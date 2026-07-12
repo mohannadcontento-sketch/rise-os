@@ -1,10 +1,16 @@
 'use client'
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import { Sidebar } from '@/components/rise/sidebar'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target } from 'lucide-react'
+import {
+  CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target,
+  LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
+  Brain, GraduationCap, Heart, Wallet, Calendar as CalendarIcon, Network, BarChart3,
+  Sparkles, Settings as SettingsIcon, Zap,
+  HeartPulse, PenLine,
+} from 'lucide-react'
 import { useTheme } from 'next-themes'
 import {
   CommandDialog,
@@ -89,24 +95,97 @@ const moduleNames: Record<ModuleId, string> = {
 function LoadingFallback() {
   return (
     <div className="flex items-center justify-center h-64">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-emerald-accent/30 border-t-emerald-accent rounded-full animate-spin" />
-        <p className="text-sm text-muted-foreground">جاري التحميل...</p>
+      <div className="relative flex items-center justify-center w-20 h-20">
+        {/* Outer orbiting dots */}
+        {[0, 1, 2].map((i) => (
+          <span
+            key={`outer-${i}`}
+            className="orbit-dot-outer absolute w-2 h-2 rounded-full bg-emerald-accent/70"
+            style={{ animationDelay: `${-i * 0.6}s` }}
+          />
+        ))}
+        {/* Inner orbiting dots */}
+        {[0, 1, 2].map((i) => (
+          <span
+            key={`inner-${i}`}
+            className="orbit-dot-inner absolute w-1.5 h-1.5 rounded-full bg-gold/60"
+            style={{ animationDelay: `${-i * 0.5}s` }}
+          />
+        ))}
+        {/* Center Zap icon */}
+        <Zap className="w-5 h-5 text-forest relative z-10" />
+        <p className="absolute -bottom-8 text-sm text-muted-foreground">جاري التحميل...</p>
       </div>
     </div>
   )
 }
 
+/* Module icon map for top bar indicator */
+const moduleIconMap: Record<ModuleId, React.ElementType> = {
+  'dashboard': LayoutDashboard,
+  'morning': Sun,
+  'planner': CalendarDays,
+  'tasks': CheckSquare,
+  'projects': FolderKanban,
+  'goals': Target,
+  'habits': Flame,
+  'journal': BookOpen,
+  'deepwork': Brain,
+  'reading': BookOpen,
+  'learning': GraduationCap,
+  'health': Heart,
+  'finance': Wallet,
+  'calendar': CalendarIcon,
+  'brain': Network,
+  'weekly-review': BarChart3,
+  'monthly-review': BarChart3,
+  'analytics': BarChart3,
+  'ai-coach': Sparkles,
+  'settings': SettingsIcon,
+}
+
+/* Module accent color map */
+const moduleAccentMap: Record<ModuleId, string> = {
+  'dashboard': 'bg-emerald-accent',
+  'morning': 'bg-gold',
+  'planner': 'bg-emerald-accent',
+  'tasks': 'bg-emerald-accent',
+  'projects': 'bg-forest',
+  'goals': 'bg-gold',
+  'habits': 'bg-gold',
+  'journal': 'bg-forest',
+  'deepwork': 'bg-emerald-accent',
+  'reading': 'bg-gold',
+  'learning': 'bg-emerald-accent',
+  'health': 'bg-emerald-accent',
+  'finance': 'bg-gold',
+  'calendar': 'bg-forest',
+  'brain': 'bg-emerald-accent',
+  'weekly-review': 'bg-forest',
+  'monthly-review': 'bg-forest',
+  'analytics': 'bg-emerald-accent',
+  'ai-coach': 'bg-gold',
+  'settings': 'bg-foreground/30',
+}
+
 interface SearchTask { id: string; title: string; status: string; xpReward: number }
 interface SearchHabit { id: string; name: string; icon: string; color: string }
 interface SearchGoal { id: string; title: string; type: string; progress: number }
+interface SearchJournal { id: string; date: string; content: string; mood: number | null }
+interface SearchBook { id: string; title: string; author: string | null; status: string }
+interface SearchKnowledge { id: string; title: string; type: string; folder: string | null }
 
 export default function RiseOSApp() {
   const { activeModule, setActiveModule, toggleSidebar } = useRiseStore()
   const { theme, setTheme } = useTheme()
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<{ tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[] }>({ tasks: [], habits: [], goals: [] })
+  const [searchResults, setSearchResults] = useState<{
+    tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[]
+    journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
+  }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
+  const [fabOpen, setFabOpen] = useState(false)
+  const [themeRotating, setThemeRotating] = useState(false)
   const mountedRef = useRef(false)
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -139,7 +218,7 @@ export default function RiseOSApp() {
     setSearchOpen(open)
     if (!open) {
       setSearchQuery('')
-      setSearchResults({ tasks: [], habits: [], goals: [] })
+      setSearchResults({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
     }
   }, [])
 
@@ -153,18 +232,40 @@ export default function RiseOSApp() {
       fetch('/api/rise/tasks', { signal: controller.signal }).then(r => r.json()).catch(() => ({ tasks: [] })),
       fetch('/api/rise/habits', { signal: controller.signal }).then(r => r.json()).catch(() => ({ habits: [] })),
       fetch('/api/rise/goals', { signal: controller.signal }).then(r => r.json()).catch(() => ({ goals: [] })),
-    ]).then(([tasksData, habitsData, goalsData]) => {
+      fetch('/api/rise/journal', { signal: controller.signal }).then(r => r.json()).catch(() => ({ journals: [] })),
+      fetch('/api/rise/books', { signal: controller.signal }).then(r => r.json()).catch(() => ({ books: [] })),
+      fetch('/api/rise/knowledge', { signal: controller.signal }).then(r => r.json()).catch(() => ({ items: [] })),
+    ]).then(([tasksData, habitsData, goalsData, journalsData, booksData, knowledgeData]) => {
       if (controller.signal.aborted) return
       setSearchResults({
         tasks: (tasksData.tasks || []).filter((t: SearchTask) => t.title.toLowerCase().includes(q)).slice(0, 5),
         habits: (habitsData.habits || []).filter((h: SearchHabit) => h.name.toLowerCase().includes(q)).slice(0, 5),
         goals: (goalsData.goals || []).filter((g: SearchGoal) => g.title.toLowerCase().includes(q)).slice(0, 5),
+        journals: (journalsData.journals || []).filter((j: SearchJournal) => j.content.toLowerCase().includes(q)).slice(0, 5),
+        books: (booksData.books || []).filter((b: SearchBook) => b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)).slice(0, 5),
+        knowledge: ((knowledgeData as any).items || []).filter((k: SearchKnowledge) => k.title.toLowerCase().includes(q)).slice(0, 5),
       })
     })
     return () => controller.abort()
   }, [searchQuery, searchOpen])
 
+  /* Today's date in Arabic */
+  const todayArabic = useMemo(() => {
+    const now = new Date()
+    const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+    return `${days[now.getDay()]}، ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
+  }, [])
+
+  /* Theme toggle with rotation */
+  const handleThemeToggle = useCallback(() => {
+    setThemeRotating(true)
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+    setTimeout(() => setThemeRotating(false), 500)
+  }, [theme, setTheme])
+
   const ActiveComponent = moduleComponents[activeModule]
+  const ModuleIcon = moduleIconMap[activeModule]
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -172,7 +273,7 @@ export default function RiseOSApp() {
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 md:px-6 py-3 border-b border-border bg-background/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 md:px-6 py-3 bg-background/80 backdrop-blur-xl noise-bg header-gradient-border">
           <Button
             variant="ghost"
             size="icon"
@@ -182,12 +283,24 @@ export default function RiseOSApp() {
             <Menu className="w-5 h-5" />
           </Button>
 
+          {/* Module indicator dot */}
+          <div className={cn(
+            'relative flex items-center justify-center w-7 h-7 rounded-lg shrink-0',
+            'bg-muted/50'
+          )}>
+            <ModuleIcon className="w-3.5 h-3.5 text-foreground/70" />
+            <span className={cn(
+              'absolute -bottom-0.5 -left-0.5 w-2 h-2 rounded-full',
+              moduleAccentMap[activeModule]
+            )} />
+          </div>
+
           <div className="flex-1" />
 
           {/* Search trigger */}
           <Button
             variant="outline"
-            className="hidden sm:flex items-center gap-2 text-muted-foreground h-9 px-3 text-sm font-normal border-dashed"
+            className="hidden sm:flex items-center gap-2 text-muted-foreground h-9 px-3 text-sm font-normal border-dashed search-glass-btn"
             onClick={() => setSearchOpen(true)}
           >
             <Search className="w-4 h-4" />
@@ -197,19 +310,21 @@ export default function RiseOSApp() {
             </kbd>
           </Button>
 
-          {/* Theme toggle */}
+          {/* Theme toggle with rotation */}
           {mounted && (
             <Button
               variant="ghost"
               size="icon"
               className="h-9 w-9"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={handleThemeToggle}
             >
-              {theme === 'dark' ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
+              <span className={cn(themeRotating && 'theme-rotate', 'inline-flex')}>
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4" />
+                ) : (
+                  <Moon className="w-4 h-4" />
+                )}
+              </span>
             </Button>
           )}
         </header>
@@ -219,17 +334,24 @@ export default function RiseOSApp() {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeModule}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
+              initial={{ opacity: 0, y: 8, scale: 0.99, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -8, scale: 0.99, filter: 'blur(4px)' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30, mass: 0.8 }}
               className="p-4 md:p-6"
             >
-              {/* Module title */}
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold tracking-tight">
-                  {moduleNames[activeModule]}
-                </h2>
+              {/* Module title with accent bar & date */}
+              <div className="mb-6 flex items-stretch gap-3 module-title-animate" key={`title-${activeModule}`}>
+                <div className={cn(
+                  'w-1 rounded-full shrink-0',
+                  moduleAccentMap[activeModule]
+                )} />
+                <div className="flex flex-col justify-center">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    {moduleNames[activeModule]}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{todayArabic}</p>
+                </div>
               </div>
               <Suspense fallback={<LoadingFallback />}>
                 <ActiveComponent />
@@ -246,7 +368,7 @@ export default function RiseOSApp() {
           <CommandEmpty>لم يتم العثور على نتائج.</CommandEmpty>
 
           {searchQuery.length >= 2 && searchResults.tasks.length > 0 && (
-            <CommandGroup heading="المهام">
+            <CommandGroup heading={`المهام (${searchResults.tasks.length})`}>
               {searchResults.tasks.map((task) => (
                 <CommandItem
                   key={task.id}
@@ -268,7 +390,7 @@ export default function RiseOSApp() {
           )}
 
           {searchQuery.length >= 2 && searchResults.habits.length > 0 && (
-            <CommandGroup heading="العادات">
+            <CommandGroup heading={`العادات (${searchResults.habits.length})`}>
               {searchResults.habits.map((habit) => (
                 <CommandItem
                   key={habit.id}
@@ -286,7 +408,7 @@ export default function RiseOSApp() {
           )}
 
           {searchQuery.length >= 2 && searchResults.goals.length > 0 && (
-            <CommandGroup heading="الأهداف">
+            <CommandGroup heading={`الأهداف (${searchResults.goals.length})`}>
               {searchResults.goals.map((goal) => (
                 <CommandItem
                   key={goal.id}
@@ -299,6 +421,63 @@ export default function RiseOSApp() {
                   <Target className="w-4 h-4 text-forest shrink-0" />
                   <span className="flex-1 text-right truncate">{goal.title}</span>
                   <span className="text-[10px] text-muted-foreground shrink-0">{goal.progress}%</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {searchQuery.length >= 2 && searchResults.journals.length > 0 && (
+            <CommandGroup heading={`اليوميات (${searchResults.journals.length})`}>
+              {searchResults.journals.map((journal) => (
+                <CommandItem
+                  key={journal.id}
+                  onSelect={() => {
+                    setActiveModule('journal')
+                    setSearchOpen(false)
+                  }}
+                  className="flex-row-reverse justify-end gap-2"
+                >
+                  <BookOpen className="w-4 h-4 text-forest shrink-0" />
+                  <span className="flex-1 text-right truncate">{journal.content.slice(0, 60)}...</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{journal.date}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {searchQuery.length >= 2 && searchResults.books.length > 0 && (
+            <CommandGroup heading={`الكتب (${searchResults.books.length})`}>
+              {searchResults.books.map((book) => (
+                <CommandItem
+                  key={book.id}
+                  onSelect={() => {
+                    setActiveModule('reading')
+                    setSearchOpen(false)
+                  }}
+                  className="flex-row-reverse justify-end gap-2"
+                >
+                  <BookOpen className="w-4 h-4 text-gold shrink-0" />
+                  <span className="flex-1 text-right truncate">{book.title}</span>
+                  {book.author && <span className="text-[10px] text-muted-foreground shrink-0">{book.author}</span>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {searchQuery.length >= 2 && searchResults.knowledge.length > 0 && (
+            <CommandGroup heading={`الملفات (${searchResults.knowledge.length})`}>
+              {searchResults.knowledge.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  onSelect={() => {
+                    setActiveModule('brain')
+                    setSearchOpen(false)
+                  }}
+                  className="flex-row-reverse justify-end gap-2"
+                >
+                  <Network className="w-4 h-4 text-emerald-accent shrink-0" />
+                  <span className="flex-1 text-right truncate">{item.title}</span>
+                  {item.folder && <span className="text-[10px] text-muted-foreground shrink-0">{item.folder}</span>}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -323,6 +502,74 @@ export default function RiseOSApp() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {/* ══════════ FAB - Quick Add ══════════ */}
+      <AnimatePresence>
+        {activeModule !== 'dashboard' && activeModule !== 'settings' && (
+          <div className="fixed bottom-6 left-6 z-50 flex flex-col-reverse items-center gap-3">
+            {/* Action items */}
+            <AnimatePresence>
+              {fabOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  className="flex flex-col gap-2 mb-2"
+                >
+                  {([
+                    { label: 'مهمة جديدة', icon: CheckSquare, module: 'tasks' as ModuleId, color: 'text-emerald-accent' },
+                    { label: 'عادة جديدة', icon: Flame, module: 'habits' as ModuleId, color: 'text-orange-500' },
+                    { label: 'يومية جديدة', icon: PenLine, module: 'journal' as ModuleId, color: 'text-forest' },
+                    { label: 'تسجيل صحي', icon: HeartPulse, module: 'health' as ModuleId, color: 'text-rose-500' },
+                  ] as const).map((action, i) => {
+                    const ActionIcon = action.icon
+                    return (
+                      <motion.button
+                        key={action.label}
+                        initial={{ opacity: 0, x: -20, scale: 0.8 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: -20, scale: 0.8 }}
+                        transition={{ delay: i * 0.05, type: 'spring', stiffness: 400, damping: 25 }}
+                        onClick={() => {
+                          setFabOpen(false)
+                          setActiveModule(action.module)
+                        }}
+                        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl glass border border-white/10 dark:border-white/5 shadow-lg hover:shadow-xl transition-shadow group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <ActionIcon className={cn('w-3.5 h-3.5', action.color)} />
+                        </div>
+                        <span className="text-sm font-medium text-foreground whitespace-nowrap">{action.label}</span>
+                      </motion.button>
+                    )
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Main FAB button */}
+            <motion.button
+              layout
+              onClick={() => setFabOpen(!fabOpen)}
+              className={cn(
+                'w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl transition-shadow',
+                'bg-gradient-to-br from-emerald-accent to-forest',
+                'hover:shadow-emerald-accent/30 hover:shadow-2xl'
+              )}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <motion.span
+                animate={{ rotate: fabOpen ? 45 : 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              >
+                <Zap className="w-6 h-6 text-white" />
+              </motion.span>
+            </motion.button>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

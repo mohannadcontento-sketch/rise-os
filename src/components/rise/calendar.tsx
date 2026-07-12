@@ -551,7 +551,7 @@ export default function CalendarView() {
                               <span className="text-lg">{moodEmojis[selectedJournal.mood] || '😐'}</span>
                             )}
                             <span className="text-[10px] text-muted-foreground">
-                              {selectedJournal.gratitude || selectedJournal.wins || 'يوميات'}
+                              {selectedJournal.gratitude || selectedJournal.content?.slice(0, 50) || 'يوميات'}
                             </span>
                           </div>
                           {selectedJournal.content && (

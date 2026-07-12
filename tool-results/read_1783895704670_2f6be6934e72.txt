@@ -1,0 +1,767 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useRef } from 'react'
+     4→     4→import { motion } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Settings as SettingsIcon,
+     7→     7→  User,
+     8→     8→  Palette,
+     9→     9→  Bell,
+    10→    10→  Sun,
+    11→    11→  Moon,
+    12→    12→  Monitor,
+    13→    13→  Globe,
+    14→    14→  Clock,
+    15→    15→  Target,
+    16→    16→  Droplets,
+    17→    17→  BookOpen,
+    18→    18→  Dumbbell,
+    19→    19→  Download,
+    20→    20→  Upload,
+    21→    21→  Trash2,
+    22→    22→  Zap,
+    23→    23→  Shield,
+    24→    24→  Info,
+    25→    25→  Sunrise,
+    26→    26→  AlertTriangle,
+    27→    27→  Pencil,
+    28→    28→  Check,
+    29→    29→  X,
+    30→    30→  HardDrive,
+    31→    31→  Heart,
+    32→    32→} from 'lucide-react'
+    33→    33→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    34→    34→import { Button } from '@/components/ui/button'
+    35→    35→import { Input } from '@/components/ui/input'
+    36→    36→import { Label } from '@/components/ui/label'
+    37→    37→import { Switch } from '@/components/ui/switch'
+    38→    38→import { Separator } from '@/components/ui/separator'
+    39→    39→import { Badge } from '@/components/ui/badge'
+    40→    40→import { Progress } from '@/components/ui/progress'
+    41→    41→import {
+    42→    42→  Dialog,
+    43→    43→  DialogContent,
+    44→    44→  DialogHeader,
+    45→    45→  DialogTitle,
+    46→    46→  DialogTrigger,
+    47→    47→  DialogFooter,
+    48→    48→  DialogClose,
+    49→    49→} from '@/components/ui/dialog'
+    50→    50→import {
+    51→    51→  Select,
+    52→    52→  SelectContent,
+    53→    53→  SelectItem,
+    54→    54→  SelectTrigger,
+    55→    55→  SelectValue,
+    56→    56→} from '@/components/ui/select'
+    57→    57→import { useTheme } from 'next-themes'
+    58→    58→import { cn } from '@/lib/utils'
+    59→    59→import { toast } from 'sonner'
+    60→    60→
+    61→    61→/* ────────────── Types ────────────── */
+    62→    62→
+    63→    63→interface SettingsData {
+    64→    64→  userName: string
+    65→    65→  wakeUpTime: string
+    66→    66→  sleepTime: string
+    67→    67→  dailyWaterGoal: number
+    68→    68→  dailyReadingGoal: number
+    69→    69→  weeklyExerciseGoal: number
+    70→    70→  notifications: {
+    71→    71→    morning: boolean
+    72→    72→    exercise: boolean
+    73→    73→    reading: boolean
+    74→    74→    focus: boolean
+    75→    75→    water: boolean
+    76→    76→    prayer: boolean
+    77→    77→    sleep: boolean
+    78→    78→  }
+    79→    79→}
+    80→    80→
+    81→    81→const STORAGE_KEY = 'rise-settings'
+    82→    82→const NAME_KEY = 'rise-user-name'
+    83→    83→
+    84→    84→const defaultSettings: SettingsData = {
+    85→    85→  userName: 'مستخدم',
+    86→    86→  wakeUpTime: '06:00',
+    87→    87→  sleepTime: '22:00',
+    88→    88→  dailyWaterGoal: 8,
+    89→    89→  dailyReadingGoal: 30,
+    90→    90→  weeklyExerciseGoal: 5,
+    91→    91→  notifications: {
+    92→    92→    morning: true,
+    93→    93→    exercise: true,
+    94→    94→    reading: false,
+    95→    95→    focus: true,
+    96→    96→    water: true,
+    97→    97→    prayer: true,
+    98→    98→    sleep: true,
+    99→    99→  },
+   100→   100→}
+   101→   101→
+   102→   102→/* ────────────── Helpers ────────────── */
+   103→   103→
+   104→   104→function getLocalStorageSize(): { used: number; total: number } {
+   105→   105→  let total = 0
+   106→   106→  for (const key in localStorage) {
+   107→   107→    if (localStorage.hasOwnProperty(key)) {
+   108→   108→      total += localStorage.getItem(key)?.length || 0
+   109→   109→    }
+   110→   110→  }
+   111→   111→  return { used: total, total: 5 * 1024 * 1024 } // 5MB typical limit
+   112→   112→}
+   113→   113→
+   114→   114→function formatBytes(bytes: number): string {
+   115→   115→  if (bytes < 1024) return `${bytes} B`
+   116→   116→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+   117→   117→  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+   118→   118→}
+   119→   119→
+   120→   120→/* ────────────── Component ────────────── */
+   121→   121→
+   122→   122→export default function Settings() {
+   123→   123→  const { theme, setTheme } = useTheme()
+   124→   124→  const [settings, setSettings] = useState<SettingsData>(() => {
+   125→   125→    if (typeof window === 'undefined') return defaultSettings
+   126→   126→    try {
+   127→   127→      const stored = localStorage.getItem(STORAGE_KEY)
+   128→   128→      if (stored) return { ...defaultSettings, ...JSON.parse(stored) }
+   129→   129→    } catch { /* ignore */ }
+   130→   130→    return defaultSettings
+   131→   131→  })
+   132→   132→  const [resetDialogOpen, setResetDialogOpen] = useState(false)
+   133→   133→  const [confirmText, setConfirmText] = useState('')
+   134→   134→  const [isEditingName, setIsEditingName] = useState(false)
+   135→   135→  const [editName, setEditName] = useState(settings.userName)
+   136→   136→  const [storageSize, setStorageSize] = useState(() => {
+   137→   137→    if (typeof window === 'undefined') return { used: 0, total: 5 * 1024 * 1024 }
+   138→   138→    return getLocalStorageSize()
+   139→   139→  })
+   140→   140→  const fileInputRef = useRef<HTMLInputElement>(null)
+   141→   141→
+   142→   142→  useEffect(() => {
+   143→   143→    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+   144→   144→    // Also save to the separate name key
+   145→   145→    localStorage.setItem(NAME_KEY, settings.userName)
+   146→   146→  }, [settings])
+   147→   147→
+   148→   148→  const updateNotification = (key: string, value: boolean) => {
+   149→   149→    setSettings((prev) => ({
+   150→   150→      ...prev,
+   151→   151→      notifications: { ...prev.notifications, [key]: value },
+   152→   152→    }))
+   153→   153→  }
+   154→   154→
+   155→   155→  const saveName = () => {
+   156→   156→    if (!editName.trim()) return
+   157→   157→    setSettings((prev) => ({ ...prev, userName: editName.trim() }))
+   158→   158→    setIsEditingName(false)
+   159→   159→    toast.success('تم تحديث الاسم')
+   160→   160→  }
+   161→   161→
+   162→   162→  const handleExportData = () => {
+   163→   163→    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-'))
+   164→   164→    const data: Record<string, unknown> = {}
+   165→   165→    allKeys.forEach((key) => {
+   166→   166→      try {
+   167→   167→        const val = localStorage.getItem(key)
+   168→   168→        if (val) data[key] = JSON.parse(val)
+   169→   169→      } catch {
+   170→   170→        // ignore
+   171→   171→      }
+   172→   172→    })
+   173→   173→    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+   174→   174→    const url = URL.createObjectURL(blob)
+   175→   175→    const a = document.createElement('a')
+   176→   176→    a.href = url
+   177→   177→    a.download = `riseos-backup-${new Date().toISOString().split('T')[0]}.json`
+   178→   178→    a.click()
+   179→   179→    URL.revokeObjectURL(url)
+   180→   180→    toast.success('تم تصدير البيانات بنجاح')
+   181→   181→  }
+   182→   182→
+   183→   183→  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+   184→   184→    const file = e.target.files?.[0]
+   185→   185→    if (!file) return
+   186→   186→    const reader = new FileReader()
+   187→   187→    reader.onload = (ev) => {
+   188→   188→      try {
+   189→   189→        const data = JSON.parse(ev.target?.result as string)
+   190→   190→        Object.entries(data).forEach(([key, value]) => {
+   191→   191→          localStorage.setItem(key, JSON.stringify(value))
+   192→   192→        })
+   193→   193→        toast.success('تم استيراد البيانات بنجاح')
+   194→   194→        setStorageSize(getLocalStorageSize())
+   195→   195→      } catch {
+   196→   196→        toast.error('فشل في قراءة الملف')
+   197→   197→      }
+   198→   198→    }
+   199→   199→    reader.readAsText(file)
+   200→   200→    // Reset file input
+   201→   201→    if (fileInputRef.current) fileInputRef.current.value = ''
+   202→   202→  }
+   203→   203→
+   204→   204→  const handleResetData = () => {
+   205→   205→    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-'))
+   206→   206→    allKeys.forEach((key) => localStorage.removeItem(key))
+   207→   207→    setSettings(defaultSettings)
+   208→   208→    setResetDialogOpen(false)
+   209→   209→    setConfirmText('')
+   210→   210→    setStorageSize({ used: 0, total: 5 * 1024 * 1024 })
+   211→   211→    toast.success('تم إعادة تعيين جميع البيانات')
+   212→   212→  }
+   213→   213→
+   214→   214→  const themes = [
+   215→   215→    {
+   216→   216→      value: 'light',
+   217→   217→      label: 'فاتح',
+   218→   218→      icon: Sun,
+   219→   219→      preview: (
+   220→   220→        <div className="w-full h-12 rounded-lg bg-white border border-gray-200 shadow-sm flex items-center justify-center">
+   221→   221→          <div className="flex gap-1">
+   222→   222→            <div className="w-4 h-4 rounded bg-gray-200" />
+   223→   223→            <div className="w-8 h-4 rounded bg-gray-100" />
+   224→   224→          </div>
+   225→   225→        </div>
+   226→   226→      ),
+   227→   227→    },
+   228→   228→    {
+   229→   229→      value: 'dark',
+   230→   230→      label: 'داكن',
+   231→   231→      icon: Moon,
+   232→   232→      preview: (
+   233→   233→        <div className="w-full h-12 rounded-lg bg-gray-900 border border-gray-700 shadow-sm flex items-center justify-center">
+   234→   234→          <div className="flex gap-1">
+   235→   235→            <div className="w-4 h-4 rounded bg-gray-700" />
+   236→   236→            <div className="w-8 h-4 rounded bg-gray-800" />
+   237→   237→          </div>
+   238→   238→        </div>
+   239→   239→      ),
+   240→   240→    },
+   241→   241→    {
+   242→   242→      value: 'system',
+   243→   243→      label: 'النظام',
+   244→   244→      icon: Monitor,
+   245→   245→      preview: (
+   246→   246→        <div className="w-full h-12 rounded-lg overflow-hidden flex shadow-sm border border-gray-200">
+   247→   247→          <div className="w-1/2 bg-white flex items-center justify-center">
+   248→   248→            <div className="w-2.5 h-2.5 rounded bg-gray-300" />
+   249→   249→          </div>
+   250→   250→          <div className="w-1/2 bg-gray-900 flex items-center justify-center">
+   251→   251→            <div className="w-2.5 h-2.5 rounded bg-gray-600" />
+   252→   252→          </div>
+   253→   253→        </div>
+   254→   254→      ),
+   255→   255→    },
+   256→   256→  ]
+   257→   257→
+   258→   258→  const notifGroups = [
+   259→   259→    {
+   260→   260→      title: 'صباحي',
+   261→   261→      items: [
+   262→   262→        { key: 'morning', label: 'تذكير صباحي', desc: 'بداية روتينك الصباحي', icon: Sunrise },
+   263→   263→        { key: 'sleep', label: 'تذكير نوم', desc: 'وقت النوم والاسترخاء', icon: Moon },
+   264→   264→      ],
+   265→   265→    },
+   266→   266→    {
+   267→   267→      title: 'صحية',
+   268→   268→      items: [
+   269→   269→        { key: 'exercise', label: 'تذكير تمارين', desc: 'تمارينك الرياضية اليومية', icon: Dumbbell },
+   270→   270→        { key: 'water', label: 'تذكير ماء', desc: 'شرب الماء بانتظام', icon: Droplets },
+   271→   271→      ],
+   272→   272→    },
+   273→   273→    {
+   274→   274→      title: 'إنتاجية',
+   275→   275→      items: [
+   276→   276→        { key: 'reading', label: 'تذكير قراءة', desc: 'هدف القراءة اليومي', icon: BookOpen },
+   277→   277→        { key: 'focus', label: 'تذكير تركيز', desc: 'جلسات العمل العميق', icon: Target },
+   278→   278→        { key: 'prayer', label: 'تذكير صلاة', desc: 'أوقات الصلاة', icon: Clock },
+   279→   279→      ],
+   280→   280→    },
+   281→   281→  ]
+   282→   282→
+   283→   283→  const storagePercent = Math.round((storageSize.used / storageSize.total) * 100)
+   284→   284→
+   285→   285→  return (
+   286→   286→    <div className="space-y-6 max-w-2xl mx-auto">
+   287→   287→      {/* Header */}
+   288→   288→      <div>
+   289→   289→        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   290→   290→          <SettingsIcon className="w-6 h-6 text-emerald-accent" />
+   291→   291→          الإعدادات
+   292→   292→        </h2>
+   293→   293→        <p className="text-sm text-muted-foreground mt-1">خصّص تجربتك في RiseOS</p>
+   294→   294→      </div>
+   295→   295→
+   296→   296→      {/* Profile Section */}
+   297→   297→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+   298→   298→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
+   299→   299→          <CardContent className="p-6">
+   300→   300→            <div className="flex items-center gap-5">
+   301→   301→              {/* Avatar with gradient */}
+   302→   302→              <motion.div
+   303→   303→                className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-emerald-accent/25 relative"
+   304→   304→                whileHover={{ scale: 1.05, rotate: -3 }}
+   305→   305→                whileTap={{ scale: 0.98 }}
+   306→   306→              >
+   307→   307→                {settings.userName.charAt(0)}
+   308→   308→                <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
+   309→   309→                  <Check className="w-2.5 h-2.5 text-white" />
+   310→   310→                </div>
+   311→   311→              </motion.div>
+   312→   312→              <div className="flex-1 space-y-3">
+   313→   313→                {/* Name */}
+   314→   314→                {isEditingName ? (
+   315→   315→                  <div className="flex items-center gap-2">
+   316→   316→                    <Input
+   317→   317→                      value={editName}
+   318→   318→                      onChange={(e) => setEditName(e.target.value)}
+   319→   319→                      className="text-sm font-semibold h-9"
+   320→   320→                      autoFocus
+   321→   321→                      onKeyDown={(e) => {
+   322→   322→                        if (e.key === 'Enter') saveName()
+   323→   323→                        if (e.key === 'Escape') { setIsEditingName(false); setEditName(settings.userName) }
+   324→   324→                      }}
+   325→   325→                    />
+   326→   326→                    <motion.button
+   327→   327→                      whileTap={{ scale: 0.9 }}
+   328→   328→                      onClick={saveName}
+   329→   329→                      className="p-1.5 rounded-lg bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20 transition-colors"
+   330→   330→                    >
+   331→   331→                      <Check className="w-4 h-4" />
+   332→   332→                    </motion.button>
+   333→   333→                    <motion.button
+   334→   334→                      whileTap={{ scale: 0.9 }}
+   335→   335→                      onClick={() => { setIsEditingName(false); setEditName(settings.userName) }}
+   336→   336→                      className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+   337→   337→                    >
+   338→   338→                      <X className="w-4 h-4" />
+   339→   339→                    </motion.button>
+   340→   340→                  </div>
+   341→   341→                ) : (
+   342→   342→                  <div className="flex items-center gap-2">
+   343→   343→                    <div>
+   344→   344→                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">الاسم</Label>
+   345→   345→                      <p className="text-base font-bold flex items-center gap-1.5">
+   346→   346→                        {settings.userName}
+   347→   347→                        <motion.button
+   348→   348→                          whileTap={{ scale: 0.9 }}
+   349→   349→                          onClick={() => { setEditName(settings.userName); setIsEditingName(true) }}
+   350→   350→                          className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors opacity-50 hover:opacity-100"
+   351→   351→                        >
+   352→   352→                          <Pencil className="w-3 h-3" />
+   353→   353→                        </motion.button>
+   354→   354→                      </p>
+   355→   355→                    </div>
+   356→   356→                  </div>
+   357→   357→                )}
+   358→   358→                {/* Email */}
+   359→   359→                <div>
+   360→   360→                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">البريد</Label>
+   361→   361→                  <p className="text-sm text-muted-foreground">user@riseos.app</p>
+   362→   362→                </div>
+   363→   363→              </div>
+   364→   364→              {/* Level Badge */}
+   365→   365→              <div className="text-center">
+   366→   366→                <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent text-xs px-3 py-1">
+   367→   367→                  المستوى ١
+   368→   368→                </Badge>
+   369→   369→              </div>
+   370→   370→            </div>
+   371→   371→          </CardContent>
+   372→   372→        </Card>
+   373→   373→      </motion.div>
+   374→   374→
+   375→   375→      {/* Appearance */}
+   376→   376→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+   377→   377→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-amber-500">
+   378→   378→          <CardHeader className="pb-4">
+   379→   379→            <CardTitle className="text-base flex items-center gap-2.5">
+   380→   380→              <Palette className="w-4 h-4 text-amber-500" />
+   381→   381→              المظهر
+   382→   382→            </CardTitle>
+   383→   383→          </CardHeader>
+   384→   384→          <CardContent className="space-y-5">
+   385→   385→            {/* Theme Cards with Mini Preview */}
+   386→   386→            <div className="space-y-3">
+   387→   387→              <Label className="text-sm font-medium">السمة</Label>
+   388→   388→              <div className="grid grid-cols-3 gap-3">
+   389→   389→                {themes.map((t) => {
+   390→   390→                  const Icon = t.icon
+   391→   391→                  const isActive = theme === t.value
+   392→   392→                  return (
+   393→   393→                    <motion.button
+   394→   394→                      key={t.value}
+   395→   395→                      whileTap={{ scale: 0.97 }}
+   396→   396→                      onClick={() => setTheme(t.value)}
+   397→   397→                      className={cn(
+   398→   398→                        'flex flex-col items-center gap-2.5 p-3 rounded-2xl border-2 transition-all',
+   399→   399→                        isActive
+   400→   400→                          ? 'border-emerald-accent bg-emerald-accent/5 shadow-lg shadow-emerald-accent/15 ring-2 ring-emerald-accent/20'
+   401→   401→                          : 'border-transparent bg-muted/20 hover:bg-muted/40'
+   402→   402→                      )}
+   403→   403→                    >
+   404→   404→                      {t.preview}
+   405→   405→                      <div className="flex items-center gap-1.5">
+   406→   406→                        <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-emerald-accent' : 'text-muted-foreground')} />
+   407→   407→                        <span className={cn('text-xs font-medium', isActive ? 'text-emerald-accent' : 'text-muted-foreground')}>
+   408→   408→                          {t.label}
+   409→   409→                        </span>
+   410→   410→                      </div>
+   411→   411→                    </motion.button>
+   412→   412→                  )
+   413→   413→                })}
+   414→   414→              </div>
+   415→   415→            </div>
+   416→   416→
+   417→   417→            <Separator />
+   418→   418→
+   419→   419→            {/* Language */}
+   420→   420→            <div className="flex items-center justify-between">
+   421→   421→              <div className="flex items-center gap-2">
+   422→   422→                <Globe className="w-4 h-4 text-muted-foreground" />
+   423→   423→                <Label className="text-sm font-medium">اللغة</Label>
+   424→   424→              </div>
+   425→   425→              <Select defaultValue="ar" disabled>
+   426→   426→                <SelectTrigger className="w-32">
+   427→   427→                  <SelectValue />
+   428→   428→                </SelectTrigger>
+   429→   429→                <SelectContent>
+   430→   430→                  <SelectItem value="ar">عربي</SelectItem>
+   431→   431→                  <SelectItem value="en">English</SelectItem>
+   432→   432→                </SelectContent>
+   433→   433→              </Select>
+   434→   434→            </div>
+   435→   435→          </CardContent>
+   436→   436→        </Card>
+   437→   437→      </motion.div>
+   438→   438→
+   439→   439→      {/* Notifications - Grouped */}
+   440→   440→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+   441→   441→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-700 dark:border-r-emerald-400">
+   442→   442→          <CardHeader className="pb-3">
+   443→   443→            <CardTitle className="text-base flex items-center gap-2.5">
+   444→   444→              <Bell className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+   445→   445→              الإشعارات
+   446→   446→            </CardTitle>
+   447→   447→          </CardHeader>
+   448→   448→          <CardContent className="space-y-5">
+   449→   449→            {notifGroups.map((group) => (
+   450→   450→              <div key={group.title}>
+   451→   451→                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">{group.title}</p>
+   452→   452→                <div className="space-y-1">
+   453→   453→                  {group.items.map((item) => {
+   454→   454→                    const Icon = item.icon
+   455→   455→                    const isChecked = settings.notifications[item.key as keyof typeof settings.notifications]
+   456→   456→                    return (
+   457→   457→                      <div key={item.key} className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-muted/30 transition-colors">
+   458→   458→                        <div className="flex items-center gap-3">
+   459→   459→                          <div className="p-1.5 rounded-lg bg-muted/50">
+   460→   460→                            <Icon className="w-4 h-4 text-muted-foreground" />
+   461→   461→                          </div>
+   462→   462→                          <div>
+   463→   463→                            <span className="text-sm font-medium block">{item.label}</span>
+   464→   464→                            <span className="text-[11px] text-muted-foreground">{item.desc}</span>
+   465→   465→                          </div>
+   466→   466→                        </div>
+   467→   467→                        <Switch
+   468→   468→                          checked={isChecked}
+   469→   469→                          onCheckedChange={(v) => updateNotification(item.key, v)}
+   470→   470→                          className="data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   471→   471→                        />
+   472→   472→                      </div>
+   473→   473→                    )
+   474→   474→                  })}
+   475→   475→                </div>
+   476→   476→                {group.title !== notifGroups[notifGroups.length - 1].title && <Separator className="mt-3" />}
+   477→   477→              </div>
+   478→   478→            ))}
+   479→   479→          </CardContent>
+   480→   480→        </Card>
+   481→   481→      </motion.div>
+   482→   482→
+   483→   483→      {/* Morning Routine */}
+   484→   484→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+   485→   485→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
+   486→   486→          <CardHeader className="pb-4">
+   487→   487→            <CardTitle className="text-base flex items-center gap-2.5">
+   488→   488→              <Clock className="w-4 h-4 text-emerald-accent" />
+   489→   489→              الروتين الصباحي
+   490→   490→            </CardTitle>
+   491→   491→          </CardHeader>
+   492→   492→          <CardContent className="space-y-4">
+   493→   493→            <div className="grid sm:grid-cols-2 gap-4">
+   494→   494→              <div className="space-y-2">
+   495→   495→                <Label className="text-sm font-medium flex items-center gap-1.5">
+   496→   496→                  <Sunrise className="w-3.5 h-3.5 text-amber-500" />
+   497→   497→                  وقت الاستيقاظ
+   498→   498→                </Label>
+   499→   499→                <Input
+   500→   500→                  type="time"
+   501→   501→                  value={settings.wakeUpTime}
+   502→   502→                  onChange={(e) => setSettings((prev) => ({ ...prev, wakeUpTime: e.target.value }))}
+   503→   503→                  className="text-center h-11 text-sm font-medium rounded-xl"
+   504→   504→                />
+   505→   505→              </div>
+   506→   506→              <div className="space-y-2">
+   507→   507→                <Label className="text-sm font-medium flex items-center gap-1.5">
+   508→   508→                  <Moon className="w-3.5 h-3.5 text-purple-500" />
+   509→   509→                  وقت النوم
+   510→   510→                </Label>
+   511→   511→                <Input
+   512→   512→                  type="time"
+   513→   513→                  value={settings.sleepTime}
+   514→   514→                  onChange={(e) => setSettings((prev) => ({ ...prev, sleepTime: e.target.value }))}
+   515→   515→                  className="text-center h-11 text-sm font-medium rounded-xl"
+   516→   516→                />
+   517→   517→              </div>
+   518→   518→            </div>
+   519→   519→          </CardContent>
+   520→   520→        </Card>
+   521→   521→      </motion.div>
+   522→   522→
+   523→   523→      {/* Goals Settings */}
+   524→   524→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+   525→   525→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-purple-500">
+   526→   526→          <CardHeader className="pb-4">
+   527→   527→            <CardTitle className="text-base flex items-center gap-2.5">
+   528→   528→              <Target className="w-4 h-4 text-purple-500" />
+   529→   529→              أهداف يومية
+   530→   530→            </CardTitle>
+   531→   531→          </CardHeader>
+   532→   532→          <CardContent className="space-y-4">
+   533→   533→            <div className="grid sm:grid-cols-3 gap-4">
+   534→   534→              <div className="space-y-2">
+   535→   535→                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+   536→   536→                  <Droplets className="w-3 h-3" />
+   537→   537→                  هدف الماء (كؤوس)
+   538→   538→                </Label>
+   539→   539→                <Input
+   540→   540→                  type="number"
+   541→   541→                  min={1}
+   542→   542→                  max={20}
+   543→   543→                  value={settings.dailyWaterGoal}
+   544→   544→                  onChange={(e) => setSettings((prev) => ({ ...prev, dailyWaterGoal: parseInt(e.target.value) || 8 }))}
+   545→   545→                  className="text-center h-12 text-lg font-bold rounded-xl"
+   546→   546→                />
+   547→   547→              </div>
+   548→   548→              <div className="space-y-2">
+   549→   549→                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+   550→   550→                  <BookOpen className="w-3 h-3" />
+   551→   551→                  هدف القراءة (صفحة)
+   552→   552→                </Label>
+   553→   553→                <Input
+   554→   554→                  type="number"
+   555→   555→                  min={1}
+   556→   556→                  max={500}
+   557→   557→                  value={settings.dailyReadingGoal}
+   558→   558→                  onChange={(e) => setSettings((prev) => ({ ...prev, dailyReadingGoal: parseInt(e.target.value) || 30 }))}
+   559→   559→                  className="text-center h-12 text-lg font-bold rounded-xl"
+   560→   560→                />
+   561→   561→              </div>
+   562→   562→              <div className="space-y-2">
+   563→   563→                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+   564→   564→                  <Dumbbell className="w-3 h-3" />
+   565→   565→                  هدف التمرين (أيام/أسبوع)
+   566→   566→                </Label>
+   567→   567→                <Input
+   568→   568→                  type="number"
+   569→   569→                  min={1}
+   570→   570→                  max={7}
+   571→   571→                  value={settings.weeklyExerciseGoal}
+   572→   572→                  onChange={(e) => setSettings((prev) => ({ ...prev, weeklyExerciseGoal: parseInt(e.target.value) || 5 }))}
+   573→   573→                  className="text-center h-12 text-lg font-bold rounded-xl"
+   574→   574→                />
+   575→   575→              </div>
+   576→   576→            </div>
+   577→   577→          </CardContent>
+   578→   578→        </Card>
+   579→   579→      </motion.div>
+   580→   580→
+   581→   581→      {/* Data & Privacy */}
+   582→   582→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+   583→   583→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-blue-500">
+   584→   584→          <CardHeader className="pb-4">
+   585→   585→            <CardTitle className="text-base flex items-center gap-2.5">
+   586→   586→              <Shield className="w-4 h-4 text-blue-500" />
+   587→   587→              البيانات والخصوصية
+   588→   588→            </CardTitle>
+   589→   589→          </CardHeader>
+   590→   590→          <CardContent className="space-y-4">
+   591→   591→            {/* Storage Usage */}
+   592→   592→            <div className="p-4 rounded-xl bg-muted/20 space-y-3">
+   593→   593→              <div className="flex items-center justify-between">
+   594→   594→                <div className="flex items-center gap-2">
+   595→   595→                  <HardDrive className="w-4 h-4 text-muted-foreground" />
+   596→   596→                  <span className="text-sm font-medium">مساحة التخزين</span>
+   597→   597→                </div>
+   598→   598→                <span className="text-xs text-muted-foreground">
+   599→   599→                  {formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}
+   600→   600→                </span>
+   601→   601→              </div>
+   602→   602→              <Progress value={storagePercent} className="h-2" />
+   603→   603→              <p className="text-[11px] text-muted-foreground">
+   604→   604→                البيانات مخزنة محلياً على جهازك فقط ولا تُرسل لأي خادم.
+   605→   605→              </p>
+   606→   606→            </div>
+   607→   607→
+   608→   608→            {/* Export */}
+   609→   609→            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
+   610→   610→              <div className="flex items-center gap-3">
+   611→   611→                <div className="p-2 rounded-lg bg-emerald-accent/10">
+   612→   612→                  <Download className="w-4 h-4 text-emerald-accent" />
+   613→   613→                </div>
+   614→   614→                <div>
+   615→   615→                  <p className="text-sm font-medium">تصدير البيانات</p>
+   616→   616→                  <p className="text-xs text-muted-foreground">تنزيل نسخة احتياطية JSON من بياناتك</p>
+   617→   617→                </div>
+   618→   618→              </div>
+   619→   619→              <Button variant="outline" size="sm" onClick={handleExportData} className="text-xs">
+   620→   620→                تصدير
+   621→   621→              </Button>
+   622→   622→            </div>
+   623→   623→
+   624→   624→            {/* Import */}
+   625→   625→            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
+   626→   626→              <div className="flex items-center gap-3">
+   627→   627→                <div className="p-2 rounded-lg bg-blue-500/10">
+   628→   628→                  <Upload className="w-4 h-4 text-blue-500" />
+   629→   629→                </div>
+   630→   630→                <div>
+   631→   631→                  <p className="text-sm font-medium">استيراد البيانات</p>
+   632→   632→                  <p className="text-xs text-muted-foreground">استعادة نسخة احتياطية من ملف JSON</p>
+   633→   633→                </div>
+   634→   634→              </div>
+   635→   635→              <label className="cursor-pointer">
+   636→   636→                <input
+   637→   637→                  ref={fileInputRef}
+   638→   638→                  type="file"
+   639→   639→                  accept=".json"
+   640→   640→                  className="hidden"
+   641→   641→                  onChange={handleImportData}
+   642→   642→                />
+   643→   643→                <Button variant="outline" size="sm" className="text-xs border-blue-500/30 text-blue-500 hover:bg-blue-500/10" asChild>
+   644→   644→                  <span>استيراد</span>
+   645→   645→                </Button>
+   646→   646→              </label>
+   647→   647→            </div>
+   648→   648→          </CardContent>
+   649→   649→        </Card>
+   650→   650→      </motion.div>
+   651→   651→
+   652→   652→      {/* Danger Zone */}
+   653→   653→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+   654→   654→        <div className="rounded-2xl border-2 border-dashed border-destructive/40 overflow-hidden hover:border-destructive/60 transition-colors group">
+   655→   655→          <div className="bg-destructive/5 group-hover:bg-destructive/10 transition-colors p-5">
+   656→   656→            <div className="flex items-center gap-3 mb-4">
+   657→   657→              <div className="p-2.5 rounded-xl bg-destructive/15">
+   658→   658→                <AlertTriangle className="w-5 h-5 text-destructive" />
+   659→   659→              </div>
+   660→   660→              <div>
+   661→   661→                <h3 className="text-base font-bold text-destructive">منطقة الخطر</h3>
+   662→   662→                <p className="text-xs text-muted-foreground mt-0.5">هذه الإجراءات لا يمكن التراجع عنها</p>
+   663→   663→              </div>
+   664→   664→            </div>
+   665→   665→            <div className="flex items-center justify-between p-4 rounded-xl border-2 border-dashed border-destructive/30 group-hover:border-destructive/60 group-hover:bg-destructive/5 transition-all">
+   666→   666→              <div className="flex items-center gap-3">
+   667→   667→                <div className="p-2 rounded-lg bg-destructive/10">
+   668→   668→                  <Trash2 className="w-5 h-5 text-destructive" />
+   669→   669→                </div>
+   670→   670→                <div>
+   671→   671→                  <p className="text-sm font-semibold text-destructive">إعادة تعيين جميع البيانات</p>
+   672→   672→                  <p className="text-xs text-muted-foreground mt-0.5">سيتم حذف جميع البيانات المحلية نهائياً</p>
+   673→   673→                </div>
+   674→   674→              </div>
+   675→   675→              <Dialog open={resetDialogOpen} onOpenChange={(open) => { setResetDialogOpen(open); if (!open) setConfirmText('') }}>
+   676→   676→                <DialogTrigger asChild>
+   677→   677→                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+   678→   678→                    <Button variant="outline" size="sm" className="text-xs border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50">
+   679→   679→                      حذف الكل
+   680→   680→                    </Button>
+   681→   681→                  </motion.div>
+   682→   682→                </DialogTrigger>
+   683→   683→                <DialogContent dir="rtl">
+   684→   684→                  <DialogHeader>
+   685→   685→                    <DialogTitle className="flex items-center gap-2 text-destructive">
+   686→   686→                      <AlertTriangle className="w-5 h-5" />
+   687→   687→                      تأكيد إعادة التعيين
+   688→   688→                    </DialogTitle>
+   689→   689→                  </DialogHeader>
+   690→   690→                  <div className="space-y-4 mt-4">
+   691→   691→                    <p className="text-sm text-muted-foreground">
+   692→   692→                      هل أنت متأكد من حذف جميع البيانات المحلية؟ هذا الإجراء لا يمكن التراجع عنه.
+   693→   693→                    </p>
+   694→   694→                    <p className="text-sm text-muted-foreground">
+   695→   695→                      يرجى كتابة <span className="font-bold text-destructive">تأكيد</span> أدناه للمتابعة:
+   696→   696→                    </p>
+   697→   697→                    <Input
+   698→   698→                      placeholder="اكتب تأكيد هنا..."
+   699→   699→                      value={confirmText}
+   700→   700→                      onChange={(e) => setConfirmText(e.target.value)}
+   701→   701→                      className="h-12 text-center text-lg font-mono rounded-xl"
+   702→   702→                      dir="ltr"
+   703→   703→                      autoFocus
+   704→   704→                    />
+   705→   705→                    <DialogFooter className="gap-2 mt-2">
+   706→   706→                      <DialogClose asChild>
+   707→   707→                        <Button variant="outline" className="text-sm">إلغاء</Button>
+   708→   708→                      </DialogClose>
+   709→   709→                      <Button
+   710→   710→                        onClick={handleResetData}
+   711→   711→                        className="bg-destructive hover:bg-destructive/90 text-white text-sm"
+   712→   712→                        disabled={confirmText !== 'تأكيد'}
+   713→   713→                      >
+   714→   714→                        <Trash2 className="w-4 h-4 ml-2" />
+   715→   715→                        حذف الكل نهائياً
+   716→   716→                      </Button>
+   717→   717→                    </DialogFooter>
+   718→   718→                  </div>
+   719→   719→                </DialogContent>
+   720→   720→              </Dialog>
+   721→   721→            </div>
+   722→   722→          </div>
+   723→   723→        </div>
+   724→   724→      </motion.div>
+   725→   725→
+   726→   726→      {/* About RiseOS */}
+   727→   727→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+   728→   728→        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-muted-foreground/30">
+   729→   729→          <CardHeader className="pb-4">
+   730→   730→            <CardTitle className="text-base flex items-center gap-2.5">
+   731→   731→              <Info className="w-4 h-4 text-muted-foreground" />
+   732→   732→              عن RiseOS
+   733→   733→            </CardTitle>
+   734→   734→          </CardHeader>
+   735→   735→          <CardContent>
+   736→   736→            <div className="flex items-center gap-4 mb-5">
+   737→   737→              <motion.div
+   738→   738→                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:to-emerald-900 flex items-center justify-center shadow-xl shadow-emerald-accent/20"
+   739→   739→                whileHover={{ scale: 1.05, rotate: -3 }}
+   740→   740→              >
+   741→   741→                <Zap className="w-7 h-7 text-white" />
+   742→   742→              </motion.div>
+   743→   743→              <div className="flex-1">
+   744→   744→                <h3 className="font-bold text-lg">RiseOS</h3>
+   745→   745→                <p className="text-xs text-muted-foreground">نظام تشغيل الحياة</p>
+   746→   746→              </div>
+   747→   747→              <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent text-xs px-3 py-1">
+   748→   748→                v1.0.0
+   749→   749→              </Badge>
+   750→   750→            </div>
+   751→   751→            <p className="text-sm text-muted-foreground leading-relaxed">
+   752→   752→              RiseOS هو نظام تشغيل حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
+   753→   753→              تحقيق أهدافك، وعيش حياة أكثر وعياً وإنتاجية.
+   754→   754→            </p>
+   755→   755→            <Separator className="my-4" />
+   756→   756→            <div className="flex items-center gap-2">
+   757→   757→              <Heart className="w-3.5 h-3.5 text-rose-500" />
+   758→   758→              <p className="text-xs text-muted-foreground">
+   759→   759→                صُنع بأيدٍ عربية. امتلك صباحك. امتلك حياتك.
+   760→   760→              </p>
+   761→   761→            </div>
+   762→   762→          </CardContent>
+   763→   763→        </Card>
+   764→   764→      </motion.div>
+   765→   765→    </div>
+   766→   766→  )
+   767→   767→}

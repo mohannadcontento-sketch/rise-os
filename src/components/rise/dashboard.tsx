@@ -303,11 +303,11 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] as const } },
 }
 
 const scaleHover = {
-  whileHover: { y: -2, transition: { duration: 0.2, ease: 'easeOut' } },
+  whileHover: { y: -2, transition: { duration: 0.2, ease: 'easeOut' as const } },
   whileTap: { scale: 0.98 },
 }
 
@@ -469,16 +469,185 @@ function SectionHeader({ icon: Icon, children, badge, iconColor }: { icon: React
 
 /* ────────────── Premium Glass Card ────────────── */
 
-function PremiumGlass({ children, className }: { children: React.ReactNode; className?: string }) {
+function PremiumGlass({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
-    <div className={cn(
-      'glass rounded-2xl border border-white/10 dark:border-white/5',
-      'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.04)]',
-      'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_1px_3px_rgba(0,0,0,0.2)]',
-      className
-    )}>
+    <div
+      className={cn(
+        'glass rounded-2xl border border-white/10 dark:border-white/5',
+        'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.04)]',
+        'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_1px_3px_rgba(0,0,0,0.2)]',
+        className
+      )}
+      style={style}
+    >
       {children}
     </div>
+  )
+}
+
+/* ────────────── Productivity Score Card ────────────── */
+
+interface ProductivityScoreData {
+  score: number
+  breakdown: { tasks: number; habits: number; focus: number; morning: number; streak: number }
+  grade: string
+}
+
+function ProductivityScoreCard() {
+  const [prodData, setProdData] = useState<ProductivityScoreData | null>(null)
+
+  useEffect(() => {
+    fetch('/api/rise/productivity-score')
+      .then((r) => r.json())
+      .then((data) => setProdData(data))
+      .catch(() => {})
+  }, [])
+
+  if (!prodData) {
+    return (
+      <PremiumGlass className="p-5 lg:p-6">
+        <div className="flex items-center justify-center gap-8">
+          <Skeleton className="w-32 h-32 rounded-full" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-6 w-32" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-3 w-full" />
+            ))}
+          </div>
+        </div>
+      </PremiumGlass>
+    )
+  }
+
+  const { score, breakdown, grade } = prodData
+  const size = 130
+  const strokeWidth = 10
+  const radius = (size - strokeWidth) / 2
+  const circumference = radius * 2 * Math.PI
+  const offset = circumference - (score / 100) * circumference
+
+  // Gradient color based on score
+  const gradientId = 'prodScoreGradient'
+  let strokeColor1 = 'oklch(0.55 0.14 163)'
+  let strokeColor2 = 'oklch(0.45 0.12 163)'
+  let glowColor = 'rgba(16, 185, 129, 0.25)'
+  let gradeColor = 'text-emerald-accent'
+
+  if (score >= 70) {
+    strokeColor1 = 'oklch(0.55 0.14 163)'
+    strokeColor2 = 'oklch(0.45 0.12 163)'
+    glowColor = 'rgba(16, 185, 129, 0.25)'
+    gradeColor = 'text-emerald-accent'
+  } else if (score >= 50) {
+    strokeColor1 = 'oklch(0.75 0.15 80)'
+    strokeColor2 = 'oklch(0.65 0.13 75)'
+    glowColor = 'rgba(234, 179, 8, 0.25)'
+    gradeColor = 'text-gold'
+  } else {
+    strokeColor1 = 'oklch(0.55 0.18 25)'
+    strokeColor2 = 'oklch(0.50 0.15 20)'
+    glowColor = 'rgba(239, 68, 68, 0.25)'
+    gradeColor = 'text-red-500'
+  }
+
+  const breakdownItems = [
+    { label: 'المهام', value: breakdown.tasks, color: 'bg-emerald-accent' },
+    { label: 'العادات', value: breakdown.habits, color: 'bg-forest' },
+    { label: 'التركيز', value: breakdown.focus, color: 'bg-gold' },
+    { label: 'الصباح', value: breakdown.morning, color: 'bg-amber-400' },
+    { label: 'السلسلة', value: breakdown.streak, color: 'bg-orange-500' },
+  ]
+
+  return (
+    <PremiumGlass className="p-5 lg:p-6 relative overflow-hidden">
+      {/* Background glow */}
+      <div
+        className="absolute top-1/2 -translate-y-1/2 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none"
+        style={{ background: glowColor, right: '10%' }}
+      />
+
+      <div className="relative flex flex-col sm:flex-row items-center gap-6 lg:gap-10">
+        {/* Circular Gauge */}
+        <div className="relative shrink-0">
+          <svg width={size} height={size} className="-rotate-90">
+            <defs>
+              <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={strokeColor1} />
+                <stop offset="100%" stopColor={strokeColor2} />
+              </linearGradient>
+            </defs>
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              className="stroke-primary/10"
+              strokeWidth={strokeWidth}
+            />
+            <motion.circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              stroke={`url(#${gradientId})`}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              initial={{ strokeDashoffset: circumference }}
+              animate={{ strokeDashoffset: offset }}
+              transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+              style={{ filter: `drop-shadow(0 0 6px ${glowColor})` }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <motion.span
+              className="text-4xl font-black tracking-tight text-foreground"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.8, duration: 0.5, type: 'spring' }}
+            >
+              {toArabicNum(score)}
+            </motion.span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">من ١٠٠</span>
+          </div>
+        </div>
+
+        {/* Right side: grade + breakdown */}
+        <div className="flex-1 w-full min-w-0 space-y-4">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">درجة الإنتاجية اليومية</p>
+            <motion.span
+              className={cn('text-2xl font-bold', gradeColor)}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6, duration: 0.4 }}
+            >
+              {grade}
+            </motion.span>
+          </div>
+
+          {/* Mini breakdown bars */}
+          <div className="space-y-2.5">
+            {breakdownItems.map((item, i) => (
+              <div key={item.label} className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground w-14 text-right shrink-0">{item.label}</span>
+                <div className="flex-1 h-2 rounded-full bg-primary/10 overflow-hidden">
+                  <motion.div
+                    className={cn('h-full rounded-full', item.color)}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${item.value}%` }}
+                    transition={{ delay: 0.8 + i * 0.1, duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+                <span className="text-[11px] font-semibold text-foreground w-8 text-left shrink-0">
+                  {toArabicNum(item.value)}٪
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </PremiumGlass>
   )
 }
 
@@ -636,10 +805,15 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ══════════ 2. Score Cards Row ══════════ */}
+      {/* ══════════ 2. Productivity Score (Full Width) ══════════ */}
+      <motion.div variants={itemVariants}>
+        <ProductivityScoreCard />
+      </motion.div>
+
+      {/* ══════════ 3. Score Cards Row ══════════ */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {/* Morning Score */}
-        <motion.div {...scaleHover}>
+        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
           <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <CircularProgress
@@ -664,7 +838,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Tasks Completed */}
-        <motion.div {...scaleHover}>
+        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
           <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
@@ -688,7 +862,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Habits */}
-        <motion.div {...scaleHover}>
+        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
           <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
@@ -712,7 +886,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Focus */}
-        <motion.div {...scaleHover}>
+        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
           <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">

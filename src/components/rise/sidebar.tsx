@@ -27,7 +27,7 @@ import {
   Zap,
   TrendingUp,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 interface NavItem {
   id: ModuleId
@@ -99,8 +99,13 @@ const navGroups: NavGroup[] = [
   },
 ]
 
+function toArabicNum(n: number): string {
+  return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+}
+
 export function Sidebar() {
-  const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen } = useRiseStore()
+  const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser } = useRiseStore()
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -109,6 +114,36 @@ export function Sidebar() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [setSidebarOpen])
+
+  // Fetch user data for XP display
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/rise/dashboard')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.user) {
+            const { calculateLevel } = await import('@/lib/gamification')
+            const levelInfo = calculateLevel(data.user.xp)
+            setUser({
+              name: data.user.name,
+              level: levelInfo.level,
+              currentXp: levelInfo.currentXp,
+              xpToNext: levelInfo.xpToNext,
+              progress: levelInfo.progress,
+              streak: data.user.streak,
+            })
+          }
+        }
+      } catch {
+        // silently ignore
+      }
+    }
+    fetchUser()
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchUser, 30000)
+    return () => clearInterval(interval)
+  }, [setUser])
 
   return (
     <>
@@ -132,15 +167,20 @@ export function Sidebar() {
           'flex flex-col duration-300 ease-out',
           'lg:static lg:z-auto',
           'shadow-[inset_-1px_0_0_rgba(0,0,0,0.03)] dark:shadow-[inset_-1px_0_0_rgba(255,255,255,0.02),inset_1px_0_0_rgba(0,0,0,0.1)]',
+          'sidebar-glow',
           !sidebarOpen && 'max-lg:[transform:translateX(100%)]',
         )}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 pb-4 relative">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20">
+            <motion.div
+              className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20"
+              whileHover={{ rotate: 12, scale: 1.05 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            >
               <Zap className="w-5 h-5 text-white" />
-            </div>
+            </motion.div>
             <div>
               <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">
                 RiseOS
@@ -156,7 +196,7 @@ export function Sidebar() {
           >
             <X className="w-4 h-4" />
           </button>
-          {/* Gradient line below header: emerald → gold → transparent */}
+          {/* Gradient line below header */}
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-emerald-accent/40 to-gold/30" />
         </div>
 
@@ -179,22 +219,26 @@ export function Sidebar() {
                       key={item.id}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setActiveModule(item.id)}
+                      onMouseEnter={() => setHoveredItem(item.id)}
+                      onMouseLeave={() => setHoveredItem(null)}
                       className={cn(
                         'w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
                         'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
                         isActive && 'bg-sidebar-primary/10 text-sidebar-primary font-semibold shadow-sm'
                       )}
                     >
-                      <div
+                      <motion.div
                         className={cn(
                           'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200',
                           isActive
                             ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md'
                             : 'bg-sidebar-accent/50 text-sidebar-foreground/50'
                         )}
+                        animate={isActive ? { scale: [1, 1.1, 1] } : hoveredItem === item.id ? { scale: 1.05 } : {}}
+                        transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                       >
                         <Icon className="w-4 h-4" />
-                      </div>
+                      </motion.div>
                       <span className="flex-1 text-right">{item.label}</span>
                       {isActive && (
                         <motion.div
@@ -211,35 +255,49 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* Footer - User Card */}
         <div className="p-4 border-t border-sidebar-border relative">
-          {/* Gradient line above footer */}
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-sidebar-border to-transparent" />
           <div className="glass rounded-xl p-3 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20">
-                م
-              </div>
+              <motion.div
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20"
+                whileHover={{ scale: 1.08 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              >
+                {user?.name?.charAt(0) || 'م'}
+              </motion.div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-sidebar-foreground truncate">مستخدم</p>
-                <p className="text-[10px] text-sidebar-foreground/50">المستوى ١</p>
+                <p className="text-sm font-semibold text-sidebar-foreground truncate">
+                  {user?.name || 'مستخدم RiseOS'}
+                </p>
+                <p className="text-[10px] text-sidebar-foreground/50">
+                  المستوى {user ? toArabicNum(user.level) : '١'}
+                  {user && user.streak > 0 && (
+                    <span className="inline-flex items-center gap-0.5 mr-2 text-orange-500">
+                      <Flame className="w-2.5 h-2.5" />
+                      {toArabicNum(user.streak)}
+                    </span>
+                  )}
+                </p>
               </div>
               <ChevronLeft className="w-4 h-4 text-sidebar-foreground/30 rotate-180" />
             </div>
             <div className="mt-2.5">
               <div className="flex justify-between text-[10px] text-sidebar-foreground/50 mb-1.5">
                 <span>الخبرة</span>
-                <span>٠ / ١٠٠</span>
+                <span>
+                  {user ? `${toArabicNum(user.currentXp)} / ${toArabicNum(user.xpToNext)}` : '٠ / ١٠٠'}
+                </span>
               </div>
               <div className="relative">
-                {/* XP bar glow effect */}
                 <div className="absolute -inset-0.5 rounded-full bg-gradient-to-l from-gold/20 to-gold-light/10 blur-[2px] opacity-50" />
                 <div className="relative h-1.5 rounded-full bg-sidebar-accent overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)]">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-l from-gold via-gold to-gold-light shadow-[0_0_8px_oklch(0.78_0.12_85/0.3)]"
+                    className="h-full rounded-full bg-gradient-to-l from-gold via-gold to-gold-light"
                     initial={{ width: 0 }}
-                    animate={{ width: '0%' }}
-                    transition={{ duration: 1, ease: 'easeOut' }}
+                    animate={{ width: user ? `${Math.min(user.progress, 100)}%` : '0%' }}
+                    transition={{ duration: 1.2, ease: 'easeOut' }}
                   />
                 </div>
               </div>

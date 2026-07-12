@@ -160,24 +160,24 @@ export default function Settings() {
   }
 
   const handleExportData = () => {
-    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-'))
-    const data: Record<string, unknown> = {}
-    allKeys.forEach((key) => {
-      try {
-        const val = localStorage.getItem(key)
-        if (val) data[key] = JSON.parse(val)
-      } catch {
-        // ignore
-      }
-    })
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `riseos-backup-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success('تم تصدير البيانات بنجاح')
+    toast.loading('جاري تصدير البيانات...', { id: 'export' })
+    fetch('/api/rise/export')
+      .then((res) => {
+        if (!res.ok) throw new Error('فشل التصدير')
+        return res.blob()
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `riseos-export-${new Date().toISOString().split('T')[0]}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success('تم تصدير البيانات بنجاح', { id: 'export' })
+      })
+      .catch(() => {
+        toast.error('فشل في تصدير البيانات', { id: 'export' })
+      })
   }
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
