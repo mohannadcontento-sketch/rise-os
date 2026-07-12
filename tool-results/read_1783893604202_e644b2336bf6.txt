@@ -1,0 +1,963 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useMemo, useCallback } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Flame,
+     7→  Plus,
+     8→  Zap,
+     9→  Trophy,
+    10→  TrendingUp,
+    11→  CheckCircle2,
+    12→  Circle,
+    13→  Loader2,
+    14→  Sparkles,
+    15→  Crown,
+    16→  CalendarDays,
+    17→  Star,
+    18→  Target,
+    19→} from 'lucide-react'
+    20→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    21→import { Button } from '@/components/ui/button'
+    22→import { Badge } from '@/components/ui/badge'
+    23→import { Input } from '@/components/ui/input'
+    24→import { Label } from '@/components/ui/label'
+    25→import { Skeleton } from '@/components/ui/skeleton'
+    26→import {
+    27→  Dialog,
+    28→  DialogContent,
+    29→  DialogHeader,
+    30→  DialogTitle,
+    31→  DialogDescription,
+    32→  DialogFooter,
+    33→  DialogTrigger,
+    34→} from '@/components/ui/dialog'
+    35→import {
+    36→  Select,
+    37→  SelectContent,
+    38→  SelectItem,
+    39→  SelectTrigger,
+    40→  SelectValue,
+    41→} from '@/components/ui/select'
+    42→import {
+    43→  Tooltip,
+    44→  TooltipContent,
+    45→  TooltipProvider,
+    46→  TooltipTrigger,
+    47→} from '@/components/ui/tooltip'
+    48→import { cn } from '@/lib/utils'
+    49→
+    50→/* ────────────── Types ────────────── */
+    51→
+    52→interface Habit {
+    53→  id: string
+    54→  name: string
+    55→  icon: string
+    56→  color: string
+    57→  frequency: 'daily' | 'weekdays' | 'weekends' | 'custom'
+    58→  targetCount: number
+    59→  xpReward: number
+    60→}
+    61→
+    62→interface HabitLog {
+    63→  habitId: string
+    64→  date: string
+    65→  completed: boolean
+    66→  count: number
+    67→}
+    68→
+    69→interface HabitsResponse {
+    70→  habits: Habit[]
+    71→  logs: HabitLog[]
+    72→}
+    73→
+    74→const PRESET_COLORS = [
+    75→  { name: 'أخضر زمردي', value: '#10b981' },
+    76→  { name: 'ذهبي', value: '#eab308' },
+    77→  { name: 'برتقالي', value: '#f97316' },
+    78→  { name: 'وردي', value: '#ec4899' },
+    79→  { name: 'بنفسجي', value: '#8b5cf6' },
+    80→  { name: 'أحمر', value: '#ef4444' },
+    81→  { name: 'سماوي', value: '#06b6d4' },
+    82→  { name: 'ليموني', value: '#84cc16' },
+    83→]
+    84→
+    85→const FREQUENCY_LABELS: Record<string, string> = {
+    86→  daily: 'يومياً',
+    87→  weekdays: 'أيام الأسبوع',
+    88→  weekends: 'عطلة نهاية الأسبوع',
+    89→  custom: 'مخصص',
+    90→}
+    91→
+    92→/* ────────────── Helpers ────────────── */
+    93→
+    94→function getHeatLevel(completed: boolean, count: number, target: number): number {
+    95→  if (!completed) return 0
+    96→  if (target <= 1) return count > 0 ? 4 : 0
+    97→  const ratio = count / target
+    98→  if (ratio >= 1) return 4
+    99→  if (ratio >= 0.75) return 3
+   100→  if (ratio >= 0.5) return 2
+   101→  return 1
+   102→}
+   103→
+   104→function getTodayStr(): string {
+   105→  const d = new Date()
+   106→  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+   107→}
+   108→
+   109→function getDayName(dateStr: string): string {
+   110→  const d = new Date(dateStr)
+   111→  return d.toLocaleDateString('ar-SA', { weekday: 'long' })
+   112→}
+   113→
+   114→function getShortDate(dateStr: string): string {
+   115→  const d = new Date(dateStr)
+   116→  return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })
+   117→}
+   118→
+   119→function calcStreak(logs: HabitLog[], habitId: string): { current: number; longest: number } {
+   120→  const habitLogs = logs
+   121→    .filter((l) => l.habitId === habitId && l.completed)
+   122→    .map((l) => l.date)
+   123→    .sort()
+   124→
+   125→  if (habitLogs.length === 0) return { current: 0, longest: 0 }
+   126→
+   127→  const today = getTodayStr()
+   128→  const todayLog = habitLogs.includes(today)
+   129→  let current = 0
+   130→  let longest = 0
+   131→  let streak = 1
+   132→
+   133→  if (todayLog) {
+   134→    current = 1
+   135→  }
+   136→
+   137→  // Calculate all streaks
+   138→  for (let i = 1; i < habitLogs.length; i++) {
+   139→    const prev = new Date(habitLogs[i - 1])
+   140→    const curr = new Date(habitLogs[i])
+   141→    const diffMs = curr.getTime() - prev.getTime()
+   142→    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+   143→
+   144→    if (diffDays === 1) {
+   145→      streak++
+   146→    } else {
+   147→      longest = Math.max(longest, streak)
+   148→      streak = 1
+   149→    }
+   150→  }
+   151→  longest = Math.max(longest, streak)
+   152→
+   153→  // Calculate current streak
+   154→  if (todayLog && habitLogs.length > 1) {
+   155→    const sorted = [...habitLogs].reverse()
+   156→    for (let i = 1; i < sorted.length; i++) {
+   157→      const prev = new Date(sorted[i - 1])
+   158→      const curr = new Date(sorted[i])
+   159→      const diffMs = prev.getTime() - curr.getTime()
+   160→      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+   161→      if (diffDays === 1) {
+   162→        current++
+   163→      } else {
+   164→        break
+   165→      }
+   166→    }
+   167→  }
+   168→
+   169→  return { current, longest }
+   170→}
+   171→
+   172→function generateLast30Days(): string[] {
+   173→  const days: string[] = []
+   174→  const today = new Date()
+   175→  for (let i = 29; i >= 0; i--) {
+   176→    const d = new Date(today)
+   177→    d.setDate(d.getDate() - i)
+   178→    days.push(
+   179→      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+   180→    )
+   181→  }
+   182→  return days
+   183→}
+   184→
+   185→function getCompletionRate(logs: HabitLog[], habitId: string): number {
+   186→  const habitLogs = logs.filter((l) => l.habitId === habitId)
+   187→  if (habitLogs.length === 0) return 0
+   188→  const completed = habitLogs.filter((l) => l.completed).length
+   189→  return Math.round((completed / habitLogs.length) * 100)
+   190→}
+   191→
+   192→/* ────────────── Component ────────────── */
+   193→
+   194→export function HabitsView() {
+   195→  const [habits, setHabits] = useState<Habit[]>([])
+   196→  const [logs, setLogs] = useState<HabitLog[]>([])
+   197→  const [loading, setLoading] = useState(true)
+   198→  const [addOpen, setAddOpen] = useState(false)
+   199→  const [saving, setSaving] = useState(false)
+   200→  const [flashCard, setFlashCard] = useState<string | null>(null)
+   201→
+   202→  // Form state
+   203→  const [formName, setFormName] = useState('')
+   204→  const [formIcon, setFormIcon] = useState('🎯')
+   205→  const [formColor, setFormColor] = useState('#10b981')
+   206→  const [formFrequency, setFormFrequency] = useState<Habit['frequency']>('daily')
+   207→  const [formTarget, setFormTarget] = useState('1')
+   208→
+   209→  const todayStr = getTodayStr()
+   210→
+   211→  /* ---- Fetch ---- */
+   212→  useEffect(() => {
+   213→    async function fetchHabits() {
+   214→      try {
+   215→        const res = await fetch('/api/rise/habits')
+   216→        if (res.ok) {
+   217→          const data: HabitsResponse = await res.json()
+   218→          setHabits(data.habits)
+   219→          setLogs(data.logs)
+   220→        }
+   221→      } catch {
+   222→        // empty
+   223→      } finally {
+   224→        setLoading(false)
+   225→      }
+   226→    }
+   227→    fetchHabits()
+   228→  }, [])
+   229→
+   230→  /* ---- Toggle today's habit ---- */
+   231→  const toggleTodayHabit = useCallback(
+   232→    async (habitId: string) => {
+   233→      const existingLog = logs.find((l) => l.habitId === habitId && l.date === todayStr)
+   234→      const newCompleted = existingLog ? !existingLog.completed : true
+   235→
+   236→      // Flash animation
+   237→      setFlashCard(habitId)
+   238→      setTimeout(() => setFlashCard(null), 400)
+   239→
+   240→      // Optimistic update
+   241→      if (existingLog) {
+   242→        setLogs((prev) =>
+   243→          prev.map((l) =>
+   244→            l.habitId === habitId && l.date === todayStr
+   245→              ? { ...l, completed: newCompleted, count: newCompleted ? 1 : 0 }
+   246→              : l
+   247→          )
+   248→        )
+   249→      } else {
+   250→        setLogs((prev) => [
+   251→          ...prev,
+   252→          { habitId, date: todayStr, completed: newCompleted, count: newCompleted ? 1 : 0 },
+   253→        ])
+   254→      }
+   255→
+   256→      try {
+   257→        await fetch('/api/rise/habits', {
+   258→          method: 'PUT',
+   259→          headers: { 'Content-Type': 'application/json' },
+   260→          body: JSON.stringify({
+   261→            habitId,
+   262→            date: todayStr,
+   263→            completed: newCompleted,
+   264→          }),
+   265→        })
+   266→      } catch {
+   267→        // Revert
+   268→        if (existingLog) {
+   269→          setLogs((prev) =>
+   270→            prev.map((l) =>
+   271→              l.habitId === habitId && l.date === todayStr
+   272→                ? { ...l, completed: existingLog.completed, count: existingLog.count }
+   273→                : l
+   274→            )
+   275→          )
+   276→        } else {
+   277→          setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayStr)))
+   278→        }
+   279→      }
+   280→    },
+   281→    [logs, todayStr]
+   282→  )
+   283→
+   284→  /* ---- Add habit ---- */
+   285→  async function handleAddHabit() {
+   286→    if (!formName.trim()) return
+   287→    setSaving(true)
+   288→    try {
+   289→      const res = await fetch('/api/rise/habits', {
+   290→        method: 'POST',
+   291→        headers: { 'Content-Type': 'application/json' },
+   292→        body: JSON.stringify({
+   293→          name: formName,
+   294→          icon: formIcon,
+   295→          color: formColor,
+   296→          frequency: formFrequency,
+   297→          targetCount: parseInt(formTarget) || 1,
+   298→        }),
+   299→      })
+   300→      if (res.ok) {
+   301→        const data: HabitsResponse = await res.json()
+   302→        setHabits((prev) => [...prev, ...data.habits])
+   303→        setLogs((prev) => [...prev, ...data.logs])
+   304→        setAddOpen(false)
+   305→        resetForm()
+   306→      }
+   307→    } catch {
+   308→      // silently fail
+   309→    } finally {
+   310→      setSaving(false)
+   311→    }
+   312→  }
+   313→
+   314→  /* ---- Delete habit ---- */
+   315→  async function deleteHabit(id: string) {
+   316→    setHabits((prev) => prev.filter((h) => h.id !== id))
+   317→    try {
+   318→      await fetch('/api/rise/habits', {
+   319→        method: 'DELETE',
+   320→        headers: { 'Content-Type': 'application/json' },
+   321→        body: JSON.stringify({ id }),
+   322→      })
+   323→    } catch {
+   324→      // silently fail
+   325→    }
+   326→  }
+   327→
+   328→  function resetForm() {
+   329→    setFormName('')
+   330→    setFormIcon('🎯')
+   331→    setFormColor('#10b981')
+   332→    setFormFrequency('daily')
+   333→    setFormTarget('1')
+   334→  }
+   335→
+   336→  /* ---- Stats ---- */
+   337→  const stats = useMemo(() => {
+   338→    const total = habits.length
+   339→    const todayLogs = logs.filter((l) => l.date === todayStr)
+   340→    const todayCompleted = todayLogs.filter((l) => l.completed).length
+   341→    const todayRate = total > 0 ? Math.round((todayCompleted / total) * 100) : 0
+   342→
+   343→    let longestStreak = 0
+   344→    let bestHabit: Habit | null = null
+   345→    let bestRate = 0
+   346→
+   347→    habits.forEach((h) => {
+   348→      const s = calcStreak(logs, h.id)
+   349→      if (s.longest > longestStreak) longestStreak = s.longest
+   350→      const rate = getCompletionRate(logs, h.id)
+   351→      if (rate > bestRate) {
+   352→        bestRate = rate
+   353→        bestHabit = h
+   354→      }
+   355→    })
+   356→
+   357→    const currentStreak =
+   358→      habits.length > 0
+   359→        ? Math.max(...habits.map((h) => calcStreak(logs, h.id).current))
+   360→        : 0
+   361→
+   362→    return { total, todayRate, longestStreak, currentStreak, bestHabit, bestRate }
+   363→  }, [habits, logs, todayStr])
+   364→
+   365→  /* ---- Heatmap data ---- */
+   366→  const last30Days = useMemo(() => generateLast30Days(), [])
+   367→
+   368→  /* ---- Day-of-week labels (Arabic, Sun=أحد through Sat=سبت) ---- */
+   369→  const dayLabels = ['سبت', 'أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة']
+   370→  // getDay() returns 0=Sun ... 6=Sat. We want Sat=0, Sun=1, Mon=2 ... Fri=6
+   371→  function getDayIndex(dateStr: string): number {
+   372→    const d = new Date(dateStr)
+   373→    const g = d.getDay() // 0=Sun
+   374→    return (g + 1) % 7 // shift: Sun→1, Mon→2, ..., Sat→0
+   375→  }
+   376→
+   377→  /* ──────────── Render ──────────── */
+   378→
+   379→  if (loading) {
+   380→    return (
+   381→      <div className="space-y-6 p-4 md:p-6">
+   382→        <div className="flex items-center justify-between">
+   383→          <Skeleton className="h-8 w-40" />
+   384→          <Skeleton className="h-10 w-10 rounded-xl" />
+   385→        </div>
+   386→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   387→          {[1, 2, 3, 4].map((i) => (
+   388→            <Skeleton key={i} className="h-24 rounded-2xl" />
+   389→          ))}
+   390→        </div>
+   391→        <Skeleton className="h-48 rounded-2xl" />
+   392→        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+   393→          {[1, 2, 3, 4, 5, 6].map((i) => (
+   394→            <Skeleton key={i} className="h-36 rounded-2xl" />
+   395→          ))}
+   396→        </div>
+   397→      </div>
+   398→    )
+   399→  }
+   400→
+   401→  return (
+   402→    <TooltipProvider delayDuration={300}>
+   403→      <div className="space-y-6 p-4 md:p-6">
+   404→        {/* ── Header ── */}
+   405→        <div className="flex items-center justify-between">
+   406→          <div className="flex items-center gap-3">
+   407→            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg">
+   408→              <Flame className="w-5 h-5 text-forest-dark" />
+   409→            </div>
+   410→            <div>
+   411→              <h1 className="text-xl font-bold tracking-tight">تتبع العادات</h1>
+   412→              <p className="text-xs text-muted-foreground">
+   413→                كرر العادات الجيدة كل يوم وحقق النجاح
+   414→              </p>
+   415→            </div>
+   416→          </div>
+   417→
+   418→          <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) resetForm() }}>
+   419→            <DialogTrigger asChild>
+   420→              <Button
+   421→                size="sm"
+   422→                className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+   423→              >
+   424→                <Plus className="w-4 h-4 ml-1.5" />
+   425→                عادة جديدة
+   426→              </Button>
+   427→            </DialogTrigger>
+   428→            <DialogContent className="sm:max-w-md rounded-2xl">
+   429→              <DialogHeader>
+   430→                <DialogTitle className="text-right">إضافة عادة جديدة</DialogTitle>
+   431→                <DialogDescription className="text-right">
+   432→                  بنِ عادات قوية تُقربك من أهدافك
+   433→                </DialogDescription>
+   434→              </DialogHeader>
+   435→              <div className="space-y-4 pt-2">
+   436→                <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
+   437→                  <div className="space-y-2">
+   438→                    <Label className="text-right text-sm font-medium">الأيقونة</Label>
+   439→                    <Input
+   440→                      value={formIcon}
+   441→                      onChange={(e) => setFormIcon(e.target.value)}
+   442→                      className="w-16 text-center text-2xl h-12 rounded-xl"
+   443→                      maxLength={2}
+   444→                    />
+   445→                  </div>
+   446→                  <div className="space-y-2">
+   447→                    <Label className="text-right text-sm font-medium">اسم العادة</Label>
+   448→                    <Input
+   449→                      value={formName}
+   450→                      onChange={(e) => setFormName(e.target.value)}
+   451→                      placeholder="مثال: قراءة 30 دقيقة"
+   452→                      className="rounded-xl text-right"
+   453→                    />
+   454→                  </div>
+   455→                </div>
+   456→                <div className="space-y-2">
+   457→                  <Label className="text-right text-sm font-medium">اللون</Label>
+   458→                  <div className="flex gap-2 flex-wrap">
+   459→                    {PRESET_COLORS.map((c) => (
+   460→                      <button
+   461→                        key={c.value}
+   462→                        onClick={() => setFormColor(c.value)}
+   463→                        className={cn(
+   464→                          'w-8 h-8 rounded-full transition-all duration-200 border-2',
+   465→                          formColor === c.value
+   466→                            ? 'ring-2 ring-offset-2 ring-offset-background scale-110'
+   467→                            : 'hover:scale-105'
+   468→                        )}
+   469→                        style={{
+   470→                          backgroundColor: c.value,
+   471→                          borderColor: formColor === c.value ? c.value : 'transparent',
+   472→                          ...(formColor === c.value ? { ['--tw-ring-color' as string]: c.value } : {}),
+   473→                        }}
+   474→                      >
+   475→                        <span className="sr-only">{c.name}</span>
+   476→                      </button>
+   477→                    ))}
+   478→                  </div>
+   479→                </div>
+   480→                <div className="grid grid-cols-2 gap-3">
+   481→                  <div className="space-y-2">
+   482→                    <Label className="text-right text-sm font-medium">التكرار</Label>
+   483→                    <Select
+   484→                      value={formFrequency}
+   485→                      onValueChange={(v) => setFormFrequency(v as Habit['frequency'])}
+   486→                    >
+   487→                      <SelectTrigger className="rounded-xl text-right">
+   488→                        <SelectValue />
+   489→                      </SelectTrigger>
+   490→                      <SelectContent>
+   491→                        <SelectItem value="daily">يومياً</SelectItem>
+   492→                        <SelectItem value="weekdays">أيام الأسبوع</SelectItem>
+   493→                        <SelectItem value="weekends">نهاية الأسبوع</SelectItem>
+   494→                        <SelectItem value="custom">مخصص</SelectItem>
+   495→                      </SelectContent>
+   496→                    </Select>
+   497→                  </div>
+   498→                  <div className="space-y-2">
+   499→                    <Label className="text-right text-sm font-medium">الهدف اليومي</Label>
+   500→                    <Input
+   501→                      type="number"
+   502→                      min="1"
+   503→                      value={formTarget}
+   504→                      onChange={(e) => setFormTarget(e.target.value)}
+   505→                      className="rounded-xl text-right"
+   506→                    />
+   507→                  </div>
+   508→                </div>
+   509→              </div>
+   510→              <DialogFooter className="gap-2 sm:gap-0">
+   511→                <Button
+   512→                  variant="outline"
+   513→                  onClick={() => setAddOpen(false)}
+   514→                  className="rounded-xl"
+   515→                >
+   516→                  إلغاء
+   517→                </Button>
+   518→                <Button
+   519→                  onClick={handleAddHabit}
+   520→                  disabled={!formName.trim() || saving}
+   521→                  className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+   522→                >
+   523→                  {saving ? (
+   524→                    <Loader2 className="w-4 h-4 animate-spin ml-1.5" />
+   525→                  ) : (
+   526→                    <Plus className="w-4 h-4 ml-1.5" />
+   527→                  )}
+   528→                  إضافة
+   529→                </Button>
+   530→              </DialogFooter>
+   531→            </DialogContent>
+   532→          </Dialog>
+   533→        </div>
+   534→
+   535→        {/* ── Statistics ── */}
+   536→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   537→          <motion.div
+   538→            initial={{ opacity: 0, y: 16 }}
+   539→            animate={{ opacity: 1, y: 0 }}
+   540→            transition={{ duration: 0.4 }}
+   541→          >
+   542→            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+   543→              {/* Gradient border effect */}
+   544→              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
+   545→              <CardContent className="p-4 flex items-center gap-3 relative">
+   546→                <div className="w-9 h-9 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
+   547→                  <Target className="w-4.5 h-4.5 text-emerald-accent" />
+   548→                </div>
+   549→                <div>
+   550→                  <p className="text-xl font-bold">{stats.total}</p>
+   551→                  <p className="text-[10px] text-muted-foreground">إجمالي العادات</p>
+   552→                </div>
+   553→              </CardContent>
+   554→            </Card>
+   555→          </motion.div>
+   556→
+   557→          <motion.div
+   558→            initial={{ opacity: 0, y: 16 }}
+   559→            animate={{ opacity: 1, y: 0 }}
+   560→            transition={{ duration: 0.4, delay: 0.06 }}
+   561→          >
+   562→            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+   563→              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
+   564→              <CardContent className="p-4 flex items-center gap-3 relative">
+   565→                <div className="w-9 h-9 rounded-xl bg-gold/10 flex items-center justify-center">
+   566→                  <Zap className="w-4.5 h-4.5 text-gold" />
+   567→                </div>
+   568→                <div>
+   569→                  <p className="text-xl font-bold">{stats.todayRate}%</p>
+   570→                  <p className="text-[10px] text-muted-foreground">إنجاز اليوم</p>
+   571→                </div>
+   572→              </CardContent>
+   573→            </Card>
+   574→          </motion.div>
+   575→
+   576→          <motion.div
+   577→            initial={{ opacity: 0, y: 16 }}
+   578→            animate={{ opacity: 1, y: 0 }}
+   579→            transition={{ duration: 0.4, delay: 0.12 }}
+   580→          >
+   581→            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+   582→              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
+   583→              <CardContent className="p-4 flex items-center gap-3 relative">
+   584→                <div className="w-9 h-9 rounded-xl bg-forest/10 flex items-center justify-center">
+   585→                  <Flame className="w-4.5 h-4.5 text-forest" />
+   586→                </div>
+   587→                <div>
+   588→                  <p className="text-xl font-bold">{stats.currentStreak}</p>
+   589→                  <p className="text-[10px] text-muted-foreground">سلسلة حالية</p>
+   590→                </div>
+   591→              </CardContent>
+   592→            </Card>
+   593→          </motion.div>
+   594→
+   595→          <motion.div
+   596→            initial={{ opacity: 0, y: 16 }}
+   597→            animate={{ opacity: 1, y: 0 }}
+   598→            transition={{ duration: 0.4, delay: 0.18 }}
+   599→          >
+   600→            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+   601→              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-forest/20 pointer-events-none" />
+   602→              <CardContent className="p-4 flex items-center gap-3 relative">
+   603→                <div className="w-9 h-9 rounded-xl bg-gold-light/20 flex items-center justify-center">
+   604→                  <Crown className="w-4.5 h-4.5 text-gold" />
+   605→                </div>
+   606→                <div>
+   607→                  <p className="text-sm font-bold truncate max-w-[80px]">
+   608→                    {stats.bestHabit ? `${stats.bestHabit.icon} ${stats.bestHabit.name}` : '—'}
+   609→                  </p>
+   610→                  <p className="text-[10px] text-muted-foreground">أفضل عادة</p>
+   611→                </div>
+   612→              </CardContent>
+   613→            </Card>
+   614→          </motion.div>
+   615→        </div>
+   616→
+   617→        {/* ── Today's Habits ── */}
+   618→        {habits.length > 0 && (
+   619→          <div>
+   620→            <div className="flex items-center gap-2 mb-4">
+   621→              <CalendarDays className="w-4 h-4 text-emerald-accent" />
+   622→              <h2 className="text-sm font-semibold">عادات اليوم</h2>
+   623→              <Badge
+   624→                variant="secondary"
+   625→                className="text-[10px] px-2 py-0 rounded-full bg-emerald-accent/10 text-emerald-accent border-0"
+   626→              >
+   627→                {logs.filter((l) => l.date === todayStr && l.completed).length} / {habits.length}
+   628→              </Badge>
+   629→            </div>
+   630→
+   631→            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+   632→              <AnimatePresence mode="popLayout">
+   633→                {habits.map((habit, index) => {
+   634→                  const todayLog = logs.find(
+   635→                    (l) => l.habitId === habit.id && l.date === todayStr
+   636→                  )
+   637→                  const isCompleted = todayLog?.completed ?? false
+   638→                  const streak = calcStreak(logs, habit.id)
+   639→                  const isFlashing = flashCard === habit.id
+   640→
+   641→                  return (
+   642→                    <motion.div
+   643→                      key={habit.id}
+   644→                      layout
+   645→                      initial={{ opacity: 0, scale: 0.9 }}
+   646→                      animate={{ opacity: 1, scale: 1 }}
+   647→                      exit={{ opacity: 0, scale: 0.9 }}
+   648→                      transition={{ duration: 0.3, delay: index * 0.05 }}
+   649→                    >
+   650→                      <Card
+   651→                        className={cn(
+   652→                          'rounded-2xl border-0 shadow-sm overflow-hidden transition-all duration-300',
+   653→                          isCompleted
+   654→                            ? 'bg-card ring-1'
+   655→                            : 'glass'
+   656→                        )}
+   657→                        style={
+   658→                          isCompleted
+   659→                            ? { ['--tw-ring-color' as string]: habit.color + '40' }
+   660→                            : undefined
+   661→                        }
+   662→                      >
+   663→                        {/* Flash overlay */}
+   664→                        <AnimatePresence>
+   665→                          {isFlashing && (
+   666→                            <motion.div
+   667→                              initial={{ opacity: 0.5 }}
+   668→                              animate={{ opacity: 0 }}
+   669→                              exit={{ opacity: 0 }}
+   670→                              transition={{ duration: 0.4 }}
+   671→                              className="absolute inset-0 z-10 pointer-events-none rounded-2xl"
+   672→                              style={{ backgroundColor: isCompleted ? habit.color : 'transparent' }}
+   673→                            />
+   674→                          )}
+   675→                        </AnimatePresence>
+   676→
+   677→                        <CardContent className="p-4 relative">
+   678→                          {/* Color accent strip */}
+   679→                          <div
+   680→                            className="absolute top-0 right-0 left-0 h-1 transition-opacity duration-300"
+   681→                            style={{
+   682→                              backgroundColor: habit.color,
+   683→                              opacity: isCompleted ? 1 : 0.3,
+   684→                            }}
+   685→                          />
+   686→
+   687→                          {/* Delete button */}
+   688→                          <button
+   689→                            onClick={(e) => {
+   690→                              e.stopPropagation()
+   691→                              deleteHabit(habit.id)
+   692→                            }}
+   693→                            className="absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+   694→                            style={{ opacity: 0.4 }}
+   695→                            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+   696→                            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.4')}
+   697→                          >
+   698→                            <span className="text-[10px]">✕</span>
+   699→                          </button>
+   700→
+   701→                          {/* Icon and name */}
+   702→                          <div className="text-center mb-3">
+   703→                            <motion.div
+   704→                              animate={isCompleted ? { scale: [1, 1.2, 1] } : {}}
+   705→                              transition={{ duration: 0.3 }}
+   706→                              className="text-3xl mb-1.5"
+   707→                            >
+   708→                              {habit.icon}
+   709→                            </motion.div>
+   710→                            <p className="text-xs font-semibold truncate">{habit.name}</p>
+   711→                          </div>
+   712→
+   713→                          {/* Streak with 🔥 for streak > 3 */}
+   714→                          {streak.current > 0 && (
+   715→                            <div className="flex items-center justify-center gap-1 mb-3">
+   716→                              {streak.current > 3 && (
+   717→                                <span className="text-sm">🔥</span>
+   718→                              )}
+   719→                              <Flame
+   720→                                className="w-3.5 h-3.5"
+   721→                                style={{ color: habit.color }}
+   722→                              />
+   723→                              <span
+   724→                                className="text-xs font-bold"
+   725→                                style={{ color: habit.color }}
+   726→                              >
+   727→                                {streak.current}
+   728→                              </span>
+   729→                              <span className="text-[10px] text-muted-foreground">يوم</span>
+   730→                            </div>
+   731→                          )}
+   732→
+   733→                          {/* Toggle button with pulsing ring when completed */}
+   734→                          <div className="relative">
+   735→                            {isCompleted && (
+   736→                              <motion.div
+   737→                                className="absolute inset-0 rounded-xl pointer-events-none"
+   738→                                style={{ borderColor: habit.color }}
+   739→                                animate={{
+   740→                                  boxShadow: [
+   741→                                    `0 0 0 0px ${habit.color}30`,
+   742→                                    `0 0 0 6px ${habit.color}10`,
+   743→                                    `0 0 0 10px ${habit.color}00`,
+   744→                                  ],
+   745→                                }}
+   746→                                transition={{
+   747→                                  duration: 2,
+   748→                                  repeat: Infinity,
+   749→                                  ease: 'easeOut',
+   750→                                }}
+   751→                              />
+   752→                            )}
+   753→                            <motion.button
+   754→                              whileTap={{ scale: 0.92 }}
+   755→                              onClick={() => toggleTodayHabit(habit.id)}
+   756→                              className={cn(
+   757→                                'w-full py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5 relative z-10',
+   758→                                isCompleted
+   759→                                  ? 'text-white shadow-md'
+   760→                                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+   761→                              )}
+   762→                              style={
+   763→                                isCompleted
+   764→                                  ? { backgroundColor: habit.color }
+   765→                                  : undefined
+   766→                              }
+   767→                            >
+   768→                              {isCompleted ? (
+   769→                                <>
+   770→                                  <CheckCircle2 className="w-3.5 h-3.5" />
+   771→                                  تم!
+   772→                                </>
+   773→                              ) : (
+   774→                                <>
+   775→                                  <Circle className="w-3.5 h-3.5" />
+   776→                                  إتمام
+   777→                                </>
+   778→                              )}
+   779→                            </motion.button>
+   780→                          </div>
+   781→
+   782→                          {/* XP badge */}
+   783→                          <div className="flex items-center justify-center gap-1 mt-2">
+   784→                            <Sparkles className="w-3 h-3 text-gold" />
+   785→                            <span className="text-[10px] text-gold font-medium">
+   786→                              +{habit.xpReward} خبرة
+   787→                            </span>
+   788→                          </div>
+   789→                        </CardContent>
+   790→                      </Card>
+   791→                    </motion.div>
+   792→                  )
+   793→                })}
+   794→              </AnimatePresence>
+   795→            </div>
+   796→          </div>
+   797→        )}
+   798→
+   799→        {/* ── Heatmap Section ── */}
+   800→        {habits.length > 0 && (
+   801→          <div>
+   802→            <div className="flex items-center gap-2 mb-4">
+   803→              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   804→              <h2 className="text-sm font-semibold">خريطة الإنجاز</h2>
+   805→              <span className="text-[10px] text-muted-foreground">آخر ٣٠ يوم</span>
+   806→            </div>
+   807→
+   808→            <div className="space-y-4 max-h-96 overflow-y-auto pl-1">
+   809→              {habits.map((habit, hIndex) => (
+   810→                <motion.div
+   811→                  key={habit.id}
+   812→                  initial={{ opacity: 0, y: 12 }}
+   813→                  animate={{ opacity: 1, y: 0 }}
+   814→                  transition={{ duration: 0.3, delay: hIndex * 0.05 }}
+   815→                >
+   816→                  <Card className="rounded-2xl border-0 shadow-sm glass">
+   817→                    <CardContent className="p-4">
+   818→                      {/* Habit name */}
+   819→                      <div className="flex items-center gap-2 mb-3">
+   820→                        <span className="text-base">{habit.icon}</span>
+   821→                        <span className="text-xs font-semibold">{habit.name}</span>
+   822→                        <div className="flex-1" />
+   823→                        <div className="flex items-center gap-1">
+   824→                          {calcStreak(logs, habit.id).current > 3 && (
+   825→                            <span className="text-xs">🔥</span>
+   826→                          )}
+   827→                          <Flame className="w-3 h-3" style={{ color: habit.color }} />
+   828→                          <span className="text-[10px] font-medium" style={{ color: habit.color }}>
+   829→                            {calcStreak(logs, habit.id).current}
+   830→                          </span>
+   831→                        </div>
+   832→                      </div>
+   833→
+   834→                      {/* Heatmap grid: 7 rows (days) × 5 cols (weeks) */}
+   835→                      <div className="overflow-x-auto">
+   836→                        <div className="flex gap-0.5 min-w-fit">
+   837→                          {/* Day labels */}
+   838→                          <div className="flex flex-col gap-0.5 ml-1.5">
+   839→                            {dayLabels.map((label, di) => (
+   840→                              <div
+   841→                                key={label}
+   842→                                className="w-7 text-[9px] text-muted-foreground/50 flex items-center justify-end pr-1"
+   843→                                style={{ height: '14px' }}
+   844→                              >
+   845→                                {di % 2 === 0 ? label : ''}
+   846→                              </div>
+   847→                            ))}
+   848→                          </div>
+   849→
+   850→                          {/* Week columns */}
+   851→                          {Array.from({ length: 5 }).map((_, weekIdx) => {
+   852→                            const weekDays = last30Days.filter(
+   853→                              (_, i) => Math.floor(i / 7) === weekIdx
+   854→                            )
+   855→
+   856→                            return (
+   857→                              <div key={weekIdx} className="flex flex-col gap-0.5">
+   858→                                {/* Render 7 cells per week */}
+   859→                                {Array.from({ length: 7 }).map((_, daySlot) => {
+   860→                                  // Find the day that falls in this week and this day-of-week
+   861→                                  const dayInWeek = weekDays.find(
+   862→                                    (d) => getDayIndex(d) === daySlot
+   863→                                  )
+   864→                                  const isToday = dayInWeek === todayStr
+   865→
+   866→                                  let heatLevel = 0
+   867→                                  if (dayInWeek) {
+   868→                                    const log = logs.find(
+   869→                                      (l) => l.habitId === habit.id && l.date === dayInWeek
+   870→                                    )
+   871→                                    if (log) {
+   872→                                      heatLevel = getHeatLevel(
+   873→                                        log.completed,
+   874→                                        log.count,
+   875→                                        habit.targetCount
+   876→                                      )
+   877→                                    }
+   878→                                  }
+   879→
+   880→                                  return (
+   881→                                    <Tooltip key={`${weekIdx}-${daySlot}`}>
+   882→                                      <TooltipTrigger asChild>
+   883→                                        <motion.div
+   884→                                          whileHover={{ scale: 1.3, zIndex: 10 }}
+   885→                                          transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+   886→                                          className={cn(
+   887→                                            'w-[14px] h-[14px] rounded-sm transition-all duration-300 cursor-default',
+   888→                                            dayInWeek ? `heat-${heatLevel}` : 'bg-transparent',
+   889→                                            isToday &&
+   890→                                              'ring-2 ring-emerald-accent ring-offset-1 ring-offset-background shadow-[0_0_8px_var(--color-emerald-accent)]'
+   891→                                          )}
+   892→                                        />
+   893→                                      </TooltipTrigger>
+   894→                                      <TooltipContent
+   895→                                        side="top"
+   896→                                        className="text-[10px] px-2 py-1 rounded-lg"
+   897→                                      >
+   898→                                        {dayInWeek ? (
+   899→                                          <span>
+   900→                                            {getDayName(dayInWeek)}، {getShortDate(dayInWeek)}
+   901→                                            {heatLevel > 0 ? ' ✅' : ' ⬜'}
+   902→                                          </span>
+   903→                                        ) : (
+   904→                                          <span>—</span>
+   905→                                        )}
+   906→                                      </TooltipContent>
+   907→                                    </Tooltip>
+   908→                                  )
+   909→                                })}
+   910→                              </div>
+   911→                            )
+   912→                          })}
+   913→                        </div>
+   914→                      </div>
+   915→                    </CardContent>
+   916→                  </Card>
+   917→                </motion.div>
+   918→              ))}
+   919→            </div>
+   920→
+   921→            {/* Heatmap legend */}
+   922→            <div className="flex items-center justify-center gap-2 mt-3">
+   923→              <span className="text-[10px] text-muted-foreground">أقل</span>
+   924→              <div className="flex gap-0.5">
+   925→                {[0, 1, 2, 3, 4].map((level) => (
+   926→                  <div key={level} className={cn('w-3 h-3 rounded-sm transition-colors duration-300', `heat-${level}`)} />
+   927→                ))}
+   928→              </div>
+   929→              <span className="text-[10px] text-muted-foreground">أكثر</span>
+   930→            </div>
+   931→          </div>
+   932→        )}
+   933→
+   934→        {/* ── Empty State ── */}
+   935→        {habits.length === 0 && (
+   936→          <motion.div
+   937→            initial={{ opacity: 0, scale: 0.95 }}
+   938→            animate={{ opacity: 1, scale: 1 }}
+   939→            className="flex flex-col items-center justify-center py-20 text-center"
+   940→          >
+   941→            <div className="w-20 h-20 rounded-full bg-gold/10 flex items-center justify-center mb-6">
+   942→              <Flame className="w-10 h-10 text-gold" />
+   943→            </div>
+   944→            <h3 className="text-lg font-semibold mb-2">ابدأ ببناء عاداتك</h3>
+   945→            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
+   946→              النجاح ليس حدثاً عابراً، بل هو نتيجة عادات يومية متكررة. أضف عادتك الأولى وابدأ
+   947→              رحلة التغيير!
+   948→            </p>
+   949→            <Button
+   950→              onClick={() => setAddOpen(true)}
+   951→              className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/20"
+   952→            >
+   953→              <Plus className="w-4 h-4 ml-1.5" />
+   954→              أضف أول عادة
+   955→            </Button>
+   956→          </motion.div>
+   957→        )}
+   958→      </div>
+   959→    </TooltipProvider>
+   960→  )
+   961→}
+   962→
+   963→export default HabitsView

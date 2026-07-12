@@ -43,6 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { notifyFocusComplete } from '@/lib/notifications'
 
 /* ────────────── Types ────────────── */
 
@@ -188,7 +189,9 @@ export default function DeepWork() {
       })
       if (res.ok) {
         if (completed) {
-          toast.success('أحسنت! أكملت جلسة العمل العميق 🎉')
+          const xp = Math.round(elapsedMin * 2)
+          notifyFocusComplete(elapsedMin, xp)
+          fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }) }).catch(() => {})
         } else {
           toast.success('تم حفظ الجلسة')
         }
@@ -661,7 +664,7 @@ export default function DeepWork() {
                             style={{
                               backgroundColor: sound.waveColor,
                               height: '40%',
-                              originY: '1',
+                              transformOrigin: 'bottom',
                             }}
                             animate={{
                               scaleX: [0.3, 0.7, 0.3],

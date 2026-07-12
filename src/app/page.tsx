@@ -1,12 +1,11 @@
 'use client'
 
-import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import { Sidebar } from '@/components/rise/sidebar'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, Moon, Sun, Search } from 'lucide-react'
+import { CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { Input } from '@/components/ui/input'
 import {
   CommandDialog,
   CommandEmpty,
@@ -98,10 +97,16 @@ function LoadingFallback() {
   )
 }
 
+interface SearchTask { id: string; title: string; status: string; xpReward: number }
+interface SearchHabit { id: string; name: string; icon: string; color: string }
+interface SearchGoal { id: string; title: string; type: string; progress: number }
+
 export default function RiseOSApp() {
   const { activeModule, setActiveModule, toggleSidebar } = useRiseStore()
   const { theme, setTheme } = useTheme()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<{ tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[] }>({ tasks: [], habits: [], goals: [] })
   const mountedRef = useRef(false)
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -124,6 +129,40 @@ export default function RiseOSApp() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  /* ── Global search ── */
+  const handleSearchQuery = useCallback((query: string) => {
+    setSearchQuery(query)
+  }, [])
+
+  const handleSearchOpenChange = useCallback((open: boolean) => {
+    setSearchOpen(open)
+    if (!open) {
+      setSearchQuery('')
+      setSearchResults({ tasks: [], habits: [], goals: [] })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!searchOpen || searchQuery.length < 2) {
+      return
+    }
+    const q = searchQuery.toLowerCase()
+    const controller = new AbortController()
+    Promise.all([
+      fetch('/api/rise/tasks', { signal: controller.signal }).then(r => r.json()).catch(() => ({ tasks: [] })),
+      fetch('/api/rise/habits', { signal: controller.signal }).then(r => r.json()).catch(() => ({ habits: [] })),
+      fetch('/api/rise/goals', { signal: controller.signal }).then(r => r.json()).catch(() => ({ goals: [] })),
+    ]).then(([tasksData, habitsData, goalsData]) => {
+      if (controller.signal.aborted) return
+      setSearchResults({
+        tasks: (tasksData.tasks || []).filter((t: SearchTask) => t.title.toLowerCase().includes(q)).slice(0, 5),
+        habits: (habitsData.habits || []).filter((h: SearchHabit) => h.name.toLowerCase().includes(q)).slice(0, 5),
+        goals: (goalsData.goals || []).filter((g: SearchGoal) => g.title.toLowerCase().includes(q)).slice(0, 5),
+      })
+    })
+    return () => controller.abort()
+  }, [searchQuery, searchOpen])
 
   const ActiveComponent = moduleComponents[activeModule]
 
@@ -201,10 +240,70 @@ export default function RiseOSApp() {
       </main>
 
       {/* Command palette */}
-      <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <CommandInput placeholder="ابحث عن أي شيء..." dir="rtl" />
+      <CommandDialog open={searchOpen} onOpenChange={handleSearchOpenChange}>
+        <CommandInput placeholder="ابحث عن أي شيء..." dir="rtl" onInput={(e) => handleSearchQuery((e.target as HTMLInputElement).value)} />
         <CommandList>
           <CommandEmpty>لم يتم العثور على نتائج.</CommandEmpty>
+
+          {searchQuery.length >= 2 && searchResults.tasks.length > 0 && (
+            <CommandGroup heading="المهام">
+              {searchResults.tasks.map((task) => (
+                <CommandItem
+                  key={task.id}
+                  onSelect={() => {
+                    setActiveModule('tasks')
+                    setSearchOpen(false)
+                  }}
+                  className="flex-row-reverse justify-end gap-2"
+                >
+                  {task.status === 'done'
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-accent shrink-0" />
+                    : <Circle className="w-4 h-4 text-muted-foreground shrink-0" />
+                  }
+                  <span className="flex-1 text-right truncate">{task.title}</span>
+                  <span className="text-[10px] text-gold font-medium shrink-0">+{task.xpReward} XP</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {searchQuery.length >= 2 && searchResults.habits.length > 0 && (
+            <CommandGroup heading="العادات">
+              {searchResults.habits.map((habit) => (
+                <CommandItem
+                  key={habit.id}
+                  onSelect={() => {
+                    setActiveModule('habits')
+                    setSearchOpen(false)
+                  }}
+                  className="flex-row-reverse justify-end gap-2"
+                >
+                  <Flame className="w-4 h-4 text-orange-500 shrink-0" />
+                  <span className="flex-1 text-right truncate">{habit.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {searchQuery.length >= 2 && searchResults.goals.length > 0 && (
+            <CommandGroup heading="الأهداف">
+              {searchResults.goals.map((goal) => (
+                <CommandItem
+                  key={goal.id}
+                  onSelect={() => {
+                    setActiveModule('goals')
+                    setSearchOpen(false)
+                  }}
+                  className="flex-row-reverse justify-end gap-2"
+                >
+                  <Target className="w-4 h-4 text-forest shrink-0" />
+                  <span className="flex-1 text-right truncate">{goal.title}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{goal.progress}%</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
           <CommandGroup heading="الوحدات">
             {(Object.keys(moduleNames) as ModuleId[]).map((id) => (
               <CommandItem

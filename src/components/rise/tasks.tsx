@@ -58,6 +58,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
+import { notifyTaskComplete } from '@/lib/notifications'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
 import { ar } from 'date-fns/locale'
 
@@ -241,6 +242,10 @@ export function Tasks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
       })
+      if (!isDone) {
+        notifyTaskComplete(task.title, task.xpReward)
+        fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+      }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }
@@ -255,6 +260,9 @@ export function Tasks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
       })
+      if (newStatus === 'done') {
+        fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+      }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }

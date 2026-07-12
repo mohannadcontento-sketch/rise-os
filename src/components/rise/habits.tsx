@@ -46,6 +46,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { notifyHabitComplete } from '@/lib/notifications'
 
 /* ────────────── Types ────────────── */
 
@@ -263,6 +264,19 @@ export function HabitsView() {
             completed: newCompleted,
           }),
         })
+        if (newCompleted) {
+          const habit = habits.find((h) => h.id === habitId)
+          if (habit) {
+            const streak = calcStreak(
+              [...logs, { habitId, date: todayStr, completed: true, count: 1 }],
+              habitId
+            )
+            notifyHabitComplete(habit.name, streak.current)
+          }
+          if (!existingLog) {
+            fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: habit?.xpReward || 15, reason: `habit:${habitId}` }) }).catch(() => {})
+          }
+        }
       } catch {
         // Revert
         if (existingLog) {
@@ -278,7 +292,7 @@ export function HabitsView() {
         }
       }
     },
-    [logs, todayStr]
+    [logs, todayStr, habits]
   )
 
   /* ---- Add habit ---- */

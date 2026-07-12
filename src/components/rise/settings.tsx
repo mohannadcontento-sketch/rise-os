@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
   Settings as SettingsIcon,
@@ -17,6 +17,7 @@ import {
   BookOpen,
   Dumbbell,
   Download,
+  Upload,
   Trash2,
   Zap,
   Shield,
@@ -26,6 +27,8 @@ import {
   Pencil,
   Check,
   X,
+  HardDrive,
+  Heart,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,6 +37,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import {
   Dialog,
   DialogContent,
@@ -75,6 +79,7 @@ interface SettingsData {
 }
 
 const STORAGE_KEY = 'rise-settings'
+const NAME_KEY = 'rise-user-name'
 
 const defaultSettings: SettingsData = {
   userName: 'مستخدم',
@@ -94,6 +99,24 @@ const defaultSettings: SettingsData = {
   },
 }
 
+/* ────────────── Helpers ────────────── */
+
+function getLocalStorageSize(): { used: number; total: number } {
+  let total = 0
+  for (const key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      total += localStorage.getItem(key)?.length || 0
+    }
+  }
+  return { used: total, total: 5 * 1024 * 1024 } // 5MB typical limit
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
 /* ────────────── Component ────────────── */
 
 export default function Settings() {
@@ -110,9 +133,16 @@ export default function Settings() {
   const [confirmText, setConfirmText] = useState('')
   const [isEditingName, setIsEditingName] = useState(false)
   const [editName, setEditName] = useState(settings.userName)
+  const [storageSize, setStorageSize] = useState(() => {
+    if (typeof window === 'undefined') return { used: 0, total: 5 * 1024 * 1024 }
+    return getLocalStorageSize()
+  })
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    // Also save to the separate name key
+    localStorage.setItem(NAME_KEY, settings.userName)
   }, [settings])
 
   const updateNotification = (key: string, value: boolean) => {
@@ -130,13 +160,7 @@ export default function Settings() {
   }
 
   const handleExportData = () => {
-    const allKeys = [
-      'rise-learning',
-      'rise-weekly-review',
-      'rise-monthly-review',
-      'rise-ai-chat',
-      'rise-settings',
-    ]
+    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-'))
     const data: Record<string, unknown> = {}
     allKeys.forEach((key) => {
       try {
@@ -156,39 +180,107 @@ export default function Settings() {
     toast.success('تم تصدير البيانات بنجاح')
   }
 
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string)
+        Object.entries(data).forEach(([key, value]) => {
+          localStorage.setItem(key, JSON.stringify(value))
+        })
+        toast.success('تم استيراد البيانات بنجاح')
+        setStorageSize(getLocalStorageSize())
+      } catch {
+        toast.error('فشل في قراءة الملف')
+      }
+    }
+    reader.readAsText(file)
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   const handleResetData = () => {
-    const allKeys = [
-      'rise-learning',
-      'rise-weekly-review',
-      'rise-monthly-review',
-      'rise-ai-chat',
-      'rise-settings',
-      'rise-daily-planner',
-      'rise-daily-planner-notes',
-      'rise-morning-session-start',
-    ]
+    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-'))
     allKeys.forEach((key) => localStorage.removeItem(key))
     setSettings(defaultSettings)
     setResetDialogOpen(false)
     setConfirmText('')
+    setStorageSize({ used: 0, total: 5 * 1024 * 1024 })
     toast.success('تم إعادة تعيين جميع البيانات')
   }
 
   const themes = [
-    { value: 'system', label: 'النظام', icon: Monitor },
-    { value: 'light', label: 'فاتح', icon: Sun },
-    { value: 'dark', label: 'داكن', icon: Moon },
+    {
+      value: 'light',
+      label: 'فاتح',
+      icon: Sun,
+      preview: (
+        <div className="w-full h-12 rounded-lg bg-white border border-gray-200 shadow-sm flex items-center justify-center">
+          <div className="flex gap-1">
+            <div className="w-4 h-4 rounded bg-gray-200" />
+            <div className="w-8 h-4 rounded bg-gray-100" />
+          </div>
+        </div>
+      ),
+    },
+    {
+      value: 'dark',
+      label: 'داكن',
+      icon: Moon,
+      preview: (
+        <div className="w-full h-12 rounded-lg bg-gray-900 border border-gray-700 shadow-sm flex items-center justify-center">
+          <div className="flex gap-1">
+            <div className="w-4 h-4 rounded bg-gray-700" />
+            <div className="w-8 h-4 rounded bg-gray-800" />
+          </div>
+        </div>
+      ),
+    },
+    {
+      value: 'system',
+      label: 'النظام',
+      icon: Monitor,
+      preview: (
+        <div className="w-full h-12 rounded-lg overflow-hidden flex shadow-sm border border-gray-200">
+          <div className="w-1/2 bg-white flex items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded bg-gray-300" />
+          </div>
+          <div className="w-1/2 bg-gray-900 flex items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded bg-gray-600" />
+          </div>
+        </div>
+      ),
+    },
   ]
 
-  const notifItems = [
-    { key: 'morning', label: 'تذكير صباحي', icon: Sun },
-    { key: 'exercise', label: 'تذكير تمارين', icon: Dumbbell },
-    { key: 'reading', label: 'تذكير قراءة', icon: BookOpen },
-    { key: 'focus', label: 'تذكير تركيز', icon: Target },
-    { key: 'water', label: 'تذكير ماء', icon: Droplets },
-    { key: 'prayer', label: 'تذكير صلاة', icon: Clock },
-    { key: 'sleep', label: 'تذكير نوم', icon: Moon },
+  const notifGroups = [
+    {
+      title: 'صباحي',
+      items: [
+        { key: 'morning', label: 'تذكير صباحي', desc: 'بداية روتينك الصباحي', icon: Sunrise },
+        { key: 'sleep', label: 'تذكير نوم', desc: 'وقت النوم والاسترخاء', icon: Moon },
+      ],
+    },
+    {
+      title: 'صحية',
+      items: [
+        { key: 'exercise', label: 'تذكير تمارين', desc: 'تمارينك الرياضية اليومية', icon: Dumbbell },
+        { key: 'water', label: 'تذكير ماء', desc: 'شرب الماء بانتظام', icon: Droplets },
+      ],
+    },
+    {
+      title: 'إنتاجية',
+      items: [
+        { key: 'reading', label: 'تذكير قراءة', desc: 'هدف القراءة اليومي', icon: BookOpen },
+        { key: 'focus', label: 'تذكير تركيز', desc: 'جلسات العمل العميق', icon: Target },
+        { key: 'prayer', label: 'تذكير صلاة', desc: 'أوقات الصلاة', icon: Clock },
+      ],
+    },
   ]
+
+  const storagePercent = Math.round((storageSize.used / storageSize.total) * 100)
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -201,24 +293,24 @@ export default function Settings() {
         <p className="text-sm text-muted-foreground mt-1">خصّص تجربتك في RiseOS</p>
       </div>
 
-      {/* Profile with Name Editing */}
+      {/* Profile Section */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="glass border border-border/30">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
-              <User className="w-4 h-4 text-emerald-accent" />
-              الملف الشخصي
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-5">
+              {/* Avatar with gradient */}
               <motion.div
-                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-emerald-accent/20"
+                className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-emerald-accent/25 relative"
                 whileHover={{ scale: 1.05, rotate: -3 }}
+                whileTap={{ scale: 0.98 }}
               >
                 {settings.userName.charAt(0)}
+                <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
+                  <Check className="w-2.5 h-2.5 text-white" />
+                </div>
               </motion.div>
-              <div className="flex-1 space-y-2.5">
+              <div className="flex-1 space-y-3">
+                {/* Name */}
                 {isEditingName ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -250,7 +342,7 @@ export default function Settings() {
                   <div className="flex items-center gap-2">
                     <div>
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">الاسم</Label>
-                      <p className="text-sm font-semibold flex items-center gap-1.5">
+                      <p className="text-base font-bold flex items-center gap-1.5">
                         {settings.userName}
                         <motion.button
                           whileTap={{ scale: 0.9 }}
@@ -263,14 +355,18 @@ export default function Settings() {
                     </div>
                   </div>
                 )}
+                {/* Email */}
                 <div>
                   <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">البريد</Label>
                   <p className="text-sm text-muted-foreground">user@riseos.app</p>
                 </div>
               </div>
-              <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent">
-                المستوى ١
-              </Badge>
+              {/* Level Badge */}
+              <div className="text-center">
+                <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent text-xs px-3 py-1">
+                  المستوى ١
+                </Badge>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -278,41 +374,40 @@ export default function Settings() {
 
       {/* Appearance */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-        <Card className="glass border border-border/30">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-amber-500">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-gold">
-              <Palette className="w-4 h-4 text-gold" />
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <Palette className="w-4 h-4 text-amber-500" />
               المظهر
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Theme */}
+            {/* Theme Cards with Mini Preview */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">السمة</Label>
               <div className="grid grid-cols-3 gap-3">
                 {themes.map((t) => {
                   const Icon = t.icon
+                  const isActive = theme === t.value
                   return (
                     <motion.button
                       key={t.value}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setTheme(t.value)}
                       className={cn(
-                        'flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all',
-                        theme === t.value
-                          ? 'border-emerald-accent bg-emerald-accent/5 shadow-md shadow-emerald-accent/15'
-                          : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                        'flex flex-col items-center gap-2.5 p-3 rounded-2xl border-2 transition-all',
+                        isActive
+                          ? 'border-emerald-accent bg-emerald-accent/5 shadow-lg shadow-emerald-accent/15 ring-2 ring-emerald-accent/20'
+                          : 'border-transparent bg-muted/20 hover:bg-muted/40'
                       )}
                     >
-                      <div className={cn(
-                        'p-2.5 rounded-xl transition-colors',
-                        theme === t.value ? 'bg-emerald-accent/15 text-emerald-accent' : 'bg-muted/50 text-muted-foreground'
-                      )}>
-                        <Icon className="w-5 h-5" />
+                      {t.preview}
+                      <div className="flex items-center gap-1.5">
+                        <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-emerald-accent' : 'text-muted-foreground')} />
+                        <span className={cn('text-xs font-medium', isActive ? 'text-emerald-accent' : 'text-muted-foreground')}>
+                          {t.label}
+                        </span>
                       </div>
-                      <span className={cn('text-xs font-medium', theme === t.value ? 'text-emerald-accent' : 'text-muted-foreground')}>
-                        {t.label}
-                      </span>
                     </motion.button>
                   )
                 })}
@@ -341,46 +436,55 @@ export default function Settings() {
         </Card>
       </motion.div>
 
-      {/* Notifications with emerald toggle switches */}
+      {/* Notifications - Grouped */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="glass border border-border/30">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-forest">
-              <Bell className="w-4 h-4 text-forest" />
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-700 dark:border-r-emerald-400">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <Bell className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               الإشعارات
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              {notifItems.map((item) => {
-                const Icon = item.icon
-                const isChecked = settings.notifications[item.key as keyof typeof settings.notifications]
-                return (
-                  <div key={item.key} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 rounded-lg bg-muted/50">
-                        <Icon className="w-4 h-4 text-muted-foreground" />
+          <CardContent className="space-y-5">
+            {notifGroups.map((group) => (
+              <div key={group.title}>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">{group.title}</p>
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const Icon = item.icon
+                    const isChecked = settings.notifications[item.key as keyof typeof settings.notifications]
+                    return (
+                      <div key={item.key} className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="p-1.5 rounded-lg bg-muted/50">
+                            <Icon className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium block">{item.label}</span>
+                            <span className="text-[11px] text-muted-foreground">{item.desc}</span>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={isChecked}
+                          onCheckedChange={(v) => updateNotification(item.key, v)}
+                          className="data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+                        />
                       </div>
-                      <span className="text-sm font-medium">{item.label}</span>
-                    </div>
-                    <Switch
-                      checked={isChecked}
-                      onCheckedChange={(v) => updateNotification(item.key, v)}
-                      className="data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
-                    />
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+                {group.title !== notifGroups[notifGroups.length - 1].title && <Separator className="mt-3" />}
+              </div>
+            ))}
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Morning Routine - Consistent time picker styling */}
+      {/* Morning Routine */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="glass border border-border/30">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
+            <CardTitle className="text-base flex items-center gap-2.5">
               <Clock className="w-4 h-4 text-emerald-accent" />
               الروتين الصباحي
             </CardTitle>
@@ -389,7 +493,7 @@ export default function Settings() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <Sunrise className="w-3.5 h-3.5 text-gold" />
+                  <Sunrise className="w-3.5 h-3.5 text-amber-500" />
                   وقت الاستيقاظ
                 </Label>
                 <Input
@@ -418,10 +522,10 @@ export default function Settings() {
 
       {/* Goals Settings */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="glass border border-border/30">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-purple-500">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-forest">
-              <Target className="w-4 h-4 text-forest" />
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <Target className="w-4 h-4 text-purple-500" />
               أهداف يومية
             </CardTitle>
           </CardHeader>
@@ -474,64 +578,69 @@ export default function Settings() {
         </Card>
       </motion.div>
 
-      {/* Data */}
+      {/* Data & Privacy */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass border border-border/30">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-blue-500">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-muted-foreground/30">
-              <Shield className="w-4 h-4 text-muted-foreground" />
-              البيانات
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <Shield className="w-4 h-4 text-blue-500" />
+              البيانات والخصوصية
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30">
+          <CardContent className="space-y-4">
+            {/* Storage Usage */}
+            <div className="p-4 rounded-xl bg-muted/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HardDrive className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">مساحة التخزين</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}
+                </span>
+              </div>
+              <Progress value={storagePercent} className="h-2" />
+              <p className="text-[11px] text-muted-foreground">
+                البيانات مخزنة محلياً على جهازك فقط ولا تُرسل لأي خادم.
+              </p>
+            </div>
+
+            {/* Export */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-emerald-accent/10">
                   <Download className="w-4 h-4 text-emerald-accent" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">تصدير البيانات</p>
-                  <p className="text-xs text-muted-foreground">تنزيل نسخة احتياطية من بياناتك</p>
+                  <p className="text-xs text-muted-foreground">تنزيل نسخة احتياطية JSON من بياناتك</p>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={handleExportData} className="text-xs">
                 تصدير
               </Button>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-destructive/5 border border-destructive/10">
+
+            {/* Import */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-destructive/10">
-                  <Download className="w-4 h-4 text-destructive" />
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Upload className="w-4 h-4 text-blue-500" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-destructive">استيراد البيانات</p>
-                  <p className="text-xs text-muted-foreground">استعادة نسخة احتياطية سابقة</p>
+                  <p className="text-sm font-medium">استيراد البيانات</p>
+                  <p className="text-xs text-muted-foreground">استعادة نسخة احتياطية من ملف JSON</p>
                 </div>
               </div>
               <label className="cursor-pointer">
-                <Input
+                <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".json"
                   className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    const reader = new FileReader()
-                    reader.onload = (ev) => {
-                      try {
-                        const data = JSON.parse(ev.target?.result as string)
-                        Object.entries(data).forEach(([key, value]) => {
-                          localStorage.setItem(key, JSON.stringify(value))
-                        })
-                        toast.success('تم استيراد البيانات بنجاح')
-                      } catch {
-                        toast.error('فشل في قراءة الملف')
-                      }
-                    }
-                    reader.readAsText(file)
-                  }}
+                  onChange={handleImportData}
                 />
-                <Button variant="outline" size="sm" className="text-xs border-destructive/30 text-destructive hover:bg-destructive/10" asChild>
+                <Button variant="outline" size="sm" className="text-xs border-blue-500/30 text-blue-500 hover:bg-blue-500/10" asChild>
                   <span>استيراد</span>
                 </Button>
               </label>
@@ -542,20 +651,18 @@ export default function Settings() {
 
       {/* Danger Zone */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <Card className="glass border border-destructive/30 overflow-hidden">
-          <div className="bg-gradient-to-l from-destructive/8 to-transparent p-4 pb-0">
-            <div className="flex items-center gap-2.5 mb-1">
-              <div className="p-2 rounded-xl bg-destructive/15">
+        <div className="rounded-2xl border-2 border-dashed border-destructive/40 overflow-hidden hover:border-destructive/60 transition-colors group">
+          <div className="bg-destructive/5 group-hover:bg-destructive/10 transition-colors p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-destructive/15">
                 <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
               <div>
-                <CardTitle className="text-base text-destructive">منطقة الخطر</CardTitle>
+                <h3 className="text-base font-bold text-destructive">منطقة الخطر</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">هذه الإجراءات لا يمكن التراجع عنها</p>
               </div>
             </div>
-          </div>
-          <CardContent className="p-4 pt-3">
-            <div className="flex items-center justify-between p-4 rounded-xl border-2 border-dashed border-destructive/30 hover:border-destructive/50 transition-colors">
+            <div className="flex items-center justify-between p-4 rounded-xl border-2 border-dashed border-destructive/30 group-hover:border-destructive/60 group-hover:bg-destructive/5 transition-all">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-destructive/10">
                   <Trash2 className="w-5 h-5 text-destructive" />
@@ -612,32 +719,32 @@ export default function Settings() {
                 </DialogContent>
               </Dialog>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      {/* About */}
+      {/* About RiseOS */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <Card className="glass border border-border/30">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-muted-foreground/30">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-muted-foreground/30">
+            <CardTitle className="text-base flex items-center gap-2.5">
               <Info className="w-4 h-4 text-muted-foreground" />
-              حول
+              عن RiseOS
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-4 mb-5">
               <motion.div
-                className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20"
-                whileHover={{ scale: 1.05 }}
+                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:to-emerald-900 flex items-center justify-center shadow-xl shadow-emerald-accent/20"
+                whileHover={{ scale: 1.05, rotate: -3 }}
               >
-                <Zap className="w-6 h-6 text-white" />
+                <Zap className="w-7 h-7 text-white" />
               </motion.div>
-              <div>
+              <div className="flex-1">
                 <h3 className="font-bold text-lg">RiseOS</h3>
                 <p className="text-xs text-muted-foreground">نظام تشغيل الحياة</p>
               </div>
-              <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent mr-auto">
+              <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent text-xs px-3 py-1">
                 v1.0.0
               </Badge>
             </div>
@@ -645,9 +752,13 @@ export default function Settings() {
               RiseOS هو نظام تشغيل حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
               تحقيق أهدافك، وعيش حياة أكثر وعياً وإنتاجية.
             </p>
-            <p className="text-xs text-muted-foreground/60 mt-3">
-              صُنع بـ ❤️ لأمتلك صباحك. امتلك حياتك.
-            </p>
+            <Separator className="my-4" />
+            <div className="flex items-center gap-2">
+              <Heart className="w-3.5 h-3.5 text-rose-500" />
+              <p className="text-xs text-muted-foreground">
+                صُنع بأيدٍ عربية. امتلك صباحك. امتلك حياتك.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

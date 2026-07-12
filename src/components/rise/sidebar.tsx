@@ -129,10 +129,10 @@ export function Sidebar() {
       <aside
         className={cn(
           'fixed top-0 right-0 z-50 h-full w-72 bg-sidebar border-l border-sidebar-border',
-          'flex flex-col transition-transform duration-300 ease-out',
-          'lg:translate-x-0 lg:static lg:z-auto',
+          'flex flex-col duration-300 ease-out',
+          'lg:static lg:z-auto',
           'shadow-[inset_-1px_0_0_rgba(0,0,0,0.03)] dark:shadow-[inset_-1px_0_0_rgba(255,255,255,0.02),inset_1px_0_0_rgba(0,0,0,0.1)]',
-          sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+          !sidebarOpen && 'max-lg:[transform:translateX(100%)]',
         )}
       >
         {/* Header */}

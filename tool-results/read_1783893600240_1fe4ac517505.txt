@@ -1,0 +1,1161 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Plus,
+     7→  Search,
+     8→  List,
+     9→  LayoutGrid,
+    10→  CalendarDays,
+    11→  Clock,
+    12→  Zap,
+    13→  Trash2,
+    14→  ChevronDown,
+    15→  ChevronUp,
+    16→  ChevronLeft,
+    17→  ChevronRight,
+    18→  Filter,
+    19→  MoreHorizontal,
+    20→  CalendarClock,
+    21→  CheckCircle2,
+    22→  Circle,
+    23→  Loader2,
+    24→  Inbox,
+    25→  Sparkles,
+    26→} from 'lucide-react'
+    27→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    28→import { Button } from '@/components/ui/button'
+    29→import { Badge } from '@/components/ui/badge'
+    30→import { Checkbox } from '@/components/ui/checkbox'
+    31→import { Input } from '@/components/ui/input'
+    32→import { Skeleton } from '@/components/ui/skeleton'
+    33→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    34→import {
+    35→  Dialog,
+    36→  DialogContent,
+    37→  DialogHeader,
+    38→  DialogTitle,
+    39→  DialogTrigger,
+    40→  DialogFooter,
+    41→  DialogClose,
+    42→} from '@/components/ui/dialog'
+    43→import {
+    44→  Select,
+    45→  SelectContent,
+    46→  SelectItem,
+    47→  SelectTrigger,
+    48→  SelectValue,
+    49→} from '@/components/ui/select'
+    50→import {
+    51→  DropdownMenu,
+    52→  DropdownMenuContent,
+    53→  DropdownMenuItem,
+    54→  DropdownMenuTrigger,
+    55→  DropdownMenuSeparator,
+    56→} from '@/components/ui/dropdown-menu'
+    57→import { Label } from '@/components/ui/label'
+    58→import { Textarea } from '@/components/ui/textarea'
+    59→import { cn } from '@/lib/utils'
+    60→import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
+    61→import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
+    62→import { ar } from 'date-fns/locale'
+    63→
+    64→/* ────────────── Types ────────────── */
+    65→
+    66→interface SubTask {
+    67→  id: string
+    68→  title: string
+    69→  completed: boolean
+    70→}
+    71→
+    72→interface Task {
+    73→  id: string
+    74→  title: string
+    75→  description?: string | null
+    76→  status: string
+    77→  priority: string
+    78→  label?: string | null
+    79→  projectId?: string | null
+    80→  project?: { name: string; color: string } | null
+    81→  dueDate?: string | null
+    82→  xpReward: number
+    83→  completedAt?: string | null
+    84→  subtasks: SubTask[]
+    85→  order: number
+    86→}
+    87→
+    88→interface Project {
+    89→  id: string
+    90→  name: string
+    91→  color: string
+    92→}
+    93→
+    94→type ViewType = 'list' | 'board' | 'calendar'
+    95→
+    96→const STATUSES = ['todo', 'in_progress', 'done'] as const
+    97→
+    98→/* ────────────── Animation Variants ────────────── */
+    99→
+   100→const containerVariants = {
+   101→  hidden: { opacity: 0 },
+   102→  visible: {
+   103→    opacity: 1,
+   104→    transition: { staggerChildren: 0.04 },
+   105→  },
+   106→}
+   107→
+   108→const itemVariants = {
+   109→  hidden: { opacity: 0, y: 12, scale: 0.98 },
+   110→  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] } },
+   111→  exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
+   112→}
+   113→
+   114→const cardHover = { scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }
+   115→
+   116→/* Priority left border colors */
+   117→const priorityBorderColors: Record<string, string> = {
+   118→  urgent: 'border-r-red-500',
+   119→  high: 'border-r-orange-500',
+   120→  medium: 'border-r-gold',
+   121→  low: 'border-r-blue-500',
+   122→}
+   123→
+   124→/* Animated Counter Component */
+   125→function AnimatedCounter({ target, className }: { target: number; className?: string }) {
+   126→  const [count, setCount] = useState(0)
+   127→  const rafRef = useRef<number>(0)
+   128→  const startTimeRef = useRef<number>(0)
+   129→
+   130→  useEffect(() => {
+   131→    startTimeRef.current = Date.now()
+   132→    if (target === 0) {
+   133→      const id = requestAnimationFrame(() => setCount(0))
+   134→      return () => cancelAnimationFrame(id)
+   135→    }
+   136→    const animate = () => {
+   137→      const elapsed = Date.now() - startTimeRef.current
+   138→      const progress = Math.min(elapsed / 800, 1)
+   139→      const eased = 1 - Math.pow(1 - progress, 3)
+   140→      setCount(Math.round(eased * target))
+   141→      if (progress < 1) rafRef.current = requestAnimationFrame(animate)
+   142→    }
+   143→    rafRef.current = requestAnimationFrame(animate)
+   144→    return () => cancelAnimationFrame(rafRef.current)
+   145→  }, [target])
+   146→
+   147→  return (
+   148→    <motion.span
+   149→      key={count}
+   150→      initial={{ y: -4, opacity: 0 }}
+   151→      animate={{ y: 0, opacity: 1 }}
+   152→      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+   153→      className={className}
+   154→    >
+   155→      {count}
+   156→    </motion.span>
+   157→  )
+   158→}
+   159→
+   160→/* ────────────── Priority Dot ────────────── */
+   161→
+   162→const priorityDotColors: Record<string, string> = {
+   163→  urgent: 'bg-red-500',
+   164→  high: 'bg-orange-500',
+   165→  medium: 'bg-gold',
+   166→  low: 'bg-blue-500',
+   167→}
+   168→
+   169→/* ────────────── Component ────────────── */
+   170→
+   171→export function Tasks() {
+   172→  const [tasks, setTasks] = useState<Task[]>([])
+   173→  const [projects, setProjects] = useState<Project[]>([])
+   174→  const [loading, setLoading] = useState(true)
+   175→  const [view, setView] = useState<ViewType>('list')
+   176→  const [addOpen, setAddOpen] = useState(false)
+   177→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   178→  const [searchQuery, setSearchQuery] = useState('')
+   179→
+   180→  // Filters
+   181→  const [filterPriority, setFilterPriority] = useState<string>('all')
+   182→  const [filterProject, setFilterProject] = useState<string>('all')
+   183→  const [filterStatus, setFilterStatus] = useState<string>('all')
+   184→
+   185→  // Add task form
+   186→  const [formTitle, setFormTitle] = useState('')
+   187→  const [formDesc, setFormDesc] = useState('')
+   188→  const [formPriority, setFormPriority] = useState('medium')
+   189→  const [formProject, setFormProject] = useState<string>('none')
+   190→  const [formDueDate, setFormDueDate] = useState('')
+   191→  const [submitting, setSubmitting] = useState(false)
+   192→
+   193→  // Calendar state
+   194→  const [calendarMonth, setCalendarMonth] = useState(new Date())
+   195→
+   196→  const fetchData = useCallback(async () => {
+   197→    try {
+   198→      const res = await fetch('/api/rise/tasks')
+   199→      const data = await res.json()
+   200→      setTasks(data.tasks || [])
+   201→      setProjects(data.projects || [])
+   202→    } catch {
+   203→      /* ignore */
+   204→    } finally {
+   205→      setLoading(false)
+   206→    }
+   207→  }, [])
+   208→
+   209→  useEffect(() => {
+   210→    fetchData()
+   211→  }, [fetchData])
+   212→
+   213→  /* ── Filtering ── */
+   214→  const filteredTasks = useMemo(() => {
+   215→    return tasks.filter((t) => {
+   216→      if (filterPriority !== 'all' && t.priority !== filterPriority) return false
+   217→      if (filterProject !== 'all' && t.projectId !== filterProject) return false
+   218→      if (filterStatus !== 'all' && t.status !== filterStatus) return false
+   219→      if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
+   220→      return true
+   221→    })
+   222→  }, [tasks, filterPriority, filterProject, filterStatus, searchQuery])
+   223→
+   224→  const groupedTasks = useMemo(() => {
+   225→    const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
+   226→    for (const t of filteredTasks) {
+   227→      if (groups[t.status]) groups[t.status].push(t)
+   228→    }
+   229→    return groups
+   230→  }, [filteredTasks])
+   231→
+   232→  /* ── Mutations ── */
+   233→  const toggleTask = async (task: Task) => {
+   234→    const isDone = task.status === 'done'
+   235→    const newStatus = isDone ? 'todo' : 'done'
+   236→    const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
+   237→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   238→    try {
+   239→      await fetch('/api/rise/tasks', {
+   240→        method: 'PUT',
+   241→        headers: { 'Content-Type': 'application/json' },
+   242→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   243→      })
+   244→    } catch {
+   245→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   246→    }
+   247→  }
+   248→
+   249→  const moveTask = async (task: Task, newStatus: string) => {
+   250→    const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
+   251→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   252→    try {
+   253→      await fetch('/api/rise/tasks', {
+   254→        method: 'PUT',
+   255→        headers: { 'Content-Type': 'application/json' },
+   256→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   257→      })
+   258→    } catch {
+   259→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   260→    }
+   261→  }
+   262→
+   263→  const deleteTask = async (taskId: string) => {
+   264→    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+   265→    try {
+   266→      await fetch(`/api/rise/tasks?id=${taskId}`, { method: 'DELETE' })
+   267→    } catch {
+   268→      fetchData()
+   269→    }
+   270→  }
+   271→
+   272→  const toggleSubtask = async (task: Task, subtaskId: string, completed: boolean) => {
+   273→    const optimistic = {
+   274→      ...task,
+   275→      subtasks: task.subtasks.map((s) => (s.id === subtaskId ? { ...s, completed: !completed } : s)),
+   276→    }
+   277→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   278→    try {
+   279→      await fetch('/api/rise/tasks', {
+   280→        method: 'PUT',
+   281→        headers: { 'Content-Type': 'application/json' },
+   282→        body: JSON.stringify({
+   283→          id: task.id,
+   284→          subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
+   285→        }),
+   286→      })
+   287→    } catch {
+   288→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   289→    }
+   290→  }
+   291→
+   292→  const createTask = async () => {
+   293→    if (!formTitle.trim()) return
+   294→    setSubmitting(true)
+   295→    try {
+   296→      const body: Record<string, unknown> = {
+   297→        title: formTitle.trim(),
+   298→        description: formDesc.trim() || null,
+   299→        priority: formPriority,
+   300→        dueDate: formDueDate || null,
+   301→      }
+   302→      if (formProject !== 'none') body.projectId = formProject
+   303→      await fetch('/api/rise/tasks', {
+   304→        method: 'POST',
+   305→        headers: { 'Content-Type': 'application/json' },
+   306→        body: JSON.stringify(body),
+   307→      })
+   308→      setFormTitle('')
+   309→      setFormDesc('')
+   310→      setFormPriority('medium')
+   311→      setFormProject('none')
+   312→      setFormDueDate('')
+   313→      setAddOpen(false)
+   314→      fetchData()
+   315→    } catch {
+   316→      /* ignore */
+   317→    } finally {
+   318→      setSubmitting(false)
+   319→    }
+   320→  }
+   321→
+   322→  /* ── Calendar helpers ── */
+   323→  const calendarDays = useMemo(() => {
+   324→    const monthStart = startOfMonth(calendarMonth)
+   325→    const monthEnd = endOfMonth(calendarMonth)
+   326→    const start = startOfWeek(monthStart, { weekStartsOn: 6 })
+   327→    const end = startOfWeek(monthEnd, { weekStartsOn: 6 })
+   328→    // Go to end of that week
+   329→    const finalEnd = addDays(end, 6)
+   330→    return eachDayOfInterval({ start, end })
+   331→  }, [calendarMonth])
+   332→
+   333→  const getTasksForDate = (date: Date) => {
+   334→    const dateStr = format(date, 'yyyy-MM-dd')
+   335→    return filteredTasks.filter((t) => t.dueDate === dateStr && t.status !== 'done')
+   336→  }
+   337→
+   338→  const weekDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
+   339→
+   340→  /* ── Status column config ── */
+   341→  const statusColumns = [
+   342→    { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-blue-500', bg: 'bg-blue-500/5' },
+   343→    { key: 'in_progress', label: 'قيد التنفيذ', icon: Clock, color: 'text-gold', bg: 'bg-gold/5' },
+   344→    { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/5' },
+   345→  ]
+   346→
+   347→  /* ────────────── Render: Task Item (List) ────────────── */
+   348→  const renderTaskItem = (task: Task, index: number) => {
+   349→    const isExpanded = expandedId === task.id
+   350→    const isDone = task.status === 'done'
+   351→    const completedSubs = task.subtasks.filter((s) => s.completed).length
+   352→
+   353→    return (
+   354→      <motion.div
+   355→        key={task.id}
+   356→        variants={itemVariants}
+   357→        layout
+   358→        className="group"
+   359→      >
+   360→        <motion.div
+   361→          className={cn(
+   362→            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300',
+   363→            'hover:shadow-lg hover:shadow-emerald-accent/8',
+   364→            priorityBorderColors[task.priority] || 'border-r-border',
+   365→            isDone && 'opacity-60'
+   366→          )}
+   367→          whileHover={{ scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+   368→        >
+   369→          <div className="flex items-start gap-3">
+   370→            {/* Checkbox */}
+   371→            <div className="pt-0.5">
+   372→              <motion.div
+   373→                whileTap={{ scale: 0.8 }}
+   374→                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+   375→              >
+   376→                <Checkbox
+   377→                  checked={isDone}
+   378→                  onCheckedChange={() => toggleTask(task)}
+   379→                  className={cn(
+   380→                    'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+   381→                  )}
+   382→                />
+   383→              </motion.div>
+   384→            </div>
+   385→
+   386→            {/* Content */}
+   387→            <div className="flex-1 min-w-0">
+   388→              <div className="flex items-center gap-2 flex-wrap">
+   389→                <button
+   390→                  onClick={() => setExpandedId(isExpanded ? null : task.id)}
+   391→                  className={cn(
+   392→                    'text-sm font-semibold text-right transition-colors',
+   393→                    isDone ? 'line-through text-muted-foreground' : 'text-foreground'
+   394→                  )}
+   395→                >
+   396→                  {task.title}
+   397→                </button>
+   398→
+   399→                {/* Priority badge */}
+   400→                <Badge
+   401→                  variant="secondary"
+   402→                  className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   403→                >
+   404→                  <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+   405→                  {priorityLabels[task.priority]}
+   406→                </Badge>
+   407→
+   408→                {/* Project dot */}
+   409→                {task.project && (
+   410→                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   411→                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+   412→                    {task.project.name}
+   413→                  </span>
+   414→                )}
+   415→
+   416→                {/* XP */}
+   417→                {task.xpReward > 0 && (
+   418→                  <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
+   419→                    <Zap className="w-3 h-3" />
+   420→                    {task.xpReward}
+   421→                  </span>
+   422→                )}
+   423→              </div>
+   424→
+   425→              {/* Meta row */}
+   426→              <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+   427→                {task.dueDate && (
+   428→                  <span className="flex items-center gap-1">
+   429→                    <CalendarClock className="w-3 h-3" />
+   430→                    {formatDateShort(task.dueDate)}
+   431→                  </span>
+   432→                )}
+   433→                {task.subtasks.length > 0 && (
+   434→                  <span className="flex items-center gap-1">
+   435→                    <CheckCircle2 className="w-3 h-3" />
+   436→                    {completedSubs}/{task.subtasks.length}
+   437→                  </span>
+   438→                )}
+   439→              </div>
+   440→
+   441→              {/* Expanded content */}
+   442→              <AnimatePresence>
+   443→                {isExpanded && (
+   444→                  <motion.div
+   445→                    initial={{ height: 0, opacity: 0 }}
+   446→                    animate={{ height: 'auto', opacity: 1 }}
+   447→                    exit={{ height: 0, opacity: 0 }}
+   448→                    transition={{ duration: 0.2 }}
+   449→                    className="overflow-hidden"
+   450→                  >
+   451→                    {task.description && (
+   452→                      <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{task.description}</p>
+   453→                    )}
+   454→                    {task.subtasks.length > 0 && (
+   455→                      <div className="mt-3 space-y-1.5">
+   456→                        {task.subtasks.map((sub) => (
+   457→                          <label key={sub.id} className="flex items-center gap-2 cursor-pointer group/sub">
+   458→                            <Checkbox
+   459→                              checked={sub.completed}
+   460→                              onCheckedChange={() => toggleSubtask(task, sub.id, sub.completed)}
+   461→                              className="w-4 h-4 rounded-md data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   462→                            />
+   463→                            <span
+   464→                              className={cn(
+   465→                                'text-xs transition-colors',
+   466→                                sub.completed ? 'line-through text-muted-foreground' : 'text-foreground/80'
+   467→                              )}
+   468→                            >
+   469→                              {sub.title}
+   470→                            </span>
+   471→                          </label>
+   472→                        ))}
+   473→                      </div>
+   474→                    )}
+   475→                  </motion.div>
+   476→                )}
+   477→              </AnimatePresence>
+   478→            </div>
+   479→
+   480→            {/* Actions */}
+   481→            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   482→              <button
+   483→                onClick={() => setExpandedId(isExpanded ? null : task.id)}
+   484→                className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
+   485→              >
+   486→                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+   487→              </button>
+   488→              <DropdownMenu>
+   489→                <DropdownMenuTrigger asChild>
+   490→                  <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+   491→                    <MoreHorizontal className="w-4 h-4" />
+   492→                  </button>
+   493→                </DropdownMenuTrigger>
+   494→                <DropdownMenuContent align="end" dir="rtl">
+   495→                  <DropdownMenuItem
+   496→                    onClick={() => {
+   497→                      const nextIdx = (STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length
+   498→                      moveTask(task, STATUSES[nextIdx])
+   499→                    }}
+   500→                  >
+   501→                    نقل إلى: {statusLabels[STATUSES[(STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length]]}
+   502→                  </DropdownMenuItem>
+   503→                  <DropdownMenuSeparator />
+   504→                  <DropdownMenuItem
+   505→                    onClick={() => deleteTask(task.id)}
+   506→                    className="text-red-500 focus:text-red-500"
+   507→                  >
+   508→                    <Trash2 className="w-4 h-4 ml-2" />
+   509→                    حذف
+   510→                  </DropdownMenuItem>
+   511→                </DropdownMenuContent>
+   512→              </DropdownMenu>
+   513→            </div>
+   514→          </div>
+   515→        </motion.div>
+   516→      </motion.div>
+   517→    )
+   518→  }
+   519→
+   520→  /* ────────────── Render: Board Card ────────────── */
+   521→  const boardColBorderColors: Record<string, string> = {
+   522→    todo: 'border-t-blue-500',
+   523→    in_progress: 'border-t-gold',
+   524→    done: 'border-t-emerald-accent',
+   525→  }
+   526→  const renderBoardCard = (task: Task) => {
+   527→    const isDone = task.status === 'done'
+   528→    const completedSubs = task.subtasks.filter((s) => s.completed).length
+   529→
+   530→    return (
+   531→      <motion.div
+   532→        key={task.id}
+   533→        variants={itemVariants}
+   534→        layout
+   535→        whileHover={cardHover}
+   536→      >
+   537→        <motion.div
+   538→          className={cn(
+   539→            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300 cursor-pointer',
+   540→            'hover:shadow-lg hover:shadow-emerald-accent/8',
+   541→            priorityBorderColors[task.priority] || 'border-r-border',
+   542→            isDone && 'opacity-60'
+   543→          )}
+   544→          whileHover={{ scale: 1.02, y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+   545→          onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
+   546→        >
+   547→          <div className="flex items-start justify-between gap-2 mb-2">
+   548→            <Badge
+   549→              variant="secondary"
+   550→              className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   551→            >
+   552→              <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+   553→              {priorityLabels[task.priority]}
+   554→            </Badge>
+   555→            <DropdownMenu>
+   556→              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+   557→                <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+   558→                  <MoreHorizontal className="w-3.5 h-3.5" />
+   559→                </button>
+   560→              </DropdownMenuTrigger>
+   561→              <DropdownMenuContent align="end" dir="rtl">
+   562→                {statusColumns
+   563→                  .filter((c) => c.key !== task.status)
+   564→                  .map((col) => (
+   565→                    <DropdownMenuItem key={col.key} onClick={() => moveTask(task, col.key)}>
+   566→                      نقل إلى: {col.label}
+   567→                    </DropdownMenuItem>
+   568→                  ))}
+   569→                <DropdownMenuSeparator />
+   570→                <DropdownMenuItem
+   571→                  onClick={() => deleteTask(task.id)}
+   572→                  className="text-red-500 focus:text-red-500"
+   573→                >
+   574→                  <Trash2 className="w-4 h-4 ml-2" />
+   575→                  حذف
+   576→                </DropdownMenuItem>
+   577→              </DropdownMenuContent>
+   578→            </DropdownMenu>
+   579→          </div>
+   580→
+   581→          <p className={cn('text-sm font-semibold text-right', isDone && 'line-through text-muted-foreground')}>
+   582→            {task.title}
+   583→          </p>
+   584→
+   585→          {task.description && (
+   586→            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
+   587→          )}
+   588→
+   589→          <div className="flex items-center gap-2 mt-3 flex-wrap">
+   590→            {task.project && (
+   591→              <span className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5">
+   592→                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+   593→                {task.project.name}
+   594→              </span>
+   595→            )}
+   596→            {task.dueDate && (
+   597→              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   598→                <CalendarClock className="w-3 h-3" />
+   599→                {formatDateShort(task.dueDate)}
+   600→              </span>
+   601→            )}
+   602→          </div>
+   603→
+   604→          {/* Subtask progress bar */}
+   605→          {task.subtasks.length > 0 && (
+   606→            <div className="mt-3">
+   607→              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+   608→                <span>المهام الفرعية</span>
+   609→                <span>{completedSubs}/{task.subtasks.length}</span>
+   610→              </div>
+   611→              <div className="h-1 rounded-full bg-muted overflow-hidden">
+   612→                <motion.div
+   613→                  className="h-full rounded-full bg-emerald-accent"
+   614→                  initial={false}
+   615→                  animate={{ width: `${task.subtasks.length > 0 ? (completedSubs / task.subtasks.length) * 100 : 0}%` }}
+   616→                  transition={{ duration: 0.3 }}
+   617→                />
+   618→              </div>
+   619→            </div>
+   620→          )}
+   621→
+   622→          {/* XP */}
+   623→          <div className="flex items-center justify-between mt-3">
+   624→            <span className="flex items-center gap-0.5 text-[11px] text-gold font-medium">
+   625→              <Zap className="w-3 h-3" />
+   626→              {task.xpReward} خبرة
+   627→            </span>
+   628→            <Checkbox
+   629→              checked={isDone}
+   630→              onCheckedChange={(e) => {
+   631→                e.stopPropagation()
+   632→                toggleTask(task)
+   633→              }}
+   634→              className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   635→            />
+   636→          </div>
+   637→        </motion.div>
+   638→      </motion.div>
+   639→    )
+   640→  }
+   641→
+   642→  /* ────────────── Render: Loading ────────────── */
+   643→  if (loading) {
+   644→    return (
+   645→      <div className="space-y-4">
+   646→        <div className="flex items-center gap-3">
+   647→          <Skeleton className="h-10 w-64 rounded-xl" />
+   648→          <Skeleton className="h-10 w-10 rounded-xl" />
+   649→        </div>
+   650→        <div className="flex gap-2">
+   651→          <Skeleton className="h-8 w-20 rounded-lg" />
+   652→          <Skeleton className="h-8 w-20 rounded-lg" />
+   653→          <Skeleton className="h-8 w-20 rounded-lg" />
+   654→        </div>
+   655→        <div className="space-y-3">
+   656→          {Array.from({ length: 5 }).map((_, i) => (
+   657→            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+   658→          ))}
+   659→        </div>
+   660→      </div>
+   661→    )
+   662→  }
+   663→
+   664→  /* ────────────── Render: Main ────────────── */
+   665→  return (
+   666→    <div className="space-y-5">
+   667→      {/* Header bar */}
+   668→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   669→        {/* Search */}
+   670→        <div className="relative flex-1 w-full sm:max-w-xs">
+   671→          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   672→          <Input
+   673→            placeholder="ابحث في المهام..."
+   674→            value={searchQuery}
+   675→            onChange={(e) => setSearchQuery(e.target.value)}
+   676→            className="pr-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
+   677→          />
+   678→        </div>
+   679→
+   680→        <div className="flex items-center gap-2">
+   681→          {/* Filters */}
+   682→          <DropdownMenu>
+   683→            <DropdownMenuTrigger asChild>
+   684→              <Button variant="outline" size="sm" className="h-10 rounded-xl gap-1.5 text-xs font-medium">
+   685→                <Filter className="w-3.5 h-3.5" />
+   686→                تصفية
+   687→              </Button>
+   688→            </DropdownMenuTrigger>
+   689→            <DropdownMenuContent align="end" dir="rtl" className="w-56">
+   690→              <div className="p-2 space-y-3">
+   691→                <div>
+   692→                  <Label className="text-[11px] text-muted-foreground mb-1 block">الأولوية</Label>
+   693→                  <Select value={filterPriority} onValueChange={setFilterPriority}>
+   694→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   695→                      <SelectValue />
+   696→                    </SelectTrigger>
+   697→                    <SelectContent>
+   698→                      <SelectItem value="all">الكل</SelectItem>
+   699→                      <SelectItem value="urgent">عاجل</SelectItem>
+   700→                      <SelectItem value="high">مرتفع</SelectItem>
+   701→                      <SelectItem value="medium">متوسط</SelectItem>
+   702→                      <SelectItem value="low">منخفض</SelectItem>
+   703→                    </SelectContent>
+   704→                  </Select>
+   705→                </div>
+   706→                <div>
+   707→                  <Label className="text-[11px] text-muted-foreground mb-1 block">المشروع</Label>
+   708→                  <Select value={filterProject} onValueChange={setFilterProject}>
+   709→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   710→                      <SelectValue />
+   711→                    </SelectTrigger>
+   712→                    <SelectContent>
+   713→                      <SelectItem value="all">الكل</SelectItem>
+   714→                      {projects.map((p) => (
+   715→                        <SelectItem key={p.id} value={p.id}>
+   716→                          <span className="flex items-center gap-2">
+   717→                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+   718→                            {p.name}
+   719→                          </span>
+   720→                        </SelectItem>
+   721→                      ))}
+   722→                    </SelectContent>
+   723→                  </Select>
+   724→                </div>
+   725→                <div>
+   726→                  <Label className="text-[11px] text-muted-foreground mb-1 block">الحالة</Label>
+   727→                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+   728→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   729→                      <SelectValue />
+   730→                    </SelectTrigger>
+   731→                    <SelectContent>
+   732→                      <SelectItem value="all">الكل</SelectItem>
+   733→                      <SelectItem value="todo">للتنفيذ</SelectItem>
+   734→                      <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+   735→                      <SelectItem value="done">مكتمل</SelectItem>
+   736→                    </SelectContent>
+   737→                  </Select>
+   738→                </div>
+   739→              </div>
+   740→            </DropdownMenuContent>
+   741→          </DropdownMenu>
+   742→
+   743→          {/* View tabs */}
+   744→          <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
+   745→            <TabsList className="h-10 rounded-xl p-1">
+   746→              <TabsTrigger value="list" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   747→                <List className="w-3.5 h-3.5" />
+   748→                <span className="hidden sm:inline">قائمة</span>
+   749→              </TabsTrigger>
+   750→              <TabsTrigger value="board" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   751→                <LayoutGrid className="w-3.5 h-3.5" />
+   752→                <span className="hidden sm:inline">لوحة</span>
+   753→              </TabsTrigger>
+   754→              <TabsTrigger value="calendar" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   755→                <CalendarDays className="w-3.5 h-3.5" />
+   756→                <span className="hidden sm:inline">تقويم</span>
+   757→              </TabsTrigger>
+   758→            </TabsList>
+   759→          </Tabs>
+   760→
+   761→          {/* Add task */}
+   762→          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+   763→            <DialogTrigger asChild>
+   764→              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20">
+   765→                <Plus className="w-4 h-4" />
+   766→                مهمة جديدة
+   767→              </Button>
+   768→            </DialogTrigger>
+   769→            <DialogContent className="sm:max-w-md backdrop-blur-xl" dir="rtl">
+   770→              <DialogHeader>
+   771→                <DialogTitle className="text-lg font-bold flex items-center gap-2">
+   772→                  <Sparkles className="w-5 h-5 text-gold" />
+   773→                  مهمة جديدة
+   774→                </DialogTitle>
+   775→              </DialogHeader>
+   776→              <div className="space-y-4 mt-2">
+   777→                <div>
+   778→                  <Label className="text-xs font-medium mb-1.5 block">العنوان</Label>
+   779→                  <Input
+   780→                    placeholder="ماذا تريد إنجازه؟"
+   781→                    value={formTitle}
+   782→                    onChange={(e) => setFormTitle(e.target.value)}
+   783→                    className="rounded-xl h-10 focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+   784→                    onKeyDown={(e) => e.key === 'Enter' && createTask()}
+   785→                  />
+   786→                </div>
+   787→                <div>
+   788→                  <Label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</Label>
+   789→                  <Textarea
+   790→                    placeholder="أضف تفاصيل..."
+   791→                    value={formDesc}
+   792→                    onChange={(e) => setFormDesc(e.target.value)}
+   793→                    className="rounded-xl min-h-[80px] text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+   794→                  />
+   795→                </div>
+   796→                <div className="grid grid-cols-2 gap-3">
+   797→                  <div>
+   798→                    <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
+   799→                    <Select value={formPriority} onValueChange={setFormPriority}>
+   800→                      <SelectTrigger className="rounded-xl h-10 text-sm">
+   801→                        <SelectValue />
+   802→                      </SelectTrigger>
+   803→                      <SelectContent>
+   804→                        <SelectItem value="urgent">
+   805→                          <span className="flex items-center gap-2">
+   806→                            <span className="w-2 h-2 rounded-full bg-red-500" />
+   807→                            عاجل
+   808→                          </span>
+   809→                        </SelectItem>
+   810→                        <SelectItem value="high">
+   811→                          <span className="flex items-center gap-2">
+   812→                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+   813→                            مرتفع
+   814→                          </span>
+   815→                        </SelectItem>
+   816→                        <SelectItem value="medium">
+   817→                          <span className="flex items-center gap-2">
+   818→                            <span className="w-2 h-2 rounded-full bg-gold" />
+   819→                            متوسط
+   820→                          </span>
+   821→                        </SelectItem>
+   822→                        <SelectItem value="low">
+   823→                          <span className="flex items-center gap-2">
+   824→                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+   825→                            منخفض
+   826→                          </span>
+   827→                        </SelectItem>
+   828→                      </SelectContent>
+   829→                    </Select>
+   830→                  </div>
+   831→                  <div>
+   832→                    <Label className="text-xs font-medium mb-1.5 block">المشروع</Label>
+   833→                    <Select value={formProject} onValueChange={setFormProject}>
+   834→                      <SelectTrigger className="rounded-xl h-10 text-sm">
+   835→                        <SelectValue />
+   836→                      </SelectTrigger>
+   837→                      <SelectContent>
+   838→                        <SelectItem value="none">بدون مشروع</SelectItem>
+   839→                        {projects.map((p) => (
+   840→                          <SelectItem key={p.id} value={p.id}>
+   841→                            <span className="flex items-center gap-2">
+   842→                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+   843→                              {p.name}
+   844→                            </span>
+   845→                          </SelectItem>
+   846→                        ))}
+   847→                      </SelectContent>
+   848→                    </Select>
+   849→                  </div>
+   850→                </div>
+   851→                <div>
+   852→                  <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق (اختياري)</Label>
+   853→                  <Input
+   854→                    type="date"
+   855→                    value={formDueDate}
+   856→                    onChange={(e) => setFormDueDate(e.target.value)}
+   857→                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+   858→                  />
+   859→                </div>
+   860→              </div>
+   861→              <DialogFooter className="gap-2 mt-4">
+   862→                <DialogClose asChild>
+   863→                  <Button variant="outline" className="rounded-xl text-sm">
+   864→                    إلغاء
+   865→                  </Button>
+   866→                </DialogClose>
+   867→                <Button
+   868→                  onClick={createTask}
+   869→                  disabled={!formTitle.trim() || submitting}
+   870→                  className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+   871→                >
+   872→                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+   873→                  إنشاء المهمة
+   874→                </Button>
+   875→              </DialogFooter>
+   876→            </DialogContent>
+   877→          </Dialog>
+   878→        </div>
+   879→      </div>
+   880→
+   881→      {/* Filter bar - glass card with rounded-full buttons */}
+   882→      <motion.div
+   883→        initial={{ opacity: 0, y: 8 }}
+   884→        animate={{ opacity: 1, y: 0 }}
+   885→        transition={{ delay: 0.1 }}
+   886→        className="glass rounded-2xl p-2.5 flex flex-wrap items-center gap-1.5"
+   887→      >
+   888→        {['all', 'todo', 'in_progress', 'done'].map((status) => {
+   889→          const isActive = filterStatus === status
+   890→          const label = status === 'all' ? 'الكل' : status === 'todo' ? 'للتنفيذ' : status === 'in_progress' ? 'قيد التنفيذ' : 'مكتمل'
+   891→          return (
+   892→            <motion.button
+   893→              key={status}
+   894→              whileTap={{ scale: 0.95 }}
+   895→              onClick={() => setFilterStatus(status)}
+   896→              className={cn(
+   897→                'px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+   898→                isActive
+   899→                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+   900→                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+   901→              )}
+   902→            >
+   903→              {label}
+   904→            </motion.button>
+   905→          )
+   906→        })}
+   907→        <div className="w-px h-5 bg-border/60 mx-1" />
+   908→        {['all', 'urgent', 'high', 'medium', 'low'].map((priority) => {
+   909→          const isActive = filterPriority === priority
+   910→          const label = priority === 'all' ? 'كل الأولويات' : priorityLabels[priority]
+   911→          return (
+   912→            <motion.button
+   913→              key={priority}
+   914→              whileTap={{ scale: 0.95 }}
+   915→              onClick={() => setFilterPriority(priority)}
+   916→              className={cn(
+   917→                'px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+   918→                isActive
+   919→                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+   920→                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+   921→              )}
+   922→            >
+   923→              {priority !== 'all' && (
+   924→                <span className={cn('w-1.5 h-1.5 rounded-full inline-block ml-1', priorityDotColors[priority])} />
+   925→              )}
+   926→              {label}
+   927→            </motion.button>
+   928→          )
+   929→        })}
+   930→      </motion.div>
+   931→
+   932→      {/* Stats summary */}
+   933→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   934→        {[
+   935→          { label: 'الكل', count: tasks.length, color: 'text-foreground' },
+   936→          { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-blue-500' },
+   937→          { label: 'قيد التنفيذ', count: tasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
+   938→          { label: 'مكتمل', count: tasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
+   939→        ].map((s, i) => (
+   940→          <motion.div
+   941→            key={s.label}
+   942→            initial={{ opacity: 0, y: 12 }}
+   943→            animate={{ opacity: 1, y: 0 }}
+   944→            transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+   945→            className="glass rounded-2xl p-3.5 text-center"
+   946→          >
+   947→            <p className={cn('text-xl font-bold tabular-nums', s.color)}>
+   948→              <AnimatedCounter target={s.count} className={cn('text-xl font-bold tabular-nums', s.color)} />
+   949→            </p>
+   950→            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+   951→          </motion.div>
+   952→        ))}
+   953→      </div>
+   954→
+   955→      {/* ── List View ── */}
+   956→      {view === 'list' && (
+   957→        <motion.div
+   958→          variants={containerVariants}
+   959→          initial="hidden"
+   960→          animate="visible"
+   961→          className="space-y-2"
+   962→        >
+   963→          {STATUSES.map((status) => {
+   964→            const col = statusColumns.find((c) => c.key === status)!
+   965→            const statusTasks = groupedTasks[status]
+   966→            return (
+   967→              <div key={status}>
+   968→                <div className="flex items-center gap-2 mb-2 px-1">
+   969→                  <col.icon className={cn('w-4 h-4', col.color)} />
+   970→                  <span className="text-sm font-semibold">{col.label}</span>
+   971→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+   972→                    {statusTasks.length}
+   973→                  </Badge>
+   974→                </div>
+   975→                <AnimatePresence mode="popLayout">
+   976→                  {statusTasks.length === 0 ? (
+   977→                    <motion.div
+   978→                      key="empty"
+   979→                      initial={{ opacity: 0 }}
+   980→                      animate={{ opacity: 1 }}
+   981→                      className="glass rounded-2xl p-6 text-center text-sm text-muted-foreground"
+   982→                    >
+   983→                      لا توجد مهام
+   984→                    </motion.div>
+   985→                  ) : (
+   986→                    <div className="space-y-2">
+   987→                      {statusTasks.map((task, idx) => renderTaskItem(task, idx))}
+   988→                    </div>
+   989→                  )}
+   990→                </AnimatePresence>
+   991→              </div>
+   992→            )
+   993→          })}
+   994→        </motion.div>
+   995→      )}
+   996→
+   997→      {/* ── Board View ── */}
+   998→      {view === 'board' && (
+   999→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  1000→          {statusColumns.map((col) => {
+  1001→            const colTasks = groupedTasks[col.key]
+  1002→            return (
+  1003→              <motion.div
+  1004→                key={col.key}
+  1005→                initial={{ opacity: 0, y: 16 }}
+  1006→                animate={{ opacity: 1, y: 0 }}
+  1007→                transition={{ delay: statusColumns.indexOf(col) * 0.1 }}
+  1008→                className={cn('flex flex-col min-h-[200px] glass rounded-2xl p-3 border-t-4', boardColBorderColors[col.key])}
+  1009→              >
+  1010→                <div className={cn('flex items-center gap-2 mb-3 px-1', col.color)}>
+  1011→                  <col.icon className="w-4 h-4" />
+  1012→                  <span className="text-sm font-semibold">{col.label}</span>
+  1013→                  <Badge variant="secondary" className="text-[10px] h-5 min-w-[22px] px-1.5 rounded-full justify-center font-bold">
+  1014→                    {colTasks.length}
+  1015→                  </Badge>
+  1016→                </div>
+  1017→                <div className="flex-1 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+  1018→                  <AnimatePresence mode="popLayout">
+  1019→                    {colTasks.length === 0 ? (
+  1020→                      <motion.div
+  1021→                        key="empty"
+  1022→                        initial={{ opacity: 0 }}
+  1023→                        animate={{ opacity: 1 }}
+  1024→                        className="glass rounded-2xl p-8 text-center"
+  1025→                      >
+  1026→                        <Inbox className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+  1027→                        <p className="text-xs text-muted-foreground">لا توجد مهام</p>
+  1028→                      </motion.div>
+  1029→                    ) : (
+  1030→                      colTasks.map((task) => renderBoardCard(task))
+  1031→                    )}
+  1032→                  </AnimatePresence>
+  1033→                </div>
+  1034→              </motion.div>
+  1035→            )
+  1036→          })}
+  1037→        </div>
+  1038→      )}
+  1039→
+  1040→      {/* ── Calendar View ── */}
+  1041→      {view === 'calendar' && (
+  1042→        <motion.div
+  1043→          initial={{ opacity: 0, y: 12 }}
+  1044→          animate={{ opacity: 1, y: 0 }}
+  1045→        >
+  1046→          <Card className="glass overflow-hidden rounded-2xl border-0">
+  1047→            <CardHeader className="pb-2">
+  1048→              <div className="flex items-center justify-between">
+  1049→                <CardTitle className="text-base font-bold">
+  1050→                  {format(calendarMonth, 'MMMM yyyy', { locale: ar })}
+  1051→                </CardTitle>
+  1052→                <div className="flex items-center gap-1">
+  1053→                  <Button
+  1054→                    variant="ghost"
+  1055→                    size="icon"
+  1056→                    className="h-8 w-8 rounded-lg"
+  1057→                    onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+  1058→                  >
+  1059→                    <ChevronRight className="w-4 h-4" />
+  1060→                  </Button>
+  1061→                  <Button
+  1062→                    variant="ghost"
+  1063→                    size="sm"
+  1064→                    className="h-8 px-2 text-xs rounded-lg"
+  1065→                    onClick={() => setCalendarMonth(new Date())}
+  1066→                  >
+  1067→                    اليوم
+  1068→                  </Button>
+  1069→                  <Button
+  1070→                    variant="ghost"
+  1071→                    size="icon"
+  1072→                    className="h-8 w-8 rounded-lg"
+  1073→                    onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+  1074→                  >
+  1075→                    <ChevronLeft className="w-4 h-4" />
+  1076→                  </Button>
+  1077→                </div>
+  1078→              </div>
+  1079→            </CardHeader>
+  1080→            <CardContent>
+  1081→              {/* Week day headers */}
+  1082→              <div className="grid grid-cols-7 gap-1 mb-1">
+  1083→                {weekDays.map((d) => (
+  1084→                  <div key={d} className="text-center text-[11px] font-medium text-muted-foreground py-2">
+  1085→                    {d}
+  1086→                  </div>
+  1087→                ))}
+  1088→              </div>
+  1089→              {/* Calendar grid */}
+  1090→              <div className="grid grid-cols-7 gap-1">
+  1091→                {calendarDays.map((day, idx) => {
+  1092→                  const dayTasks = getTasksForDate(day)
+  1093→                  const isCurrentMonth = isSameMonth(day, calendarMonth)
+  1094→                  const isToday = isSameDay(day, new Date())
+  1095→                  const hasTasks = dayTasks.length > 0
+  1096→
+  1097→                  return (
+  1098→                    <motion.div
+  1099→                      key={idx}
+  1100→                      initial={false}
+  1101→                      className={cn(
+  1102→                        'min-h-[72px] sm:min-h-[88px] rounded-xl p-1.5 transition-colors',
+  1103→                        isCurrentMonth ? 'bg-background' : 'bg-muted/30',
+  1104→                        isToday && 'ring-2 ring-emerald-accent ring-offset-1 ring-offset-background',
+  1105→                        hasTasks && 'bg-emerald-accent/5'
+  1106→                      )}
+  1107→                    >
+  1108→                      <span
+  1109→                        className={cn(
+  1110→                          'text-[11px] font-medium block text-center',
+  1111→                          isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/40',
+  1112→                          isToday && 'text-emerald-accent font-bold'
+  1113→                        )}
+  1114→                      >
+  1115→                        {format(day, 'd')}
+  1116→                      </span>
+  1117→                      <div className="mt-0.5 space-y-0.5 max-h-[56px] sm:max-h-[64px] overflow-y-auto">
+  1118→                        {dayTasks.slice(0, 3).map((t) => (
+  1119→                          <div
+  1120→                            key={t.id}
+  1121→                            className={cn(
+  1122→                              'text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium',
+  1123→                              t.priority === 'urgent' && 'bg-red-500/10 text-red-600 dark:text-red-400',
+  1124→                              t.priority === 'high' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  1125→                              t.priority === 'medium' && 'bg-gold/10 text-yellow-700 dark:text-gold',
+  1126→                              t.priority === 'low' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+  1127→                            )}
+  1128→                          >
+  1129→                            {t.title}
+  1130→                          </div>
+  1131→                        ))}
+  1132→                        {dayTasks.length > 3 && (
+  1133→                          <p className="text-[9px] text-muted-foreground text-center">+{dayTasks.length - 3}</p>
+  1134→                        )}
+  1135→                      </div>
+  1136→                    </motion.div>
+  1137→                  )
+  1138→                })}
+  1139→              </div>
+  1140→            </CardContent>
+  1141→          </Card>
+  1142→        </motion.div>
+  1143→      )}
+  1144→
+  1145→      {/* Expanded task panel (mobile friendly overlay) */}
+  1146→      <AnimatePresence>
+  1147→        {expandedId && view === 'board' && (
+  1148→          <motion.div
+  1149→            initial={{ opacity: 0 }}
+  1150→            animate={{ opacity: 1 }}
+  1151→            exit={{ opacity: 0 }}
+  1152→            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 md:hidden"
+  1153→            onClick={() => setExpandedId(null)}
+  1154→          />
+  1155→        )}
+  1156→      </AnimatePresence>
+  1157→    </div>
+  1158→  )
+  1159→}
+  1160→
+  1161→export default Tasks

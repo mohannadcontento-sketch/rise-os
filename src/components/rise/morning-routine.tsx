@@ -35,6 +35,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { notifyMorningComplete } from '@/lib/notifications'
 
 /* ────────────── Types ────────────── */
 
@@ -281,11 +282,10 @@ function HistoryChart({ logs }: { logs: MorningLog[] }) {
             </span>
             <motion.div
               className="w-full max-w-[28px] rounded-t-md relative overflow-hidden"
-              style={{ height: `${height}%`, minHeight: '4px' }}
+              style={{ height: `${height}%`, minHeight: '4px', transformOrigin: 'bottom' }}
               initial={{ scaleY: 0 }}
               animate={{ scaleY: 1 }}
               transition={{ duration: 0.5, delay: i * 0.06, ease: 'easeOut' }}
-              originY={1}
             >
               <div
                 className={cn(
@@ -402,6 +402,7 @@ export default function MorningRoutine() {
   const [elapsedMs, setElapsedMs] = useState(0)
   const sessionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const SESSION_STORAGE_KEY = 'rise-morning-session-start'
+  const prevAllDoneRef = useRef(false)
 
   const movementTimer = useSectionTimer(SECTIONS[0].timerDefault)
   const reflectionTimer = useSectionTimer(SECTIONS[1].timerDefault)
@@ -415,6 +416,14 @@ export default function MorningRoutine() {
   const score = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
   const earnedXP = ALL_ITEMS.filter((item) => completedIds.has(item.id)).reduce((sum, item) => sum + item.xp, 0)
   const isAllDone = completedCount === totalCount
+
+  // Notify when all items completed (transition from false → true)
+  useEffect(() => {
+    if (isAllDone && !prevAllDoneRef.current) {
+      notifyMorningComplete(score, earnedXP)
+    }
+    prevAllDoneRef.current = isAllDone
+  }, [isAllDone, score, earnedXP])
 
   // Session timer logic
   useEffect(() => {
@@ -523,6 +532,11 @@ export default function MorningRoutine() {
         })
         if (!startedAt) setStartedAt(now)
         setTodayLog(payload)
+        // Award XP when all items completed
+        if (ids.size === totalCount && totalCount > 0) {
+          const totalXp = SECTIONS.reduce((sum, s) => sum + s.items.reduce((isum, item) => isum + item.xp, 0), 0)
+          fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: totalXp, reason: 'morning-routine-complete' }) }).catch(() => {})
+        }
       } catch {
         // silent fail
       } finally {

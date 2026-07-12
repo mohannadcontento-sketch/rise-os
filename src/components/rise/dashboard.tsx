@@ -7,7 +7,7 @@ import {
   Area,
   XAxis,
   YAxis,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from 'recharts'
 import {
@@ -40,6 +40,13 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
+import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 /* ────────────── Types ────────────── */
 
@@ -174,15 +181,7 @@ function getDayLabel(dateStr: string): string {
   }
 }
 
-const XP_PER_LEVEL = 500
-
-function xpInLevel(xp: number): number {
-  return xp % XP_PER_LEVEL
-}
-
-function xpPercent(xp: number): number {
-  return Math.min((xpInLevel(xp) / XP_PER_LEVEL) * 100, 100)
-}
+/* XP/Level now handled by calculateLevel from @/lib/gamification */
 
 function getPriorityColor(priority: string): string {
   switch (priority) {
@@ -536,6 +535,16 @@ export default function Dashboard() {
   const greeting = getGreeting()
   const quote = getQuoteOfTheDay()
 
+  const levelInfo = calculateLevel(user.xp)
+  const badgeStats: BadgeStats = {
+    totalTasks: user.totalTasksDone,
+    streak: user.streak,
+    totalFocusMin: user.totalFocusMin,
+    booksCompleted: 0,
+    totalHabits: habits.length,
+    journalStreak: 0,
+  }
+
   const upcomingTasks = tasks.filter((t) => !t.done).slice(0, 5)
   const activeGoals = goals.slice(0, 4)
   const activeBooks = books.filter((b) => b.status === 'reading' || b.progress > 0).slice(0, 3)
@@ -578,33 +587,42 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3 flex-wrap">
             {/* Level Badge */}
-            <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[200px] border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shrink-0 shadow-md">
-                <Zap className="w-5 h-5 text-forest-dark" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-foreground">
-                    المستوى {toArabicNum(user.level)}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {toArabicNum(xpInLevel(user.xp))} / {toArabicNum(XP_PER_LEVEL)}
-                  </span>
-                </div>
-                {/* XP bar with glow */}
-                <div className="relative">
-                  <div className="absolute -inset-1 rounded-full bg-gradient-to-l from-gold/30 to-gold-light/20 blur-sm opacity-60" />
-                  <div className="relative h-1.5 rounded-full bg-primary/10 overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${xpPercent(user.xp)}%` }}
-                      transition={{ duration: 1.2, ease: 'easeOut' }}
-                    />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[200px] border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] cursor-default">
+                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shrink-0 shadow-md">
+                      <Zap className="w-5 h-5 text-forest-dark" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-foreground">
+                          المستوى {toArabicNum(levelInfo.level)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {toArabicNum(levelInfo.currentXp)} / {toArabicNum(levelInfo.xpToNext)}
+                        </span>
+                      </div>
+                      {/* XP bar with glow */}
+                      <div className="relative">
+                        <div className="absolute -inset-1 rounded-full bg-gradient-to-l from-gold/30 to-gold-light/20 blur-sm opacity-60" />
+                        <div className="relative h-1.5 rounded-full bg-primary/10 overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${levelInfo.progress}%` }}
+                            transition={{ duration: 1.2, ease: 'easeOut' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {toArabicNum(levelInfo.xpToNext - levelInfo.currentXp)} خبرة للمستوى التالي
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {/* Streak */}
             <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 pulse-glow border border-white/10 dark:border-white/5">
@@ -751,7 +769,7 @@ export default function Dashboard() {
                       dx={-4}
                       width={28}
                     />
-                    <Tooltip content={<ChartTooltip />} />
+                    <RechartsTooltip content={<ChartTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="score"
@@ -959,6 +977,63 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           )}
+
+          {/* Available Badges */}
+          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+            <CardHeader className="pb-3 pt-0">
+              <SectionHeader icon={Trophy} iconColor="text-gold">
+                الشارات المتاحة
+              </SectionHeader>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="glass rounded-2xl p-4 border border-white/10 dark:border-white/5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {BADGES.map((badge, i) => {
+                    const earned = badge.condition(badgeStats)
+                    return (
+                      <motion.div
+                        key={badge.id}
+                        initial={{ opacity: 0, scale: 0.85 }}
+                        animate={{ opacity: earned ? 1 : 0.4, scale: 1 }}
+                        transition={{ delay: 0.6 + i * 0.04, duration: 0.4, type: 'spring', stiffness: 200 }}
+                        whileHover={earned ? { y: -3, scale: 1.03, transition: { duration: 0.2 } } : undefined}
+                        className={cn(
+                          'rounded-xl p-3 text-center space-y-1.5 border transition-shadow duration-300',
+                          earned
+                            ? 'bg-primary/[0.03] border-gold/20 shadow-[0_0_15px_oklch(0.78_0.12_85/0.08)]'
+                            : 'bg-primary/[0.02] border-primary/10'
+                        )}
+                      >
+                        <motion.div
+                          className="text-2xl"
+                          animate={earned ? { rotate: [0, -10, 10, -5, 5, 0], scale: [1, 1.2, 1] } : {}}
+                          transition={{ delay: 0.8 + i * 0.04, duration: 0.6 }}
+                        >
+                          {badge.icon}
+                        </motion.div>
+                        <p className={cn('text-xs font-semibold truncate', earned ? 'text-foreground' : 'text-muted-foreground')}>
+                          {badge.name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
+                          {badge.desc}
+                        </p>
+                        {earned && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 1 + i * 0.04, type: 'spring', stiffness: 300 }}
+                            className="flex justify-center"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-accent" />
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </motion.div>
 

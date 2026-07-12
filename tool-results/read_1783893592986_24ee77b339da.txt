@@ -1,0 +1,757 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useMemo } from 'react'
+     4→import { motion } from 'framer-motion'
+     5→import {
+     6→  BarChart3,
+     7→  Zap,
+     8→  CheckCircle2,
+     9→  Clock,
+    10→  Flame,
+    11→  TrendingUp,
+    12→  TrendingDown,
+    13→  Sparkles,
+    14→  Brain,
+    15→  Target,
+    16→  Award,
+    17→  ArrowUpRight,
+    18→  ArrowDownRight,
+    19→  Trophy,
+    20→  Calendar,
+    21→  Timer,
+    22→  Star,
+    23→} from 'lucide-react'
+    24→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    25→import { Button } from '@/components/ui/button'
+    26→import { Badge } from '@/components/ui/badge'
+    27→import { Skeleton } from '@/components/ui/skeleton'
+    28→import { cn } from '@/lib/utils'
+    29→import {
+    30→  LineChart,
+    31→  Line,
+    32→  AreaChart,
+    33→  Area,
+    34→  BarChart,
+    35→  Bar,
+    36→  PieChart,
+    37→  Pie,
+    38→  Cell,
+    39→  XAxis,
+    40→  YAxis,
+    41→  CartesianGrid,
+    42→  Tooltip,
+    43→  ResponsiveContainer,
+    44→  Legend,
+    45→} from 'recharts'
+    46→
+    47→/* ────────────── Types ────────────── */
+    48→
+    49→interface DashboardData {
+    50→  user: {
+    51→    name: string
+    52→    level: number
+    53→    xp: number
+    54→    streak: number
+    55→    longestStreak: number
+    56→    totalFocusMin: number
+    57→    totalTasksDone: number
+    58→  }
+    59→  dailyScores: { date: string; score: number; morningScore: number; taskScore: number; habitScore: number; focusScore: number; healthScore: number; journalScore: number }[]
+    60→}
+    61→
+    62→interface HabitData {
+    63→  habits: { id: string; name: string }[]
+    64→  logs: { habitId: string; date: string; completed: boolean }[]
+    65→}
+    66→
+    67→interface FocusData {
+    68→  sessions: { id: string; duration: number; actualMin: number; completed: boolean; startedAt: string }[]
+    69→}
+    70→
+    71→interface HealthData {
+    72→  logs: { date: string; sleepHours: number | null; waterGlasses: number | null; mood: number | null; energy: number | null }[]
+    73→}
+    74→
+    75→type Period = 'weekly' | 'monthly' | 'yearly'
+    76→
+    77→const periodLabels: Record<Period, string> = {
+    78→  weekly: 'أسبوعي',
+    79→  monthly: 'شهري',
+    80→  yearly: 'سنوي',
+    81→}
+    82→
+    83→const CHART_COLORS = [
+    84→  'oklch(0.55 0.14 163)',
+    85→  'oklch(0.78 0.12 85)',
+    86→  'oklch(0.65 0.10 200)',
+    87→  'oklch(0.70 0.15 300)',
+    88→  'oklch(0.60 0.20 25)',
+    89→  'oklch(0.35 0.10 160)',
+    90→]
+    91→
+    92→const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+    93→
+    94→/* Glass-themed tooltip with dark mode support */
+    95→const glassTooltipStyle = {
+    96→  background: 'oklch(0.98 0.002 106 / 0.92)',
+    97→  backdropFilter: 'blur(16px)',
+    98→  WebkitBackdropFilter: 'blur(16px)',
+    99→  border: '1px solid oklch(0.88 0.01 160)',
+   100→  borderRadius: '12px',
+   101→  fontSize: 12,
+   102→  direction: 'rtl' as const,
+   103→  padding: '10px 14px',
+   104→  boxShadow: '0 4px 24px oklch(0.55 0.14 163 / 0.08)',
+   105→}
+   106→
+   107→/* Dark mode glass tooltip */
+   108→const darkGlassTooltipStyle = {
+   109→  background: 'oklch(0.18 0.02 155 / 0.92)',
+   110→  backdropFilter: 'blur(16px)',
+   111→  WebkitBackdropFilter: 'blur(16px)',
+   112→  border: '1px solid oklch(0.30 0.02 155)',
+   113→  borderRadius: '12px',
+   114→  fontSize: 12,
+   115→  direction: 'rtl' as const,
+   116→  padding: '10px 14px',
+   117→  boxShadow: '0 4px 24px oklch(0 0 0 / 0.3)',
+   118→}
+   119→
+   120→/* Custom tooltip renderer */
+   121→function GlassTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+   122→  if (!active || !payload?.length) return null
+   123→  const isDark = document.documentElement.classList.contains('dark')
+   124→  return (
+   125→    <div
+   126→      className={cn(
+   127→        'rounded-xl px-3.5 py-2.5 text-xs space-y-1.5',
+   128→        isDark
+   129→          ? 'bg-[oklch(0.18_0.02_155/0.92)] border border-[oklch(0.30_0.02_155)]'
+   130→          : 'bg-[oklch(0.98_0.002_106/0.92)] border border-[oklch(0.88_0.01_160)]'
+   131→      )}
+   132→      style={{ backdropFilter: 'blur(16px)', boxShadow: isDark ? '0 4px 24px oklch(0 0 0/0.3)' : '0 4px 24px oklch(0.55 0.14 163/0.08)' }}
+   133→    >
+   134→      <p className={cn('font-semibold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{label}</p>
+   135→      {payload.map((entry, i) => (
+   136→        <div key={i} className="flex items-center justify-between gap-4">
+   137→          <div className="flex items-center gap-1.5">
+   138→            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+   139→            <span className={isDark ? 'text-[oklch(0.70_0.01_160)]' : 'text-[oklch(0.50_0.01_160)]'}>{entry.name}</span>
+   140→          </div>
+   141→          <span className={cn('font-bold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{entry.value}</span>
+   142→        </div>
+   143→      ))}
+   144→    </div>
+   145→  )
+   146→}
+   147→
+   148→/* ────────────── Component ────────────── */
+   149→
+   150→export default function Analytics() {
+   151→  const [period, setPeriod] = useState<Period>('weekly')
+   152→  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
+   153→  const [habits, setHabits] = useState<HabitData | null>(null)
+   154→  const [focus, setFocus] = useState<FocusData | null>(null)
+   155→  const [health, setHealth] = useState<HealthData | null>(null)
+   156→  const [loading, setLoading] = useState(true)
+   157→
+   158→  useEffect(() => {
+   159→    async function load() {
+   160→      try {
+   161→        const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
+   162→          fetch('/api/rise/dashboard'),
+   163→          fetch('/api/rise/habits'),
+   164→          fetch('/api/rise/focus'),
+   165→          fetch('/api/rise/health'),
+   166→        ])
+   167→        const [dash, habit, foc, hlt] = await Promise.all([
+   168→          dashRes.json(),
+   169→          habitRes.json(),
+   170→          focusRes.json(),
+   171→          healthRes.json(),
+   172→        ])
+   173→        setDashboard(dash)
+   174→        setHabits(habit)
+   175→        setFocus(foc)
+   176→        setHealth(hlt)
+   177→      } catch {
+   178→        // ignore
+   179→      } finally {
+   180→        setLoading(false)
+   181→      }
+   182→    }
+   183→    load()
+   184→  }, [])
+   185→
+   186→  // ─── Computed Charts ───
+   187→
+   188→  const productivityData = useMemo(() => {
+   189→    if (!dashboard?.dailyScores) return []
+   190→    const scores = dashboard.dailyScores.slice(-(period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90))
+   191→    return scores.map((s) => ({
+   192→      date: s.date.slice(5),
+   193→      score: Math.round(s.score),
+   194→    }))
+   195→  }, [dashboard, period])
+   196→
+   197→  const habitTrendData = useMemo(() => {
+   198→    if (!habits) return []
+   199→    const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
+   200→    const today = new Date()
+   201→    const result: { date: string; rate: number }[] = []
+   202→    for (let i = days - 1; i >= 0; i--) {
+   203→      const d = new Date(today)
+   204→      d.setDate(d.getDate() - i)
+   205→      const key = d.toISOString().split('T')[0]
+   206→      const dayLogs = habits.logs.filter((l) => l.date === key)
+   207→      const total = habits.habits.length
+   208→      const completed = dayLogs.filter((l) => l.completed).length
+   209→      result.push({
+   210→        date: key.slice(5),
+   211→        rate: total > 0 ? Math.round((completed / total) * 100) : 0,
+   212→      })
+   213→    }
+   214→    return result
+   215→  }, [habits, period])
+   216→
+   217→  const focusByDayData = useMemo(() => {
+   218→    if (!focus) return []
+   219→    const dayMap: Record<string, number> = {}
+   220→    dayNamesAr.forEach((d) => (dayMap[d] = 0))
+   221→    focus.sessions
+   222→      .filter((s) => s.completed)
+   223→      .forEach((s) => {
+   224→        const day = new Date(s.startedAt).getDay()
+   225→        dayMap[dayNamesAr[day]] = (dayMap[dayNamesAr[day]] || 0) + s.actualMin
+   226→      })
+   227→    return dayNamesAr.map((name) => ({
+   228→      day: name,
+   229→      minutes: dayMap[name],
+   230→      hours: Math.round((dayMap[name] / 60) * 10) / 10,
+   231→    }))
+   232→  }, [focus])
+   233→
+   234→  const taskCompletionData = useMemo(() => {
+   235→    if (!dashboard?.dailyScores) return []
+   236→    const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
+   237→    const scores = dashboard.dailyScores.slice(-days)
+   238→    return scores.map((s) => ({
+   239→      date: s.date.slice(5),
+   240→      tasks: Math.round(s.taskScore * 10) / 10,
+   241→    }))
+   242→  }, [dashboard, period])
+   243→
+   244→  const healthTrendsData = useMemo(() => {
+   245→    if (!health?.logs) return []
+   246→    const logs = health.logs.slice(-(period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90)).reverse()
+   247→    return logs.map((l) => ({
+   248→      date: l.date.slice(5),
+   249→      sleep: l.sleepHours || 0,
+   250→      water: l.waterGlasses || 0,
+   251→      mood: l.mood || 0,
+   252→    }))
+   253→  }, [health, period])
+   254→
+   255→  const goalDistributionData = useMemo(() => {
+   256→    if (!dashboard?.dailyScores?.length) return []
+   257→    const latest = dashboard.dailyScores[dashboard.dailyScores.length - 1]
+   258→    if (!latest) return []
+   259→    return [
+   260→      { name: 'الصباح', value: Math.round(latest.morningScore) || 1 },
+   261→      { name: 'المهام', value: Math.round(latest.taskScore) || 1 },
+   262→      { name: 'العادات', value: Math.round(latest.habitScore) || 1 },
+   263→      { name: 'التركيز', value: Math.round(latest.focusScore) || 1 },
+   264→      { name: 'الصحة', value: Math.round(latest.healthScore) || 1 },
+   265→      { name: 'اليوميات', value: Math.round(latest.journalScore) || 1 },
+   266→    ]
+   267→  }, [dashboard])
+   268→
+   269→  // Best/Worst Day
+   270→  const { bestDay, worstDay } = useMemo(() => {
+   271→    if (!dashboard?.dailyScores || dashboard.dailyScores.length < 2) {
+   272→      return { bestDay: null, worstDay: null }
+   273→    }
+   274→    const dayScores: Record<number, { total: number; count: number }> = {}
+   275→    dashboard.dailyScores.forEach((s) => {
+   276→      const day = new Date(s.date).getDay()
+   277→      if (!dayScores[day]) dayScores[day] = { total: 0, count: 0 }
+   278→      dayScores[day].total += s.score
+   279→      dayScores[day].count++
+   280→    })
+   281→    let bestKey = 0, worstKey = 0, bestAvg = 0, worstAvg = 10
+   282→    Object.entries(dayScores).forEach(([day, { total, count }]) => {
+   283→      const avg = total / count
+   284→      if (avg > bestAvg) { bestAvg = avg; bestKey = parseInt(day) }
+   285→      if (avg < worstAvg) { worstAvg = avg; worstKey = parseInt(day) }
+   286→    })
+   287→    return {
+   288→      bestDay: { name: dayNamesAr[bestKey], avg: Math.round(bestAvg * 10) / 10 },
+   289→      worstDay: { name: dayNamesAr[worstKey], avg: Math.round(worstAvg * 10) / 10 },
+   290→    }
+   291→  }, [dashboard])
+   292→
+   293→  // Personal Records
+   294→  const personalRecords = useMemo(() => {
+   295→    if (!dashboard?.dailyScores || !focus) return null
+   296→    const scores = dashboard.dailyScores
+   297→    const highestScore = scores.length > 0 ? Math.round(Math.max(...scores.map((s) => s.score)) * 10) / 10 : 0
+   298→    const longestFocus = focus.sessions.length > 0 ? Math.max(...focus.sessions.filter((s) => s.completed).map((s) => s.actualMin || 0)) : 0
+   299→    const mostTasks = scores.length > 0 ? Math.round(Math.max(...scores.map((s) => s.taskScore)) * 10) / 10 : 0
+   300→    return { highestScore, longestFocus, mostTasks }
+   301→  }, [dashboard, focus])
+   302→
+   303→  const insights = useMemo(() => {
+   304→    const items: { icon: React.ElementType; text: string; type: 'positive' | 'negative' | 'neutral' }[] = []
+   305→    if (dashboard) {
+   306→      const { streak, longestStreak, totalTasksDone, totalFocusMin } = dashboard.user
+   307→      items.push({
+   308→        icon: Flame,
+   309→        text: streak > 0 ? `سلسلتك الحالية: ${streak} يوم متتالي` : 'ابدأ سلسلتك اليوم!',
+   310→        type: streak > 0 ? 'positive' : 'neutral',
+   311→      })
+   312→      items.push({
+   313→        icon: Award,
+   314→        text: `أطول سلسلة: ${longestStreak} يوم`,
+   315→        type: 'neutral',
+   316→      })
+   317→      items.push({
+   318→        icon: CheckCircle2,
+   319→        text: `إجمالي المهام المنجزة: ${totalTasksDone}`,
+   320→        type: 'positive',
+   321→      })
+   322→      items.push({
+   323→        icon: Clock,
+   324→        text: `إجمالي وقت التركيز: ${Math.round(totalFocusMin / 60)} ساعة`,
+   325→        type: 'positive',
+   326→      })
+   327→      if (dashboard.dailyScores?.length >= 2) {
+   328→        const lastWeek = dashboard.dailyScores.slice(-7)
+   329→        const avg = lastWeek.reduce((s, d) => s + d.score, 0) / lastWeek.length
+   330→        items.push({
+   331→          icon: avg >= 7 ? TrendingUp : TrendingDown,
+   332→          text: `متوسط الدرجات هذا الأسبوع: ${Math.round(avg * 10) / 10}`,
+   333→          type: avg >= 7 ? 'positive' : 'negative',
+   334→        })
+   335→      }
+   336→    }
+   337→    if (habits) {
+   338→      const today = new Date().toISOString().split('T')[0]
+   339→      const todayCompleted = habits.logs.filter((l) => l.date === today && l.completed).length
+   340→      const rate = habits.habits.length > 0 ? Math.round((todayCompleted / habits.habits.length) * 100) : 0
+   341→      items.push({
+   342→        icon: Target,
+   343→        text: `إكمال العادات اليوم: ${rate}%`,
+   344→        type: rate >= 80 ? 'positive' : rate >= 50 ? 'neutral' : 'negative',
+   345→      })
+   346→    }
+   347→    return items
+   348→  }, [dashboard, habits])
+   349→
+   350→  const totalXP = dashboard?.user.xp || 0
+   351→  const totalTasks = dashboard?.user.totalTasksDone || 0
+   352→  const totalFocusHours = Math.round((dashboard?.user.totalFocusMin || 0) / 60)
+   353→  const currentStreak = dashboard?.user.streak || 0
+   354→
+   355→  if (loading) {
+   356→    return (
+   357→      <div className="space-y-6">
+   358→        <div className="flex items-center justify-between">
+   359→          <Skeleton className="h-8 w-40" />
+   360→          <Skeleton className="h-9 w-48" />
+   361→        </div>
+   362→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   363→          {Array.from({ length: 4 }).map((_, i) => (
+   364→            <Skeleton key={i} className="h-24 rounded-2xl" />
+   365→          ))}
+   366→        </div>
+   367→        {Array.from({ length: 3 }).map((_, i) => (
+   368→          <Skeleton key={i} className="h-72 rounded-2xl" />
+   369→        ))}
+   370→      </div>
+   371→    )
+   372→  }
+   373→
+   374→  return (
+   375→    <div className="space-y-6">
+   376→      {/* Header */}
+   377→      <div className="flex items-center justify-between flex-wrap gap-3">
+   378→        <div>
+   379→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   380→            <BarChart3 className="w-6 h-6 text-emerald-accent" />
+   381→            التحليلات
+   382→          </h2>
+   383→          <p className="text-sm text-muted-foreground mt-1">نظرة شاملة على أدائك وتقدمك</p>
+   384→        </div>
+   385→        {/* Period Selector with gradient border */}
+   386→        <motion.div
+   387→          className="p-[1px] rounded-xl bg-gradient-to-l from-emerald-accent/40 via-emerald-accent/20 to-gold/30"
+   388→          initial={{ opacity: 0 }}
+   389→          animate={{ opacity: 1 }}
+   390→        >
+   391→          <div className="flex items-center gap-0.5 bg-background/80 dark:bg-card/80 rounded-xl p-1">
+   392→            {(Object.keys(periodLabels) as Period[]).map((p) => (
+   393→              <Button
+   394→                key={p}
+   395→                size="sm"
+   396→                variant="ghost"
+   397→                onClick={() => setPeriod(p)}
+   398→                className={cn(
+   399→                  'rounded-lg text-xs transition-all',
+   400→                  period === p
+   401→                    ? 'bg-gradient-to-l from-emerald-accent to-emerald-accent/80 text-white font-semibold shadow-md shadow-emerald-accent/20'
+   402→                    : 'text-muted-foreground hover:text-foreground'
+   403→                )}
+   404→              >
+   405→                {periodLabels[p]}
+   406→              </Button>
+   407→            ))}
+   408→          </div>
+   409→        </motion.div>
+   410→      </div>
+   411→
+   412→      {/* Overview Cards */}
+   413→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   414→        {[
+   415→          { label: 'إجمالي الخبرة', value: totalXP, icon: Zap, color: 'text-gold', bg: 'bg-gold/10' },
+   416→          { label: 'المهام المنجزة', value: totalTasks, icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/10' },
+   417→          { label: 'ساعات التركيز', value: totalFocusHours, icon: Clock, color: 'text-forest', bg: 'bg-forest/10' },
+   418→          { label: 'السلسلة الحالية', value: currentStreak, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+   419→        ].map((stat, i) => (
+   420→          <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
+   421→            <Card className="glass">
+   422→              <CardContent className="p-4">
+   423→                <div className="flex items-center gap-3">
+   424→                  <div className={cn('p-2 rounded-xl', stat.bg, stat.color)}>
+   425→                    <stat.icon className="w-4 h-4" />
+   426→                  </div>
+   427→                  <div>
+   428→                    <p className="text-2xl font-bold">{stat.value}</p>
+   429→                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+   430→                  </div>
+   431→                </div>
+   432→              </CardContent>
+   433→            </Card>
+   434→          </motion.div>
+   435→        ))}
+   436→      </div>
+   437→
+   438→      {/* Best/Worst Day + Personal Records */}
+   439→      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   440→        {bestDay && (
+   441→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+   442→            <Card className="glass border-emerald-accent/20 overflow-hidden">
+   443→              <div className="bg-gradient-to-l from-emerald-accent/8 to-transparent p-4">
+   444→                <div className="flex items-center gap-2 mb-2">
+   445→                  <div className="p-1.5 rounded-lg bg-emerald-accent/15">
+   446→                    <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   447→                  </div>
+   448→                  <p className="text-xs font-semibold text-muted-foreground">أفضل يوم</p>
+   449→                </div>
+   450→                <p className="text-2xl font-bold text-emerald-accent">{bestDay.name}</p>
+   451→                <p className="text-sm text-muted-foreground">متوسط: <span className="font-semibold text-foreground">{bestDay.avg}</span></p>
+   452→              </div>
+   453→            </Card>
+   454→          </motion.div>
+   455→        )}
+   456→        {worstDay && (
+   457→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+   458→            <Card className="glass border-rose-500/20 overflow-hidden">
+   459→              <div className="bg-gradient-to-l from-rose-500/8 to-transparent p-4">
+   460→                <div className="flex items-center gap-2 mb-2">
+   461→                  <div className="p-1.5 rounded-lg bg-rose-500/15">
+   462→                    <TrendingDown className="w-4 h-4 text-rose-500" />
+   463→                  </div>
+   464→                  <p className="text-xs font-semibold text-muted-foreground">يوم يحتاج تحسين</p>
+   465→                </div>
+   466→                <p className="text-2xl font-bold text-rose-500">{worstDay.name}</p>
+   467→                <p className="text-sm text-muted-foreground">متوسط: <span className="font-semibold text-foreground">{worstDay.avg}</span></p>
+   468→              </div>
+   469→            </Card>
+   470→          </motion.div>
+   471→        )}
+   472→        {personalRecords && (
+   473→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+   474→            <Card className="glass border-gold/20 overflow-hidden">
+   475→              <div className="bg-gradient-to-l from-gold/8 to-transparent p-4">
+   476→                <div className="flex items-center gap-2 mb-3">
+   477→                  <div className="p-1.5 rounded-lg bg-gold/15">
+   478→                    <Trophy className="w-4 h-4 text-gold" />
+   479→                  </div>
+   480→                  <p className="text-xs font-semibold text-muted-foreground">الأرقام القياسية</p>
+   481→                </div>
+   482→                <div className="space-y-2.5">
+   483→                  <div className="flex items-center justify-between text-sm">
+   484→                    <div className="flex items-center gap-1.5">
+   485→                      <Star className="w-3.5 h-3.5 text-gold" />
+   486→                      <span className="text-muted-foreground text-xs">أعلى درجة يومية</span>
+   487→                    </div>
+   488→                    <span className="font-bold text-foreground">{personalRecords.highestScore}</span>
+   489→                  </div>
+   490→                  <div className="flex items-center justify-between text-sm">
+   491→                    <div className="flex items-center gap-1.5">
+   492→                      <Timer className="w-3.5 h-3.5 text-emerald-accent" />
+   493→                      <span className="text-muted-foreground text-xs">أطول جلسة تركيز</span>
+   494→                    </div>
+   495→                    <span className="font-bold text-foreground">{personalRecords.longestFocus} دقيقة</span>
+   496→                  </div>
+   497→                  <div className="flex items-center justify-between text-sm">
+   498→                    <div className="flex items-center gap-1.5">
+   499→                      <CheckCircle2 className="w-3.5 h-3.5 text-forest" />
+   500→                      <span className="text-muted-foreground text-xs">أعلى إنجاز مهام</span>
+   501→                    </div>
+   502→                    <span className="font-bold text-foreground">{personalRecords.mostTasks}</span>
+   503→                  </div>
+   504→                </div>
+   505→              </div>
+   506→            </Card>
+   507→          </motion.div>
+   508→        )}
+   509→      </div>
+   510→
+   511→      {/* Charts Row 1 - Glass Cards */}
+   512→      <div className="grid lg:grid-cols-2 gap-4">
+   513→        {/* Productivity Trend */}
+   514→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+   515→          <Card className="glass overflow-hidden">
+   516→            <CardHeader className="pb-3">
+   517→              <CardTitle className="text-sm flex items-center gap-2">
+   518→                <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   519→                اتجاه الإنتاجية
+   520→              </CardTitle>
+   521→            </CardHeader>
+   522→            <CardContent>
+   523→              {productivityData.length > 0 ? (
+   524→                <div className="h-56">
+   525→                  <ResponsiveContainer width="100%" height="100%">
+   526→                    <LineChart data={productivityData}>
+   527→                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
+   528→                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+   529→                      <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+   530→                      <Tooltip content={<GlassTooltip />} />
+   531→                      <Line
+   532→                        type="monotone"
+   533→                        dataKey="score"
+   534→                        stroke="oklch(0.55 0.14 163)"
+   535→                        strokeWidth={2.5}
+   536→                        dot={{ r: 3, fill: 'oklch(0.55 0.14 163)' }}
+   537→                        activeDot={{ r: 5 }}
+   538→                        name="الدرجة"
+   539→                      />
+   540→                    </LineChart>
+   541→                  </ResponsiveContainer>
+   542→                </div>
+   543→              ) : (
+   544→                <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات</div>
+   545→              )}
+   546→            </CardContent>
+   547→          </Card>
+   548→        </motion.div>
+   549→
+   550→        {/* Habit Completion Trend */}
+   551→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+   552→          <Card className="glass overflow-hidden">
+   553→            <CardHeader className="pb-3">
+   554→              <CardTitle className="text-sm flex items-center gap-2">
+   555→                <Target className="w-4 h-4 text-forest" />
+   556→                نسبة إكمال العادات
+   557→              </CardTitle>
+   558→            </CardHeader>
+   559→            <CardContent>
+   560→              {habitTrendData.length > 0 ? (
+   561→                <div className="h-56">
+   562→                  <ResponsiveContainer width="100%" height="100%">
+   563→                    <AreaChart data={habitTrendData}>
+   564→                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
+   565→                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+   566→                      <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} unit="%" />
+   567→                      <Tooltip content={<GlassTooltip />} />
+   568→                      <defs>
+   569→                        <linearGradient id="habitGrad" x1="0" y1="0" x2="0" y2="1">
+   570→                          <stop offset="5%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.3} />
+   571→                          <stop offset="95%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+   572→                        </linearGradient>
+   573→                      </defs>
+   574→                      <Area
+   575→                        type="monotone"
+   576→                        dataKey="rate"
+   577→                        stroke="oklch(0.55 0.14 163)"
+   578→                        fill="url(#habitGrad)"
+   579→                        strokeWidth={2}
+   580→                        name="النسبة"
+   581→                      />
+   582→                    </AreaChart>
+   583→                  </ResponsiveContainer>
+   584→                </div>
+   585→              ) : (
+   586→                <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات</div>
+   587→              )}
+   588→            </CardContent>
+   589→          </Card>
+   590→        </motion.div>
+   591→      </div>
+   592→
+   593→      {/* Charts Row 2 - Glass Cards */}
+   594→      <div className="grid lg:grid-cols-2 gap-4">
+   595→        {/* Focus Time Distribution */}
+   596→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+   597→          <Card className="glass overflow-hidden">
+   598→            <CardHeader className="pb-3">
+   599→              <CardTitle className="text-sm flex items-center gap-2">
+   600→                <Brain className="w-4 h-4 text-gold" />
+   601→                توزيع وقت التركيز (بالساعات)
+   602→              </CardTitle>
+   603→            </CardHeader>
+   604→            <CardContent>
+   605→              <div className="h-56">
+   606→                <ResponsiveContainer width="100%" height="100%">
+   607→                  <BarChart data={focusByDayData}>
+   608→                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
+   609→                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }} />
+   610→                    <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+   611→                    <Tooltip content={<GlassTooltip />} />
+   612→                    <Bar
+   613→                      dataKey="hours"
+   614→                      fill="oklch(0.55 0.14 163)"
+   615→                      radius={[6, 6, 0, 0]}
+   616→                      name="ساعات"
+   617→                    />
+   618→                  </BarChart>
+   619→                </ResponsiveContainer>
+   620→              </div>
+   621→            </CardContent>
+   622→          </Card>
+   623→        </motion.div>
+   624→
+   625→        {/* Goal Progress Distribution (Pie) */}
+   626→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+   627→          <Card className="glass overflow-hidden">
+   628→            <CardHeader className="pb-3">
+   629→              <CardTitle className="text-sm flex items-center gap-2">
+   630→                <Sparkles className="w-4 h-4 text-purple-500" />
+   631→                توزيع التقدم حسب المجال
+   632→              </CardTitle>
+   633→            </CardHeader>
+   634→            <CardContent>
+   635→              {goalDistributionData.length > 0 ? (
+   636→                <div className="h-56 flex items-center">
+   637→                  <div className="w-1/2 h-full">
+   638→                    <ResponsiveContainer width="100%" height="100%">
+   639→                      <PieChart>
+   640→                        <Pie
+   641→                          data={goalDistributionData}
+   642→                          cx="50%"
+   643→                          cy="50%"
+   644→                          innerRadius={50}
+   645→                          outerRadius={80}
+   646→                          paddingAngle={3}
+   647→                          dataKey="value"
+   648→                        >
+   649→                          {goalDistributionData.map((_, i) => (
+   650→                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+   651→                          ))}
+   652→                        </Pie>
+   653→                        <Tooltip content={<GlassTooltip />} />
+   654→                      </PieChart>
+   655→                    </ResponsiveContainer>
+   656→                  </div>
+   657→                  <div className="w-1/2 space-y-2">
+   658→                    {goalDistributionData.map((item, i) => (
+   659→                      <div key={item.name} className="flex items-center gap-2">
+   660→                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+   661→                        <span className="text-xs text-muted-foreground flex-1">{item.name}</span>
+   662→                        <span className="text-xs font-semibold">{item.value}</span>
+   663→                      </div>
+   664→                    ))}
+   665→                  </div>
+   666→                </div>
+   667→              ) : (
+   668→                <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات</div>
+   669→              )}
+   670→            </CardContent>
+   671→          </Card>
+   672→        </motion.div>
+   673→      </div>
+   674→
+   675→      {/* Health Trends - Glass Card */}
+   676→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+   677→        <Card className="glass overflow-hidden">
+   678→          <CardHeader className="pb-3">
+   679→            <CardTitle className="text-sm flex items-center gap-2">
+   680→              <Sparkles className="w-4 h-4 text-rose-500" />
+   681→              اتجاهات الصحة
+   682→            </CardTitle>
+   683→          </CardHeader>
+   684→          <CardContent>
+   685→            {healthTrendsData.length > 0 ? (
+   686→              <div className="h-64">
+   687→                <ResponsiveContainer width="100%" height="100%">
+   688→                  <LineChart data={healthTrendsData}>
+   689→                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
+   690→                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+   691→                    <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+   692→                    <Tooltip content={<GlassTooltip />} />
+   693→                    <Legend wrapperStyle={{ fontSize: 11, direction: 'rtl' }} />
+   694→                    <Line type="monotone" dataKey="sleep" stroke="oklch(0.55 0.10 250)" strokeWidth={2} name="النوم (ساعات)" />
+   695→                    <Line type="monotone" dataKey="water" stroke="oklch(0.60 0.15 200)" strokeWidth={2} name="الماء (كؤوس)" />
+   696→                    <Line type="monotone" dataKey="mood" stroke="oklch(0.78 0.12 85)" strokeWidth={2} name="المزاج" />
+   697→                  </LineChart>
+   698→                </ResponsiveContainer>
+   699→              </div>
+   700→            ) : (
+   701→              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات صحية</div>
+   702→            )}
+   703→          </CardContent>
+   704→        </Card>
+   705→      </motion.div>
+   706→
+   707→      {/* Insights - Glass Card */}
+   708→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+   709→        <Card className="glass overflow-hidden">
+   710→          <CardHeader className="pb-3">
+   711→            <CardTitle className="text-sm flex items-center gap-2">
+   712→              <Brain className="w-4 h-4 text-emerald-accent" />
+   713→              رؤى وتحليلات
+   714→            </CardTitle>
+   715→          </CardHeader>
+   716→          <CardContent>
+   717→            <div className="grid sm:grid-cols-2 gap-3">
+   718→              {insights.map((item, i) => (
+   719→                <motion.div
+   720→                  key={i}
+   721→                  initial={{ opacity: 0, x: i % 2 === 0 ? 20 : -20 }}
+   722→                  animate={{ opacity: 1, x: 0 }}
+   723→                  transition={{ delay: 0.4 + i * 0.05 }}
+   724→                  className={cn(
+   725→                    'flex items-start gap-3 p-3 rounded-xl',
+   726→                    item.type === 'positive' && 'bg-emerald-accent/5 border border-emerald-accent/10',
+   727→                    item.type === 'negative' && 'bg-rose-500/5 border border-rose-500/10',
+   728→                    item.type === 'neutral' && 'bg-muted/30'
+   729→                  )}
+   730→                >
+   731→                  <div className={cn(
+   732→                    'p-1.5 rounded-lg shrink-0',
+   733→                    item.type === 'positive' && 'bg-emerald-accent/10 text-emerald-accent',
+   734→                    item.type === 'negative' && 'bg-rose-500/10 text-rose-500',
+   735→                    item.type === 'neutral' && 'bg-muted/50 text-muted-foreground'
+   736→                  )}>
+   737→                    {item.type === 'positive' ? <ArrowUpRight className="w-3.5 h-3.5" /> :
+   738→                     item.type === 'negative' ? <ArrowDownRight className="w-3.5 h-3.5" /> :
+   739→                     <item.icon className="w-3.5 h-3.5" />}
+   740→                  </div>
+   741→                  <div className="flex-1 min-w-0">
+   742→                    <div className="flex items-center gap-1.5 mb-0.5">
+   743→                      <item.icon className="w-3 h-3 text-muted-foreground" />
+   744→                      <span className="text-xs font-medium">{item.type === 'positive' ? 'إيجابي' : item.type === 'negative' ? 'تحذير' : 'معلومات'}</span>
+   745→                    </div>
+   746→                    <p className="text-sm leading-relaxed">{item.text}</p>
+   747→                  </div>
+   748→                </motion.div>
+   749→              ))}
+   750→            </div>
+   751→          </CardContent>
+   752→        </Card>
+   753→      </motion.div>
+   754→    </div>
+   755→  )
+   756→}
+   757→
