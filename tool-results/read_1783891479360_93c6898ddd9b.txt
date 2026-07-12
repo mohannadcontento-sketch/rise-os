@@ -1,0 +1,939 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Sun,
+     7→  Flame,
+     8→  Wind,
+     9→  BookOpen,
+    10→  CheckCircle2,
+    11→  Timer,
+    12→  Trophy,
+    13→  Sparkles,
+    14→  Dumbbell,
+    15→  Droplets,
+    16→  HandHeart,
+    17→  Brain,
+    18→  PenLine,
+    19→  Smartphone,
+    20→  Sunrise,
+    21→  Heart,
+    22→  Star,
+    23→  Play,
+    24→  Pause,
+    25→  RotateCcw,
+    26→  Zap,
+    27→  TrendingUp,
+    28→  Clock,
+    29→  PartyPopper,
+    30→} from 'lucide-react'
+    31→import { Card, CardContent } from '@/components/ui/card'
+    32→import { Progress } from '@/components/ui/progress'
+    33→import { Badge } from '@/components/ui/badge'
+    34→import { Checkbox } from '@/components/ui/checkbox'
+    35→import { Skeleton } from '@/components/ui/skeleton'
+    36→import { Button } from '@/components/ui/button'
+    37→import { cn } from '@/lib/utils'
+    38→
+    39→/* ────────────── Types ────────────── */
+    40→
+    41→interface RoutineItem {
+    42→  id: string
+    43→  name: string
+    44→  icon: React.ElementType
+    45→  xp: number
+    46→}
+    47→
+    48→interface RoutineSection {
+    49→  id: string
+    50→  title: string
+    51→  subtitle: string
+    52→  color: string
+    53→  bgGradient: string
+    54→  iconBg: string
+    55→  items: RoutineItem[]
+    56→  timerDefault: number // seconds
+    57→  borderColor: string
+    58→}
+    59→
+    60→interface MorningLog {
+    61→  id?: string
+    62→  date: string
+    63→  score: number
+    64→  completedItems: string
+    65→  totalItems: number
+    66→  startedAt: string
+    67→  completedAt: string | null
+    68→}
+    69→
+    70→/* ────────────── Constants ────────────── */
+    71→
+    72→const SECTIONS: RoutineSection[] = [
+    73→  {
+    74→    id: 'movement',
+    75→    title: 'حركة',
+    76→    subtitle: '٢٠ دقيقة للحركة والنشاط',
+    77→    color: 'text-emerald-accent',
+    78→    bgGradient: 'from-emerald-accent/10 to-emerald-accent/5',
+    79→    iconBg: 'bg-emerald-accent/15',
+    80→    timerDefault: 20 * 60,
+    81→    borderColor: 'border-t-emerald-accent',
+    82→    items: [
+    83→      { id: 'wake-up', name: 'الاستيقاظ في الموعد', icon: Sunrise, xp: 10 },
+    84→      { id: 'prayer', name: 'صلاة الفجر', icon: HandHeart, xp: 15 },
+    85→      { id: 'water', name: 'شرب الماء', icon: Droplets, xp: 10 },
+    86→      { id: 'exercise', name: 'تمارين رياضية', icon: Dumbbell, xp: 20 },
+    87→      { id: 'stretch', name: 'تمارين الإطالة', icon: Wind, xp: 15 },
+    88→    ],
+    89→  },
+    90→  {
+    91→    id: 'reflection',
+    92→    title: 'تأمل',
+    93→    subtitle: '٢٠ دقيقة للتأمل والتفكير',
+    94→    color: 'text-forest',
+    95→    bgGradient: 'from-forest/10 to-forest/5',
+    96→    iconBg: 'bg-forest/15',
+    97→    timerDefault: 20 * 60,
+    98→    borderColor: 'border-t-purple-500',
+    99→    items: [
+   100→      { id: 'meditation', name: 'التأمل والهدوء', icon: Brain, xp: 20 },
+   101→      { id: 'breathing', name: 'تمارين التنفس', icon: Wind, xp: 15 },
+   102→      { id: 'gratitude', name: 'الشكر والامتنان', icon: Heart, xp: 15 },
+   103→    ],
+   104→  },
+   105→  {
+   106→    id: 'growth',
+   107→    title: 'نمو',
+   108→    subtitle: '٢٠ دقيقة للتعلم والتطوير',
+   109→    color: 'text-gold',
+   110→    bgGradient: 'from-gold/10 to-gold/5',
+   111→    iconBg: 'bg-gold/15',
+   112→    timerDefault: 20 * 60,
+   113→    borderColor: 'border-t-gold',
+   114→    items: [
+   115→      { id: 'reading', name: 'القراءة', icon: BookOpen, xp: 15 },
+   116→      { id: 'planning', name: 'التخطيط اليومي', icon: Star, xp: 20 },
+   117→      { id: 'journal', name: 'كتابة اليوميات', icon: PenLine, xp: 15 },
+   118→      { id: 'no-phone', name: 'بدون هاتف', icon: Smartphone, xp: 10 },
+   119→    ],
+   120→  },
+   121→]
+   122→
+   123→const ALL_ITEMS = SECTIONS.flatMap((s) => s.items)
+   124→const TOTAL_XP = ALL_ITEMS.reduce((sum, item) => sum + item.xp, 0)
+   125→
+   126→const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+   127→
+   128→const MOTIVATIONAL_MESSAGES = [
+   129→  'يوم رائع يبدأ بروتين رائع! 🌟',
+   130→  'أنت تبني نسخة أفضل من نفسك كل صباح 💪',
+   131→  'الاستمرارية هي سر النجاح الحقيقي 🔥',
+   132→  'كل خطوة صغيرة تقربك من أهدافك الكبيرة 🚀',
+   133→  'صباحك هو مفتاح يومك — أحسنت! ✨',
+   134→]
+   135→
+   136→/* ────────────── Helpers ────────────── */
+   137→
+   138→function getTodayStr() {
+   139→  return new Date().toISOString().split('T')[0]
+   140→}
+   141→
+   142→function formatTimer(seconds: number) {
+   143→  const m = Math.floor(seconds / 60)
+   144→  const s = seconds % 60
+   145→  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+   146→}
+   147→
+   148→function formatElapsed(ms: number): string {
+   149→  const totalSec = Math.floor(ms / 1000)
+   150→  const h = Math.floor(totalSec / 3600)
+   151→  const m = Math.floor((totalSec % 3600) / 60)
+   152→  const s = totalSec % 60
+   153→  if (h > 0) return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+   154→  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+   155→}
+   156→
+   157→function arabicNum(n: number): string {
+   158→  const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩']
+   159→  return String(n).replace(/[0-9]/g, (d) => digits[parseInt(d)])
+   160→}
+   161→
+   162→/* ────────────── Timer Hook ────────────── */
+   163→
+   164→function useSectionTimer(defaultSeconds: number) {
+   165→  const [seconds, setSeconds] = useState(defaultSeconds)
+   166→  const [isRunning, setIsRunning] = useState(false)
+   167→  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   168→
+   169→  useEffect(() => {
+   170→    if (isRunning && seconds > 0) {
+   171→      intervalRef.current = setInterval(() => {
+   172→        setSeconds((prev) => {
+   173→          if (prev <= 1) {
+   174→            setIsRunning(false)
+   175→            return 0
+   176→          }
+   177→          return prev - 1
+   178→        })
+   179→      }, 1000)
+   180→    }
+   181→    return () => {
+   182→      if (intervalRef.current) clearInterval(intervalRef.current)
+   183→    }
+   184→  }, [isRunning, seconds])
+   185→
+   186→  const start = () => setIsRunning(true)
+   187→  const pause = () => setIsRunning(false)
+   188→  const reset = () => {
+   189→    setIsRunning(false)
+   190→    setSeconds(defaultSeconds)
+   191→  }
+   192→
+   193→  return { seconds, isRunning, start, pause, reset, setSeconds }
+   194→}
+   195→
+   196→/* ────────────── Section Timer Component ────────────── */
+   197→
+   198→function SectionTimer({
+   199→  section,
+   200→  timer,
+   201→}: {
+   202→  section: RoutineSection
+   203→  timer: ReturnType<typeof useSectionTimer>
+   204→}) {
+   205→  const progress = 1 - timer.seconds / section.timerDefault
+   206→  const isComplete = timer.seconds === 0
+   207→
+   208→  return (
+   209→    <div className="mt-4 pt-4 border-t border-border/50">
+   210→      <div className="flex items-center justify-between mb-2">
+   211→        <div className="flex items-center gap-2">
+   212→          <Timer className={cn('w-3.5 h-3.5', section.color)} />
+   213→          <span className="text-xs text-muted-foreground font-medium">المؤقت</span>
+   214→        </div>
+   215→        <div className="flex items-center gap-1.5">
+   216→          {isComplete ? (
+   217→            <Badge className="text-[10px] px-1.5 py-0 bg-emerald-accent/15 text-emerald-accent border-emerald-accent/20 hover:bg-emerald-accent/20">
+   218→              <Sparkles className="w-3 h-3 ml-1" />
+   219→              مكتمل
+   220→            </Badge>
+   221→          ) : (
+   222→            <span className={cn('text-sm font-mono font-semibold tabular-nums', section.color)}>
+   223→              {formatTimer(timer.seconds)}
+   224→            </span>
+   225→          )}
+   226→        </div>
+   227→      </div>
+   228→      <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-2">
+   229→        <motion.div
+   230→          className={cn(
+   231→            'h-full rounded-full transition-all',
+   232→            isComplete ? 'bg-emerald-accent' : section.color.replace('text-', 'bg-')
+   233→          )}
+   234→          animate={{ width: `${progress * 100}%` }}
+   235→          transition={{ duration: 0.5, ease: 'easeOut' }}
+   236→        />
+   237→      </div>
+   238→      <div className="flex items-center gap-2">
+   239→        <motion.button
+   240→          whileTap={{ scale: 0.92 }}
+   241→          onClick={timer.isRunning ? timer.pause : timer.start}
+   242→          disabled={isComplete}
+   243→          className={cn(
+   244→            'flex items-center justify-center w-7 h-7 rounded-lg transition-all',
+   245→            timer.isRunning
+   246→              ? 'bg-forest/10 text-forest hover:bg-forest/20'
+   247→              : 'bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20',
+   248→            isComplete && 'opacity-40 cursor-not-allowed'
+   249→          )}
+   250→        >
+   251→          {timer.isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+   252→        </motion.button>
+   253→        <motion.button
+   254→          whileTap={{ scale: 0.92 }}
+   255→          onClick={timer.reset}
+   256→          className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-all"
+   257→        >
+   258→          <RotateCcw className="w-3 h-3" />
+   259→        </motion.button>
+   260→      </div>
+   261→    </div>
+   262→  )
+   263→}
+   264→
+   265→/* ────────────── History Chart ────────────── */
+   266→
+   267→function HistoryChart({ logs }: { logs: MorningLog[] }) {
+   268→  const maxScore = 100
+   269→
+   270→  return (
+   271→    <div className="flex items-end gap-2 h-20 px-1">
+   272→      {logs.map((log, i) => {
+   273→        const height = Math.max((log.score / maxScore) * 100, 4)
+   274→        const dayLabel = ARABIC_DAYS[new Date(log.date).getDay()]
+   275→        const isToday = log.date === getTodayStr()
+   276→
+   277→        return (
+   278→          <div key={log.date} className="flex-1 flex flex-col items-center gap-1.5">
+   279→            <span className={cn('text-[10px] font-semibold', log.score >= 80 ? 'text-emerald-accent' : 'text-muted-foreground')}>
+   280→              {arabicNum(log.score)}٪
+   281→            </span>
+   282→            <motion.div
+   283→              className="w-full max-w-[28px] rounded-t-md relative overflow-hidden"
+   284→              style={{ height: `${height}%`, minHeight: '4px' }}
+   285→              initial={{ scaleY: 0 }}
+   286→              animate={{ scaleY: 1 }}
+   287→              transition={{ duration: 0.5, delay: i * 0.06, ease: 'easeOut' }}
+   288→              originY={1}
+   289→            >
+   290→              <div
+   291→                className={cn(
+   292→                  'absolute inset-0 rounded-t-md',
+   293→                  isToday
+   294→                    ? 'bg-gradient-to-t from-emerald-accent to-forest-light'
+   295→                    : log.score >= 80
+   296→                      ? 'bg-emerald-accent/70'
+   297→                      : log.score >= 50
+   298→                        ? 'bg-gold/60'
+   299→                        : 'bg-muted-foreground/20'
+   300→                )}
+   301→              />
+   302→            </motion.div>
+   303→            <span className={cn('text-[9px] text-muted-foreground', isToday && 'text-emerald-accent font-semibold')}>
+   304→              {dayLabel}
+   305→            </span>
+   306→          </div>
+   307→        )
+   308→      })}
+   309→    </div>
+   310→  )
+   311→}
+   312→
+   313→/* ────────────── Routine Item Row ────────────── */
+   314→
+   315→function RoutineItemRow({
+   316→  item,
+   317→  sectionColor,
+   318→  checked,
+   319→  onToggle,
+   320→}: {
+   321→  item: RoutineItem
+   322→  sectionColor: string
+   323→  checked: boolean
+   324→  onToggle: (id: string) => void
+   325→}) {
+   326→  const Icon = item.icon
+   327→
+   328→  return (
+   329→    <motion.div
+   330→      layout
+   331→      className={cn(
+   332→        'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer group',
+   333→        'hover:bg-muted/50',
+   334→        checked && 'bg-emerald-accent/5'
+   335→      )}
+   336→      onClick={() => onToggle(item.id)}
+   337→    >
+   338→      <motion.div
+   339→        initial={false}
+   340→        animate={checked ? { scale: 1 } : { scale: 1 }}
+   341→        whileTap={{ scale: 0.9 }}
+   342→      >
+   343→        <Checkbox
+   344→          checked={checked}
+   345→          onCheckedChange={() => onToggle(item.id)}
+   346→          className={cn(
+   347→            'w-5 h-5 rounded-md border-2',
+   348→            checked
+   349→              ? 'border-emerald-accent bg-emerald-accent text-white data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+   350→              : 'border-muted-foreground/30'
+   351→          )}
+   352→        />
+   353→      </motion.div>
+   354→      <div
+   355→        className={cn(
+   356→          'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300',
+   357→          checked ? 'bg-emerald-accent/15 text-emerald-accent' : `bg-muted/60 ${sectionColor} opacity-60`
+   358→        )}
+   359→      >
+   360→        <Icon className="w-4 h-4" />
+   361→      </div>
+   362→      <span
+   363→        className={cn(
+   364→          'flex-1 text-sm font-medium transition-all duration-300',
+   365→          checked ? 'line-through text-muted-foreground' : 'text-foreground'
+   366→        )}
+   367→      >
+   368→        {item.name}
+   369→      </span>
+   370→      <AnimatePresence>
+   371→        {checked && (
+   372→          <motion.div
+   373→            initial={{ opacity: 0, scale: 0.5, x: 10 }}
+   374→            animate={{ opacity: 1, scale: 1, x: 0 }}
+   375→            exit={{ opacity: 0, scale: 0.5, x: 10 }}
+   376→            transition={{ duration: 0.2 }}
+   377→          >
+   378→            <Badge className="text-[10px] px-1.5 py-0 bg-gold/15 text-gold border-gold/20 hover:bg-gold/20">
+   379→              <Zap className="w-2.5 h-2.5 ml-0.5" />
+   380→              {arabicNum(item.xp)}
+   381→            </Badge>
+   382→          </motion.div>
+   383→        )}
+   384→      </AnimatePresence>
+   385→    </motion.div>
+   386→  )
+   387→}
+   388→
+   389→/* ────────────── Main Component ────────────── */
+   390→
+   391→export default function MorningRoutine() {
+   392→  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+   393→  const [logs, setLogs] = useState<MorningLog[]>([])
+   394→  const [todayLog, setTodayLog] = useState<MorningLog | null>(null)
+   395→  const [loading, setLoading] = useState(true)
+   396→  const [saving, setSaving] = useState(false)
+   397→  const [startedAt, setStartedAt] = useState<string | null>(null)
+   398→
+   399→  // Session timer state
+   400→  const [sessionActive, setSessionActive] = useState(false)
+   401→  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null)
+   402→  const [elapsedMs, setElapsedMs] = useState(0)
+   403→  const sessionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   404→  const SESSION_STORAGE_KEY = 'rise-morning-session-start'
+   405→
+   406→  const movementTimer = useSectionTimer(SECTIONS[0].timerDefault)
+   407→  const reflectionTimer = useSectionTimer(SECTIONS[1].timerDefault)
+   408→  const growthTimer = useSectionTimer(SECTIONS[2].timerDefault)
+   409→
+   410→  const timers = [movementTimer, reflectionTimer, growthTimer]
+   411→
+   412→  // Calculate score
+   413→  const completedCount = completedIds.size
+   414→  const totalCount = ALL_ITEMS.length
+   415→  const score = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+   416→  const earnedXP = ALL_ITEMS.filter((item) => completedIds.has(item.id)).reduce((sum, item) => sum + item.xp, 0)
+   417→  const isAllDone = completedCount === totalCount
+   418→
+   419→  // Session timer logic
+   420→  useEffect(() => {
+   421→    if (sessionActive && sessionStartTime) {
+   422→      sessionIntervalRef.current = setInterval(() => {
+   423→        setElapsedMs(Date.now() - sessionStartTime)
+   424→      }, 1000)
+   425→    }
+   426→    return () => {
+   427→      if (sessionIntervalRef.current) clearInterval(sessionIntervalRef.current)
+   428→    }
+   429→  }, [sessionActive, sessionStartTime])
+   430→
+   431→  // Restore session from localStorage
+   432→  useEffect(() => {
+   433→    try {
+   434→      const stored = localStorage.getItem(SESSION_STORAGE_KEY)
+   435→      if (stored) {
+   436→        const startTime = parseInt(stored)
+   437→        const today = new Date().toISOString().split('T')[0]
+   438→        const storedDate = new Date(startTime).toISOString().split('T')[0]
+   439→        if (storedDate === today) {
+   440→          setSessionActive(true)
+   441→          setSessionStartTime(startTime)
+   442→          setElapsedMs(Date.now() - startTime)
+   443→        } else {
+   444→          localStorage.removeItem(SESSION_STORAGE_KEY)
+   445→        }
+   446→      }
+   447→    } catch { /* ignore */ }
+   448→  }, [])
+   449→
+   450→  const handleStartMorning = () => {
+   451→    const now = Date.now()
+   452→    setSessionActive(true)
+   453→    setSessionStartTime(now)
+   454→    setElapsedMs(0)
+   455→    localStorage.setItem(SESSION_STORAGE_KEY, String(now))
+   456→  }
+   457→
+   458→  // Load data from API
+   459→  useEffect(() => {
+   460→    async function load() {
+   461→      try {
+   462→        const res = await fetch('/api/rise/morning')
+   463→        if (res.ok) {
+   464→          const data = await res.json()
+   465→          setLogs(data.logs || [])
+   466→          if (data.todayLog) {
+   467→            setTodayLog(data.todayLog)
+   468→            const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
+   469→            setCompletedIds(new Set(items))
+   470→            setStartedAt(data.todayLog.startedAt)
+   471→          }
+   472→        }
+   473→      } catch {
+   474→        // Use empty state
+   475→      } finally {
+   476→        setLoading(false)
+   477→      }
+   478→    }
+   479→    load()
+   480→  }, [])
+   481→
+   482→  // Generate mock history for last 7 days if no logs
+   483→  const displayLogs = (() => {
+   484→    if (logs.length > 0) return logs.slice(-7)
+   485→
+   486→    const mockLogs: MorningLog[] = []
+   487→    for (let i = 6; i >= 0; i--) {
+   488→      const d = new Date()
+   489→      d.setDate(d.getDate() - i)
+   490→      mockLogs.push({
+   491→        date: d.toISOString().split('T')[0],
+   492→        score: i === 0 ? score : Math.floor(Math.random() * 60) + 40,
+   493→        completedItems: '[]',
+   494→        totalItems: totalCount,
+   495→        startedAt: d.toISOString(),
+   496→        completedAt: i === 0 && isAllDone ? new Date().toISOString() : null,
+   497→      })
+   498→    }
+   499→    return mockLogs
+   500→  })()
+   501→
+   502→  // Save to API
+   503→  const saveToAPI = useCallback(
+   504→    async (ids: Set<string>) => {
+   505→      setSaving(true)
+   506→      const now = new Date().toISOString()
+   507→      const dateStr = getTodayStr()
+   508→
+   509→      const payload: MorningLog = {
+   510→        date: dateStr,
+   511→        score: totalCount > 0 ? Math.round((ids.size / totalCount) * 100) : 0,
+   512→        completedItems: JSON.stringify(Array.from(ids)),
+   513→        totalItems: totalCount,
+   514→        startedAt: startedAt || now,
+   515→        completedAt: ids.size === totalCount ? now : null,
+   516→      }
+   517→
+   518→      try {
+   519→        await fetch('/api/rise/morning', {
+   520→          method: 'POST',
+   521→          headers: { 'Content-Type': 'application/json' },
+   522→          body: JSON.stringify(payload),
+   523→        })
+   524→        if (!startedAt) setStartedAt(now)
+   525→        setTodayLog(payload)
+   526→      } catch {
+   527→        // silent fail
+   528→      } finally {
+   529→        setSaving(false)
+   530→      }
+   531→    },
+   532→    [startedAt, totalCount]
+   533→  )
+   534→
+   535→  const handleToggle = useCallback(
+   536→    (id: string) => {
+   537→      setCompletedIds((prev) => {
+   538→        const next = new Set(prev)
+   539→        if (next.has(id)) {
+   540→          next.delete(id)
+   541→        } else {
+   542→          next.add(id)
+   543→        }
+   544→        // Save after state update
+   545→        setTimeout(() => saveToAPI(next), 0)
+   546→        return next
+   547→      })
+   548→    },
+   549→    [saveToAPI]
+   550→  )
+   551→
+   552→  if (loading) {
+   553→    return (
+   554→      <div dir="rtl" className="space-y-6">
+   555→        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   556→          {[1, 2, 3].map((i) => (
+   557→            <Skeleton key={i} className="h-16 rounded-2xl" />
+   558→          ))}
+   559→        </div>
+   560→        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+   561→          {[1, 2, 3].map((i) => (
+   562→            <Skeleton key={i} className="h-80 rounded-2xl" />
+   563→          ))}
+   564→        </div>
+   565→        <Skeleton className="h-36 rounded-2xl" />
+   566→      </div>
+   567→    )
+   568→  }
+   569→
+   570→  // Pick a random motivational message
+   571→  const motivationalMsg = MOTIVATIONAL_MESSAGES[Math.floor((Date.now() / 86400000) % MOTIVATIONAL_MESSAGES.length)]
+   572→
+   573→  return (
+   574→    <div dir="rtl" className="space-y-6">
+   575→      {/* ── Start Morning Button + Session Timer ── */}
+   576→      <motion.div
+   577→        initial={{ opacity: 0, y: 16 }}
+   578→        animate={{ opacity: 1, y: 0 }}
+   579→        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+   580→      >
+   581→        <div>
+   582→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   583→            <Sunrise className="w-6 h-6 text-emerald-accent" />
+   584→            الروتين الصباحي
+   585→          </h2>
+   586→          <p className="text-sm text-muted-foreground mt-1">ابدأ يومك بطاقة وإيجابية</p>
+   587→        </div>
+   588→        <div className="flex items-center gap-3">
+   589→          {sessionActive && sessionStartTime && (
+   590→            <motion.div
+   591→              initial={{ opacity: 0, x: 20 }}
+   592→              animate={{ opacity: 1, x: 0 }}
+   593→              className="flex items-center gap-2 glass rounded-xl px-4 py-2.5"
+   594→            >
+   595→              <Clock className="w-4 h-4 text-emerald-accent" />
+   596→              <span className="text-sm font-mono font-semibold text-foreground tabular-nums">
+   597→                {formatElapsed(elapsedMs)}
+   598→              </span>
+   599→            </motion.div>
+   600→          )}
+   601→          {!sessionActive && (
+   602→            <Button
+   603→              onClick={handleStartMorning}
+   604→              className="gap-2 bg-gradient-to-l from-emerald-accent to-forest hover:from-emerald-accent/90 hover:to-forest/90 text-white shadow-lg shadow-emerald-accent/20"
+   605→              size="lg"
+   606→            >
+   607→              <Play className="w-4 h-4" />
+   608→              ابدأ الصباح
+   609→            </Button>
+   610→          )}
+   611→        </div>
+   612→      </motion.div>
+   613→
+   614→      {/* ── Overall Progress Bar (top) ── */}
+   615→      <motion.div
+   616→        initial={{ opacity: 0, y: 12 }}
+   617→        animate={{ opacity: 1, y: 0 }}
+   618→        transition={{ duration: 0.4, delay: 0.1 }}
+   619→      >
+   620→        <div className="glass rounded-2xl p-4">
+   621→          <div className="flex items-center justify-between mb-2">
+   622→            <div className="flex items-center gap-2">
+   623→              <Zap className="w-4 h-4 text-emerald-accent" />
+   624→              <span className="text-sm font-semibold text-foreground">التقدم الكلي للروتين</span>
+   625→            </div>
+   626→            <span className="text-xs text-muted-foreground font-medium">{arabicNum(completedCount)} من {arabicNum(totalCount)}</span>
+   627→          </div>
+   628→          <div className="h-3 rounded-full bg-muted overflow-hidden">
+   629→            <motion.div
+   630→              className={cn(
+   631→                'h-full rounded-full transition-colors',
+   632→                isAllDone
+   633→                  ? 'bg-gradient-to-l from-gold via-emerald-accent to-forest'
+   634→                  : 'bg-gradient-to-l from-emerald-accent to-forest-light'
+   635→              )}
+   636→              initial={{ width: 0 }}
+   637→              animate={{ width: `${score}%` }}
+   638→              transition={{ duration: 0.6, ease: 'easeOut' }}
+   639→            />
+   640→          </div>
+   641→        </div>
+   642→      </motion.div>
+   643→
+   644→      {/* ── Top Stats ── */}
+   645→      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   646→        <motion.div
+   647→          initial={{ opacity: 0, y: 16 }}
+   648→          animate={{ opacity: 1, y: 0 }}
+   649→          transition={{ duration: 0.4, delay: 0.15 }}
+   650→          className="glass rounded-2xl p-4 flex items-center gap-4"
+   651→        >
+   652→          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg">
+   653→            <Sun className="w-5 h-5 text-white" />
+   654→          </div>
+   655→          <div className="flex-1 min-w-0">
+   656→            <p className="text-xs text-muted-foreground font-medium">نتيجة الصباح</p>
+   657→            <div className="flex items-baseline gap-1">
+   658→              <span className="text-2xl font-bold text-foreground">{arabicNum(score)}٪</span>
+   659→              {saving && (
+   660→                <motion.div
+   661→                  className="w-3 h-3 border-2 border-emerald-accent/30 border-t-emerald-accent rounded-full"
+   662→                  animate={{ rotate: 360 }}
+   663→                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+   664→                />
+   665→              )}
+   666→            </div>
+   667→          </div>
+   668→          <div className="w-12 h-12 relative">
+   669→            <svg className="w-12 h-12 -rotate-90" viewBox="0 0 44 44">
+   670→              <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/50" />
+   671→              <motion.circle
+   672→                cx="22"
+   673→                cy="22"
+   674→                r="18"
+   675→                fill="none"
+   676→                stroke="url(#scoreGrad)"
+   677→                strokeWidth="3"
+   678→                strokeLinecap="round"
+   679→                strokeDasharray={`${2 * Math.PI * 18}`}
+   680→                initial={{ strokeDashoffset: 2 * Math.PI * 18 }}
+   681→                animate={{ strokeDashoffset: 2 * Math.PI * 18 * (1 - score / 100) }}
+   682→                transition={{ duration: 0.8, ease: 'easeOut' }}
+   683→              />
+   684→              <defs>
+   685→                <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+   686→                  <stop offset="0%" stopColor="var(--emerald-accent)" />
+   687→                  <stop offset="100%" stopColor="var(--forest)" />
+   688→                </linearGradient>
+   689→              </defs>
+   690→            </svg>
+   691→          </div>
+   692→        </motion.div>
+   693→
+   694→        <motion.div
+   695→          initial={{ opacity: 0, y: 16 }}
+   696→          animate={{ opacity: 1, y: 0 }}
+   697→          transition={{ duration: 0.4, delay: 0.2 }}
+   698→          className="glass rounded-2xl p-4 flex items-center gap-4"
+   699→        >
+   700→          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg">
+   701→            <Zap className="w-5 h-5 text-forest-dark" />
+   702→          </div>
+   703→          <div className="flex-1 min-w-0">
+   704→            <p className="text-xs text-muted-foreground font-medium">الخبرة المكتسبة</p>
+   705→            <div className="flex items-baseline gap-1.5">
+   706→              <span className="text-2xl font-bold text-foreground">{arabicNum(earnedXP)}</span>
+   707→              <span className="text-xs text-muted-foreground">/ {arabicNum(TOTAL_XP)}</span>
+   708→            </div>
+   709→          </div>
+   710→          <div className="text-right">
+   711→            <Progress value={(earnedXP / TOTAL_XP) * 100} className="w-16 h-2" />
+   712→          </div>
+   713→        </motion.div>
+   714→
+   715→        <motion.div
+   716→          initial={{ opacity: 0, y: 16 }}
+   717→          animate={{ opacity: 1, y: 0 }}
+   718→          transition={{ duration: 0.4, delay: 0.25 }}
+   719→          className="glass rounded-2xl p-4 flex items-center gap-4"
+   720→        >
+   721→          <div className={cn(
+   722→            'w-11 h-11 rounded-xl flex items-center justify-center shadow-lg',
+   723→            isAllDone
+   724→              ? 'bg-gradient-to-br from-emerald-accent to-forest'
+   725→              : 'bg-gradient-to-br from-forest/30 to-forest/10'
+   726→          )}>
+   727→            {isAllDone ? (
+   728→              <Trophy className="w-5 h-5 text-white" />
+   729→            ) : (
+   730→              <Flame className="w-5 h-5 text-forest" />
+   731→            )}
+   732→          </div>
+   733→          <div className="flex-1 min-w-0">
+   734→            <p className="text-xs text-muted-foreground font-medium">التقدم</p>
+   735→            <div className="flex items-baseline gap-1">
+   736→              <span className="text-2xl font-bold text-foreground">{arabicNum(completedCount)}</span>
+   737→              <span className="text-xs text-muted-foreground">/ {arabicNum(totalCount)} عنصر</span>
+   738→            </div>
+   739→          </div>
+   740→          <AnimatePresence>
+   741→            {isAllDone && (
+   742→              <motion.div
+   743→                initial={{ opacity: 0, scale: 0.5 }}
+   744→                animate={{ opacity: 1, scale: 1 }}
+   745→                exit={{ opacity: 0, scale: 0.5 }}
+   746→              >
+   747→                <Badge className="bg-emerald-accent text-white border-emerald-accent text-xs px-2 py-0.5">
+   748→                  <Sparkles className="w-3 h-3 ml-1" />
+   749→                  مكتمل
+   750→                </Badge>
+   751→              </motion.div>
+   752→            )}
+   753→          </AnimatePresence>
+   754→        </motion.div>
+   755→      </div>
+   756→
+   757→      {/* ── 3 Section Cards (with colored top borders) ── */}
+   758→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+   759→        {SECTIONS.map((section, si) => {
+   760→          const sectionCompleted = section.items.filter((item) => completedIds.has(item.id)).length
+   761→          const sectionTotal = section.items.length
+   762→          const sectionScore = sectionTotal > 0 ? Math.round((sectionCompleted / sectionTotal) * 100) : 0
+   763→          const sectionXP = section.items.filter((item) => completedIds.has(item.id)).reduce((s, i) => s + i.xp, 0)
+   764→
+   765→          return (
+   766→            <motion.div
+   767→              key={section.id}
+   768→              initial={{ opacity: 0, y: 20 }}
+   769→              animate={{ opacity: 1, y: 0 }}
+   770→              transition={{ duration: 0.5, delay: 0.1 + si * 0.1 }}
+   771→            >
+   772→              <Card className={cn('overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-md transition-shadow duration-300 gap-0 border-t-4', section.borderColor)}>
+   773→                {/* Section Header */}
+   774→                <div className={cn('px-5 pt-5 pb-3 bg-gradient-to-b', section.bgGradient)}>
+   775→                  <div className="flex items-center justify-between mb-1">
+   776→                    <div className="flex items-center gap-3">
+   777→                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', section.iconBg)}>
+   778→                        {section.id === 'movement' && <Sun className={cn('w-5 h-5', section.color)} />}
+   779→                        {section.id === 'reflection' && <Brain className={cn('w-5 h-5', section.color)} />}
+   780→                        {section.id === 'growth' && <BookOpen className={cn('w-5 h-5', section.color)} />}
+   781→                      </div>
+   782→                      <div>
+   783→                        <h3 className={cn('text-lg font-bold', section.color)}>{section.title}</h3>
+   784→                        <p className="text-[11px] text-muted-foreground">{section.subtitle}</p>
+   785→                      </div>
+   786→                    </div>
+   787→                    <div className="text-left">
+   788→                      <span className={cn('text-lg font-bold', sectionScore === 100 ? 'text-emerald-accent' : section.color)}>
+   789→                        {arabicNum(sectionScore)}٪
+   790→                      </span>
+   791→                    </div>
+   792→                  </div>
+   793→                  <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
+   794→                    <motion.div
+   795→                      className={cn('h-full rounded-full', sectionScore === 100 ? 'bg-emerald-accent' : section.color.replace('text-', 'bg-'))}
+   796→                      animate={{ width: `${sectionScore}%` }}
+   797→                      transition={{ duration: 0.5, ease: 'easeOut' }}
+   798→                    />
+   799→                  </div>
+   800→                </div>
+   801→
+   802→                {/* Items */}
+   803→                <CardContent className="p-3 pt-3 space-y-0.5">
+   804→                  {section.items.map((item, ii) => (
+   805→                    <motion.div
+   806→                      key={item.id}
+   807→                      initial={{ opacity: 0, x: -10 }}
+   808→                      animate={{ opacity: 1, x: 0 }}
+   809→                      transition={{ duration: 0.3, delay: 0.2 + si * 0.1 + ii * 0.04 }}
+   810→                    >
+   811→                      <RoutineItemRow
+   812→                        item={item}
+   813→                        sectionColor={section.color}
+   814→                        checked={completedIds.has(item.id)}
+   815→                        onToggle={handleToggle}
+   816→                      />
+   817→                    </motion.div>
+   818→                  ))}
+   819→
+   820→                  {/* Section Timer */}
+   821→                  <SectionTimer section={section} timer={timers[si]} />
+   822→
+   823→                  {/* Section XP Summary */}
+   824→                  {sectionCompleted > 0 && (
+   825→                    <motion.div
+   826→                      initial={{ opacity: 0 }}
+   827→                      animate={{ opacity: 1 }}
+   828→                      className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between"
+   829→                    >
+   830→                      <span className="text-xs text-muted-foreground">خبرة القسم</span>
+   831→                      <div className="flex items-center gap-1">
+   832→                        <Zap className="w-3 h-3 text-gold" />
+   833→                        <span className="text-xs font-semibold text-gold">{arabicNum(sectionXP)}</span>
+   834→                        <span className="text-[10px] text-muted-foreground">/ {arabicNum(section.items.reduce((s, i) => s + i.xp, 0))}</span>
+   835→                      </div>
+   836→                    </motion.div>
+   837→                  )}
+   838→                </CardContent>
+   839→              </Card>
+   840→            </motion.div>
+   841→          )
+   842→        })}
+   843→      </div>
+   844→
+   845→      {/* ── History Section ── */}
+   846→      <motion.div
+   847→        initial={{ opacity: 0, y: 16 }}
+   848→        animate={{ opacity: 1, y: 0 }}
+   849→        transition={{ duration: 0.5, delay: 0.4 }}
+   850→      >
+   851→        <Card className="overflow-hidden rounded-2xl border-0 shadow-sm gap-0">
+   852→          <div className="px-5 pt-5 pb-2 flex items-center justify-between">
+   853→            <div className="flex items-center gap-2.5">
+   854→              <div className="w-9 h-9 rounded-xl bg-forest/10 flex items-center justify-center">
+   855→                <TrendingUp className="w-5 h-5 text-forest" />
+   856→              </div>
+   857→              <div>
+   858→                <h3 className="text-base font-bold text-foreground">آخر ٧ أيام</h3>
+   859→                <p className="text-[11px] text-muted-foreground">تتبع تقدمك اليومي</p>
+   860→              </div>
+   861→            </div>
+   862→            {todayLog && todayLog.score >= 80 && (
+   863→              <Badge className="bg-emerald-accent/10 text-emerald-accent border-emerald-accent/20 hover:bg-emerald-accent/15">
+   864→                <Star className="w-3 h-3 ml-1" />
+   865→                أداء ممتاز
+   866→              </Badge>
+   867→            )}
+   868→          </div>
+   869→          <CardContent className="pb-5 pt-2">
+   870→            <HistoryChart logs={displayLogs} />
+   871→          </CardContent>
+   872→        </Card>
+   873→      </motion.div>
+   874→
+   875→      {/* ── Completion Celebration Overlay ── */}
+   876→      <AnimatePresence>
+   877→        {isAllDone && (
+   878→          <motion.div
+   879→            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+   880→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   881→            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+   882→            transition={{ duration: 0.5, type: 'spring', damping: 20 }}
+   883→          >
+   884→            <div className="glass rounded-2xl p-8 text-center shine relative overflow-hidden">
+   885→              {/* Background confetti-like effect */}
+   886→              <div className="absolute inset-0 bg-gradient-to-b from-gold/5 via-emerald-accent/5 to-forest/5 pointer-events-none" />
+   887→
+   888→              <div className="relative z-10">
+   889→                <motion.div
+   890→                  animate={{ rotate: [0, 10, -10, 0] }}
+   891→                  transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
+   892→                >
+   893→                  <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-gold via-emerald-accent to-forest flex items-center justify-center shadow-2xl mb-5">
+   894→                    <PartyPopper className="w-10 h-10 text-white" />
+   895→                  </div>
+   896→                </motion.div>
+   897→                <h3 className="text-2xl font-bold text-foreground mb-2">مبهر! أكملت روتينك الصباحي بالكامل</h3>
+   898→                <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+   899→                  {motivationalMsg}
+   900→                </p>
+   901→                <div className="flex items-center justify-center gap-3 mb-4">
+   902→                  <motion.div
+   903→                    initial={{ scale: 0 }}
+   904→                    animate={{ scale: 1 }}
+   905→                    transition={{ type: 'spring', delay: 0.3 }}
+   906→                    className="flex items-center gap-2 bg-gold/10 border border-gold/20 rounded-xl px-4 py-2"
+   907→                  >
+   908→                    <Zap className="w-5 h-5 text-gold" />
+   909→                    <div className="text-right">
+   910→                      <p className="text-[10px] text-muted-foreground">إجمالي الخبرة</p>
+   911→                      <p className="text-lg font-bold text-gold">{arabicNum(earnedXP)} XP</p>
+   912→                    </div>
+   913→                  </motion.div>
+   914→                  <motion.div
+   915→                    initial={{ scale: 0 }}
+   916→                    animate={{ scale: 1 }}
+   917→                    transition={{ type: 'spring', delay: 0.4 }}
+   918→                    className="flex items-center gap-2 bg-emerald-accent/10 border border-emerald-accent/20 rounded-xl px-4 py-2"
+   919→                  >
+   920→                    <Sparkles className="w-5 h-5 text-emerald-accent" />
+   921→                    <div className="text-right">
+   922→                      <p className="text-[10px] text-muted-foreground">النتيجة</p>
+   923→                      <p className="text-lg font-bold text-emerald-accent">{arabicNum(score)}٪</p>
+   924→                    </div>
+   925→                  </motion.div>
+   926→                </div>
+   927→                {sessionStartTime && (
+   928→                  <p className="text-xs text-muted-foreground">
+   929→                    الوقت المستغرق: <span className="font-mono font-semibold text-foreground">{formatElapsed(elapsedMs)}</span>
+   930→                  </p>
+   931→                )}
+   932→              </div>
+   933→            </div>
+   934→          </motion.div>
+   935→        )}
+   936→      </AnimatePresence>
+   937→    </div>
+   938→  )
+   939→}

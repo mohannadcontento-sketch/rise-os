@@ -35,6 +35,14 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+} from 'recharts'
 
 /* ────────────── Types ────────────── */
 
@@ -86,15 +94,26 @@ const defaultData: LearningData = {
   logs: [],
 }
 
-const skillColors = [
-  'bg-emerald-accent/10 text-emerald-accent border-emerald-accent/20',
-  'bg-forest/10 text-forest border-forest/20',
-  'bg-gold/10 text-gold border-gold/20',
-  'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  'bg-rose-500/10 text-rose-500 border-rose-500/20',
-  'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
-  'bg-amber-500/10 text-amber-500 border-amber-500/20',
+const skillGradientColors = [
+  'from-emerald-accent/20 to-emerald-accent/5 text-emerald-accent border-emerald-accent/20',
+  'from-forest/20 to-forest/5 text-forest border-forest/20',
+  'from-gold/20 to-gold/5 text-gold border-gold/20',
+  'from-purple-500/20 to-purple-500/5 text-purple-500 border-purple-500/20',
+  'from-orange-500/20 to-orange-500/5 text-orange-500 border-orange-500/20',
+  'from-rose-500/20 to-rose-500/5 text-rose-500 border-rose-500/20',
+  'from-cyan-500/20 to-cyan-500/5 text-cyan-500 border-cyan-500/20',
+  'from-amber-500/20 to-amber-500/5 text-amber-500 border-amber-500/20',
+]
+
+const skillDotColors = [
+  'oklch(0.55 0.14 163)',
+  'oklch(0.45 0.08 160)',
+  'oklch(0.78 0.12 85)',
+  'oklch(0.65 0.15 300)',
+  'oklch(0.65 0.20 30)',
+  'oklch(0.60 0.18 15)',
+  'oklch(0.65 0.12 210)',
+  'oklch(0.72 0.15 75)',
 ]
 
 function EmptyState({ icon: Icon, title, desc }: { icon: React.ElementType; title: string; desc: string }) {
@@ -135,6 +154,7 @@ export default function Learning() {
   // Add skill dialog
   const [skillDialogOpen, setSkillDialogOpen] = useState(false)
   const [newSkillName, setNewSkillName] = useState('')
+  const [newSkillLevel, setNewSkillLevel] = useState(1)
 
   // Log dialog
   const [logDialogOpen, setLogDialogOpen] = useState(false)
@@ -144,6 +164,10 @@ export default function Learning() {
   // Editing
   const [editingLog, setEditingLog] = useState<string | null>(null)
   const [editLogContent, setEditLogContent] = useState('')
+
+  // Edit skill
+  const [editingSkill, setEditingSkill] = useState<string | null>(null)
+  const [editSkillName, setEditSkillName] = useState('')
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -230,11 +254,12 @@ export default function Learning() {
     const skill: Skill = {
       id: crypto.randomUUID(),
       name: newSkillName,
-      level: 1,
-      color: skillColors[data.skills.length % skillColors.length],
+      level: newSkillLevel,
+      color: skillGradientColors[data.skills.length % skillGradientColors.length],
     }
     setData((prev) => ({ ...prev, skills: [...prev.skills, skill] }))
     setNewSkillName('')
+    setNewSkillLevel(1)
     setSkillDialogOpen(false)
     toast.success('تمت إضافة المهارة')
   }
@@ -244,6 +269,17 @@ export default function Learning() {
       ...prev,
       skills: prev.skills.map((s) => (s.id === id ? { ...s, level: Math.min(5, Math.max(1, level)) } : s)),
     }))
+  }
+
+  const saveSkillEdit = () => {
+    if (!editingSkill || !editSkillName.trim()) return
+    setData((prev) => ({
+      ...prev,
+      skills: prev.skills.map((s) => s.id === editingSkill ? { ...s, name: editSkillName.trim() } : s),
+    }))
+    setEditingSkill(null)
+    setEditSkillName('')
+    toast.success('تم تحديث المهارة')
   }
 
   const deleteSkill = (id: string) => {
@@ -285,12 +321,23 @@ export default function Learning() {
   const activeGoals = data.goals.filter((g) => g.status === 'active').length
   const completedCourses = data.courses.filter((c) => c.status === 'completed').length
 
+  // Skill radar data
+  const radarData = data.skills.map((s, i) => ({
+    skill: s.name,
+    level: s.level,
+    fullMark: 5,
+    fill: skillDotColors[i % skillDotColors.length],
+  }))
+
   return (
-    <div className="space-y-6">
+    <div dir="rtl" className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">التعلم</h2>
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <GraduationCap className="w-6 h-6 text-emerald-accent" />
+            التعلم
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">تتبع أهدافك التعليمية ومهاراتك ودوراتك</p>
         </div>
       </div>
@@ -403,7 +450,14 @@ export default function Learning() {
                             <span>التقدم</span>
                             <span className="font-semibold text-foreground">{goal.progress}%</span>
                           </div>
-                          <Progress value={goal.progress} className="h-2" />
+                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                            <motion.div
+                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${goal.progress}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut' }}
+                            />
+                          </div>
                           <div className="flex gap-1">
                             {[0, 25, 50, 75, 100].map((val) => (
                               <button
@@ -490,7 +544,14 @@ export default function Learning() {
                             <span>{course.status === 'completed' ? 'مكتملة' : course.status === 'in_progress' ? 'قيد التعلم' : 'لم تبدأ'}</span>
                             <span className="font-semibold text-foreground">{course.progress}%</span>
                           </div>
-                          <Progress value={course.progress} className="h-2" />
+                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                            <motion.div
+                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-gold"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${course.progress}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut' }}
+                            />
+                          </div>
                           <Input
                             type="range"
                             min={0}
@@ -512,7 +573,7 @@ export default function Learning() {
         {/* SKILLS SECTION */}
         {activeSection === 'skills' && (
           <motion.div key="skills" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
               <Dialog open={skillDialogOpen} onOpenChange={setSkillDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
@@ -527,6 +588,26 @@ export default function Learning() {
                       <label className="text-sm font-medium">اسم المهارة</label>
                       <Input placeholder="مثال: البرمجة، التصميم..." value={newSkillName} onChange={(e) => setNewSkillName(e.target.value)} />
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">المستوى المبدئي</label>
+                      <div className="flex gap-2">
+                        {[1, 2, 3, 4, 5].map((level) => (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => setNewSkillLevel(level)}
+                            className={cn(
+                              'flex-1 h-10 rounded-xl text-sm font-bold transition-all',
+                              newSkillLevel >= level
+                                ? 'bg-emerald-accent text-white'
+                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                            )}
+                          >
+                            {level}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <Button onClick={addSkill} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newSkillName.trim()}>
                       إضافة المهارة
                     </Button>
@@ -538,79 +619,154 @@ export default function Learning() {
             {data.skills.length === 0 ? (
               <EmptyState icon={Brain} title="لا توجد مهارات" desc="أضف المهارات التي تطورها" />
             ) : (
-              <div className="flex flex-wrap gap-3">
-                {data.skills.map((skill, i) => (
+              <>
+                {/* Skill Radar Chart */}
+                {data.skills.length >= 3 && (
                   <motion.div
-                    key={skill.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="group relative"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
                   >
-                    <Card className={cn('glass overflow-hidden', skill.color)}>
-                      <CardContent className="p-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map((level) => (
-                              <button
-                                key={level}
-                                onClick={() => updateSkillLevel(skill.id, level)}
-                                className="w-2.5 h-2.5 rounded-full border transition-all"
-                                style={{
-                                  backgroundColor: level <= skill.level ? 'currentColor' : 'transparent',
-                                  borderColor: 'currentColor',
-                                  opacity: level <= skill.level ? 1 : 0.3,
-                                }}
+                    <Card className="glass">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-gold" />
+                          رادار المهارات
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-64 sm:h-80">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+                              <PolarGrid stroke="oklch(0.85 0.005 160)" />
+                              <PolarAngleAxis
+                                dataKey="skill"
+                                tick={{ fontSize: 11, fill: 'oklch(0.4 0.01 160)' }}
                               />
-                            ))}
-                          </div>
-                          <span className="text-sm font-medium">{skill.name}</span>
-                          <button
-                            onClick={() => deleteSkill(skill.id)}
-                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                              <PolarRadiusAxis
+                                angle={90}
+                                domain={[0, 5]}
+                                tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }}
+                              />
+                              <Radar
+                                name="المستوى"
+                                dataKey="level"
+                                stroke="oklch(0.55 0.14 163)"
+                                fill="oklch(0.55 0.14 163)"
+                                fillOpacity={0.2}
+                                strokeWidth={2}
+                                dot={{ r: 4, fill: 'oklch(0.55 0.14 163)' }}
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
                         </div>
                       </CardContent>
                     </Card>
                   </motion.div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {/* Skill Tree Visual */}
-            {data.skills.length > 0 && (
-              <Card className="glass">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-gold" />
-                    خريطة المهارات
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {data.skills.map((skill) => (
-                      <div key={skill.id} className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="font-medium">{skill.name}</span>
-                            <span className="text-muted-foreground">{skill.level}/5</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-                            <motion.div
-                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(skill.level / 5) * 100}%` }}
-                              transition={{ duration: 0.8, ease: 'easeOut' }}
-                            />
-                          </div>
+                {/* Skill Tags with Gradient Backgrounds */}
+                <div className="flex flex-wrap gap-3">
+                  {data.skills.map((skill, i) => (
+                    <motion.div
+                      key={skill.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="group relative"
+                    >
+                      {editingSkill === skill.id ? (
+                        <div className={cn('flex items-center gap-2 p-2 rounded-xl border bg-gradient-to-l border shadow-sm', skill.color)}>
+                          <Input
+                            value={editSkillName}
+                            onChange={(e) => setEditSkillName(e.target.value)}
+                            className="h-7 text-sm w-28"
+                            onKeyDown={(e) => e.key === 'Enter' && saveSkillEdit()}
+                            autoFocus
+                          />
+                          <button onClick={saveSkillEdit} className="p-1 rounded-md bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20">
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => setEditingSkill(null)} className="p-1 rounded-md hover:bg-muted text-muted-foreground">
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
+                      ) : (
+                        <Card className={cn('glass overflow-hidden border', skill.color, 'bg-gradient-to-l')}>
+                          <CardContent className="p-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map((level) => (
+                                  <motion.button
+                                    key={level}
+                                    whileTap={{ scale: 0.8 }}
+                                    onClick={() => updateSkillLevel(skill.id, level)}
+                                    className="w-3 h-3 rounded-full border-2 transition-all"
+                                    style={{
+                                      backgroundColor: level <= skill.level ? 'currentColor' : 'transparent',
+                                      borderColor: 'currentColor',
+                                      opacity: level <= skill.level ? 1 : 0.2,
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-sm font-medium">{skill.name}</span>
+                              <span className="text-[10px] text-muted-foreground/60">({skill.level}/5)</span>
+                              <button
+                                onClick={() => { setEditingSkill(skill.id); setEditSkillName(skill.name) }}
+                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => deleteSkill(skill.id)}
+                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Skill Bars Visual */}
+                {data.skills.length > 0 && (
+                  <Card className="glass">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-accent" />
+                        خريطة المهارات
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {data.skills.map((skill, i) => (
+                          <div key={skill.id} className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="font-medium">{skill.name}</span>
+                                <span className="text-muted-foreground">{skill.level}/5</span>
+                              </div>
+                              <div className="h-2.5 rounded-full bg-muted/50 overflow-hidden">
+                                <motion.div
+                                  className="h-full rounded-full"
+                                  style={{ backgroundColor: skillDotColors[i % skillDotColors.length] }}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${(skill.level / 5) * 100}%` }}
+                                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
           </motion.div>
         )}

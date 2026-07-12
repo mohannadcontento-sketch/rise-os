@@ -20,6 +20,8 @@ import {
   TrendingUp,
   Flame,
   X,
+  Calendar,
+  BookMarked,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -88,24 +90,42 @@ const typeColors: Record<string, string> = {
   video: 'bg-purple-500/10 text-purple-500',
 }
 
+const typeBorderColors: Record<string, string> = {
+  book: 'border-r-emerald-accent',
+  article: 'border-r-gold',
+  course: 'border-r-blue-500',
+  video: 'border-r-purple-500',
+}
+
+function arabicNum(n: number): string {
+  const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩']
+  return String(n).replace(/[0-9]/g, (d) => digits[parseInt(d)])
+}
+
 function StarRating({ rating, onRate, readonly = false }: { rating: number; onRate?: (r: number) => void; readonly?: boolean }) {
+  const [hovered, setHovered] = useState(0)
+
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((s) => (
-        <button
+        <motion.button
           key={s}
           type="button"
           disabled={readonly}
           onClick={() => onRate?.(s)}
-          className={cn('transition-all', !readonly && 'hover:scale-110 cursor-pointer', readonly && 'cursor-default')}
+          onMouseEnter={() => !readonly && setHovered(s)}
+          onMouseLeave={() => !readonly && setHovered(0)}
+          whileHover={!readonly ? { scale: 1.2 } : {}}
+          whileTap={!readonly ? { scale: 0.9 } : {}}
+          className={cn('transition-all', !readonly && 'cursor-pointer', readonly && 'cursor-default')}
         >
           <Star
             className={cn(
               'w-4 h-4 transition-colors',
-              s <= rating ? 'fill-gold text-gold' : 'text-muted-foreground/30'
+              s <= (hovered || rating) ? 'fill-gold text-gold' : 'text-muted-foreground/30'
             )}
           />
-        </button>
+        </motion.button>
       ))}
     </div>
   )
@@ -188,6 +208,21 @@ export default function Reading() {
     }
   }
 
+  const handleLogReading = (bookId: string) => {
+    const book = books.find((b) => b.id === bookId)
+    if (!book || !book.totalPages) return
+    const newPage = Math.min(book.currentPage + 1, book.totalPages)
+    const progress = Math.min(100, Math.round((newPage / book.totalPages) * 100))
+    const status = progress >= 100 ? 'completed' : 'reading'
+    handleUpdateBook(bookId, {
+      currentPage: newPage,
+      progress,
+      status,
+      endDate: progress >= 100 ? new Date().toISOString().split('T')[0] : undefined,
+    })
+    toast.success(progress >= 100 ? '🎉 أنهيت الكتاب!' : `صفحة ${arabicNum(newPage)}`)
+  }
+
   const handleUpdateProgress = (bookId: string) => {
     const page = parseInt(editPage[bookId] || '0')
     const book = books.find((b) => b.id === bookId)
@@ -255,12 +290,31 @@ export default function Reading() {
       return b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)
     })
 
+  // Estimate completion date for the active book
+  const getEstimatedCompletion = (book: Book): string | null => {
+    if (!book.totalPages || !book.startDate) return null
+    const pagesRead = book.currentPage
+    if (pagesRead === 0) return null
+    const startDate = new Date(book.startDate)
+    const daysSinceStart = Math.max(1, (Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    const pagesPerDay = pagesRead / daysSinceStart
+    if (pagesPerDay === 0) return null
+    const pagesRemaining = book.totalPages - pagesRead
+    const daysRemaining = Math.ceil(pagesRemaining / pagesPerDay)
+    const completionDate = new Date()
+    completionDate.setDate(completionDate.getDate() + daysRemaining)
+    return completionDate.toLocaleDateString('ar', { month: 'short', day: 'numeric' })
+  }
+
   return (
-    <div className="space-y-6">
+    <div dir="rtl" className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">القراءة</h2>
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <BookMarked className="w-6 h-6 text-emerald-accent" />
+            القراءة
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">تتبع كتبك ومقالاتك ودوراتك التعليمية</p>
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
@@ -353,7 +407,7 @@ export default function Reading() {
         ))}
       </div>
 
-      {/* Currently Reading Highlight */}
+      {/* Currently Reading Featured Section */}
       {readingBooks.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -361,35 +415,131 @@ export default function Reading() {
           transition={{ delay: 0.3 }}
         >
           <Card className="glass border-emerald-accent/20 overflow-hidden">
-            <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-emerald-accent" />
+            <div className="bg-gradient-to-l from-emerald-accent/5 via-emerald-accent/3 to-transparent p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-accent/15 flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-emerald-accent" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base">أقرأ الآن</h3>
+                    <p className="text-xs text-muted-foreground">{arabicNum(readingBooks.length)} كتاب قيد القراءة</p>
+                  </div>
                 </div>
-                <h3 className="font-semibold text-sm">أقرأ الآن</h3>
+                <Flame className="w-5 h-5 text-gold" />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {readingBooks.slice(0, 3).map((book) => (
-                  <div key={book.id} className="bg-background/60 rounded-xl p-3 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
+
+              {/* Featured active book (first one with most progress) */}
+              {(() => {
+                const featured = readingBooks.sort((a, b) => b.progress - a.progress)[0]
+                if (!featured) return null
+                const pagesRemaining = (featured.totalPages || 0) - featured.currentPage
+                const estDate = getEstimatedCompletion(featured)
+
+                return (
+                  <div className="bg-background/60 rounded-2xl p-5 border border-emerald-accent/10">
+                    <div className="flex items-start justify-between gap-4 mb-4">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{book.title}</p>
-                        <p className="text-xs text-muted-foreground">{book.author}</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-bold text-lg truncate">{featured.title}</h4>
+                          <Badge variant="secondary" className={cn('text-[10px] shrink-0', typeColors[featured.type])}>
+                            {typeLabels[featured.type]}
+                          </Badge>
+                        </div>
+                        {featured.author && <p className="text-sm text-muted-foreground">{featured.author}</p>}
                       </div>
-                      <Badge variant="secondary" className={cn('text-[10px] shrink-0', typeColors[book.type])}>
-                        {typeLabels[book.type]}
-                      </Badge>
+                      <motion.div whileTap={{ scale: 0.95 }}>
+                        <Button
+                          onClick={() => handleLogReading(featured.id)}
+                          className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white shrink-0"
+                          size="sm"
+                        >
+                          <Plus className="w-4 h-4" />
+                          تسجيل قراءة
+                        </Button>
+                      </motion.div>
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px] text-muted-foreground">
-                        <span>{book.currentPage} / {book.totalPages || '∞'}</span>
-                        <span>{Math.round(book.progress)}%</span>
+
+                    {/* Large progress bar */}
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          صفحة <span className="font-semibold text-foreground">{arabicNum(featured.currentPage)}</span> من <span className="font-semibold text-foreground">{arabicNum(featured.totalPages || 0)}</span>
+                        </span>
+                        <span className="font-bold text-emerald-accent text-lg">{Math.round(featured.progress)}٪</span>
                       </div>
-                      <Progress value={book.progress} className="h-2" />
+                      <div className="h-3.5 rounded-full bg-muted overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${featured.progress}%` }}
+                          transition={{ duration: 0.8, ease: 'easeOut' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meta info */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {featured.totalPages && (
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>متبقي {arabicNum(pagesRemaining)} صفحة</span>
+                        </div>
+                      )}
+                      {estDate && (
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>تقدير الإنهاء: {estDate}</span>
+                        </div>
+                      )}
+                      {featured.startDate && (
+                        <div className="flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          <span>بدأ {new Date(featured.startDate).toLocaleDateString('ar', { month: 'short', day: 'numeric' })}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+                )
+              })()}
+
+              {/* Other reading books (compact) */}
+              {readingBooks.length > 1 && (
+                <div className="grid gap-3 sm:grid-cols-2 mt-4">
+                  {readingBooks.slice(0, 3).map((book) => {
+                    const pagesRemaining = (book.totalPages || 0) - book.currentPage
+                    const estDate = getEstimatedCompletion(book)
+                    return (
+                      <div key={book.id} className="bg-background/60 rounded-xl p-3 space-y-2 border-r-4 border-r-emerald-accent/40">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">{book.title}</p>
+                            <p className="text-xs text-muted-foreground">{book.author}</p>
+                          </div>
+                          <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => handleLogReading(book.id)}
+                            className="shrink-0 p-1.5 rounded-lg bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20 transition-colors"
+                            title="تسجيل صفحة"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </motion.button>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px] text-muted-foreground">
+                            <span>{arabicNum(book.currentPage)} / {book.totalPages || '∞'}</span>
+                            <span className="font-semibold text-foreground">{Math.round(book.progress)}%</span>
+                          </div>
+                          <Progress value={book.progress} className="h-2" />
+                        </div>
+                        {estDate && (
+                          <p className="text-[10px] text-muted-foreground/60">تقدير الإنهاء: {estDate}</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </Card>
         </motion.div>
@@ -460,7 +610,12 @@ export default function Reading() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <Card className={cn('glass overflow-hidden transition-shadow hover:shadow-lg', isExpanded && 'ring-1 ring-emerald-accent/30')}>
+                  <Card className={cn(
+                    'glass overflow-hidden transition-shadow hover:shadow-lg',
+                    isExpanded && 'ring-1 ring-emerald-accent/30',
+                    typeBorderColors[book.type] || 'border-r-emerald-accent',
+                    'border-r-4'
+                  )}>
                     <CardContent className="p-5">
                       {/* Header */}
                       <div className="flex items-start justify-between gap-2 mb-3">
@@ -491,10 +646,13 @@ export default function Reading() {
                         </div>
                       )}
 
-                      {/* Rating */}
-                      {book.rating && book.status === 'completed' && (
+                      {/* Rating (always interactive) */}
+                      {book.status === 'completed' && (
                         <div className="mb-3">
-                          <StarRating rating={book.rating} readonly />
+                          <StarRating
+                            rating={book.rating || 0}
+                            onRate={(r) => handleUpdateBook(book.id, { rating: r })}
+                          />
                         </div>
                       )}
 

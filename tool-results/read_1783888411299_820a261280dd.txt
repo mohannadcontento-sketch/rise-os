@@ -1,0 +1,942 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Plus,
+     7→     7→  Search,
+     8→     8→  ArrowRight,
+     9→     9→  Trash2,
+    10→    10→  Pencil,
+    11→    11→  CheckCircle2,
+    12→    12→  Circle,
+    13→    13→  Clock,
+    14→    14→  Zap,
+    15→    15→  MoreHorizontal,
+    16→    16→  FolderKanban,
+    17→    17→  Sparkles,
+    18→    18→  Loader2,
+    19→    19→  X,
+    20→    20→  TrendingUp,
+    21→    21→  ListChecks,
+    22→    22→} from 'lucide-react'
+    23→    23→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    24→    24→import { Button } from '@/components/ui/button'
+    25→    25→import { Badge } from '@/components/ui/badge'
+    26→    26→import { Input } from '@/components/ui/input'
+    27→    27→import { Skeleton } from '@/components/ui/skeleton'
+    28→    28→import { Textarea } from '@/components/ui/textarea'
+    29→    29→import { Label } from '@/components/ui/label'
+    30→    30→import { Progress } from '@/components/ui/progress'
+    31→    31→import { Checkbox } from '@/components/ui/checkbox'
+    32→    32→import {
+    33→    33→  Dialog,
+    34→    34→  DialogContent,
+    35→    35→  DialogHeader,
+    36→    36→  DialogTitle,
+    37→    37→  DialogTrigger,
+    38→    38→  DialogFooter,
+    39→    39→  DialogClose,
+    40→    40→} from '@/components/ui/dialog'
+    41→    41→import {
+    42→    42→  Select,
+    43→    43→  SelectContent,
+    44→    44→  SelectItem,
+    45→    45→  SelectTrigger,
+    46→    46→  SelectValue,
+    47→    47→} from '@/components/ui/select'
+    48→    48→import {
+    49→    49→  DropdownMenu,
+    50→    50→  DropdownMenuContent,
+    51→    51→  DropdownMenuItem,
+    52→    52→  DropdownMenuTrigger,
+    53→    53→  DropdownMenuSeparator,
+    54→    54→} from '@/components/ui/dropdown-menu'
+    55→    55→import { cn } from '@/lib/utils'
+    56→    56→import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
+    57→    57→import { format } from 'date-fns'
+    58→    58→import { ar } from 'date-fns/locale'
+    59→    59→
+    60→    60→/* ────────────── Types ────────────── */
+    61→    61→
+    62→    62→interface Project {
+    63→    63→  id: string
+    64→    64→  name: string
+    65→    65→  description?: string | null
+    66→    66→  color: string
+    67→    67→  progress: number
+    68→    68→  status: string
+    69→    69→  createdAt: string
+    70→    70→}
+    71→    71→
+    72→    72→interface Task {
+    73→    73→  id: string
+    74→    74→  title: string
+    75→    75→  description?: string | null
+    76→    76→  status: string
+    77→    77→  priority: string
+    78→    78→  projectId?: string | null
+    79→    79→  dueDate?: string | null
+    80→    80→  xpReward: number
+    81→    81→  completedAt?: string | null
+    82→    82→  subtasks: { id: string; title: string; completed: boolean }[]
+    83→    83→}
+    84→    84→
+    85→    85→/* ────────────── Constants ────────────── */
+    86→    86→
+    87→    87→const PRESET_COLORS = [
+    88→    88→  '#059669', '#10B981', '#14B8A6',
+    89→    89→  '#3B82F6', '#6366F1', '#8B5CF6',
+    90→    90→  '#F59E0B', '#D4A853', '#F97316',
+    91→    91→  '#EF4444', '#EC4899', '#64748B',
+    92→    92→]
+    93→    93→
+    94→    94→const STATUSES = ['todo', 'in_progress', 'done'] as const
+    95→    95→
+    96→    96→/* ────────────── Animation Variants ────────────── */
+    97→    97→
+    98→    98→const containerVariants = {
+    99→    99→  hidden: { opacity: 0 },
+   100→   100→  visible: {
+   101→   101→    opacity: 1,
+   102→   102→    transition: { staggerChildren: 0.06 },
+   103→   103→  },
+   104→   104→}
+   105→   105→
+   106→   106→const itemVariants = {
+   107→   107→  hidden: { opacity: 0, y: 16, scale: 0.97 },
+   108→   108→  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } },
+   109→   109→  exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
+   110→   110→}
+   111→   111→
+   112→   112→/* ────────────── Progress Ring Component ────────────── */
+   113→   113→
+   114→   114→function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progress: number; size?: number; strokeWidth?: number; color: string }) {
+   115→   115→  const radius = (size - strokeWidth) / 2
+   116→   116→  const circumference = 2 * Math.PI * radius
+   117→   117→  const offset = circumference - (progress / 100) * circumference
+   118→   118→
+   119→   119→  return (
+   120→   120→    <svg width={size} height={size} className="transform -rotate-90">
+   121→   121→      <circle
+   122→   122→        cx={size / 2}
+   123→   123→        cy={size / 2}
+   124→   124→        r={radius}
+   125→   125→        fill="none"
+   126→   126→        stroke="currentColor"
+   127→   127→        strokeWidth={strokeWidth}
+   128→   128→        className="text-muted/50"
+   129→   129→      />
+   130→   130→      <motion.circle
+   131→   131→        cx={size / 2}
+   132→   132→        cy={size / 2}
+   133→   133→        r={radius}
+   134→   134→        fill="none"
+   135→   135→        stroke={color}
+   136→   136→        strokeWidth={strokeWidth}
+   137→   137→        strokeLinecap="round"
+   138→   138→        strokeDasharray={circumference}
+   139→   139→        initial={{ strokeDashoffset: circumference }}
+   140→   140→        animate={{ strokeDashoffset: offset }}
+   141→   141→        transition={{ duration: 0.8, ease: 'easeOut' }}
+   142→   142→      />
+   143→   143→      <text
+   144→   144→        x="50%"
+   145→   145→        y="50%"
+   146→   146→        textAnchor="middle"
+   147→   147→        dominantBaseline="central"
+   148→   148→        transform={`rotate(90, ${size / 2}, ${size / 2})`}
+   149→   149→        className="fill-foreground text-[11px] font-bold"
+   150→   150→      >
+   151→   151→        {Math.round(progress)}%
+   152→   152→      </text>
+   153→   153→    </svg>
+   154→   154→  )
+   155→   155→}
+   156→   156→
+   157→   157→/* ────────────── Empty State ────────────── */
+   158→   158→
+   159→   159→function EmptyState() {
+   160→   160→  return (
+   161→   161→    <motion.div
+   162→   162→      initial={{ opacity: 0, y: 20 }}
+   163→   163→      animate={{ opacity: 1, y: 0 }}
+   164→   164→      className="flex flex-col items-center justify-center py-16 text-center"
+   165→   165→    >
+   166→   166→      <div className="relative mb-6">
+   167→   167→        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-accent/20 to-forest/20 flex items-center justify-center">
+   168→   168→          <FolderKanban className="w-10 h-10 text-emerald-accent/60" />
+   169→   169→        </div>
+   170→   170→        <motion.div
+   171→   171→          className="absolute -top-1 -left-1 w-6 h-6 rounded-full bg-gold/20 flex items-center justify-center"
+   172→   172→          animate={{ y: [0, -4, 0] }}
+   173→   173→          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   174→   174→        >
+   175→   175→          <Sparkles className="w-3 h-3 text-gold" />
+   176→   176→        </motion.div>
+   177→   177→      </div>
+   178→   178→      <h3 className="text-lg font-bold text-foreground mb-2">لا توجد مشاريع بعد</h3>
+   179→   179→      <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+   180→   180→        ابدأ بإنشاء مشروعك الأول وorganize مهامك بشكل أفضل. المشاريع تساعدك على التركيز وتتبع التقدم.
+   181→   181→      </p>
+   182→   182→    </motion.div>
+   183→   183→  )
+   184→   184→}
+   185→   185→
+   186→   186→/* ────────────── Main Component ────────────── */
+   187→   187→
+   188→   188→export function Projects() {
+   189→   189→  const [projects, setProjects] = useState<Project[]>([])
+   190→   190→  const [tasks, setTasks] = useState<Task[]>([])
+   191→   191→  const [loading, setLoading] = useState(true)
+   192→   192→  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+   193→   193→  const [searchQuery, setSearchQuery] = useState('')
+   194→   194→
+   195→   195→  // Add/Edit project dialog
+   196→   196→  const [dialogOpen, setDialogOpen] = useState(false)
+   197→   197→  const [editingProject, setEditingProject] = useState<Project | null>(null)
+   198→   198→  const [formName, setFormName] = useState('')
+   199→   199→  const [formDesc, setFormDesc] = useState('')
+   200→   200→  const [formColor, setFormColor] = useState(PRESET_COLORS[0])
+   201→   201→  const [submitting, setSubmitting] = useState(false)
+   202→   202→
+   203→   203→  // Add task to project dialog
+   204→   204→  const [addTaskOpen, setAddTaskOpen] = useState(false)
+   205→   205→  const [newTaskTitle, setNewTaskTitle] = useState('')
+   206→   206→  const [newTaskPriority, setNewTaskPriority] = useState('medium')
+   207→   207→  const [newTaskDueDate, setNewTaskDueDate] = useState('')
+   208→   208→  const [taskSubmitting, setTaskSubmitting] = useState(false)
+   209→   209→
+   210→   210→  const fetchData = useCallback(async () => {
+   211→   211→    try {
+   212→   212→      const [projRes, taskRes] = await Promise.all([
+   213→   213→        fetch('/api/rise/projects'),
+   214→   214→        fetch('/api/rise/tasks'),
+   215→   215→      ])
+   216→   216→      const projData = await projRes.json()
+   217→   217→      const taskData = await taskRes.json()
+   218→   218→      setProjects(projData.projects || [])
+   219→   219→      setTasks(taskData.tasks || [])
+   220→   220→    } catch {
+   221→   221→      /* ignore */
+   222→   222→    } finally {
+   223→   223→      setLoading(false)
+   224→   224→    }
+   225→   225→  }, [])
+   226→   226→
+   227→   227→  useEffect(() => {
+   228→   228→    fetchData()
+   229→   229→  }, [fetchData])
+   230→   230→
+   231→   231→  /* ── Computed ── */
+   232→   232→  const filteredProjects = useMemo(() => {
+   233→   233→    if (!searchQuery) return projects
+   234→   234→    return projects.filter((p) => p.name.includes(searchQuery) || p.description?.includes(searchQuery))
+   235→   235→  }, [projects, searchQuery])
+   236→   236→
+   237→   237→  const selectedProject = useMemo(
+   238→   238→    () => projects.find((p) => p.id === selectedProjectId) || null,
+   239→   239→    [projects, selectedProjectId]
+   240→   240→  )
+   241→   241→
+   242→   242→  const projectTasks = useMemo(
+   243→   243→    () => tasks.filter((t) => t.projectId === selectedProjectId),
+   244→   244→    [tasks, selectedProjectId]
+   245→   245→  )
+   246→   246→
+   247→   247→  const projectTasksByStatus = useMemo(() => {
+   248→   248→    const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
+   249→   249→    for (const t of projectTasks) {
+   250→   250→      if (groups[t.status]) groups[t.status].push(t)
+   251→   251→    }
+   252→   252→    return groups
+   253→   253→  }, [projectTasks])
+   254→   254→
+   255→   255→  /* ── Mutations ── */
+   256→   256→  const openAddDialog = () => {
+   257→   257→    setEditingProject(null)
+   258→   258→    setFormName('')
+   259→   259→    setFormDesc('')
+   260→   260→    setFormColor(PRESET_COLORS[0])
+   261→   261→    setDialogOpen(true)
+   262→   262→  }
+   263→   263→
+   264→   264→  const openEditDialog = (project: Project) => {
+   265→   265→    setEditingProject(project)
+   266→   266→    setFormName(project.name)
+   267→   267→    setFormDesc(project.description || '')
+   268→   268→    setFormColor(project.color)
+   269→   269→    setDialogOpen(true)
+   270→   270→  }
+   271→   271→
+   272→   272→  const saveProject = async () => {
+   273→   273→    if (!formName.trim()) return
+   274→   274→    setSubmitting(true)
+   275→   275→    try {
+   276→   276→      if (editingProject) {
+   277→   277→        await fetch('/api/rise/projects', {
+   278→   278→          method: 'PUT',
+   279→   279→          headers: { 'Content-Type': 'application/json' },
+   280→   280→          body: JSON.stringify({ id: editingProject.id, name: formName.trim(), description: formDesc.trim() || null, color: formColor }),
+   281→   281→        })
+   282→   282→      } else {
+   283→   283→        await fetch('/api/rise/projects', {
+   284→   284→          method: 'POST',
+   285→   285→          headers: { 'Content-Type': 'application/json' },
+   286→   286→          body: JSON.stringify({ name: formName.trim(), description: formDesc.trim() || null, color: formColor }),
+   287→   287→        })
+   288→   288→      }
+   289→   289→      setDialogOpen(false)
+   290→   290→      fetchData()
+   291→   291→    } catch {
+   292→   292→      /* ignore */
+   293→   293→    } finally {
+   294→   294→      setSubmitting(false)
+   295→   295→    }
+   296→   296→  }
+   297→   297→
+   298→   298→  const deleteProject = async (id: string) => {
+   299→   299→    setProjects((prev) => prev.filter((p) => p.id !== id))
+   300→   300→    if (selectedProjectId === id) setSelectedProjectId(null)
+   301→   301→    try {
+   302→   302→      await fetch(`/api/rise/projects?id=${id}`, { method: 'DELETE' })
+   303→   303→    } catch {
+   304→   304→      fetchData()
+   305→   305→    }
+   306→   306→  }
+   307→   307→
+   308→   308→  const addTaskToProject = async () => {
+   309→   309→    if (!newTaskTitle.trim() || !selectedProjectId) return
+   310→   310→    setTaskSubmitting(true)
+   311→   311→    try {
+   312→   312→      await fetch('/api/rise/tasks', {
+   313→   313→        method: 'POST',
+   314→   314→        headers: { 'Content-Type': 'application/json' },
+   315→   315→        body: JSON.stringify({
+   316→   316→          title: newTaskTitle.trim(),
+   317→   317→          priority: newTaskPriority,
+   318→   318→          projectId: selectedProjectId,
+   319→   319→          dueDate: newTaskDueDate || null,
+   320→   320→        }),
+   321→   321→      })
+   322→   322→      setNewTaskTitle('')
+   323→   323→      setNewTaskPriority('medium')
+   324→   324→      setNewTaskDueDate('')
+   325→   325→      setAddTaskOpen(false)
+   326→   326→      fetchData()
+   327→   327→    } catch {
+   328→   328→      /* ignore */
+   329→   329→    } finally {
+   330→   330→      setTaskSubmitting(false)
+   331→   331→    }
+   332→   332→  }
+   333→   333→
+   334→   334→  const toggleTask = async (task: Task) => {
+   335→   335→    const isDone = task.status === 'done'
+   336→   336→    const newStatus = isDone ? 'todo' : 'done'
+   337→   337→    const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
+   338→   338→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   339→   339→    try {
+   340→   340→      await fetch('/api/rise/tasks', {
+   341→   341→        method: 'PUT',
+   342→   342→        headers: { 'Content-Type': 'application/json' },
+   343→   343→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   344→   344→      })
+   345→   345→    } catch {
+   346→   346→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   347→   347→    }
+   348→   348→  }
+   349→   349→
+   350→   350→  const deleteTask = async (taskId: string) => {
+   351→   351→    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+   352→   352→    try {
+   353→   353→      await fetch(`/api/rise/tasks?id=${taskId}`, { method: 'DELETE' })
+   354→   354→    } catch {
+   355→   355→      fetchData()
+   356→   356→    }
+   357→   357→  }
+   358→   358→
+   359→   359→  const moveTask = async (task: Task, newStatus: string) => {
+   360→   360→    const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
+   361→   361→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   362→   362→    try {
+   363→   363→      await fetch('/api/rise/tasks', {
+   364→   364→        method: 'PUT',
+   365→   365→        headers: { 'Content-Type': 'application/json' },
+   366→   366→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   367→   367→      })
+   368→   368→    } catch {
+   369→   369→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   370→   370→    }
+   371→   371→  }
+   372→   372→
+   373→   373→  const getTaskCountForProject = (projectId: string) => {
+   374→   374→    return tasks.filter((t) => t.projectId === projectId).length
+   375→   375→  }
+   376→   376→
+   377→   377→  const getDoneCountForProject = (projectId: string) => {
+   378→   378→    return tasks.filter((t) => t.projectId === projectId && t.status === 'done').length
+   379→   379→  }
+   380→   380→
+   381→   381→  /* ────────────── Render: Loading ────────────── */
+   382→   382→  if (loading) {
+   383→   383→    return (
+   384→   384→      <div className="space-y-5">
+   385→   385→        <div className="flex items-center gap-3">
+   386→   386→          <Skeleton className="h-10 w-64 rounded-xl" />
+   387→   387→          <Skeleton className="h-10 w-36 rounded-xl" />
+   388→   388→        </div>
+   389→   389→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   390→   390→          {Array.from({ length: 3 }).map((_, i) => (
+   391→   391→            <Skeleton key={i} className="h-56 w-full rounded-2xl" />
+   392→   392→          ))}
+   393→   393→        </div>
+   394→   394→      </div>
+   395→   395→    )
+   396→   396→  }
+   397→   397→
+   398→   398→  /* ────────────── Render: Project Detail View ────────────── */
+   399→   399→  if (selectedProject) {
+   400→   400→    const totalTasks = projectTasks.length
+   401→   401→    const doneTasks = projectTasks.filter((t) => t.status === 'done').length
+   402→   402→    const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
+   403→   403→
+   404→   404→    return (
+   405→   405→      <motion.div
+   406→   406→        key="detail"
+   407→   407→        initial={{ opacity: 0, x: 20 }}
+   408→   408→        animate={{ opacity: 1, x: 0 }}
+   409→   409→        exit={{ opacity: 0, x: -20 }}
+   410→   410→        transition={{ duration: 0.3 }}
+   411→   411→      >
+   412→   412→        {/* Back button + header */}
+   413→   413→        <div className="flex items-center gap-3 mb-6">
+   414→   414→          <Button
+   415→   415→            variant="ghost"
+   416→   416→            size="sm"
+   417→   417→            onClick={() => setSelectedProjectId(null)}
+   418→   418→            className="rounded-xl gap-1.5 text-sm"
+   419→   419→          >
+   420→   420→            <ArrowRight className="w-4 h-4" />
+   421→   421→            المشاريع
+   422→   422→          </Button>
+   423→   423→        </div>
+   424→   424→
+   425→   425→        {/* Project info card */}
+   426→   426→        <div className="glass rounded-2xl p-5 mb-6">
+   427→   427→          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+   428→   428→            <div className="flex items-center gap-4 flex-1 min-w-0">
+   429→   429→              <div
+   430→   430→                className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+   431→   431→                style={{ backgroundColor: selectedProject.color + '18' }}
+   432→   432→              >
+   433→   433→                <FolderKanban className="w-6 h-6" style={{ color: selectedProject.color }} />
+   434→   434→              </div>
+   435→   435→              <div className="min-w-0">
+   436→   436→                <h3 className="text-xl font-bold truncate">{selectedProject.name}</h3>
+   437→   437→                {selectedProject.description && (
+   438→   438→                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{selectedProject.description}</p>
+   439→   439→                )}
+   440→   440→              </div>
+   441→   441→            </div>
+   442→   442→            <div className="flex items-center gap-3">
+   443→   443→              <ProgressRing progress={progress} size={56} strokeWidth={4} color={selectedProject.color} />
+   444→   444→              <div className="flex gap-1">
+   445→   445→                <DropdownMenu>
+   446→   446→                  <DropdownMenuTrigger asChild>
+   447→   447→                    <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl">
+   448→   448→                      <MoreHorizontal className="w-4 h-4" />
+   449→   449→                    </Button>
+   450→   450→                  </DropdownMenuTrigger>
+   451→   451→                  <DropdownMenuContent align="end" dir="rtl">
+   452→   452→                    <DropdownMenuItem onClick={() => openEditDialog(selectedProject)}>
+   453→   453→                      <Pencil className="w-4 h-4 ml-2" />
+   454→   454→                      تعديل
+   455→   455→                    </DropdownMenuItem>
+   456→   456→                    <DropdownMenuSeparator />
+   457→   457→                    <DropdownMenuItem
+   458→   458→                      onClick={() => {
+   459→   459→                        deleteProject(selectedProject.id)
+   460→   460→                      }}
+   461→   461→                      className="text-red-500 focus:text-red-500"
+   462→   462→                    >
+   463→   463→                      <Trash2 className="w-4 h-4 ml-2" />
+   464→   464→                      حذف
+   465→   465→                    </DropdownMenuItem>
+   466→   466→                  </DropdownMenuContent>
+   467→   467→                </DropdownMenu>
+   468→   468→                <Button
+   469→   469→                  size="sm"
+   470→   470→                  onClick={() => setAddTaskOpen(true)}
+   471→   471→                  className="h-9 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20"
+   472→   472→                >
+   473→   473→                  <Plus className="w-4 h-4" />
+   474→   474→                  مهمة
+   475→   475→                </Button>
+   476→   476→              </div>
+   477→   477→            </div>
+   478→   478→          </div>
+   479→   479→
+   480→   480→          {/* Stats */}
+   481→   481→          <div className="grid grid-cols-3 gap-3 mt-5">
+   482→   482→            {[
+   483→   483→              { label: 'إجمالي المهام', value: totalTasks, icon: ListChecks, color: 'text-foreground' },
+   484→   484→              { label: 'مكتمل', value: doneTasks, icon: CheckCircle2, color: 'text-emerald-accent' },
+   485→   485→              { label: 'قيد التنفيذ', value: projectTasks.filter((t) => t.status === 'in_progress').length, icon: Clock, color: 'text-gold' },
+   486→   486→            ].map((s) => (
+   487→   487→              <div key={s.label} className="bg-muted/50 rounded-xl p-3 text-center">
+   488→   488→                <s.icon className={cn('w-4 h-4 mx-auto mb-1', s.color)} />
+   489→   489→                <p className={cn('text-lg font-bold', s.color)}>{s.value}</p>
+   490→   490→                <p className="text-[10px] text-muted-foreground">{s.label}</p>
+   491→   491→              </div>
+   492→   492→            ))}
+   493→   493→          </div>
+   494→   494→
+   495→   495→          {/* Overall progress bar */}
+   496→   496→          <div className="mt-4">
+   497→   497→            <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+   498→   498→              <span>التقدم الكلي</span>
+   499→   499→              <span className="font-medium">{progress}%</span>
+   500→   500→            </div>
+   501→   501→            <div className="h-2 rounded-full bg-muted overflow-hidden">
+   502→   502→              <motion.div
+   503→   503→                className="h-full rounded-full"
+   504→   504→                style={{ backgroundColor: selectedProject.color }}
+   505→   505→                initial={{ width: 0 }}
+   506→   506→                animate={{ width: `${progress}%` }}
+   507→   507→                transition={{ duration: 0.8, ease: 'easeOut' }}
+   508→   508→              />
+   509→   509→            </div>
+   510→   510→          </div>
+   511→   511→        </div>
+   512→   512→
+   513→   513→        {/* Tasks grouped by status */}
+   514→   514→        <div className="space-y-4">
+   515→   515→          {[
+   516→   516→            { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-blue-500' },
+   517→   517→            { key: 'in_progress', label: 'قيد التنفيذ', icon: Clock, color: 'text-gold' },
+   518→   518→            { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent' },
+   519→   519→          ].map((group) => {
+   520→   520→            const groupTasks = projectTasksByStatus[group.key]
+   521→   521→            return (
+   522→   522→              <div key={group.key}>
+   523→   523→                <div className={cn('flex items-center gap-2 mb-2 px-1', group.color)}>
+   524→   524→                  <group.icon className="w-4 h-4" />
+   525→   525→                  <span className="text-sm font-semibold">{group.label}</span>
+   526→   526→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+   527→   527→                    {groupTasks.length}
+   528→   528→                  </Badge>
+   529→   529→                </div>
+   530→   530→                <AnimatePresence mode="popLayout">
+   531→   531→                  {groupTasks.length === 0 ? (
+   532→   532→                    <motion.div
+   533→   533→                      key="empty"
+   534→   534→                      initial={{ opacity: 0 }}
+   535→   535→                      animate={{ opacity: 1 }}
+   536→   536→                      className="glass rounded-2xl p-5 text-center text-sm text-muted-foreground"
+   537→   537→                    >
+   538→   538→                      لا توجد مهام
+   539→   539→                    </motion.div>
+   540→   540→                  ) : (
+   541→   541→                    <motion.div
+   542→   542→                      key="list"
+   543→   543→                      variants={containerVariants}
+   544→   544→                      initial="hidden"
+   545→   545→                      animate="visible"
+   546→   546→                      className="space-y-2"
+   547→   547→                    >
+   548→   548→                      {groupTasks.map((task) => (
+   549→   549→                        <motion.div
+   550→   550→                          key={task.id}
+   551→   551→                          variants={itemVariants}
+   552→   552→                          layout
+   553→   553→                          className="group"
+   554→   554→                        >
+   555→   555→                          <div className="glass rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:shadow-emerald-accent/5">
+   556→   556→                            <div className="pt-0.5">
+   557→   557→                              <Checkbox
+   558→   558→                                checked={task.status === 'done'}
+   559→   559→                                onCheckedChange={() => toggleTask(task)}
+   560→   560→                                className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   561→   561→                              />
+   562→   562→                            </div>
+   563→   563→                            <div className="flex-1 min-w-0">
+   564→   564→                              <div className="flex items-center gap-2 flex-wrap">
+   565→   565→                                <span
+   566→   566→                                  className={cn(
+   567→   567→                                    'text-sm font-semibold',
+   568→   568→                                    task.status === 'done' && 'line-through text-muted-foreground'
+   569→   569→                                  )}
+   570→   570→                                >
+   571→   571→                                  {task.title}
+   572→   572→                                </span>
+   573→   573→                                <Badge
+   574→   574→                                  variant="secondary"
+   575→   575→                                  className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   576→   576→                                >
+   577→   577→                                  {priorityLabels[task.priority]}
+   578→   578→                                </Badge>
+   579→   579→                                {task.xpReward > 0 && (
+   580→   580→                                  <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
+   581→   581→                                    <Zap className="w-3 h-3" />
+   582→   582→                                    {task.xpReward}
+   583→   583→                                  </span>
+   584→   584→                                )}
+   585→   585→                              </div>
+   586→   586→                              {task.dueDate && (
+   587→   587→                                <span className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+   588→   588→                                  <Clock className="w-3 h-3" />
+   589→   589→                                  {formatDateShort(task.dueDate)}
+   590→   590→                                </span>
+   591→   591→                              )}
+   592→   592→                              {task.subtasks.length > 0 && (
+   593→   593→                                <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+   594→   594→                                  <CheckCircle2 className="w-3 h-3" />
+   595→   595→                                  {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length} مهام فرعية
+   596→   596→                                </span>
+   597→   597→                              )}
+   598→   598→                            </div>
+   599→   599→                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   600→   600→                              <DropdownMenu>
+   601→   601→                                <DropdownMenuTrigger asChild>
+   602→   602→                                  <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+   603→   603→                                    <MoreHorizontal className="w-4 h-4" />
+   604→   604→                                  </button>
+   605→   605→                                </DropdownMenuTrigger>
+   606→   606→                                <DropdownMenuContent align="end" dir="rtl">
+   607→   607→                                  {STATUSES.filter((s) => s !== task.status).map((s) => (
+   608→   608→                                    <DropdownMenuItem key={s} onClick={() => moveTask(task, s)}>
+   609→   609→                                      نقل إلى: {statusLabels[s]}
+   610→   610→                                    </DropdownMenuItem>
+   611→   611→                                  ))}
+   612→   612→                                  <DropdownMenuSeparator />
+   613→   613→                                  <DropdownMenuItem
+   614→   614→                                    onClick={() => deleteTask(task.id)}
+   615→   615→                                    className="text-red-500 focus:text-red-500"
+   616→   616→                                  >
+   617→   617→                                    <Trash2 className="w-4 h-4 ml-2" />
+   618→   618→                                    حذف
+   619→   619→                                  </DropdownMenuItem>
+   620→   620→                                </DropdownMenuContent>
+   621→   621→                              </DropdownMenu>
+   622→   622→                            </div>
+   623→   623→                          </div>
+   624→   624→                        </motion.div>
+   625→   625→                      ))}
+   626→   626→                    </motion.div>
+   627→   627→                  )}
+   628→   628→                </AnimatePresence>
+   629→   629→              </div>
+   630→   630→            )
+   631→   631→          })}
+   632→   632→        </div>
+   633→   633→
+   634→   634→        {/* Add Task Dialog (for project) */}
+   635→   635→        <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
+   636→   636→          <DialogContent className="sm:max-w-md" dir="rtl">
+   637→   637→            <DialogHeader>
+   638→   638→              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+   639→   639→                <Sparkles className="w-5 h-5 text-gold" />
+   640→   640→                إضافة مهمة
+   641→   641→              </DialogTitle>
+   642→   642→            </DialogHeader>
+   643→   643→            <div className="space-y-4 mt-2">
+   644→   644→              <div>
+   645→   645→                <Label className="text-xs font-medium mb-1.5 block">العنوان</Label>
+   646→   646→                <Input
+   647→   647→                  placeholder="ماذا تريد إنجازه؟"
+   648→   648→                  value={newTaskTitle}
+   649→   649→                  onChange={(e) => setNewTaskTitle(e.target.value)}
+   650→   650→                  className="rounded-xl h-10"
+   651→   651→                  onKeyDown={(e) => e.key === 'Enter' && addTaskToProject()}
+   652→   652→                />
+   653→   653→              </div>
+   654→   654→              <div className="grid grid-cols-2 gap-3">
+   655→   655→                <div>
+   656→   656→                  <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
+   657→   657→                  <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+   658→   658→                    <SelectTrigger className="rounded-xl h-10 text-sm">
+   659→   659→                      <SelectValue />
+   660→   660→                    </SelectTrigger>
+   661→   661→                    <SelectContent>
+   662→   662→                      <SelectItem value="urgent">عاجل</SelectItem>
+   663→   663→                      <SelectItem value="high">مرتفع</SelectItem>
+   664→   664→                      <SelectItem value="medium">متوسط</SelectItem>
+   665→   665→                      <SelectItem value="low">منخفض</SelectItem>
+   666→   666→                    </SelectContent>
+   667→   667→                  </Select>
+   668→   668→                </div>
+   669→   669→                <div>
+   670→   670→                  <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق</Label>
+   671→   671→                  <Input
+   672→   672→                    type="date"
+   673→   673→                    value={newTaskDueDate}
+   674→   674→                    onChange={(e) => setNewTaskDueDate(e.target.value)}
+   675→   675→                    className="rounded-xl h-10 text-sm"
+   676→   676→                  />
+   677→   677→                </div>
+   678→   678→              </div>
+   679→   679→            </div>
+   680→   680→            <DialogFooter className="gap-2 mt-4">
+   681→   681→              <DialogClose asChild>
+   682→   682→                <Button variant="outline" className="rounded-xl text-sm">إلغاء</Button>
+   683→   683→              </DialogClose>
+   684→   684→              <Button
+   685→   685→                onClick={addTaskToProject}
+   686→   686→                disabled={!newTaskTitle.trim() || taskSubmitting}
+   687→   687→                className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+   688→   688→              >
+   689→   689→                {taskSubmitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+   690→   690→                إضافة
+   691→   691→              </Button>
+   692→   692→            </DialogFooter>
+   693→   693→          </DialogContent>
+   694→   694→        </Dialog>
+   695→   695→      </motion.div>
+   696→   696→    )
+   697→   697→  }
+   698→   698→
+   699→   699→  /* ────────────── Render: Projects Grid ────────────── */
+   700→   700→  return (
+   701→   701→    <div className="space-y-5">
+   702→   702→      {/* Header */}
+   703→   703→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   704→   704→        <div className="relative flex-1 w-full sm:max-w-xs">
+   705→   705→          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   706→   706→          <Input
+   707→   707→            placeholder="ابحث في المشاريع..."
+   708→   708→            value={searchQuery}
+   709→   709→            onChange={(e) => setSearchQuery(e.target.value)}
+   710→   710→            className="pr-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
+   711→   711→          />
+   712→   712→        </div>
+   713→   713→
+   714→   714→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   715→   715→          <DialogTrigger asChild>
+   716→   716→            <Button
+   717→   717→              size="sm"
+   718→   718→              onClick={openAddDialog}
+   719→   719→              className="h-10 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20"
+   720→   720→            >
+   721→   721→              <Plus className="w-4 h-4" />
+   722→   722→              مشروع جديد
+   723→   723→            </Button>
+   724→   724→          </DialogTrigger>
+   725→   725→          <DialogContent className="sm:max-w-md" dir="rtl">
+   726→   726→            <DialogHeader>
+   727→   727→              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+   728→   728→                <Sparkles className="w-5 h-5 text-gold" />
+   729→   729→                {editingProject ? 'تعديل المشروع' : 'مشروع جديد'}
+   730→   730→              </DialogTitle>
+   731→   731→            </DialogHeader>
+   732→   732→            <div className="space-y-4 mt-2">
+   733→   733→              <div>
+   734→   734→                <Label className="text-xs font-medium mb-1.5 block">اسم المشروع</Label>
+   735→   735→                <Input
+   736→   736→                  placeholder="مثال: تطوير التطبيق"
+   737→   737→                  value={formName}
+   738→   738→                  onChange={(e) => setFormName(e.target.value)}
+   739→   739→                  className="rounded-xl h-10"
+   740→   740→                  onKeyDown={(e) => e.key === 'Enter' && saveProject()}
+   741→   741→                />
+   742→   742→              </div>
+   743→   743→              <div>
+   744→   744→                <Label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</Label>
+   745→   745→                <Textarea
+   746→   746→                  placeholder="وصف مختصر للمشروع..."
+   747→   747→                  value={formDesc}
+   748→   748→                  onChange={(e) => setFormDesc(e.target.value)}
+   749→   749→                  className="rounded-xl min-h-[80px] text-sm"
+   750→   750→                />
+   751→   751→              </div>
+   752→   752→              <div>
+   753→   753→                <Label className="text-xs font-medium mb-2 block">اللون</Label>
+   754→   754→                <div className="flex flex-wrap gap-2">
+   755→   755→                  {PRESET_COLORS.map((c) => (
+   756→   756→                    <button
+   757→   757→                      key={c}
+   758→   758→                      onClick={() => setFormColor(c)}
+   759→   759→                      className={cn(
+   760→   760→                        'w-8 h-8 rounded-xl transition-all duration-200',
+   761→   761→                        formColor === c ? 'ring-2 ring-offset-2 ring-foreground scale-110' : 'hover:scale-110'
+   762→   762→                      )}
+   763→   763→                      style={{ backgroundColor: c }}
+   764→   764→                    />
+   765→   765→                  ))}
+   766→   766→                </div>
+   767→   767→              </div>
+   768→   768→            </div>
+   769→   769→            <DialogFooter className="gap-2 mt-4">
+   770→   770→              <DialogClose asChild>
+   771→   771→                <Button variant="outline" className="rounded-xl text-sm">إلغاء</Button>
+   772→   772→              </DialogClose>
+   773→   773→              <Button
+   774→   774→                onClick={saveProject}
+   775→   775→                disabled={!formName.trim() || submitting}
+   776→   776→                className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+   777→   777→              >
+   778→   778→                {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+   779→   779→                {editingProject ? 'حفظ التعديلات' : 'إنشاء المشروع'}
+   780→   780→              </Button>
+   781→   781→            </DialogFooter>
+   782→   782→          </DialogContent>
+   783→   783→        </Dialog>
+   784→   784→      </div>
+   785→   785→
+   786→   786→      {/* Projects Grid */}
+   787→   787→      {filteredProjects.length === 0 ? (
+   788→   788→        <EmptyState />
+   789→   789→      ) : (
+   790→   790→        <motion.div
+   791→   791→          variants={containerVariants}
+   792→   792→          initial="hidden"
+   793→   793→          animate="visible"
+   794→   794→          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+   795→   795→        >
+   796→   796→          <AnimatePresence mode="popLayout">
+   797→   797→            {filteredProjects.map((project) => {
+   798→   798→              const taskCount = getTaskCountForProject(project.id)
+   799→   799→              const doneCount = getDoneCountForProject(project.id)
+   800→   800→              const calculatedProgress = taskCount > 0 ? Math.round((doneCount / taskCount) * 100) : project.progress
+   801→   801→
+   802→   802→              return (
+   803→   803→                <motion.div
+   804→   804→                  key={project.id}
+   805→   805→                  variants={itemVariants}
+   806→   806→                  layout
+   807→   807→                  whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+   808→   808→                  className="group cursor-pointer"
+   809→   809→                  onClick={() => setSelectedProjectId(project.id)}
+   810→   810→                >
+   811→   811→                  <div className="glass rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-emerald-accent/5 h-full flex flex-col">
+   812→   812→                    {/* Color accent bar */}
+   813→   813→                    <div className="h-1.5 w-full" style={{ backgroundColor: project.color }} />
+   814→   814→
+   815→   815→                    <div className="p-5 flex-1 flex flex-col">
+   816→   816→                      {/* Top: Icon + Actions */}
+   817→   817→                      <div className="flex items-start justify-between mb-4">
+   818→   818→                        <div
+   819→   819→                          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+   820→   820→                          style={{ backgroundColor: project.color + '15' }}
+   821→   821→                        >
+   822→   822→                          <FolderKanban className="w-5 h-5" style={{ color: project.color }} />
+   823→   823→                        </div>
+   824→   824→                        <div className="flex items-center gap-1">
+   825→   825→                          {/* Progress ring */}
+   826→   826→                          <ProgressRing progress={calculatedProgress} size={44} strokeWidth={3} color={project.color} />
+   827→   827→                          {/* Actions */}
+   828→   828→                          <DropdownMenu>
+   829→   829→                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+   830→   830→                              <button
+   831→   831→                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+   832→   832→                              >
+   833→   833→                                <MoreHorizontal className="w-4 h-4" />
+   834→   834→                              </button>
+   835→   835→                            </DropdownMenuTrigger>
+   836→   836→                            <DropdownMenuContent align="end" dir="rtl">
+   837→   837→                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project) }}>
+   838→   838→                                <Pencil className="w-4 h-4 ml-2" />
+   839→   839→                                تعديل
+   840→   840→                              </DropdownMenuItem>
+   841→   841→                              <DropdownMenuSeparator />
+   842→   842→                              <DropdownMenuItem
+   843→   843→                                onClick={(e) => { e.stopPropagation(); deleteProject(project.id) }}
+   844→   844→                                className="text-red-500 focus:text-red-500"
+   845→   845→                              >
+   846→   846→                                <Trash2 className="w-4 h-4 ml-2" />
+   847→   847→                                حذف
+   848→   848→                              </DropdownMenuItem>
+   849→   849→                            </DropdownMenuContent>
+   850→   850→                          </DropdownMenu>
+   851→   851→                        </div>
+   852→   852→                      </div>
+   853→   853→
+   854→   854→                      {/* Name & Description */}
+   855→   855→                      <h3 className="text-base font-bold mb-1 truncate">{project.name}</h3>
+   856→   856→                      {project.description && (
+   857→   857→                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-4 flex-1">
+   858→   858→                          {project.description}
+   859→   859→                        </p>
+   860→   860→                      )}
+   861→   861→                      {!project.description && <div className="flex-1" />}
+   862→   862→
+   863→   863→                      {/* Bottom: Task count + status */}
+   864→   864→                      <div className="flex items-center justify-between pt-3 border-t border-border/50">
+   865→   865→                        <div className="flex items-center gap-3">
+   866→   866→                          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+   867→   867→                            <ListChecks className="w-3.5 h-3.5" />
+   868→   868→                            {taskCount} مهمة
+   869→   869→                          </span>
+   870→   870→                          {doneCount > 0 && (
+   871→   871→                            <span className="text-[11px] text-emerald-accent flex items-center gap-1">
+   872→   872→                              <CheckCircle2 className="w-3.5 h-3.5" />
+   873→   873→                              {doneCount} مكتمل
+   874→   874→                            </span>
+   875→   875→                          )}
+   876→   876→                        </div>
+   877→   877→                        <Badge
+   878→   878→                          variant="secondary"
+   879→   879→                          className={cn(
+   880→   880→                            'text-[10px] h-5 px-2 rounded-full font-medium',
+   881→   881→                            project.status === 'active' && 'bg-emerald-accent/10 text-emerald-accent',
+   882→   882→                            project.status === 'completed' && 'bg-gold/10 text-gold',
+   883→   883→                            project.status === 'archived' && 'bg-muted text-muted-foreground'
+   884→   884→                          )}
+   885→   885→                        >
+   886→   886→                          {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'مؤرشف'}
+   887→   887→                        </Badge>
+   888→   888→                      </div>
+   889→   889→
+   890→   890→                      {/* Progress bar */}
+   891→   891→                      <div className="mt-3">
+   892→   892→                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+   893→   893→                          <motion.div
+   894→   894→                            className="h-full rounded-full"
+   895→   895→                            style={{ backgroundColor: project.color }}
+   896→   896→                            initial={{ width: 0 }}
+   897→   897→                            animate={{ width: `${calculatedProgress}%` }}
+   898→   898→                            transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+   899→   899→                          />
+   900→   900→                        </div>
+   901→   901→                      </div>
+   902→   902→                    </div>
+   903→   903→                  </div>
+   904→   904→                </motion.div>
+   905→   905→              )
+   906→   906→            })}
+   907→   907→          </AnimatePresence>
+   908→   908→        </motion.div>
+   909→   909→      )}
+   910→   910→
+   911→   911→      {/* Summary stats at bottom */}
+   912→   912→      {projects.length > 0 && (
+   913→   913→        <motion.div
+   914→   914→          initial={{ opacity: 0, y: 12 }}
+   915→   915→          animate={{ opacity: 1, y: 0 }}
+   916→   916→          transition={{ delay: 0.3 }}
+   917→   917→          className="glass rounded-2xl p-5"
+   918→   918→        >
+   919→   919→          <h4 className="text-sm font-bold mb-3 flex items-center gap-2">
+   920→   920→            <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   921→   921→            ملخص المشاريع
+   922→   922→          </h4>
+   923→   923→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   924→   924→            {[
+   925→   925→              { label: 'إجمالي المشاريع', value: projects.length, color: 'text-foreground' },
+   926→   926→              { label: 'نشطة', value: projects.filter((p) => p.status === 'active').length, color: 'text-emerald-accent' },
+   927→   927→              { label: 'إجمالي المهام', value: tasks.filter((t) => t.projectId).length, color: 'text-gold' },
+   928→   928→              { label: 'مهام مكتملة', value: tasks.filter((t) => t.projectId && t.status === 'done').length, color: 'text-forest' },
+   929→   929→            ].map((s) => (
+   930→   930→              <div key={s.label} className="bg-muted/50 rounded-xl p-3 text-center">
+   931→   931→                <p className={cn('text-xl font-bold', s.color)}>{s.value}</p>
+   932→   932→                <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+   933→   933→              </div>
+   934→   934→            ))}
+   935→   935→          </div>
+   936→   936→        </motion.div>
+   937→   937→      )}
+   938→   938→    </div>
+   939→   939→  )
+   940→   940→}
+   941→   941→
+   942→   942→export default Projects

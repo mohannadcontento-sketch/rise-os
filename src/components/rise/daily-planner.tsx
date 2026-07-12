@@ -19,7 +19,6 @@ import {
   Briefcase,
   Utensils,
   Dumbbell,
-  MoonIcon,
   Flag,
   ChevronDown,
   ChevronUp,
@@ -27,13 +26,23 @@ import {
   Trash2,
   ListTodo,
   Highlighter,
+  StickyNote,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
 
@@ -65,9 +74,16 @@ interface PlannerData {
   priorities: string[]
 }
 
+interface QuickNote {
+  id: string
+  text: string
+  createdAt: string
+}
+
 /* ────────────── Constants ────────────── */
 
 const STORAGE_KEY = 'rise-daily-planner'
+const NOTES_STORAGE_KEY = 'rise-quick-notes'
 
 const SECTIONS: PlannerSection[] = [
   {
@@ -195,6 +211,21 @@ function savePlannerData(data: PlannerData) {
   }
 }
 
+function loadNotes(): QuickNote[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(NOTES_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveNotes(notes: QuickNote[]) {
+  try {
+    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes))
+  } catch { /* ignore */ }
+}
+
 /* ────────────── Quick Suggest Button ────────────── */
 
 function SuggestButton({
@@ -245,16 +276,23 @@ function EmptyState({ section }: { section: PlannerSection }) {
 function PlannerItemRow({
   item,
   section,
+  index,
   onToggle,
   onDelete,
   onTogglePriority,
 }: {
   item: PlannerItem
   section: PlannerSection
+  index: number
   onToggle: (id: string) => void
   onDelete: (id: string) => void
   onTogglePriority: (id: string) => void
 }) {
+  const createdHour = new Date(item.createdAt).getHours()
+  const period = createdHour < 12 ? 'ص' : 'م'
+  const displayHour = createdHour > 12 ? createdHour - 12 : createdHour === 0 ? 12 : createdHour
+  const timeStr = `${arabicNum(displayHour)}:${arabicNum(new Date(item.createdAt).getMinutes())} ${period}`
+
   return (
     <motion.div
       layout
@@ -263,10 +301,17 @@ function PlannerItemRow({
       exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
       className={cn(
         'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
+        index % 2 === 0 ? 'bg-muted/20' : 'bg-transparent',
         'hover:bg-muted/40',
         item.done && 'opacity-60'
       )}
     >
+      {/* Time indicator */}
+      <div className="flex items-center gap-1 shrink-0 w-12">
+        <Clock className="w-3 h-3 text-muted-foreground/40" />
+        <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">{timeStr}</span>
+      </div>
+
       {/* Drag handle (visual only) */}
       <div className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
         <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -453,7 +498,7 @@ function SectionCard({
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
             >
-              <CardContent className="p-3 space-y-1">
+              <CardContent className="p-3 space-y-0.5">
                 {/* Items list */}
                 <div className="min-h-[2rem]">
                   {items.length === 0 ? (
@@ -461,11 +506,12 @@ function SectionCard({
                   ) : (
                     <div className="space-y-0.5">
                       <AnimatePresence mode="popLayout">
-                        {items.map((item) => (
+                        {items.map((item, idx) => (
                           <PlannerItemRow
                             key={item.id}
                             item={item}
                             section={section}
+                            index={idx}
                             onToggle={onToggleItem}
                             onDelete={onDeleteItem}
                             onTogglePriority={onTogglePriority}
@@ -580,64 +626,32 @@ function TimelineView({
   onToggleItem: (id: string) => void
 }) {
   const currentHour = getCurrentHour()
-
-  // Map items to approximate hours
-  const getSectionForHour = (h: number): 'morning' | 'noon' | 'evening' | null => {
-    if (h >= 6 && h < 12) return 'morning'
-    if (h >= 12 && h < 17) return 'noon'
-    if (h >= 17 && h <= 22) return 'evening'
-    return null
-  }
-
-  const timelineHours = Array.from({ length: 17 }, (_, i) => i + 6) // 6AM to 10PM
+  const timelineHours = Array.from({ length: 17 }, (_, i) => i + 6)
 
   return (
     <div className="relative">
-      {/* Current time indicator */}
-      {currentHour >= 6 && currentHour <= 22 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute right-[3.5rem] z-10 pointer-events-none"
-          style={{ top: `${((currentHour - 6) / 17) * 100}%` }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-accent pulse-glow" />
-            <div className="w-px h-6 bg-emerald-accent/30" />
-          </div>
-        </motion.div>
-      )}
-
       <div className="space-y-0">
         {timelineHours.map((hour) => {
-          const section = getSectionForHour(hour)
           const isNow = hour === currentHour
-          const hourItems = section
-            ? items.filter((_, idx) => {
-                // Distribute items across their section's hours
-                const sectionItems = items.filter((item) => {
-                  const si = items.indexOf(item)
-                  return si >= 0
-                })
-                // Simple heuristic: assign items to hours within their section
-                const sectionStart = section === 'morning' ? 6 : section === 'noon' ? 12 : 17
-                const sectionItemsForSection = items.filter((item, idx) => {
-                  const itemHour = (sectionStart + (idx % 6)) 
-                  return itemHour === hour
-                })
-                return false // Simplified: don't show items in timeline, just hours
-              })
-            : []
 
           return (
             <div
               key={hour}
               className={cn(
-                'flex items-stretch gap-4 py-1.5 border-b border-border/20 last:border-0',
+                'flex items-stretch gap-4 py-1.5 border-b border-border/20 last:border-0 relative',
                 isNow && 'bg-emerald-accent/5 -mx-3 px-3 rounded-lg'
               )}
             >
-              <div className="w-14 shrink-0 text-left">
+              {/* Now line indicator */}
+              {isNow && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="absolute right-0 top-0 bottom-0 w-0.5 bg-emerald-accent"
+                />
+              )}
+              <div className="w-14 shrink-0 text-left flex items-center gap-1">
+                <Clock className="w-3 h-3 text-muted-foreground/30" />
                 <span className={cn(
                   'text-[11px] font-mono tabular-nums',
                   isNow ? 'text-emerald-accent font-bold' : 'text-muted-foreground/50'
@@ -672,6 +686,13 @@ export default function DailyPlanner() {
   const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
   const isFirstRender = useRef(true)
 
+  // Quick Notes
+  const [notes, setNotes] = useState<QuickNote[]>(() => loadNotes())
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [newNoteText, setNewNoteText] = useState('')
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editNoteText, setEditNoteText] = useState('')
+
   // Save to localStorage on changes (skip first render)
   useEffect(() => {
     if (isFirstRender.current) {
@@ -705,7 +726,6 @@ export default function DailyPlanner() {
       isPriority: false,
       createdAt: new Date().toISOString(),
     }
-    // Adjust createdAt hour to match section for proper categorization
     const adjustedItem = { ...newItem }
     if (sectionId === 'morning') {
       const d = new Date()
@@ -758,6 +778,39 @@ export default function DailyPlanner() {
       }
     })
   }, [])
+
+  // Note handlers
+  const handleAddNote = () => {
+    if (!newNoteText.trim()) return
+    const note: QuickNote = {
+      id: generateId(),
+      text: newNoteText.trim(),
+      createdAt: new Date().toISOString(),
+    }
+    const updated = [note, ...notes]
+    setNotes(updated)
+    saveNotes(updated)
+    setNewNoteText('')
+    setNoteDialogOpen(false)
+    toast.success('تمت إضافة الملاحظة')
+  }
+
+  const handleDeleteNote = (id: string) => {
+    const updated = notes.filter((n) => n.id !== id)
+    setNotes(updated)
+    saveNotes(updated)
+    toast.success('تم حذف الملاحظة')
+  }
+
+  const handleSaveNoteEdit = () => {
+    if (!editingNoteId || !editNoteText.trim()) return
+    const updated = notes.map((n) => n.id === editingNoteId ? { ...n, text: editNoteText.trim() } : n)
+    setNotes(updated)
+    saveNotes(updated)
+    setEditingNoteId(null)
+    setEditNoteText('')
+    toast.success('تم تحديث الملاحظة')
+  }
 
   const priorityItems = data.items.filter((item) => item.isPriority && !item.done)
   const totalItems = data.items.length
@@ -867,6 +920,7 @@ export default function DailyPlanner() {
                       key={item.id}
                       item={item}
                       section={SECTIONS[0]}
+                      index={0}
                       onToggle={toggleItem}
                       onDelete={deleteItem}
                       onTogglePriority={togglePriority}
@@ -988,6 +1042,134 @@ export default function DailyPlanner() {
             </div>
           </motion.div>
         ))}
+      </motion.div>
+
+      {/* ── Quick Notes Section ── */}
+      {notes.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          <Card className="glass overflow-hidden">
+            <div className="px-5 pt-4 pb-2 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-950/10 dark:to-transparent">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <StickyNote className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <h3 className="text-sm font-bold text-foreground">ملاحظات سريعة</h3>
+                  <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/30">
+                    {arabicNum(notes.length)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <CardContent className="p-3 space-y-2">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {notes.map((note) => (
+                  <motion.div
+                    key={note.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative group p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-800/20"
+                  >
+                    {editingNoteId === note.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editNoteText}
+                          onChange={(e) => setEditNoteText(e.target.value)}
+                          rows={2}
+                          className="text-sm resize-none"
+                        />
+                        <div className="flex gap-1">
+                          <Button size="sm" onClick={handleSaveNoteEdit} className="h-6 text-[10px] px-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">حفظ</Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingNoteId(null)} className="h-6 text-[10px] px-2">إلغاء</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-foreground leading-relaxed">{note.text}</p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-2">
+                          {new Date(note.createdAt).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <div className="absolute top-2 left-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => { setEditingNoteId(note.id); setEditNoteText(note.text) }}
+                            className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground transition-colors"
+                          >
+                            <Highlighter className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* ── Floating Quick Note Button ── */}
+      <motion.div
+        className="fixed bottom-6 left-6 z-50"
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', delay: 0.5 }}
+      >
+        <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+          <DialogTrigger asChild>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 text-white shadow-xl shadow-amber-500/30 flex items-center justify-center relative"
+            >
+              <StickyNote className="w-6 h-6" />
+              {notes.length > 0 && (
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {notes.length}
+                </div>
+              )}
+            </motion.button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <StickyNote className="w-5 h-5 text-amber-500" />
+                ملاحظة سريعة
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <Textarea
+                placeholder="اكتب ملاحظتك السريعة هنا..."
+                value={newNoteText}
+                onChange={(e) => setNewNoteText(e.target.value)}
+                rows={4}
+                className="text-sm resize-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddNote()
+                }}
+              />
+              <Button
+                onClick={handleAddNote}
+                className="w-full bg-amber-500 hover:bg-amber-500/90 text-white"
+                disabled={!newNoteText.trim()}
+              >
+                <StickyNote className="w-4 h-4 ml-2" />
+                حفظ الملاحظة
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </motion.div>
     </div>
   )

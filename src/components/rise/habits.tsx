@@ -197,6 +197,7 @@ export function HabitsView() {
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [flashCard, setFlashCard] = useState<string | null>(null)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -231,6 +232,10 @@ export function HabitsView() {
     async (habitId: string) => {
       const existingLog = logs.find((l) => l.habitId === habitId && l.date === todayStr)
       const newCompleted = existingLog ? !existingLog.completed : true
+
+      // Flash animation
+      setFlashCard(habitId)
+      setTimeout(() => setFlashCard(null), 400)
 
       // Optimistic update
       if (existingLog) {
@@ -534,8 +539,10 @@ export function HabitsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
+            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+              {/* Gradient border effect */}
+              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
+              <CardContent className="p-4 flex items-center gap-3 relative">
                 <div className="w-9 h-9 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
                   <Target className="w-4.5 h-4.5 text-emerald-accent" />
                 </div>
@@ -552,8 +559,9 @@ export function HabitsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.06 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
+            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
+              <CardContent className="p-4 flex items-center gap-3 relative">
                 <div className="w-9 h-9 rounded-xl bg-gold/10 flex items-center justify-center">
                   <Zap className="w-4.5 h-4.5 text-gold" />
                 </div>
@@ -570,8 +578,9 @@ export function HabitsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.12 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
+            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
+              <CardContent className="p-4 flex items-center gap-3 relative">
                 <div className="w-9 h-9 rounded-xl bg-forest/10 flex items-center justify-center">
                   <Flame className="w-4.5 h-4.5 text-forest" />
                 </div>
@@ -588,8 +597,9 @@ export function HabitsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.18 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
+            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
+              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-forest/20 pointer-events-none" />
+              <CardContent className="p-4 flex items-center gap-3 relative">
                 <div className="w-9 h-9 rounded-xl bg-gold-light/20 flex items-center justify-center">
                   <Crown className="w-4.5 h-4.5 text-gold" />
                 </div>
@@ -626,6 +636,7 @@ export function HabitsView() {
                   )
                   const isCompleted = todayLog?.completed ?? false
                   const streak = calcStreak(logs, habit.id)
+                  const isFlashing = flashCard === habit.id
 
                   return (
                     <motion.div
@@ -649,6 +660,20 @@ export function HabitsView() {
                             : undefined
                         }
                       >
+                        {/* Flash overlay */}
+                        <AnimatePresence>
+                          {isFlashing && (
+                            <motion.div
+                              initial={{ opacity: 0.5 }}
+                              animate={{ opacity: 0 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.4 }}
+                              className="absolute inset-0 z-10 pointer-events-none rounded-2xl"
+                              style={{ backgroundColor: isCompleted ? habit.color : 'transparent' }}
+                            />
+                          )}
+                        </AnimatePresence>
+
                         <CardContent className="p-4 relative">
                           {/* Color accent strip */}
                           <div
@@ -685,9 +710,12 @@ export function HabitsView() {
                             <p className="text-xs font-semibold truncate">{habit.name}</p>
                           </div>
 
-                          {/* Streak */}
+                          {/* Streak with 🔥 for streak > 3 */}
                           {streak.current > 0 && (
                             <div className="flex items-center justify-center gap-1 mb-3">
+                              {streak.current > 3 && (
+                                <span className="text-sm">🔥</span>
+                              )}
                               <Flame
                                 className="w-3.5 h-3.5"
                                 style={{ color: habit.color }}
@@ -702,34 +730,54 @@ export function HabitsView() {
                             </div>
                           )}
 
-                          {/* Toggle button */}
-                          <motion.button
-                            whileTap={{ scale: 0.92 }}
-                            onClick={() => toggleTodayHabit(habit.id)}
-                            className={cn(
-                              'w-full py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5',
-                              isCompleted
-                                ? 'text-white shadow-md'
-                                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                          {/* Toggle button with pulsing ring when completed */}
+                          <div className="relative">
+                            {isCompleted && (
+                              <motion.div
+                                className="absolute inset-0 rounded-xl pointer-events-none"
+                                style={{ borderColor: habit.color }}
+                                animate={{
+                                  boxShadow: [
+                                    `0 0 0 0px ${habit.color}30`,
+                                    `0 0 0 6px ${habit.color}10`,
+                                    `0 0 0 10px ${habit.color}00`,
+                                  ],
+                                }}
+                                transition={{
+                                  duration: 2,
+                                  repeat: Infinity,
+                                  ease: 'easeOut',
+                                }}
+                              />
                             )}
-                            style={
-                              isCompleted
-                                ? { backgroundColor: habit.color }
-                                : undefined
-                            }
-                          >
-                            {isCompleted ? (
-                              <>
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                تم!
-                              </>
-                            ) : (
-                              <>
-                                <Circle className="w-3.5 h-3.5" />
-                                إتمام
-                              </>
-                            )}
-                          </motion.button>
+                            <motion.button
+                              whileTap={{ scale: 0.92 }}
+                              onClick={() => toggleTodayHabit(habit.id)}
+                              className={cn(
+                                'w-full py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5 relative z-10',
+                                isCompleted
+                                  ? 'text-white shadow-md'
+                                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                              )}
+                              style={
+                                isCompleted
+                                  ? { backgroundColor: habit.color }
+                                  : undefined
+                              }
+                            >
+                              {isCompleted ? (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  تم!
+                                </>
+                              ) : (
+                                <>
+                                  <Circle className="w-3.5 h-3.5" />
+                                  إتمام
+                                </>
+                              )}
+                            </motion.button>
+                          </div>
 
                           {/* XP badge */}
                           <div className="flex items-center justify-center gap-1 mt-2">
@@ -773,6 +821,9 @@ export function HabitsView() {
                         <span className="text-xs font-semibold">{habit.name}</span>
                         <div className="flex-1" />
                         <div className="flex items-center gap-1">
+                          {calcStreak(logs, habit.id).current > 3 && (
+                            <span className="text-xs">🔥</span>
+                          )}
                           <Flame className="w-3 h-3" style={{ color: habit.color }} />
                           <span className="text-[10px] font-medium" style={{ color: habit.color }}>
                             {calcStreak(logs, habit.id).current}
@@ -829,12 +880,14 @@ export function HabitsView() {
                                   return (
                                     <Tooltip key={`${weekIdx}-${daySlot}`}>
                                       <TooltipTrigger asChild>
-                                        <div
+                                        <motion.div
+                                          whileHover={{ scale: 1.3, zIndex: 10 }}
+                                          transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                                           className={cn(
-                                            'w-[14px] h-[14px] rounded-sm transition-colors duration-200',
+                                            'w-[14px] h-[14px] rounded-sm transition-all duration-300 cursor-default',
                                             dayInWeek ? `heat-${heatLevel}` : 'bg-transparent',
                                             isToday &&
-                                              'ring-1 ring-foreground/30 ring-offset-1 ring-offset-background'
+                                              'ring-2 ring-emerald-accent ring-offset-1 ring-offset-background shadow-[0_0_8px_var(--color-emerald-accent)]'
                                           )}
                                         />
                                       </TooltipTrigger>
@@ -870,7 +923,7 @@ export function HabitsView() {
               <span className="text-[10px] text-muted-foreground">أقل</span>
               <div className="flex gap-0.5">
                 {[0, 1, 2, 3, 4].map((level) => (
-                  <div key={level} className={cn('w-3 h-3 rounded-sm', `heat-${level}`)} />
+                  <div key={level} className={cn('w-3 h-3 rounded-sm transition-colors duration-300', `heat-${level}`)} />
                 ))}
               </div>
               <span className="text-[10px] text-muted-foreground">أكثر</span>

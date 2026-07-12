@@ -1,0 +1,1043 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Plus,
+     7→     7→  Search,
+     8→     8→  List,
+     9→     9→  LayoutGrid,
+    10→    10→  CalendarDays,
+    11→    11→  Clock,
+    12→    12→  Zap,
+    13→    13→  Trash2,
+    14→    14→  ChevronDown,
+    15→    15→  ChevronUp,
+    16→    16→  ChevronLeft,
+    17→    17→  ChevronRight,
+    18→    18→  Filter,
+    19→    19→  MoreHorizontal,
+    20→    20→  CalendarClock,
+    21→    21→  CheckCircle2,
+    22→    22→  Circle,
+    23→    23→  Loader2,
+    24→    24→  Inbox,
+    25→    25→  Sparkles,
+    26→    26→} from 'lucide-react'
+    27→    27→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    28→    28→import { Button } from '@/components/ui/button'
+    29→    29→import { Badge } from '@/components/ui/badge'
+    30→    30→import { Checkbox } from '@/components/ui/checkbox'
+    31→    31→import { Input } from '@/components/ui/input'
+    32→    32→import { Skeleton } from '@/components/ui/skeleton'
+    33→    33→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    34→    34→import {
+    35→    35→  Dialog,
+    36→    36→  DialogContent,
+    37→    37→  DialogHeader,
+    38→    38→  DialogTitle,
+    39→    39→  DialogTrigger,
+    40→    40→  DialogFooter,
+    41→    41→  DialogClose,
+    42→    42→} from '@/components/ui/dialog'
+    43→    43→import {
+    44→    44→  Select,
+    45→    45→  SelectContent,
+    46→    46→  SelectItem,
+    47→    47→  SelectTrigger,
+    48→    48→  SelectValue,
+    49→    49→} from '@/components/ui/select'
+    50→    50→import {
+    51→    51→  DropdownMenu,
+    52→    52→  DropdownMenuContent,
+    53→    53→  DropdownMenuItem,
+    54→    54→  DropdownMenuTrigger,
+    55→    55→  DropdownMenuSeparator,
+    56→    56→} from '@/components/ui/dropdown-menu'
+    57→    57→import { Label } from '@/components/ui/label'
+    58→    58→import { Textarea } from '@/components/ui/textarea'
+    59→    59→import { cn } from '@/lib/utils'
+    60→    60→import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
+    61→    61→import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
+    62→    62→import { ar } from 'date-fns/locale'
+    63→    63→
+    64→    64→/* ────────────── Types ────────────── */
+    65→    65→
+    66→    66→interface SubTask {
+    67→    67→  id: string
+    68→    68→  title: string
+    69→    69→  completed: boolean
+    70→    70→}
+    71→    71→
+    72→    72→interface Task {
+    73→    73→  id: string
+    74→    74→  title: string
+    75→    75→  description?: string | null
+    76→    76→  status: string
+    77→    77→  priority: string
+    78→    78→  label?: string | null
+    79→    79→  projectId?: string | null
+    80→    80→  project?: { name: string; color: string } | null
+    81→    81→  dueDate?: string | null
+    82→    82→  xpReward: number
+    83→    83→  completedAt?: string | null
+    84→    84→  subtasks: SubTask[]
+    85→    85→  order: number
+    86→    86→}
+    87→    87→
+    88→    88→interface Project {
+    89→    89→  id: string
+    90→    90→  name: string
+    91→    91→  color: string
+    92→    92→}
+    93→    93→
+    94→    94→type ViewType = 'list' | 'board' | 'calendar'
+    95→    95→
+    96→    96→const STATUSES = ['todo', 'in_progress', 'done'] as const
+    97→    97→
+    98→    98→/* ────────────── Animation Variants ────────────── */
+    99→    99→
+   100→   100→const containerVariants = {
+   101→   101→  hidden: { opacity: 0 },
+   102→   102→  visible: {
+   103→   103→    opacity: 1,
+   104→   104→    transition: { staggerChildren: 0.04 },
+   105→   105→  },
+   106→   106→}
+   107→   107→
+   108→   108→const itemVariants = {
+   109→   109→  hidden: { opacity: 0, y: 12, scale: 0.98 },
+   110→   110→  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] } },
+   111→   111→  exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
+   112→   112→}
+   113→   113→
+   114→   114→const cardHover = { scale: 1.01, transition: { duration: 0.2 } }
+   115→   115→
+   116→   116→/* ────────────── Priority Dot ────────────── */
+   117→   117→
+   118→   118→const priorityDotColors: Record<string, string> = {
+   119→   119→  urgent: 'bg-red-500',
+   120→   120→  high: 'bg-orange-500',
+   121→   121→  medium: 'bg-gold',
+   122→   122→  low: 'bg-blue-500',
+   123→   123→}
+   124→   124→
+   125→   125→/* ────────────── Component ────────────── */
+   126→   126→
+   127→   127→export function Tasks() {
+   128→   128→  const [tasks, setTasks] = useState<Task[]>([])
+   129→   129→  const [projects, setProjects] = useState<Project[]>([])
+   130→   130→  const [loading, setLoading] = useState(true)
+   131→   131→  const [view, setView] = useState<ViewType>('list')
+   132→   132→  const [addOpen, setAddOpen] = useState(false)
+   133→   133→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   134→   134→  const [searchQuery, setSearchQuery] = useState('')
+   135→   135→
+   136→   136→  // Filters
+   137→   137→  const [filterPriority, setFilterPriority] = useState<string>('all')
+   138→   138→  const [filterProject, setFilterProject] = useState<string>('all')
+   139→   139→  const [filterStatus, setFilterStatus] = useState<string>('all')
+   140→   140→
+   141→   141→  // Add task form
+   142→   142→  const [formTitle, setFormTitle] = useState('')
+   143→   143→  const [formDesc, setFormDesc] = useState('')
+   144→   144→  const [formPriority, setFormPriority] = useState('medium')
+   145→   145→  const [formProject, setFormProject] = useState<string>('none')
+   146→   146→  const [formDueDate, setFormDueDate] = useState('')
+   147→   147→  const [submitting, setSubmitting] = useState(false)
+   148→   148→
+   149→   149→  // Calendar state
+   150→   150→  const [calendarMonth, setCalendarMonth] = useState(new Date())
+   151→   151→
+   152→   152→  const fetchData = useCallback(async () => {
+   153→   153→    try {
+   154→   154→      const res = await fetch('/api/rise/tasks')
+   155→   155→      const data = await res.json()
+   156→   156→      setTasks(data.tasks || [])
+   157→   157→      setProjects(data.projects || [])
+   158→   158→    } catch {
+   159→   159→      /* ignore */
+   160→   160→    } finally {
+   161→   161→      setLoading(false)
+   162→   162→    }
+   163→   163→  }, [])
+   164→   164→
+   165→   165→  useEffect(() => {
+   166→   166→    fetchData()
+   167→   167→  }, [fetchData])
+   168→   168→
+   169→   169→  /* ── Filtering ── */
+   170→   170→  const filteredTasks = useMemo(() => {
+   171→   171→    return tasks.filter((t) => {
+   172→   172→      if (filterPriority !== 'all' && t.priority !== filterPriority) return false
+   173→   173→      if (filterProject !== 'all' && t.projectId !== filterProject) return false
+   174→   174→      if (filterStatus !== 'all' && t.status !== filterStatus) return false
+   175→   175→      if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
+   176→   176→      return true
+   177→   177→    })
+   178→   178→  }, [tasks, filterPriority, filterProject, filterStatus, searchQuery])
+   179→   179→
+   180→   180→  const groupedTasks = useMemo(() => {
+   181→   181→    const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
+   182→   182→    for (const t of filteredTasks) {
+   183→   183→      if (groups[t.status]) groups[t.status].push(t)
+   184→   184→    }
+   185→   185→    return groups
+   186→   186→  }, [filteredTasks])
+   187→   187→
+   188→   188→  /* ── Mutations ── */
+   189→   189→  const toggleTask = async (task: Task) => {
+   190→   190→    const isDone = task.status === 'done'
+   191→   191→    const newStatus = isDone ? 'todo' : 'done'
+   192→   192→    const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
+   193→   193→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   194→   194→    try {
+   195→   195→      await fetch('/api/rise/tasks', {
+   196→   196→        method: 'PUT',
+   197→   197→        headers: { 'Content-Type': 'application/json' },
+   198→   198→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   199→   199→      })
+   200→   200→    } catch {
+   201→   201→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   202→   202→    }
+   203→   203→  }
+   204→   204→
+   205→   205→  const moveTask = async (task: Task, newStatus: string) => {
+   206→   206→    const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
+   207→   207→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   208→   208→    try {
+   209→   209→      await fetch('/api/rise/tasks', {
+   210→   210→        method: 'PUT',
+   211→   211→        headers: { 'Content-Type': 'application/json' },
+   212→   212→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   213→   213→      })
+   214→   214→    } catch {
+   215→   215→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   216→   216→    }
+   217→   217→  }
+   218→   218→
+   219→   219→  const deleteTask = async (taskId: string) => {
+   220→   220→    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+   221→   221→    try {
+   222→   222→      await fetch(`/api/rise/tasks?id=${taskId}`, { method: 'DELETE' })
+   223→   223→    } catch {
+   224→   224→      fetchData()
+   225→   225→    }
+   226→   226→  }
+   227→   227→
+   228→   228→  const toggleSubtask = async (task: Task, subtaskId: string, completed: boolean) => {
+   229→   229→    const optimistic = {
+   230→   230→      ...task,
+   231→   231→      subtasks: task.subtasks.map((s) => (s.id === subtaskId ? { ...s, completed: !completed } : s)),
+   232→   232→    }
+   233→   233→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   234→   234→    try {
+   235→   235→      await fetch('/api/rise/tasks', {
+   236→   236→        method: 'PUT',
+   237→   237→        headers: { 'Content-Type': 'application/json' },
+   238→   238→        body: JSON.stringify({
+   239→   239→          id: task.id,
+   240→   240→          subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
+   241→   241→        }),
+   242→   242→      })
+   243→   243→    } catch {
+   244→   244→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   245→   245→    }
+   246→   246→  }
+   247→   247→
+   248→   248→  const createTask = async () => {
+   249→   249→    if (!formTitle.trim()) return
+   250→   250→    setSubmitting(true)
+   251→   251→    try {
+   252→   252→      const body: Record<string, unknown> = {
+   253→   253→        title: formTitle.trim(),
+   254→   254→        description: formDesc.trim() || null,
+   255→   255→        priority: formPriority,
+   256→   256→        dueDate: formDueDate || null,
+   257→   257→      }
+   258→   258→      if (formProject !== 'none') body.projectId = formProject
+   259→   259→      await fetch('/api/rise/tasks', {
+   260→   260→        method: 'POST',
+   261→   261→        headers: { 'Content-Type': 'application/json' },
+   262→   262→        body: JSON.stringify(body),
+   263→   263→      })
+   264→   264→      setFormTitle('')
+   265→   265→      setFormDesc('')
+   266→   266→      setFormPriority('medium')
+   267→   267→      setFormProject('none')
+   268→   268→      setFormDueDate('')
+   269→   269→      setAddOpen(false)
+   270→   270→      fetchData()
+   271→   271→    } catch {
+   272→   272→      /* ignore */
+   273→   273→    } finally {
+   274→   274→      setSubmitting(false)
+   275→   275→    }
+   276→   276→  }
+   277→   277→
+   278→   278→  /* ── Calendar helpers ── */
+   279→   279→  const calendarDays = useMemo(() => {
+   280→   280→    const monthStart = startOfMonth(calendarMonth)
+   281→   281→    const monthEnd = endOfMonth(calendarMonth)
+   282→   282→    const start = startOfWeek(monthStart, { weekStartsOn: 6 })
+   283→   283→    const end = startOfWeek(monthEnd, { weekStartsOn: 6 })
+   284→   284→    // Go to end of that week
+   285→   285→    const finalEnd = addDays(end, 6)
+   286→   286→    return eachDayOfInterval({ start, end })
+   287→   287→  }, [calendarMonth])
+   288→   288→
+   289→   289→  const getTasksForDate = (date: Date) => {
+   290→   290→    const dateStr = format(date, 'yyyy-MM-dd')
+   291→   291→    return filteredTasks.filter((t) => t.dueDate === dateStr && t.status !== 'done')
+   292→   292→  }
+   293→   293→
+   294→   294→  const weekDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
+   295→   295→
+   296→   296→  /* ── Status column config ── */
+   297→   297→  const statusColumns = [
+   298→   298→    { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-blue-500', bg: 'bg-blue-500/5' },
+   299→   299→    { key: 'in_progress', label: 'قيد التنفيذ', icon: Clock, color: 'text-gold', bg: 'bg-gold/5' },
+   300→   300→    { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/5' },
+   301→   301→  ]
+   302→   302→
+   303→   303→  /* ────────────── Render: Task Item (List) ────────────── */
+   304→   304→  const renderTaskItem = (task: Task, index: number) => {
+   305→   305→    const isExpanded = expandedId === task.id
+   306→   306→    const isDone = task.status === 'done'
+   307→   307→    const completedSubs = task.subtasks.filter((s) => s.completed).length
+   308→   308→
+   309→   309→    return (
+   310→   310→      <motion.div
+   311→   311→        key={task.id}
+   312→   312→        variants={itemVariants}
+   313→   313→        layout
+   314→   314→        className="group"
+   315→   315→      >
+   316→   316→        <div
+   317→   317→          className={cn(
+   318→   318→            'glass rounded-2xl p-4 transition-all duration-200',
+   319→   319→            'hover:shadow-md hover:shadow-emerald-accent/5',
+   320→   320→            isDone && 'opacity-60'
+   321→   321→          )}
+   322→   322→        >
+   323→   323→          <div className="flex items-start gap-3">
+   324→   324→            {/* Checkbox */}
+   325→   325→            <div className="pt-0.5">
+   326→   326→              <Checkbox
+   327→   327→                checked={isDone}
+   328→   328→                onCheckedChange={() => toggleTask(task)}
+   329→   329→                className={cn(
+   330→   330→                  'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+   331→   331→                )}
+   332→   332→              />
+   333→   333→            </div>
+   334→   334→
+   335→   335→            {/* Content */}
+   336→   336→            <div className="flex-1 min-w-0">
+   337→   337→              <div className="flex items-center gap-2 flex-wrap">
+   338→   338→                <button
+   339→   339→                  onClick={() => setExpandedId(isExpanded ? null : task.id)}
+   340→   340→                  className={cn(
+   341→   341→                    'text-sm font-semibold text-right transition-colors',
+   342→   342→                    isDone ? 'line-through text-muted-foreground' : 'text-foreground'
+   343→   343→                  )}
+   344→   344→                >
+   345→   345→                  {task.title}
+   346→   346→                </button>
+   347→   347→
+   348→   348→                {/* Priority badge */}
+   349→   349→                <Badge
+   350→   350→                  variant="secondary"
+   351→   351→                  className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   352→   352→                >
+   353→   353→                  <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+   354→   354→                  {priorityLabels[task.priority]}
+   355→   355→                </Badge>
+   356→   356→
+   357→   357→                {/* Project dot */}
+   358→   358→                {task.project && (
+   359→   359→                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   360→   360→                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+   361→   361→                    {task.project.name}
+   362→   362→                  </span>
+   363→   363→                )}
+   364→   364→
+   365→   365→                {/* XP */}
+   366→   366→                {task.xpReward > 0 && (
+   367→   367→                  <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
+   368→   368→                    <Zap className="w-3 h-3" />
+   369→   369→                    {task.xpReward}
+   370→   370→                  </span>
+   371→   371→                )}
+   372→   372→              </div>
+   373→   373→
+   374→   374→              {/* Meta row */}
+   375→   375→              <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+   376→   376→                {task.dueDate && (
+   377→   377→                  <span className="flex items-center gap-1">
+   378→   378→                    <CalendarClock className="w-3 h-3" />
+   379→   379→                    {formatDateShort(task.dueDate)}
+   380→   380→                  </span>
+   381→   381→                )}
+   382→   382→                {task.subtasks.length > 0 && (
+   383→   383→                  <span className="flex items-center gap-1">
+   384→   384→                    <CheckCircle2 className="w-3 h-3" />
+   385→   385→                    {completedSubs}/{task.subtasks.length}
+   386→   386→                  </span>
+   387→   387→                )}
+   388→   388→              </div>
+   389→   389→
+   390→   390→              {/* Expanded content */}
+   391→   391→              <AnimatePresence>
+   392→   392→                {isExpanded && (
+   393→   393→                  <motion.div
+   394→   394→                    initial={{ height: 0, opacity: 0 }}
+   395→   395→                    animate={{ height: 'auto', opacity: 1 }}
+   396→   396→                    exit={{ height: 0, opacity: 0 }}
+   397→   397→                    transition={{ duration: 0.2 }}
+   398→   398→                    className="overflow-hidden"
+   399→   399→                  >
+   400→   400→                    {task.description && (
+   401→   401→                      <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{task.description}</p>
+   402→   402→                    )}
+   403→   403→                    {task.subtasks.length > 0 && (
+   404→   404→                      <div className="mt-3 space-y-1.5">
+   405→   405→                        {task.subtasks.map((sub) => (
+   406→   406→                          <label key={sub.id} className="flex items-center gap-2 cursor-pointer group/sub">
+   407→   407→                            <Checkbox
+   408→   408→                              checked={sub.completed}
+   409→   409→                              onCheckedChange={() => toggleSubtask(task, sub.id, sub.completed)}
+   410→   410→                              className="w-4 h-4 rounded-md data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   411→   411→                            />
+   412→   412→                            <span
+   413→   413→                              className={cn(
+   414→   414→                                'text-xs transition-colors',
+   415→   415→                                sub.completed ? 'line-through text-muted-foreground' : 'text-foreground/80'
+   416→   416→                              )}
+   417→   417→                            >
+   418→   418→                              {sub.title}
+   419→   419→                            </span>
+   420→   420→                          </label>
+   421→   421→                        ))}
+   422→   422→                      </div>
+   423→   423→                    )}
+   424→   424→                  </motion.div>
+   425→   425→                )}
+   426→   426→              </AnimatePresence>
+   427→   427→            </div>
+   428→   428→
+   429→   429→            {/* Actions */}
+   430→   430→            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   431→   431→              <button
+   432→   432→                onClick={() => setExpandedId(isExpanded ? null : task.id)}
+   433→   433→                className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
+   434→   434→              >
+   435→   435→                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+   436→   436→              </button>
+   437→   437→              <DropdownMenu>
+   438→   438→                <DropdownMenuTrigger asChild>
+   439→   439→                  <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+   440→   440→                    <MoreHorizontal className="w-4 h-4" />
+   441→   441→                  </button>
+   442→   442→                </DropdownMenuTrigger>
+   443→   443→                <DropdownMenuContent align="end" dir="rtl">
+   444→   444→                  <DropdownMenuItem
+   445→   445→                    onClick={() => {
+   446→   446→                      const nextIdx = (STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length
+   447→   447→                      moveTask(task, STATUSES[nextIdx])
+   448→   448→                    }}
+   449→   449→                  >
+   450→   450→                    نقل إلى: {statusLabels[STATUSES[(STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length]]}
+   451→   451→                  </DropdownMenuItem>
+   452→   452→                  <DropdownMenuSeparator />
+   453→   453→                  <DropdownMenuItem
+   454→   454→                    onClick={() => deleteTask(task.id)}
+   455→   455→                    className="text-red-500 focus:text-red-500"
+   456→   456→                  >
+   457→   457→                    <Trash2 className="w-4 h-4 ml-2" />
+   458→   458→                    حذف
+   459→   459→                  </DropdownMenuItem>
+   460→   460→                </DropdownMenuContent>
+   461→   461→              </DropdownMenu>
+   462→   462→            </div>
+   463→   463→          </div>
+   464→   464→        </div>
+   465→   465→      </motion.div>
+   466→   466→    )
+   467→   467→  }
+   468→   468→
+   469→   469→  /* ────────────── Render: Board Card ────────────── */
+   470→   470→  const renderBoardCard = (task: Task) => {
+   471→   471→    const isDone = task.status === 'done'
+   472→   472→    const completedSubs = task.subtasks.filter((s) => s.completed).length
+   473→   473→
+   474→   474→    return (
+   475→   475→      <motion.div
+   476→   476→        key={task.id}
+   477→   477→        variants={itemVariants}
+   478→   478→        layout
+   479→   479→        whileHover={cardHover}
+   480→   480→      >
+   481→   481→        <div
+   482→   482→          className={cn(
+   483→   483→            'glass rounded-2xl p-4 transition-all duration-200 cursor-pointer',
+   484→   484→            'hover:shadow-md hover:shadow-emerald-accent/5',
+   485→   485→            isDone && 'opacity-60'
+   486→   486→          )}
+   487→   487→          onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
+   488→   488→        >
+   489→   489→          <div className="flex items-start justify-between gap-2 mb-2">
+   490→   490→            <Badge
+   491→   491→              variant="secondary"
+   492→   492→              className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   493→   493→            >
+   494→   494→              <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+   495→   495→              {priorityLabels[task.priority]}
+   496→   496→            </Badge>
+   497→   497→            <DropdownMenu>
+   498→   498→              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+   499→   499→                <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+   500→   500→                  <MoreHorizontal className="w-3.5 h-3.5" />
+   501→   501→                </button>
+   502→   502→              </DropdownMenuTrigger>
+   503→   503→              <DropdownMenuContent align="end" dir="rtl">
+   504→   504→                {statusColumns
+   505→   505→                  .filter((c) => c.key !== task.status)
+   506→   506→                  .map((col) => (
+   507→   507→                    <DropdownMenuItem key={col.key} onClick={() => moveTask(task, col.key)}>
+   508→   508→                      نقل إلى: {col.label}
+   509→   509→                    </DropdownMenuItem>
+   510→   510→                  ))}
+   511→   511→                <DropdownMenuSeparator />
+   512→   512→                <DropdownMenuItem
+   513→   513→                  onClick={() => deleteTask(task.id)}
+   514→   514→                  className="text-red-500 focus:text-red-500"
+   515→   515→                >
+   516→   516→                  <Trash2 className="w-4 h-4 ml-2" />
+   517→   517→                  حذف
+   518→   518→                </DropdownMenuItem>
+   519→   519→              </DropdownMenuContent>
+   520→   520→            </DropdownMenu>
+   521→   521→          </div>
+   522→   522→
+   523→   523→          <p className={cn('text-sm font-semibold text-right', isDone && 'line-through text-muted-foreground')}>
+   524→   524→            {task.title}
+   525→   525→          </p>
+   526→   526→
+   527→   527→          {task.description && (
+   528→   528→            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
+   529→   529→          )}
+   530→   530→
+   531→   531→          <div className="flex items-center gap-2 mt-3 flex-wrap">
+   532→   532→            {task.project && (
+   533→   533→              <span className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5">
+   534→   534→                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+   535→   535→                {task.project.name}
+   536→   536→              </span>
+   537→   537→            )}
+   538→   538→            {task.dueDate && (
+   539→   539→              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   540→   540→                <CalendarClock className="w-3 h-3" />
+   541→   541→                {formatDateShort(task.dueDate)}
+   542→   542→              </span>
+   543→   543→            )}
+   544→   544→          </div>
+   545→   545→
+   546→   546→          {/* Subtask progress bar */}
+   547→   547→          {task.subtasks.length > 0 && (
+   548→   548→            <div className="mt-3">
+   549→   549→              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+   550→   550→                <span>المهام الفرعية</span>
+   551→   551→                <span>{completedSubs}/{task.subtasks.length}</span>
+   552→   552→              </div>
+   553→   553→              <div className="h-1 rounded-full bg-muted overflow-hidden">
+   554→   554→                <motion.div
+   555→   555→                  className="h-full rounded-full bg-emerald-accent"
+   556→   556→                  initial={false}
+   557→   557→                  animate={{ width: `${task.subtasks.length > 0 ? (completedSubs / task.subtasks.length) * 100 : 0}%` }}
+   558→   558→                  transition={{ duration: 0.3 }}
+   559→   559→                />
+   560→   560→              </div>
+   561→   561→            </div>
+   562→   562→          )}
+   563→   563→
+   564→   564→          {/* XP */}
+   565→   565→          <div className="flex items-center justify-between mt-3">
+   566→   566→            <span className="flex items-center gap-0.5 text-[11px] text-gold font-medium">
+   567→   567→              <Zap className="w-3 h-3" />
+   568→   568→              {task.xpReward} خبرة
+   569→   569→            </span>
+   570→   570→            <Checkbox
+   571→   571→              checked={isDone}
+   572→   572→              onCheckedChange={(e) => {
+   573→   573→                e.stopPropagation()
+   574→   574→                toggleTask(task)
+   575→   575→              }}
+   576→   576→              className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   577→   577→            />
+   578→   578→          </div>
+   579→   579→        </div>
+   580→   580→      </motion.div>
+   581→   581→    )
+   582→   582→  }
+   583→   583→
+   584→   584→  /* ────────────── Render: Loading ────────────── */
+   585→   585→  if (loading) {
+   586→   586→    return (
+   587→   587→      <div className="space-y-4">
+   588→   588→        <div className="flex items-center gap-3">
+   589→   589→          <Skeleton className="h-10 w-64 rounded-xl" />
+   590→   590→          <Skeleton className="h-10 w-10 rounded-xl" />
+   591→   591→        </div>
+   592→   592→        <div className="flex gap-2">
+   593→   593→          <Skeleton className="h-8 w-20 rounded-lg" />
+   594→   594→          <Skeleton className="h-8 w-20 rounded-lg" />
+   595→   595→          <Skeleton className="h-8 w-20 rounded-lg" />
+   596→   596→        </div>
+   597→   597→        <div className="space-y-3">
+   598→   598→          {Array.from({ length: 5 }).map((_, i) => (
+   599→   599→            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+   600→   600→          ))}
+   601→   601→        </div>
+   602→   602→      </div>
+   603→   603→    )
+   604→   604→  }
+   605→   605→
+   606→   606→  /* ────────────── Render: Main ────────────── */
+   607→   607→  return (
+   608→   608→    <div className="space-y-5">
+   609→   609→      {/* Header bar */}
+   610→   610→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   611→   611→        {/* Search */}
+   612→   612→        <div className="relative flex-1 w-full sm:max-w-xs">
+   613→   613→          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   614→   614→          <Input
+   615→   615→            placeholder="ابحث في المهام..."
+   616→   616→            value={searchQuery}
+   617→   617→            onChange={(e) => setSearchQuery(e.target.value)}
+   618→   618→            className="pr-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
+   619→   619→          />
+   620→   620→        </div>
+   621→   621→
+   622→   622→        <div className="flex items-center gap-2">
+   623→   623→          {/* Filters */}
+   624→   624→          <DropdownMenu>
+   625→   625→            <DropdownMenuTrigger asChild>
+   626→   626→              <Button variant="outline" size="sm" className="h-10 rounded-xl gap-1.5 text-xs font-medium">
+   627→   627→                <Filter className="w-3.5 h-3.5" />
+   628→   628→                تصفية
+   629→   629→              </Button>
+   630→   630→            </DropdownMenuTrigger>
+   631→   631→            <DropdownMenuContent align="end" dir="rtl" className="w-56">
+   632→   632→              <div className="p-2 space-y-3">
+   633→   633→                <div>
+   634→   634→                  <Label className="text-[11px] text-muted-foreground mb-1 block">الأولوية</Label>
+   635→   635→                  <Select value={filterPriority} onValueChange={setFilterPriority}>
+   636→   636→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   637→   637→                      <SelectValue />
+   638→   638→                    </SelectTrigger>
+   639→   639→                    <SelectContent>
+   640→   640→                      <SelectItem value="all">الكل</SelectItem>
+   641→   641→                      <SelectItem value="urgent">عاجل</SelectItem>
+   642→   642→                      <SelectItem value="high">مرتفع</SelectItem>
+   643→   643→                      <SelectItem value="medium">متوسط</SelectItem>
+   644→   644→                      <SelectItem value="low">منخفض</SelectItem>
+   645→   645→                    </SelectContent>
+   646→   646→                  </Select>
+   647→   647→                </div>
+   648→   648→                <div>
+   649→   649→                  <Label className="text-[11px] text-muted-foreground mb-1 block">المشروع</Label>
+   650→   650→                  <Select value={filterProject} onValueChange={setFilterProject}>
+   651→   651→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   652→   652→                      <SelectValue />
+   653→   653→                    </SelectTrigger>
+   654→   654→                    <SelectContent>
+   655→   655→                      <SelectItem value="all">الكل</SelectItem>
+   656→   656→                      {projects.map((p) => (
+   657→   657→                        <SelectItem key={p.id} value={p.id}>
+   658→   658→                          <span className="flex items-center gap-2">
+   659→   659→                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+   660→   660→                            {p.name}
+   661→   661→                          </span>
+   662→   662→                        </SelectItem>
+   663→   663→                      ))}
+   664→   664→                    </SelectContent>
+   665→   665→                  </Select>
+   666→   666→                </div>
+   667→   667→                <div>
+   668→   668→                  <Label className="text-[11px] text-muted-foreground mb-1 block">الحالة</Label>
+   669→   669→                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+   670→   670→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   671→   671→                      <SelectValue />
+   672→   672→                    </SelectTrigger>
+   673→   673→                    <SelectContent>
+   674→   674→                      <SelectItem value="all">الكل</SelectItem>
+   675→   675→                      <SelectItem value="todo">للتنفيذ</SelectItem>
+   676→   676→                      <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+   677→   677→                      <SelectItem value="done">مكتمل</SelectItem>
+   678→   678→                    </SelectContent>
+   679→   679→                  </Select>
+   680→   680→                </div>
+   681→   681→              </div>
+   682→   682→            </DropdownMenuContent>
+   683→   683→          </DropdownMenu>
+   684→   684→
+   685→   685→          {/* View tabs */}
+   686→   686→          <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
+   687→   687→            <TabsList className="h-10 rounded-xl p-1">
+   688→   688→              <TabsTrigger value="list" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   689→   689→                <List className="w-3.5 h-3.5" />
+   690→   690→                <span className="hidden sm:inline">قائمة</span>
+   691→   691→              </TabsTrigger>
+   692→   692→              <TabsTrigger value="board" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   693→   693→                <LayoutGrid className="w-3.5 h-3.5" />
+   694→   694→                <span className="hidden sm:inline">لوحة</span>
+   695→   695→              </TabsTrigger>
+   696→   696→              <TabsTrigger value="calendar" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   697→   697→                <CalendarDays className="w-3.5 h-3.5" />
+   698→   698→                <span className="hidden sm:inline">تقويم</span>
+   699→   699→              </TabsTrigger>
+   700→   700→            </TabsList>
+   701→   701→          </Tabs>
+   702→   702→
+   703→   703→          {/* Add task */}
+   704→   704→          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+   705→   705→            <DialogTrigger asChild>
+   706→   706→              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20">
+   707→   707→                <Plus className="w-4 h-4" />
+   708→   708→                مهمة جديدة
+   709→   709→              </Button>
+   710→   710→            </DialogTrigger>
+   711→   711→            <DialogContent className="sm:max-w-md" dir="rtl">
+   712→   712→              <DialogHeader>
+   713→   713→                <DialogTitle className="text-lg font-bold flex items-center gap-2">
+   714→   714→                  <Sparkles className="w-5 h-5 text-gold" />
+   715→   715→                  مهمة جديدة
+   716→   716→                </DialogTitle>
+   717→   717→              </DialogHeader>
+   718→   718→              <div className="space-y-4 mt-2">
+   719→   719→                <div>
+   720→   720→                  <Label className="text-xs font-medium mb-1.5 block">العنوان</Label>
+   721→   721→                  <Input
+   722→   722→                    placeholder="ماذا تريد إنجازه؟"
+   723→   723→                    value={formTitle}
+   724→   724→                    onChange={(e) => setFormTitle(e.target.value)}
+   725→   725→                    className="rounded-xl h-10"
+   726→   726→                    onKeyDown={(e) => e.key === 'Enter' && createTask()}
+   727→   727→                  />
+   728→   728→                </div>
+   729→   729→                <div>
+   730→   730→                  <Label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</Label>
+   731→   731→                  <Textarea
+   732→   732→                    placeholder="أضف تفاصيل..."
+   733→   733→                    value={formDesc}
+   734→   734→                    onChange={(e) => setFormDesc(e.target.value)}
+   735→   735→                    className="rounded-xl min-h-[80px] text-sm"
+   736→   736→                  />
+   737→   737→                </div>
+   738→   738→                <div className="grid grid-cols-2 gap-3">
+   739→   739→                  <div>
+   740→   740→                    <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
+   741→   741→                    <Select value={formPriority} onValueChange={setFormPriority}>
+   742→   742→                      <SelectTrigger className="rounded-xl h-10 text-sm">
+   743→   743→                        <SelectValue />
+   744→   744→                      </SelectTrigger>
+   745→   745→                      <SelectContent>
+   746→   746→                        <SelectItem value="urgent">
+   747→   747→                          <span className="flex items-center gap-2">
+   748→   748→                            <span className="w-2 h-2 rounded-full bg-red-500" />
+   749→   749→                            عاجل
+   750→   750→                          </span>
+   751→   751→                        </SelectItem>
+   752→   752→                        <SelectItem value="high">
+   753→   753→                          <span className="flex items-center gap-2">
+   754→   754→                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+   755→   755→                            مرتفع
+   756→   756→                          </span>
+   757→   757→                        </SelectItem>
+   758→   758→                        <SelectItem value="medium">
+   759→   759→                          <span className="flex items-center gap-2">
+   760→   760→                            <span className="w-2 h-2 rounded-full bg-gold" />
+   761→   761→                            متوسط
+   762→   762→                          </span>
+   763→   763→                        </SelectItem>
+   764→   764→                        <SelectItem value="low">
+   765→   765→                          <span className="flex items-center gap-2">
+   766→   766→                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+   767→   767→                            منخفض
+   768→   768→                          </span>
+   769→   769→                        </SelectItem>
+   770→   770→                      </SelectContent>
+   771→   771→                    </Select>
+   772→   772→                  </div>
+   773→   773→                  <div>
+   774→   774→                    <Label className="text-xs font-medium mb-1.5 block">المشروع</Label>
+   775→   775→                    <Select value={formProject} onValueChange={setFormProject}>
+   776→   776→                      <SelectTrigger className="rounded-xl h-10 text-sm">
+   777→   777→                        <SelectValue />
+   778→   778→                      </SelectTrigger>
+   779→   779→                      <SelectContent>
+   780→   780→                        <SelectItem value="none">بدون مشروع</SelectItem>
+   781→   781→                        {projects.map((p) => (
+   782→   782→                          <SelectItem key={p.id} value={p.id}>
+   783→   783→                            <span className="flex items-center gap-2">
+   784→   784→                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+   785→   785→                              {p.name}
+   786→   786→                            </span>
+   787→   787→                          </SelectItem>
+   788→   788→                        ))}
+   789→   789→                      </SelectContent>
+   790→   790→                    </Select>
+   791→   791→                  </div>
+   792→   792→                </div>
+   793→   793→                <div>
+   794→   794→                  <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق (اختياري)</Label>
+   795→   795→                  <Input
+   796→   796→                    type="date"
+   797→   797→                    value={formDueDate}
+   798→   798→                    onChange={(e) => setFormDueDate(e.target.value)}
+   799→   799→                    className="rounded-xl h-10 text-sm"
+   800→   800→                  />
+   801→   801→                </div>
+   802→   802→              </div>
+   803→   803→              <DialogFooter className="gap-2 mt-4">
+   804→   804→                <DialogClose asChild>
+   805→   805→                  <Button variant="outline" className="rounded-xl text-sm">
+   806→   806→                    إلغاء
+   807→   807→                  </Button>
+   808→   808→                </DialogClose>
+   809→   809→                <Button
+   810→   810→                  onClick={createTask}
+   811→   811→                  disabled={!formTitle.trim() || submitting}
+   812→   812→                  className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+   813→   813→                >
+   814→   814→                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+   815→   815→                  إنشاء المهمة
+   816→   816→                </Button>
+   817→   817→              </DialogFooter>
+   818→   818→            </DialogContent>
+   819→   819→          </Dialog>
+   820→   820→        </div>
+   821→   821→      </div>
+   822→   822→
+   823→   823→      {/* Stats summary */}
+   824→   824→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   825→   825→        {[
+   826→   826→          { label: 'الكل', count: tasks.length, color: 'text-foreground' },
+   827→   827→          { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-blue-500' },
+   828→   828→          { label: 'قيد التنفيذ', count: tasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
+   829→   829→          { label: 'مكتمل', count: tasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
+   830→   830→        ].map((s) => (
+   831→   831→          <motion.div
+   832→   832→            key={s.label}
+   833→   833→            initial={{ opacity: 0, y: 8 }}
+   834→   834→            animate={{ opacity: 1, y: 0 }}
+   835→   835→            className="glass rounded-2xl p-3 text-center"
+   836→   836→          >
+   837→   837→            <p className={cn('text-xl font-bold', s.color)}>{s.count}</p>
+   838→   838→            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+   839→   839→          </motion.div>
+   840→   840→        ))}
+   841→   841→      </div>
+   842→   842→
+   843→   843→      {/* ── List View ── */}
+   844→   844→      {view === 'list' && (
+   845→   845→        <motion.div
+   846→   846→          variants={containerVariants}
+   847→   847→          initial="hidden"
+   848→   848→          animate="visible"
+   849→   849→          className="space-y-2"
+   850→   850→        >
+   851→   851→          {STATUSES.map((status) => {
+   852→   852→            const col = statusColumns.find((c) => c.key === status)!
+   853→   853→            const statusTasks = groupedTasks[status]
+   854→   854→            return (
+   855→   855→              <div key={status}>
+   856→   856→                <div className="flex items-center gap-2 mb-2 px-1">
+   857→   857→                  <col.icon className={cn('w-4 h-4', col.color)} />
+   858→   858→                  <span className="text-sm font-semibold">{col.label}</span>
+   859→   859→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+   860→   860→                    {statusTasks.length}
+   861→   861→                  </Badge>
+   862→   862→                </div>
+   863→   863→                <AnimatePresence mode="popLayout">
+   864→   864→                  {statusTasks.length === 0 ? (
+   865→   865→                    <motion.div
+   866→   866→                      key="empty"
+   867→   867→                      initial={{ opacity: 0 }}
+   868→   868→                      animate={{ opacity: 1 }}
+   869→   869→                      className="glass rounded-2xl p-6 text-center text-sm text-muted-foreground"
+   870→   870→                    >
+   871→   871→                      لا توجد مهام
+   872→   872→                    </motion.div>
+   873→   873→                  ) : (
+   874→   874→                    <div className="space-y-2">
+   875→   875→                      {statusTasks.map((task, idx) => renderTaskItem(task, idx))}
+   876→   876→                    </div>
+   877→   877→                  )}
+   878→   878→                </AnimatePresence>
+   879→   879→              </div>
+   880→   880→            )
+   881→   881→          })}
+   882→   882→        </motion.div>
+   883→   883→      )}
+   884→   884→
+   885→   885→      {/* ── Board View ── */}
+   886→   886→      {view === 'board' && (
+   887→   887→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   888→   888→          {statusColumns.map((col) => {
+   889→   889→            const colTasks = groupedTasks[col.key]
+   890→   890→            return (
+   891→   891→              <div key={col.key} className="flex flex-col min-h-[200px]">
+   892→   892→                <div className={cn('flex items-center gap-2 mb-3 px-1', col.color)}>
+   893→   893→                  <col.icon className="w-4 h-4" />
+   894→   894→                  <span className="text-sm font-semibold">{col.label}</span>
+   895→   895→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+   896→   896→                    {colTasks.length}
+   897→   897→                  </Badge>
+   898→   898→                </div>
+   899→   899→                <div className="flex-1 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+   900→   900→                  <AnimatePresence mode="popLayout">
+   901→   901→                    {colTasks.length === 0 ? (
+   902→   902→                      <motion.div
+   903→   903→                        key="empty"
+   904→   904→                        initial={{ opacity: 0 }}
+   905→   905→                        animate={{ opacity: 1 }}
+   906→   906→                        className="glass rounded-2xl p-8 text-center"
+   907→   907→                      >
+   908→   908→                        <Inbox className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+   909→   909→                        <p className="text-xs text-muted-foreground">لا توجد مهام</p>
+   910→   910→                      </motion.div>
+   911→   911→                    ) : (
+   912→   912→                      colTasks.map((task) => renderBoardCard(task))
+   913→   913→                    )}
+   914→   914→                  </AnimatePresence>
+   915→   915→                </div>
+   916→   916→              </div>
+   917→   917→            )
+   918→   918→          })}
+   919→   919→        </div>
+   920→   920→      )}
+   921→   921→
+   922→   922→      {/* ── Calendar View ── */}
+   923→   923→      {view === 'calendar' && (
+   924→   924→        <motion.div
+   925→   925→          initial={{ opacity: 0, y: 12 }}
+   926→   926→          animate={{ opacity: 1, y: 0 }}
+   927→   927→        >
+   928→   928→          <Card className="glass overflow-hidden rounded-2xl border-0">
+   929→   929→            <CardHeader className="pb-2">
+   930→   930→              <div className="flex items-center justify-between">
+   931→   931→                <CardTitle className="text-base font-bold">
+   932→   932→                  {format(calendarMonth, 'MMMM yyyy', { locale: ar })}
+   933→   933→                </CardTitle>
+   934→   934→                <div className="flex items-center gap-1">
+   935→   935→                  <Button
+   936→   936→                    variant="ghost"
+   937→   937→                    size="icon"
+   938→   938→                    className="h-8 w-8 rounded-lg"
+   939→   939→                    onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+   940→   940→                  >
+   941→   941→                    <ChevronRight className="w-4 h-4" />
+   942→   942→                  </Button>
+   943→   943→                  <Button
+   944→   944→                    variant="ghost"
+   945→   945→                    size="sm"
+   946→   946→                    className="h-8 px-2 text-xs rounded-lg"
+   947→   947→                    onClick={() => setCalendarMonth(new Date())}
+   948→   948→                  >
+   949→   949→                    اليوم
+   950→   950→                  </Button>
+   951→   951→                  <Button
+   952→   952→                    variant="ghost"
+   953→   953→                    size="icon"
+   954→   954→                    className="h-8 w-8 rounded-lg"
+   955→   955→                    onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+   956→   956→                  >
+   957→   957→                    <ChevronLeft className="w-4 h-4" />
+   958→   958→                  </Button>
+   959→   959→                </div>
+   960→   960→              </div>
+   961→   961→            </CardHeader>
+   962→   962→            <CardContent>
+   963→   963→              {/* Week day headers */}
+   964→   964→              <div className="grid grid-cols-7 gap-1 mb-1">
+   965→   965→                {weekDays.map((d) => (
+   966→   966→                  <div key={d} className="text-center text-[11px] font-medium text-muted-foreground py-2">
+   967→   967→                    {d}
+   968→   968→                  </div>
+   969→   969→                ))}
+   970→   970→              </div>
+   971→   971→              {/* Calendar grid */}
+   972→   972→              <div className="grid grid-cols-7 gap-1">
+   973→   973→                {calendarDays.map((day, idx) => {
+   974→   974→                  const dayTasks = getTasksForDate(day)
+   975→   975→                  const isCurrentMonth = isSameMonth(day, calendarMonth)
+   976→   976→                  const isToday = isSameDay(day, new Date())
+   977→   977→                  const hasTasks = dayTasks.length > 0
+   978→   978→
+   979→   979→                  return (
+   980→   980→                    <motion.div
+   981→   981→                      key={idx}
+   982→   982→                      initial={false}
+   983→   983→                      className={cn(
+   984→   984→                        'min-h-[72px] sm:min-h-[88px] rounded-xl p-1.5 transition-colors',
+   985→   985→                        isCurrentMonth ? 'bg-background' : 'bg-muted/30',
+   986→   986→                        isToday && 'ring-2 ring-emerald-accent ring-offset-1 ring-offset-background',
+   987→   987→                        hasTasks && 'bg-emerald-accent/5'
+   988→   988→                      )}
+   989→   989→                    >
+   990→   990→                      <span
+   991→   991→                        className={cn(
+   992→   992→                          'text-[11px] font-medium block text-center',
+   993→   993→                          isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/40',
+   994→   994→                          isToday && 'text-emerald-accent font-bold'
+   995→   995→                        )}
+   996→   996→                      >
+   997→   997→                        {format(day, 'd')}
+   998→   998→                      </span>
+   999→   999→                      <div className="mt-0.5 space-y-0.5 max-h-[56px] sm:max-h-[64px] overflow-y-auto">
+  1000→  1000→                        {dayTasks.slice(0, 3).map((t) => (
+  1001→  1001→                          <div
+  1002→  1002→                            key={t.id}
+  1003→  1003→                            className={cn(
+  1004→  1004→                              'text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium',
+  1005→  1005→                              t.priority === 'urgent' && 'bg-red-500/10 text-red-600 dark:text-red-400',
+  1006→  1006→                              t.priority === 'high' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  1007→  1007→                              t.priority === 'medium' && 'bg-gold/10 text-yellow-700 dark:text-gold',
+  1008→  1008→                              t.priority === 'low' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+  1009→  1009→                            )}
+  1010→  1010→                          >
+  1011→  1011→                            {t.title}
+  1012→  1012→                          </div>
+  1013→  1013→                        ))}
+  1014→  1014→                        {dayTasks.length > 3 && (
+  1015→  1015→                          <p className="text-[9px] text-muted-foreground text-center">+{dayTasks.length - 3}</p>
+  1016→  1016→                        )}
+  1017→  1017→                      </div>
+  1018→  1018→                    </motion.div>
+  1019→  1019→                  )
+  1020→  1020→                })}
+  1021→  1021→              </div>
+  1022→  1022→            </CardContent>
+  1023→  1023→          </Card>
+  1024→  1024→        </motion.div>
+  1025→  1025→      )}
+  1026→  1026→
+  1027→  1027→      {/* Expanded task panel (mobile friendly overlay) */}
+  1028→  1028→      <AnimatePresence>
+  1029→  1029→        {expandedId && view === 'board' && (
+  1030→  1030→          <motion.div
+  1031→  1031→            initial={{ opacity: 0 }}
+  1032→  1032→            animate={{ opacity: 1 }}
+  1033→  1033→            exit={{ opacity: 0 }}
+  1034→  1034→            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 md:hidden"
+  1035→  1035→            onClick={() => setExpandedId(null)}
+  1036→  1036→          />
+  1037→  1037→        )}
+  1038→  1038→      </AnimatePresence>
+  1039→  1039→    </div>
+  1040→  1040→  )
+  1041→  1041→}
+  1042→  1042→
+  1043→  1043→export default Tasks

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
@@ -111,7 +111,51 @@ const itemVariants = {
   exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
 }
 
-const cardHover = { scale: 1.01, transition: { duration: 0.2 } }
+const cardHover = { scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }
+
+/* Priority left border colors */
+const priorityBorderColors: Record<string, string> = {
+  urgent: 'border-r-red-500',
+  high: 'border-r-orange-500',
+  medium: 'border-r-gold',
+  low: 'border-r-blue-500',
+}
+
+/* Animated Counter Component */
+function AnimatedCounter({ target, className }: { target: number; className?: string }) {
+  const [count, setCount] = useState(0)
+  const rafRef = useRef<number>(0)
+  const startTimeRef = useRef<number>(0)
+
+  useEffect(() => {
+    startTimeRef.current = Date.now()
+    if (target === 0) {
+      const id = requestAnimationFrame(() => setCount(0))
+      return () => cancelAnimationFrame(id)
+    }
+    const animate = () => {
+      const elapsed = Date.now() - startTimeRef.current
+      const progress = Math.min(elapsed / 800, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setCount(Math.round(eased * target))
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [target])
+
+  return (
+    <motion.span
+      key={count}
+      initial={{ y: -4, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+      className={className}
+    >
+      {count}
+    </motion.span>
+  )
+}
 
 /* ────────────── Priority Dot ────────────── */
 
@@ -313,23 +357,30 @@ export function Tasks() {
         layout
         className="group"
       >
-        <div
+        <motion.div
           className={cn(
-            'glass rounded-2xl p-4 transition-all duration-200',
-            'hover:shadow-md hover:shadow-emerald-accent/5',
+            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300',
+            'hover:shadow-lg hover:shadow-emerald-accent/8',
+            priorityBorderColors[task.priority] || 'border-r-border',
             isDone && 'opacity-60'
           )}
+          whileHover={{ scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
         >
           <div className="flex items-start gap-3">
             {/* Checkbox */}
             <div className="pt-0.5">
-              <Checkbox
-                checked={isDone}
-                onCheckedChange={() => toggleTask(task)}
-                className={cn(
-                  'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
-                )}
-              />
+              <motion.div
+                whileTap={{ scale: 0.8 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              >
+                <Checkbox
+                  checked={isDone}
+                  onCheckedChange={() => toggleTask(task)}
+                  className={cn(
+                    'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+                  )}
+                />
+              </motion.div>
             </div>
 
             {/* Content */}
@@ -461,12 +512,17 @@ export function Tasks() {
               </DropdownMenu>
             </div>
           </div>
-        </div>
+        </motion.div>
       </motion.div>
     )
   }
 
   /* ────────────── Render: Board Card ────────────── */
+  const boardColBorderColors: Record<string, string> = {
+    todo: 'border-t-blue-500',
+    in_progress: 'border-t-gold',
+    done: 'border-t-emerald-accent',
+  }
   const renderBoardCard = (task: Task) => {
     const isDone = task.status === 'done'
     const completedSubs = task.subtasks.filter((s) => s.completed).length
@@ -478,12 +534,14 @@ export function Tasks() {
         layout
         whileHover={cardHover}
       >
-        <div
+        <motion.div
           className={cn(
-            'glass rounded-2xl p-4 transition-all duration-200 cursor-pointer',
-            'hover:shadow-md hover:shadow-emerald-accent/5',
+            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300 cursor-pointer',
+            'hover:shadow-lg hover:shadow-emerald-accent/8',
+            priorityBorderColors[task.priority] || 'border-r-border',
             isDone && 'opacity-60'
           )}
+          whileHover={{ scale: 1.02, y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
           onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
         >
           <div className="flex items-start justify-between gap-2 mb-2">
@@ -576,7 +634,7 @@ export function Tasks() {
               className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
             />
           </div>
-        </div>
+        </motion.div>
       </motion.div>
     )
   }
@@ -708,7 +766,7 @@ export function Tasks() {
                 مهمة جديدة
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md" dir="rtl">
+            <DialogContent className="sm:max-w-md backdrop-blur-xl" dir="rtl">
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-gold" />
@@ -722,7 +780,7 @@ export function Tasks() {
                     placeholder="ماذا تريد إنجازه؟"
                     value={formTitle}
                     onChange={(e) => setFormTitle(e.target.value)}
-                    className="rounded-xl h-10"
+                    className="rounded-xl h-10 focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
                     onKeyDown={(e) => e.key === 'Enter' && createTask()}
                   />
                 </div>
@@ -732,7 +790,7 @@ export function Tasks() {
                     placeholder="أضف تفاصيل..."
                     value={formDesc}
                     onChange={(e) => setFormDesc(e.target.value)}
-                    className="rounded-xl min-h-[80px] text-sm"
+                    className="rounded-xl min-h-[80px] text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -796,7 +854,7 @@ export function Tasks() {
                     type="date"
                     value={formDueDate}
                     onChange={(e) => setFormDueDate(e.target.value)}
-                    className="rounded-xl h-10 text-sm"
+                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
                   />
                 </div>
               </div>
@@ -820,6 +878,57 @@ export function Tasks() {
         </div>
       </div>
 
+      {/* Filter bar - glass card with rounded-full buttons */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="glass rounded-2xl p-2.5 flex flex-wrap items-center gap-1.5"
+      >
+        {['all', 'todo', 'in_progress', 'done'].map((status) => {
+          const isActive = filterStatus === status
+          const label = status === 'all' ? 'الكل' : status === 'todo' ? 'للتنفيذ' : status === 'in_progress' ? 'قيد التنفيذ' : 'مكتمل'
+          return (
+            <motion.button
+              key={status}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setFilterStatus(status)}
+              className={cn(
+                'px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+                isActive
+                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+              )}
+            >
+              {label}
+            </motion.button>
+          )
+        })}
+        <div className="w-px h-5 bg-border/60 mx-1" />
+        {['all', 'urgent', 'high', 'medium', 'low'].map((priority) => {
+          const isActive = filterPriority === priority
+          const label = priority === 'all' ? 'كل الأولويات' : priorityLabels[priority]
+          return (
+            <motion.button
+              key={priority}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setFilterPriority(priority)}
+              className={cn(
+                'px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+                isActive
+                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+              )}
+            >
+              {priority !== 'all' && (
+                <span className={cn('w-1.5 h-1.5 rounded-full inline-block ml-1', priorityDotColors[priority])} />
+              )}
+              {label}
+            </motion.button>
+          )
+        })}
+      </motion.div>
+
       {/* Stats summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -827,14 +936,17 @@ export function Tasks() {
           { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-blue-500' },
           { label: 'قيد التنفيذ', count: tasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
           { label: 'مكتمل', count: tasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
-        ].map((s) => (
+        ].map((s, i) => (
           <motion.div
             key={s.label}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass rounded-2xl p-3 text-center"
+            transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+            className="glass rounded-2xl p-3.5 text-center"
           >
-            <p className={cn('text-xl font-bold', s.color)}>{s.count}</p>
+            <p className={cn('text-xl font-bold tabular-nums', s.color)}>
+              <AnimatedCounter target={s.count} className={cn('text-xl font-bold tabular-nums', s.color)} />
+            </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
           </motion.div>
         ))}
@@ -888,11 +1000,17 @@ export function Tasks() {
           {statusColumns.map((col) => {
             const colTasks = groupedTasks[col.key]
             return (
-              <div key={col.key} className="flex flex-col min-h-[200px]">
+              <motion.div
+                key={col.key}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: statusColumns.indexOf(col) * 0.1 }}
+                className={cn('flex flex-col min-h-[200px] glass rounded-2xl p-3 border-t-4', boardColBorderColors[col.key])}
+              >
                 <div className={cn('flex items-center gap-2 mb-3 px-1', col.color)}>
                   <col.icon className="w-4 h-4" />
                   <span className="text-sm font-semibold">{col.label}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+                  <Badge variant="secondary" className="text-[10px] h-5 min-w-[22px] px-1.5 rounded-full justify-center font-bold">
                     {colTasks.length}
                   </Badge>
                 </div>
@@ -913,7 +1031,7 @@ export function Tasks() {
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
+              </motion.div>
             )
           })}
         </div>

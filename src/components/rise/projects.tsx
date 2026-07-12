@@ -115,6 +115,7 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (progress / 100) * circumference
+  const isHighProgress = progress > 75
 
   return (
     <svg width={size} height={size} className="transform -rotate-90">
@@ -127,6 +128,18 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
         strokeWidth={strokeWidth}
         className="text-muted/50"
       />
+      {/* Glow filter for high progress */}
+      {isHighProgress && (
+        <defs>
+          <filter id={`glow-${size}-${color}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+      )}
       <motion.circle
         cx={size / 2}
         cy={size / 2}
@@ -139,6 +152,7 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
         initial={{ strokeDashoffset: circumference }}
         animate={{ strokeDashoffset: offset }}
         transition={{ duration: 0.8, ease: 'easeOut' }}
+        filter={isHighProgress ? `url(#glow-${size}-${color})` : undefined}
       />
       <text
         x="50%"
@@ -422,8 +436,18 @@ export function Projects() {
           </Button>
         </div>
 
-        {/* Project info card */}
-        <div className="glass rounded-2xl p-5 mb-6">
+        {/* Project info card with subtle gradient header */}
+        <div
+          className="glass rounded-2xl overflow-hidden mb-6"
+        >
+          {/* Subtle gradient header */}
+          <div
+            className="h-20 w-full"
+            style={{
+              background: `linear-gradient(135deg, ${selectedProject.color}15, ${selectedProject.color}05, transparent)`
+            }}
+          />
+          <div className="p-5 -mt-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <div
@@ -508,6 +532,7 @@ export function Projects() {
               />
             </div>
           </div>
+          </div>
         </div>
 
         {/* Tasks grouped by status */}
@@ -552,7 +577,7 @@ export function Projects() {
                           layout
                           className="group"
                         >
-                          <div className="glass rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:shadow-emerald-accent/5">
+                          <div className="glass rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:shadow-emerald-accent/5 hover:-translate-y-0.5">
                             <div className="pt-0.5">
                               <Checkbox
                                 checked={task.status === 'done'}
@@ -633,7 +658,7 @@ export function Projects() {
 
         {/* Add Task Dialog (for project) */}
         <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
-          <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogContent className="sm:max-w-md backdrop-blur-xl" dir="rtl">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-gold" />
@@ -647,7 +672,7 @@ export function Projects() {
                   placeholder="ماذا تريد إنجازه؟"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="rounded-xl h-10"
+                  className="rounded-xl h-10 focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
                   onKeyDown={(e) => e.key === 'Enter' && addTaskToProject()}
                 />
               </div>
@@ -655,7 +680,7 @@ export function Projects() {
                 <div>
                   <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
                   <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                    <SelectTrigger className="rounded-xl h-10 text-sm">
+                    <SelectTrigger className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -672,7 +697,7 @@ export function Projects() {
                     type="date"
                     value={newTaskDueDate}
                     onChange={(e) => setNewTaskDueDate(e.target.value)}
-                    className="rounded-xl h-10 text-sm"
+                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
                   />
                 </div>
               </div>
@@ -722,7 +747,7 @@ export function Projects() {
               مشروع جديد
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogContent className="sm:max-w-md backdrop-blur-xl" dir="rtl">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-gold" />
@@ -804,13 +829,16 @@ export function Projects() {
                   key={project.id}
                   variants={itemVariants}
                   layout
-                  whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+                  whileHover={{ scale: 1.02, y: -4, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
                   className="group cursor-pointer"
                   onClick={() => setSelectedProjectId(project.id)}
                 >
                   <div className="glass rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-emerald-accent/5 h-full flex flex-col">
-                    {/* Color accent bar */}
-                    <div className="h-1.5 w-full" style={{ backgroundColor: project.color }} />
+                    {/* Color accent bar with gradient overlay */}
+                    <div className="h-1.5 w-full relative overflow-hidden">
+                      <div className="absolute inset-0" style={{ backgroundColor: project.color }} />
+                      <div className="absolute inset-0" style={{ background: `linear-gradient(to left, transparent, ${project.color}50)` }} />
+                    </div>
 
                     <div className="p-5 flex-1 flex flex-col">
                       {/* Top: Icon + Actions */}
@@ -865,7 +893,7 @@ export function Projects() {
                         <div className="flex items-center gap-3">
                           <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                             <ListChecks className="w-3.5 h-3.5" />
-                            {taskCount} مهمة
+                            {doneCount}/{taskCount} مهمة
                           </span>
                           {doneCount > 0 && (
                             <span className="text-[11px] text-emerald-accent flex items-center gap-1">
@@ -887,7 +915,7 @@ export function Projects() {
                         </Badge>
                       </div>
 
-                      {/* Progress bar */}
+                      {/* Progress bar with micro text */}
                       <div className="mt-3">
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                           <motion.div
@@ -898,6 +926,7 @@ export function Projects() {
                             transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
                           />
                         </div>
+                        <p className="text-[10px] text-muted-foreground/70 mt-1 text-left">{doneCount} من {taskCount} مهام مكتملة</p>
                       </div>
                     </div>
                   </div>

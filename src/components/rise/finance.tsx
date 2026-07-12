@@ -48,13 +48,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -79,12 +72,20 @@ interface FinanceData {
 
 /* ────────────── Constants ────────────── */
 
-const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string }> = {
-  دخل: { label: 'الدخل', color: 'bg-emerald-accent/10 text-emerald-accent', icon: TrendingUp, amountColor: 'text-emerald-accent' },
-  مصروف: { label: 'المصروفات', color: 'bg-orange-500/10 text-orange-500', icon: TrendingDown, amountColor: 'text-orange-500' },
-  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest' },
-  استثمار: { label: 'الاستثمار', color: 'bg-sky-500/10 text-sky-500', icon: Landmark, amountColor: 'text-sky-500' },
-  اشتراك: { label: 'الاشتراكات', color: 'bg-purple-500/10 text-purple-500', icon: CreditCard, amountColor: 'text-purple-500' },
+const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string; borderColor: string; dotColor: string; trendValue?: number }> = {
+  دخل: { label: 'الدخل', color: 'bg-emerald-accent/10 text-emerald-accent', icon: TrendingUp, amountColor: 'text-emerald-accent', borderColor: 'border-r-emerald-accent', dotColor: 'bg-emerald-accent', trendValue: 12 },
+  مصروف: { label: 'المصروفات', color: 'bg-orange-500/10 text-orange-500', icon: TrendingDown, amountColor: 'text-orange-500', borderColor: 'border-r-orange-500', dotColor: 'bg-orange-500', trendValue: -5 },
+  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest', borderColor: 'border-r-forest', dotColor: 'bg-forest', trendValue: 8 },
+  استثمار: { label: 'الاستثمار', color: 'bg-sky-500/10 text-sky-500', icon: Landmark, amountColor: 'text-sky-500', borderColor: 'border-r-sky-500', dotColor: 'bg-sky-500', trendValue: 15 },
+  اشتراك: { label: 'الاشتراكات', color: 'bg-purple-500/10 text-purple-500', icon: CreditCard, amountColor: 'text-purple-500', borderColor: 'border-r-purple-500', dotColor: 'bg-purple-500', trendValue: -3 },
+}
+
+const TYPE_CARD_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; borderColor: string; activeBg: string }> = {
+  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-emerald-accent/5', borderColor: 'border-emerald-accent/30', activeBg: 'bg-emerald-accent/15 ring-emerald-accent/40' },
+  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-orange-500/5', borderColor: 'border-orange-500/30', activeBg: 'bg-orange-500/15 ring-orange-500/40' },
+  ادخار: { label: 'الادخار', icon: PiggyBank, bg: 'bg-forest/5', borderColor: 'border-forest/30', activeBg: 'bg-forest/15 ring-forest/40' },
+  استثمار: { label: 'الاستثمار', icon: Landmark, bg: 'bg-sky-500/5', borderColor: 'border-sky-500/30', activeBg: 'bg-sky-500/15 ring-sky-500/40' },
+  اشتراك: { label: 'الاشتراكات', icon: CreditCard, bg: 'bg-purple-500/5', borderColor: 'border-purple-500/30', activeBg: 'bg-purple-500/15 ring-purple-500/40' },
 }
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -340,24 +341,41 @@ export default function Finance() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
-              {/* Type */}
+              {/* Type - Visual Cards instead of dropdown */}
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-foreground">النوع</label>
-                <Select
-                  value={form.type}
-                  onValueChange={(val) => updateForm('type', val)}
-                >
-                  <SelectTrigger className="rounded-xl border-0 bg-muted/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>
-                        {cfg.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-5 gap-2">
+                  {Object.entries(TYPE_CARD_CONFIG).map(([key, cfg]) => {
+                    const Icon = cfg.icon
+                    const isActive = form.type === key
+                    return (
+                      <motion.button
+                        key={key}
+                        type="button"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => updateForm('type', key)}
+                        className={cn(
+                          'rounded-xl p-2.5 flex flex-col items-center gap-1 border transition-all duration-200',
+                          isActive
+                            ? `${cfg.activeBg} ring-1 shadow-sm`
+                            : `${cfg.bg} ${cfg.borderColor} hover:shadow-sm`
+                        )}
+                      >
+                        <Icon className={cn(
+                          'w-4 h-4 transition-colors',
+                          isActive ? cfg.activeBg.split(' ')[0].replace('bg-', 'text-').split('/')[0] : 'text-muted-foreground'
+                        )} style={isActive ? { color: `var(--color-${key === 'دخل' ? 'emerald-accent' : key === 'مصروف' ? 'orange-500' : key === 'ادخار' ? 'forest' : key === 'استثمار' ? 'sky-500' : 'purple-500'})` } : undefined} />
+                        <span className={cn(
+                          'text-[10px] font-medium leading-tight text-center',
+                          isActive ? 'text-foreground' : 'text-muted-foreground'
+                        )}>
+                          {cfg.label}
+                        </span>
+                      </motion.button>
+                    )
+                  })}
+                </div>
               </div>
 
               {/* Category */}
@@ -435,56 +453,104 @@ export default function Finance() {
         </Dialog>
       </motion.div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards with colored left borders and trend arrows */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {/* Income */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 bottom-0 w-1 bg-emerald-accent rounded-r-2xl" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-emerald-accent" />
             </div>
-            <span className="text-xl font-bold text-emerald-accent count-up">
-              {formatAmount(stats.income)}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xl font-bold text-emerald-accent count-up">
+                {formatAmount(stats.income)}
+              </span>
+              {stats.income > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                </motion.div>
+              )}
+            </div>
             <span className="text-[11px] text-muted-foreground">الدخل</span>
           </CardContent>
         </Card>
 
         {/* Expenses */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 bottom-0 w-1 bg-orange-500 rounded-r-2xl" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
               <TrendingDown className="w-4 h-4 text-orange-500" />
             </div>
-            <span className="text-xl font-bold text-orange-500 count-up">
-              {formatAmount(stats.expenses)}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xl font-bold text-orange-500 count-up">
+                {formatAmount(stats.expenses)}
+              </span>
+              {stats.expenses > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center"
+                >
+                  <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+                </motion.div>
+              )}
+            </div>
             <span className="text-[11px] text-muted-foreground">المصروفات</span>
           </CardContent>
         </Card>
 
         {/* Savings */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 bottom-0 w-1 bg-forest rounded-r-2xl" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
               <PiggyBank className="w-4 h-4 text-forest" />
             </div>
-            <span className="text-xl font-bold text-forest count-up">
-              {formatAmount(stats.savings)}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xl font-bold text-forest count-up">
+                {formatAmount(stats.savings)}
+              </span>
+              {stats.savings > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                </motion.div>
+              )}
+            </div>
             <span className="text-[11px] text-muted-foreground">الادخار</span>
           </CardContent>
         </Card>
 
         {/* Investment */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 bottom-0 w-1 bg-sky-500 rounded-r-2xl" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
               <Landmark className="w-4 h-4 text-sky-500" />
             </div>
-            <span className="text-xl font-bold text-sky-500 count-up">
-              {formatAmount(stats.investment)}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xl font-bold text-sky-500 count-up">
+                {formatAmount(stats.investment)}
+              </span>
+              {stats.investment > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                </motion.div>
+              )}
+            </div>
             <span className="text-[11px] text-muted-foreground">الاستثمار</span>
           </CardContent>
         </Card>
@@ -492,7 +558,7 @@ export default function Finance() {
 
       {/* Charts Row */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Expense Pie Chart */}
+        {/* Expense Pie Chart with labels and legend */}
         <Card className="glass border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold">توزيع المصروفات حسب الفئة</CardTitle>
@@ -505,7 +571,7 @@ export default function Finance() {
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <div className="h-52 w-full">
+                <div className="h-52 w-full relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -516,12 +582,14 @@ export default function Finance() {
                         outerRadius={85}
                         paddingAngle={3}
                         dataKey="قيمة"
+                        strokeWidth={0}
                       >
                         {expenseByCategory.map((_, index) => (
                           <Cell
                             key={index}
                             fill={PIE_COLORS[index % PIE_COLORS.length]}
-                            stroke="none"
+                            stroke="var(--color-card)"
+                            strokeWidth={2}
                           />
                         ))}
                       </Pie>
@@ -531,18 +599,31 @@ export default function Finance() {
                       />
                     </PieChart>
                   </ResponsiveContainer>
+                  {/* Center label */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xs text-muted-foreground">المجموع</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {formatAmount(expenseByCategory.reduce((s, e) => s + e.قيمة, 0))}
+                    </span>
+                  </div>
                 </div>
-                {/* Legend */}
-                <div className="flex flex-wrap items-center gap-2 justify-center mt-2 px-2">
-                  {expenseByCategory.map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-1.5">
-                      <div
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
-                      />
-                      <span className="text-[10px] text-muted-foreground">{entry.name}</span>
-                    </div>
-                  ))}
+                {/* Legend with labels and percentages */}
+                <div className="flex flex-wrap items-start gap-x-4 gap-y-2 justify-center mt-3 px-2">
+                  {expenseByCategory.map((entry, index) => {
+                    const total = expenseByCategory.reduce((s, e) => s + e.قيمة, 0)
+                    const pct = total > 0 ? Math.round((entry.قيمة / total) * 100) : 0
+                    return (
+                      <div key={entry.name} className="flex items-center gap-1.5">
+                        <div
+                          className="w-2.5 h-2.5 rounded-sm"
+                          style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                        />
+                        <span className="text-[10px] text-muted-foreground">
+                          {entry.name} ({pct}%)
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -614,9 +695,16 @@ export default function Finance() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">صافي الرصيد</p>
-                    <span className={cn('text-lg font-bold', net >= 0 ? 'text-emerald-accent' : 'text-orange-500')}>
-                      {net >= 0 ? '+' : ''}{formatAmount(net)}
-                    </span>
+                    <div className="flex items-center justify-center gap-1">
+                      <span className={cn('text-lg font-bold', net >= 0 ? 'text-emerald-accent' : 'text-orange-500')}>
+                        {net >= 0 ? '+' : ''}{formatAmount(net)}
+                      </span>
+                      {net >= 0 ? (
+                        <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                      ) : (
+                        <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">الاشتراكات</p>
@@ -637,7 +725,7 @@ export default function Finance() {
         </Card>
       </motion.div>
 
-      {/* Transaction List */}
+      {/* Transaction List with alternating rows, colored dots, smooth delete animation */}
       <motion.div variants={itemVariants}>
         <Card className="glass border-0 shadow-sm">
           <CardHeader className="pb-3">
@@ -674,21 +762,32 @@ export default function Finance() {
                         </span>
                       </div>
 
-                      {/* Records */}
+                      {/* Records with alternating backgrounds and colored dots */}
                       <div className="space-y-1.5 mb-4">
-                        <AnimatePresence>
+                        <AnimatePresence mode="popLayout">
                           {records.map((record, index) => {
                             const CatIcon = CATEGORY_ICONS[record.category] || Receipt
                             const isPositive = record.type === 'دخل'
                             return (
                               <motion.div
                                 key={record.id}
-                                initial={{ opacity: 0, x: 10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -10 }}
-                                transition={{ delay: index * 0.02 }}
-                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors group"
+                                layout
+                                initial={{ opacity: 0, x: 10, scale: 0.97 }}
+                                animate={{ opacity: 1, x: 0, scale: 1 }}
+                                exit={{ opacity: 0, x: -30, scale: 0.9, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
+                                transition={{
+                                  layout: { duration: 0.3 },
+                                  exit: { duration: 0.3, ease: 'easeIn' },
+                                }}
+                                className={cn(
+                                  'flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden',
+                                  index % 2 === 0 ? 'bg-muted/20' : 'bg-transparent',
+                                  'hover:shadow-sm hover:bg-muted/30'
+                                )}
                               >
+                                {/* Colored type dot */}
+                                <div className={cn('w-2 h-2 rounded-full shrink-0', config.dotColor)} />
+
                                 <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', config.color)}>
                                   <CatIcon className="w-4 h-4" />
                                 </div>
@@ -719,12 +818,21 @@ export default function Finance() {
                                     </span>
                                   </div>
                                   <motion.button
-                                    whileTap={{ scale: 0.9 }}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.85 }}
                                     onClick={() => handleDelete(record.id)}
                                     disabled={deleting === record.id}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                    className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    {deleting === record.id ? (
+                                      <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 0.5, repeat: Infinity, ease: 'linear' }}
+                                        className="w-3.5 h-3.5 border-2 border-destructive/30 border-t-destructive rounded-full"
+                                      />
+                                    ) : (
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    )}
                                   </motion.button>
                                 </div>
                               </motion.div>

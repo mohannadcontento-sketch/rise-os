@@ -24,7 +24,7 @@ import {
   Archive,
   Grid3X3,
   List,
-  ChevronLeft,
+  Zap,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -66,16 +66,42 @@ interface KnowledgeItem {
 
 /* ────────────── Config ────────────── */
 
-const typeConfig: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent' },
-  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-forest/10 text-forest' },
-  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold' },
-  resource: { label: 'موارد', icon: FileText, color: 'bg-blue-500/10 text-blue-500' },
-  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-amber-500/10 text-amber-500' },
-  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-purple-500/10 text-purple-500' },
-  research: { label: 'بحث', icon: Beaker, color: 'bg-cyan-500/10 text-cyan-500' },
-  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-rose-500/10 text-rose-500' },
+const typeConfig: Record<string, { label: string; icon: React.ElementType; color: string; stripColor: string }> = {
+  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent', stripColor: 'bg-emerald-accent' },
+  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-forest/10 text-forest', stripColor: 'bg-forest' },
+  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold', stripColor: 'bg-gold' },
+  resource: { label: 'موارد', icon: FileText, color: 'bg-cyan-500/10 text-cyan-500', stripColor: 'bg-cyan-500' },
+  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-amber-500/10 text-amber-500', stripColor: 'bg-amber-500' },
+  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-purple-500/10 text-purple-500', stripColor: 'bg-purple-500' },
+  research: { label: 'بحث', icon: Beaker, color: 'bg-rose-500/10 text-rose-500', stripColor: 'bg-rose-500' },
+  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500' },
 }
+
+const tagColors = [
+  'bg-emerald-accent/15 text-emerald-accent',
+  'bg-forest/15 text-forest',
+  'bg-gold/15 text-gold',
+  'bg-purple-500/15 text-purple-500',
+  'bg-orange-500/15 text-orange-500',
+  'bg-rose-500/15 text-rose-500',
+  'bg-cyan-500/15 text-cyan-500',
+  'bg-pink-500/15 text-pink-500',
+  'bg-amber-500/15 text-amber-500',
+  'bg-lime-500/15 text-lime-600',
+]
+
+const tagBorderColors = [
+  'border-emerald-accent/25',
+  'border-forest/25',
+  'border-gold/25',
+  'border-purple-500/25',
+  'border-orange-500/25',
+  'border-rose-500/25',
+  'border-cyan-500/25',
+  'border-pink-500/25',
+  'border-amber-500/25',
+  'border-lime-500/25',
+]
 
 const folders = [
   { id: 'all', label: 'الكل', icon: Archive },
@@ -96,6 +122,10 @@ export default function SecondBrain() {
   const [activeFolder, setActiveFolder] = useState('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+
+  // Quick Capture
+  const [quickCapture, setQuickCapture] = useState('')
+  const [isCapturing, setIsCapturing] = useState(false)
 
   // Add form
   const [newType, setNewType] = useState('note')
@@ -125,6 +155,34 @@ export default function SecondBrain() {
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
+
+  // Quick Capture handler
+  const handleQuickCapture = useCallback(async () => {
+    const text = quickCapture.trim()
+    if (!text) return
+    setIsCapturing(true)
+    try {
+      await fetch('/api/rise/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'idea',
+          title: text,
+          content: '',
+          folder: 'general',
+          tags: null,
+          source: null,
+        }),
+      })
+      setQuickCapture('')
+      toast.success('تم التقاط الفكرة بسرعة!')
+      fetchItems()
+    } catch {
+      toast.error('فشل في الحفظ')
+    } finally {
+      setIsCapturing(false)
+    }
+  }, [quickCapture, fetchItems])
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return
@@ -222,7 +280,10 @@ export default function SecondBrain() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">الدماغ الثاني</h2>
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Network className="w-6 h-6 text-emerald-accent" />
+            الدماغ الثاني
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">نظّم أفكارك ومعرفتك ومواريدك في مكان واحد</p>
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
@@ -285,6 +346,64 @@ export default function SecondBrain() {
         </Dialog>
       </div>
 
+      {/* Quick Capture */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="glass overflow-hidden">
+          <div className="bg-gradient-to-l from-emerald-accent/8 via-emerald-accent/3 to-transparent p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <motion.div
+                className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20"
+                whileHover={{ scale: 1.05, rotate: -5 }}
+              >
+                <Zap className="w-4.5 h-4.5 text-white" />
+              </motion.div>
+              <div>
+                <h3 className="text-sm font-bold">التقاط سريع</h3>
+                <p className="text-[11px] text-muted-foreground">اكتب فكرة واضغط Enter للحفظ الفوري</p>
+              </div>
+            </div>
+            <div className="relative">
+              <Input
+                placeholder="اكتب فكرتك أو ملاحظتك هنا..."
+                value={quickCapture}
+                onChange={(e) => setQuickCapture(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleQuickCapture()
+                }}
+                className={cn(
+                  'pl-11 pr-4 h-11 text-sm rounded-xl transition-all duration-300',
+                  'border-emerald-accent/30 focus:border-emerald-accent/60 focus:ring-emerald-accent/20',
+                  'bg-background/50 focus:bg-background',
+                  quickCapture && !isCapturing && 'ring-2 ring-emerald-accent/15 border-emerald-accent/50'
+                )}
+                disabled={isCapturing}
+              />
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={handleQuickCapture}
+                disabled={!quickCapture.trim() || isCapturing}
+                className={cn(
+                  'absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-xl text-white transition-all duration-200',
+                  quickCapture.trim() && !isCapturing
+                    ? 'bg-emerald-accent hover:bg-emerald-accent/90 shadow-md shadow-emerald-accent/25'
+                    : 'bg-muted/70 text-muted-foreground'
+                )}
+              >
+                {isCapturing ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+              </motion.button>
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+
       {/* Layout: Sidebar + Content */}
       <div className="flex gap-4 flex-col lg:flex-row">
         {/* Sidebar */}
@@ -297,8 +416,10 @@ export default function SecondBrain() {
                 <button
                   onClick={() => setActiveType('all')}
                   className={cn(
-                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-right',
-                    activeType === 'all' ? 'bg-emerald-accent/10 text-emerald-accent' : 'text-muted-foreground hover:bg-muted/50'
+                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right',
+                    activeType === 'all'
+                      ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+                      : 'text-muted-foreground hover:bg-muted/50'
                   )}
                 >
                   <Archive className="w-3.5 h-3.5" />
@@ -311,8 +432,10 @@ export default function SecondBrain() {
                       key={key}
                       onClick={() => setActiveType(key)}
                       className={cn(
-                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-right',
-                        activeType === key ? 'bg-emerald-accent/10 text-emerald-accent' : 'text-muted-foreground hover:bg-muted/50'
+                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right',
+                        activeType === key
+                          ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+                          : 'text-muted-foreground hover:bg-muted/50'
                       )}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -336,10 +459,18 @@ export default function SecondBrain() {
                       key={folder.id}
                       onClick={() => setActiveFolder(folder.id)}
                       className={cn(
-                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-right',
-                        activeFolder === folder.id ? 'bg-emerald-accent/10 text-emerald-accent' : 'text-muted-foreground hover:bg-muted/50'
+                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right relative',
+                        activeFolder === folder.id
+                          ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+                          : 'text-muted-foreground hover:bg-muted/50'
                       )}
                     >
+                      {activeFolder === folder.id && (
+                        <motion.div
+                          layoutId="folder-indicator"
+                          className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-full bg-emerald-accent"
+                        />
+                      )}
                       <Icon className="w-3.5 h-3.5" />
                       {folder.label}
                     </button>
@@ -358,8 +489,15 @@ export default function SecondBrain() {
                   الوسوم
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {allTags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-[10px] cursor-pointer hover:bg-emerald-accent/10 hover:text-emerald-accent transition-colors">
+                  {allTags.map((tag, i) => (
+                    <Badge
+                      key={tag}
+                      className={cn(
+                        'text-[10px] rounded-full px-2.5 py-0.5 cursor-pointer hover:opacity-80 transition-all font-medium border',
+                        tagColors[i % tagColors.length],
+                        tagBorderColors[i % tagBorderColors.length]
+                      )}
+                    >
                       {tag}
                     </Badge>
                   ))}
@@ -417,7 +555,7 @@ export default function SecondBrain() {
                 <Network className="w-8 h-8 text-muted-foreground/50" />
               </div>
               <p className="text-lg font-semibold text-muted-foreground">لا توجد عناصر</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">أضف أول عنصر لدماغك الثاني</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">أضف أول عنصر أو استخدم التقاط السريع</p>
             </motion.div>
           ) : (
             <AnimatePresence mode="popLayout">
@@ -439,69 +577,80 @@ export default function SecondBrain() {
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ delay: i * 0.03 }}
                     >
-                      <Card className="glass group hover:shadow-lg transition-shadow">
-                        <CardContent className="p-4">
-                          {editingId === item.id ? (
-                            <div className="space-y-3">
-                              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-sm font-semibold" />
-                              <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} className="text-sm" />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={saveEdit} className="bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs">
-                                  <Check className="w-3 h-3 ml-1" /> حفظ
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="text-xs">
-                                  إلغاء
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex items-start justify-between gap-2 mb-2">
-                                <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                                  <div className={cn('p-2 rounded-lg shrink-0', cfg.color)}>
-                                    <TypeIcon className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-sm leading-snug truncate">{item.title}</h3>
-                                    {item.content && (
-                                      <p className={cn('text-xs text-muted-foreground mt-1', viewMode === 'grid' ? 'line-clamp-2' : 'line-clamp-1')}>
-                                        {item.content}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-0.5 shrink-0">
-                                  <button
-                                    onClick={() => toggleFavorite(item.id, item.isFavorite)}
-                                    className={cn('p-1.5 rounded-lg transition-colors', item.isFavorite ? 'text-gold' : 'text-muted-foreground/30 hover:text-gold')}
-                                  >
-                                    <Star className={cn('w-3.5 h-3.5', item.isFavorite && 'fill-gold')} />
-                                  </button>
-                                  <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button onClick={() => handleDelete(item.id)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                      <Card className="glass group hover:shadow-lg transition-all overflow-hidden">
+                        {/* Colored left strip */}
+                        <div className="flex">
+                          <div className={cn('w-1 rounded-l-lg shrink-0', cfg.stripColor)} />
+                          <CardContent className="p-4 flex-1">
+                            {editingId === item.id ? (
+                              <div className="space-y-3">
+                                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-sm font-semibold" />
+                                <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} className="text-sm" />
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={saveEdit} className="bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs">
+                                    <Check className="w-3 h-3 ml-1" /> حفظ
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="text-xs">
+                                    إلغاء
+                                  </Button>
                                 </div>
                               </div>
-
-                              {tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {tags.map((tag) => (
-                                    <Badge key={tag} variant="secondary" className="text-[10px]">
-                                      {tag}
-                                    </Badge>
-                                  ))}
+                            ) : (
+                              <>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                    <div className={cn('p-2 rounded-lg shrink-0', cfg.color)}>
+                                      <TypeIcon className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="font-semibold text-sm leading-snug truncate">{item.title}</h3>
+                                      {item.content && (
+                                        <p className={cn('text-xs text-muted-foreground mt-1', viewMode === 'grid' ? 'line-clamp-2' : 'line-clamp-1')}>
+                                          {item.content}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <button
+                                      onClick={() => toggleFavorite(item.id, item.isFavorite)}
+                                      className={cn('p-1.5 rounded-lg transition-colors', item.isFavorite ? 'text-gold' : 'text-muted-foreground/30 hover:text-gold')}
+                                    >
+                                      <Star className={cn('w-3.5 h-3.5', item.isFavorite && 'fill-gold')} />
+                                    </button>
+                                    <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => handleDelete(item.id)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
-                              )}
 
-                              {item.source && (
-                                <p className="text-[10px] text-muted-foreground/60 mt-2 truncate">المصدر: {item.source}</p>
-                              )}
-                            </>
-                          )}
-                        </CardContent>
+                                {tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {tags.map((tag, ti) => (
+                                      <Badge
+                                        key={tag}
+                                        className={cn(
+                                          'text-[10px] rounded-full px-2.5 py-0.5 font-medium border',
+                                          tagColors[ti % tagColors.length],
+                                          tagBorderColors[ti % tagBorderColors.length]
+                                        )}
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {item.source && (
+                                  <p className="text-[10px] text-muted-foreground/60 mt-2 truncate">المصدر: {item.source}</p>
+                                )}
+                              </>
+                            )}
+                          </CardContent>
+                        </div>
                       </Card>
                     </motion.div>
                   )

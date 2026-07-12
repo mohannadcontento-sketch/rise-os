@@ -1,0 +1,797 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Target,
+     7→  Plus,
+     8→  ChevronDown,
+     9→  ChevronUp,
+    10→  Trophy,
+    11→  TrendingUp,
+    12→  Calendar,
+    13→  Flame,
+    14→  Eye,
+    15→  Sparkles,
+    16→  Trash2,
+    17→  CheckCircle2,
+    18→  Circle,
+    19→  Loader2,
+    20→  Rocket,
+    21→} from 'lucide-react'
+    22→import { Card, CardContent } from '@/components/ui/card'
+    23→import { Button } from '@/components/ui/button'
+    24→import { Badge } from '@/components/ui/badge'
+    25→import { Input } from '@/components/ui/input'
+    26→import { Label } from '@/components/ui/label'
+    27→import { Checkbox } from '@/components/ui/checkbox'
+    28→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    29→import { Textarea } from '@/components/ui/textarea'
+    30→import { Skeleton } from '@/components/ui/skeleton'
+    31→import {
+    32→  Dialog,
+    33→  DialogContent,
+    34→  DialogHeader,
+    35→  DialogTitle,
+    36→  DialogDescription,
+    37→  DialogFooter,
+    38→  DialogTrigger,
+    39→} from '@/components/ui/dialog'
+    40→import {
+    41→  Select,
+    42→  SelectContent,
+    43→  SelectItem,
+    44→  SelectTrigger,
+    45→  SelectValue,
+    46→} from '@/components/ui/select'
+    47→import {
+    48→  Tooltip,
+    49→  TooltipContent,
+    50→  TooltipProvider,
+    51→  TooltipTrigger,
+    52→} from '@/components/ui/tooltip'
+    53→import { cn } from '@/lib/utils'
+    54→
+    55→/* ────────────── Types ────────────── */
+    56→
+    57→interface Milestone {
+    58→  id: string
+    59→  title: string
+    60→  completed: boolean
+    61→  order: number
+    62→}
+    63→
+    64→interface Goal {
+    65→  id: string
+    66→  title: string
+    67→  vision: string
+    68→  why: string
+    69→  type: 'annual' | 'quarterly' | 'monthly' | 'weekly'
+    70→  progress: number
+    71→  status: string
+    72→  deadline: string
+    73→  milestones: Milestone[]
+    74→}
+    75→
+    76→interface GoalsResponse {
+    77→  goals: Goal[]
+    78→}
+    79→
+    80→const TYPE_LABELS: Record<Goal['type'], string> = {
+    81→  annual: 'سنوي',
+    82→  quarterly: 'ربع سنوي',
+    83→  monthly: 'شهري',
+    84→  weekly: 'أسبوعي',
+    85→}
+    86→
+    87→const TYPE_COLORS: Record<Goal['type'], string> = {
+    88→  annual: 'bg-gold/15 text-gold border-gold/25',
+    89→  quarterly: 'bg-emerald-accent/15 text-emerald-accent border-emerald-accent/25',
+    90→  monthly: 'bg-forest/15 text-forest border-forest/25',
+    91→  weekly: 'bg-forest-light/15 text-forest-light border-forest-light/25',
+    92→}
+    93→
+    94→/* ────────────── Component ────────────── */
+    95→
+    96→export function GoalsView() {
+    97→  const [goals, setGoals] = useState<Goal[]>([])
+    98→  const [loading, setLoading] = useState(true)
+    99→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   100→  const [activeType, setActiveType] = useState<string>('all')
+   101→  const [addOpen, setAddOpen] = useState(false)
+   102→  const [saving, setSaving] = useState(false)
+   103→
+   104→  // Form state
+   105→  const [formTitle, setFormTitle] = useState('')
+   106→  const [formVision, setFormVision] = useState('')
+   107→  const [formWhy, setFormWhy] = useState('')
+   108→  const [formType, setFormType] = useState<Goal['type']>('monthly')
+   109→  const [formDeadline, setFormDeadline] = useState('')
+   110→
+   111→  /* ---- Fetch ---- */
+   112→  useEffect(() => {
+   113→    async function fetchGoals() {
+   114→      try {
+   115→        const res = await fetch('/api/rise/goals')
+   116→        if (res.ok) {
+   117→          const data: GoalsResponse = await res.json()
+   118→          setGoals(data.goals)
+   119→        }
+   120→      } catch {
+   121→        // Use empty state
+   122→      } finally {
+   123→        setLoading(false)
+   124→      }
+   125→    }
+   126→    fetchGoals()
+   127→  }, [])
+   128→
+   129→  /* ---- Filtered goals ---- */
+   130→  const filteredGoals = useMemo(() => {
+   131→    if (activeType === 'all') return goals
+   132→    return goals.filter((g) => g.type === activeType)
+   133→  }, [goals, activeType])
+   134→
+   135→  /* ---- Stats ---- */
+   136→  const stats = useMemo(() => {
+   137→    const total = goals.length
+   138→    const completed = goals.filter((g) => g.status === 'completed').length
+   139→    const avgProgress =
+   140→      total > 0 ? Math.round(goals.reduce((s, g) => s + g.progress, 0) / total) : 0
+   141→    return { total, completed, avgProgress }
+   142→  }, [goals])
+   143→
+   144→  /* ---- Toggle milestone ---- */
+   145→  async function toggleMilestone(goalId: string, milestoneId: string) {
+   146→    setGoals((prev) =>
+   147→      prev.map((g) => {
+   148→        if (g.id !== goalId) return g
+   149→        const updatedMilestones = g.milestones.map((m) =>
+   150→          m.id === milestoneId ? { ...m, completed: !m.completed } : m
+   151→        )
+   152→        const completedCount = updatedMilestones.filter((m) => m.completed).length
+   153→        const progress =
+   154→          updatedMilestones.length > 0
+   155→            ? Math.round((completedCount / updatedMilestones.length) * 100)
+   156→            : 0
+   157→        return { ...g, milestones: updatedMilestones, progress }
+   158→      })
+   159→    )
+   160→
+   161→    try {
+   162→      const goal = goals.find((g) => g.id === goalId)
+   163→      if (!goal) return
+   164→      const ms = goal.milestones.find((m) => m.id === milestoneId)
+   165→      if (!ms) return
+   166→      await fetch('/api/rise/goals', {
+   167→        method: 'PUT',
+   168→        headers: { 'Content-Type': 'application/json' },
+   169→        body: JSON.stringify({
+   170→          id: goalId,
+   171→          milestoneId,
+   172→          completed: !ms.completed,
+   173→        }),
+   174→      })
+   175→    } catch {
+   176→      // Revert on error
+   177→      setGoals((prev) =>
+   178→        prev.map((g) => {
+   179→          if (g.id !== goalId) return g
+   180→          const reverted = g.milestones.map((m) =>
+   181→            m.id === milestoneId ? { ...m, completed: m.completed } : m
+   182→          )
+   183→          const completedCount = reverted.filter((m) => m.completed).length
+   184→          const progress =
+   185→            reverted.length > 0 ? Math.round((completedCount / reverted.length) * 100) : 0
+   186→          return { ...g, milestones: reverted, progress }
+   187→        })
+   188→      )
+   189→    }
+   190→  }
+   191→
+   192→  /* ---- Add goal ---- */
+   193→  async function handleAddGoal() {
+   194→    if (!formTitle.trim()) return
+   195→    setSaving(true)
+   196→    try {
+   197→      const res = await fetch('/api/rise/goals', {
+   198→        method: 'POST',
+   199→        headers: { 'Content-Type': 'application/json' },
+   200→        body: JSON.stringify({
+   201→          title: formTitle,
+   202→          vision: formVision,
+   203→          why: formWhy,
+   204→          type: formType,
+   205→          deadline: formDeadline,
+   206→        }),
+   207→      })
+   208→      if (res.ok) {
+   209→        const data: GoalsResponse = await res.json()
+   210→        setGoals((prev) => [...prev, ...data.goals])
+   211→        setAddOpen(false)
+   212→        resetForm()
+   213→      }
+   214→    } catch {
+   215→      // Silently fail
+   216→    } finally {
+   217→      setSaving(false)
+   218→    }
+   219→  }
+   220→
+   221→  /* ---- Delete goal ---- */
+   222→  async function deleteGoal(id: string) {
+   223→    setGoals((prev) => prev.filter((g) => g.id !== id))
+   224→    try {
+   225→      await fetch('/api/rise/goals', {
+   226→        method: 'DELETE',
+   227→        headers: { 'Content-Type': 'application/json' },
+   228→        body: JSON.stringify({ id }),
+   229→      })
+   230→    } catch {
+   231→      // Silently fail
+   232→    }
+   233→  }
+   234→
+   235→  function resetForm() {
+   236→    setFormTitle('')
+   237→    setFormVision('')
+   238→    setFormWhy('')
+   239→    setFormType('monthly')
+   240→    setFormDeadline('')
+   241→  }
+   242→
+   243→  /* ---- Helpers ---- */
+   244→  function formatDate(dateStr: string) {
+   245→    if (!dateStr) return ''
+   246→    const d = new Date(dateStr)
+   247→    return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })
+   248→  }
+   249→
+   250→  function getDeadlineInfo(deadline: string) {
+   251→    if (!deadline) return null
+   252→    const now = new Date()
+   253→    const end = new Date(deadline)
+   254→    const diffMs = end.getTime() - now.getTime()
+   255→    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+   256→    if (diffDays < 0) return { text: 'منتهي', urgent: true }
+   257→    if (diffDays === 0) return { text: 'اليوم!', urgent: true }
+   258→    if (diffDays <= 7) return { text: `${diffDays} أيام متبقية`, urgent: true }
+   259→    return { text: `${diffDays} يوم متبقي`, urgent: false }
+   260→  }
+   261→
+   262→  /* ──────────── Render ──────────── */
+   263→
+   264→  if (loading) {
+   265→    return (
+   266→      <div className="space-y-6 p-4 md:p-6">
+   267→        <div className="flex items-center justify-between">
+   268→          <Skeleton className="h-8 w-40" />
+   269→          <Skeleton className="h-10 w-10 rounded-xl" />
+   270→        </div>
+   271→        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   272→          {[1, 2, 3].map((i) => (
+   273→            <Skeleton key={i} className="h-24 rounded-2xl" />
+   274→          ))}
+   275→        </div>
+   276→        <div className="space-y-4">
+   277→          {[1, 2, 3].map((i) => (
+   278→            <Skeleton key={i} className="h-32 rounded-2xl" />
+   279→          ))}
+   280→        </div>
+   281→      </div>
+   282→    )
+   283→  }
+   284→
+   285→  return (
+   286→    <TooltipProvider delayDuration={300}>
+   287→      <div className="space-y-6 p-4 md:p-6">
+   288→        {/* ── Header ── */}
+   289→        <div className="flex items-center justify-between">
+   290→          <div className="flex items-center gap-3">
+   291→            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg">
+   292→              <Target className="w-5 h-5 text-white" />
+   293→            </div>
+   294→            <div>
+   295→              <h1 className="text-xl font-bold tracking-tight">الأهداف</h1>
+   296→              <p className="text-xs text-muted-foreground">حدد أهدافك وتابع تقدمك نحو القمة</p>
+   297→            </div>
+   298→          </div>
+   299→
+   300→          <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) resetForm() }}>
+   301→            <DialogTrigger asChild>
+   302→              <Button
+   303→                size="sm"
+   304→                className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+   305→              >
+   306→                <Plus className="w-4 h-4 ml-1.5" />
+   307→                هدف جديد
+   308→              </Button>
+   309→            </DialogTrigger>
+   310→            <DialogContent className="sm:max-w-md rounded-2xl">
+   311→              <DialogHeader>
+   312→                <DialogTitle className="text-right">إضافة هدف جديد</DialogTitle>
+   313→                <DialogDescription className="text-right">
+   314→                  حدد هدفك ورؤيتك لتحقيق النجاح
+   315→                </DialogDescription>
+   316→              </DialogHeader>
+   317→              <div className="space-y-4 pt-2">
+   318→                <div className="space-y-2">
+   319→                  <Label className="text-right text-sm font-medium">عنوان الهدف</Label>
+   320→                  <Input
+   321→                    value={formTitle}
+   322→                    onChange={(e) => setFormTitle(e.target.value)}
+   323→                    placeholder="مثال: إتمام دورة البرمجة"
+   324→                    className="rounded-xl text-right"
+   325→                  />
+   326→                </div>
+   327→                <div className="space-y-2">
+   328→                  <Label className="text-right text-sm font-medium">الرؤية</Label>
+   329→                  <Textarea
+   330→                    value={formVision}
+   331→                    onChange={(e) => setFormVision(e.target.value)}
+   332→                    placeholder="كيف ستبدو حياتك عند تحقيق هذا الهدف؟"
+   333→                    className="rounded-xl text-right min-h-[80px]"
+   334→                  />
+   335→                </div>
+   336→                <div className="space-y-2">
+   337→                  <Label className="text-right text-sm font-medium">لماذا؟</Label>
+   338→                  <Textarea
+   339→                    value={formWhy}
+   340→                    onChange={(e) => setFormWhy(e.target.value)}
+   341→                    placeholder="ما الدافع الحقيقي وراء هذا الهدف؟"
+   342→                    className="rounded-xl text-right min-h-[80px]"
+   343→                  />
+   344→                </div>
+   345→                <div className="grid grid-cols-2 gap-3">
+   346→                  <div className="space-y-2">
+   347→                    <Label className="text-right text-sm font-medium">النوع</Label>
+   348→                    <Select
+   349→                      value={formType}
+   350→                      onValueChange={(v) => setFormType(v as Goal['type'])}
+   351→                    >
+   352→                      <SelectTrigger className="rounded-xl text-right">
+   353→                        <SelectValue />
+   354→                      </SelectTrigger>
+   355→                      <SelectContent>
+   356→                        <SelectItem value="annual">سنوي</SelectItem>
+   357→                        <SelectItem value="quarterly">ربع سنوي</SelectItem>
+   358→                        <SelectItem value="monthly">شهري</SelectItem>
+   359→                        <SelectItem value="weekly">أسبوعي</SelectItem>
+   360→                      </SelectContent>
+   361→                    </Select>
+   362→                  </div>
+   363→                  <div className="space-y-2">
+   364→                    <Label className="text-right text-sm font-medium">الموعد النهائي</Label>
+   365→                    <Input
+   366→                      type="date"
+   367→                      value={formDeadline}
+   368→                      onChange={(e) => setFormDeadline(e.target.value)}
+   369→                      className="rounded-xl text-right"
+   370→                    />
+   371→                  </div>
+   372→                </div>
+   373→              </div>
+   374→              <DialogFooter className="gap-2 sm:gap-0">
+   375→                <Button
+   376→                  variant="outline"
+   377→                  onClick={() => setAddOpen(false)}
+   378→                  className="rounded-xl"
+   379→                >
+   380→                  إلغاء
+   381→                </Button>
+   382→                <Button
+   383→                  onClick={handleAddGoal}
+   384→                  disabled={!formTitle.trim() || saving}
+   385→                  className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+   386→                >
+   387→                  {saving ? (
+   388→                    <Loader2 className="w-4 h-4 animate-spin ml-1.5" />
+   389→                  ) : (
+   390→                    <Plus className="w-4 h-4 ml-1.5" />
+   391→                  )}
+   392→                  إضافة
+   393→                </Button>
+   394→              </DialogFooter>
+   395→            </DialogContent>
+   396→          </Dialog>
+   397→        </div>
+   398→
+   399→        {/* ── Statistics ── */}
+   400→        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   401→          <motion.div
+   402→            initial={{ opacity: 0, y: 16 }}
+   403→            animate={{ opacity: 1, y: 0 }}
+   404→            transition={{ duration: 0.4 }}
+   405→          >
+   406→            <Card className="rounded-2xl border-0 shadow-sm glass">
+   407→              <CardContent className="p-4 flex items-center gap-3">
+   408→                <div className="w-10 h-10 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
+   409→                  <Target className="w-5 h-5 text-emerald-accent" />
+   410→                </div>
+   411→                <div>
+   412→                  <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+   413→                  <p className="text-xs text-muted-foreground">إجمالي الأهداف</p>
+   414→                </div>
+   415→              </CardContent>
+   416→            </Card>
+   417→          </motion.div>
+   418→
+   419→          <motion.div
+   420→            initial={{ opacity: 0, y: 16 }}
+   421→            animate={{ opacity: 1, y: 0 }}
+   422→            transition={{ duration: 0.4, delay: 0.08 }}
+   423→          >
+   424→            <Card className="rounded-2xl border-0 shadow-sm glass">
+   425→              <CardContent className="p-4 flex items-center gap-3">
+   426→                <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center">
+   427→                  <Trophy className="w-5 h-5 text-gold" />
+   428→                </div>
+   429→                <div>
+   430→                  <p className="text-2xl font-bold text-foreground">{stats.completed}</p>
+   431→                  <p className="text-xs text-muted-foreground">مكتمل</p>
+   432→                </div>
+   433→              </CardContent>
+   434→            </Card>
+   435→          </motion.div>
+   436→
+   437→          <motion.div
+   438→            initial={{ opacity: 0, y: 16 }}
+   439→            animate={{ opacity: 1, y: 0 }}
+   440→            transition={{ duration: 0.4, delay: 0.16 }}
+   441→          >
+   442→            <Card className="rounded-2xl border-0 shadow-sm glass">
+   443→              <CardContent className="p-4 flex items-center gap-3">
+   444→                <div className="w-10 h-10 rounded-xl bg-forest/10 flex items-center justify-center">
+   445→                  <TrendingUp className="w-5 h-5 text-forest" />
+   446→                </div>
+   447→                <div>
+   448→                  <p className="text-2xl font-bold text-foreground">{stats.avgProgress}%</p>
+   449→                  <p className="text-xs text-muted-foreground">متوسط التقدم</p>
+   450→                </div>
+   451→              </CardContent>
+   452→            </Card>
+   453→          </motion.div>
+   454→        </div>
+   455→
+   456→        {/* ── Filter Tabs ── */}
+   457→        <Tabs
+   458→          value={activeType}
+   459→          onValueChange={setActiveType}
+   460→          className="w-full"
+   461→        >
+   462→          <TabsList className="rounded-xl bg-muted/60 p-1 h-auto flex-wrap">
+   463→            <TabsTrigger
+   464→              value="all"
+   465→              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
+   466→            >
+   467→              الكل
+   468→            </TabsTrigger>
+   469→            <TabsTrigger
+   470→              value="annual"
+   471→              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
+   472→            >
+   473→              سنوي
+   474→            </TabsTrigger>
+   475→            <TabsTrigger
+   476→              value="quarterly"
+   477→              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
+   478→            >
+   479→              ربع سنوي
+   480→            </TabsTrigger>
+   481→            <TabsTrigger
+   482→              value="monthly"
+   483→              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
+   484→            >
+   485→              شهري
+   486→            </TabsTrigger>
+   487→            <TabsTrigger
+   488→              value="weekly"
+   489→              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
+   490→            >
+   491→              أسبوعي
+   492→            </TabsTrigger>
+   493→          </TabsList>
+   494→
+   495→          {/* All tabs share the same content */}
+   496→          {['all', 'annual', 'quarterly', 'monthly', 'weekly'].map((tab) => (
+   497→            <TabsContent key={tab} value={tab}>
+   498→              {/* ── Goals List ── */}
+   499→              {filteredGoals.length === 0 ? (
+   500→                <motion.div
+   501→                  initial={{ opacity: 0, scale: 0.95 }}
+   502→                  animate={{ opacity: 1, scale: 1 }}
+   503→                  className="flex flex-col items-center justify-center py-20 text-center"
+   504→                >
+   505→                  <div className="w-20 h-20 rounded-full bg-emerald-accent/10 flex items-center justify-center mb-6">
+   506→                    <Rocket className="w-10 h-10 text-emerald-accent" />
+   507→                  </div>
+   508→                  <h3 className="text-lg font-semibold mb-2">ابدأ رحلتك نحو النجاح</h3>
+   509→                  <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
+   510→                    {activeType !== 'all'
+   511→                      ? `لا توجد أهداف ${TYPE_LABELS[activeType as Goal['type']] || ''} بعد. أضف أول هدفك الآن وابدأ بالتحرك!`
+   512→                      : 'كل رحلة عظيمة تبدأ بهدف واحد. حدد ما تريد تحقيقه وابدأ بخطوات ثابتة نحو حلمك.'}
+   513→                  </p>
+   514→                  <Button
+   515→                    onClick={() => setAddOpen(true)}
+   516→                    className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/20"
+   517→                  >
+   518→                    <Plus className="w-4 h-4 ml-1.5" />
+   519→                    أضف أول هدف
+   520→                  </Button>
+   521→                </motion.div>
+   522→              ) : (
+   523→                <div className="space-y-3">
+   524→                  <AnimatePresence mode="popLayout">
+   525→                    {filteredGoals.map((goal, index) => (
+   526→                      <GoalCard
+   527→                        key={goal.id}
+   528→                        goal={goal}
+   529→                        index={index}
+   530→                        expanded={expandedId === goal.id}
+   531→                        onToggleExpand={() =>
+   532→                          setExpandedId(expandedId === goal.id ? null : goal.id)
+   533→                        }
+   534→                        onToggleMilestone={(milestoneId) =>
+   535→                          toggleMilestone(goal.id, milestoneId)
+   536→                        }
+   537→                        onDelete={() => deleteGoal(goal.id)}
+   538→                        formatDate={formatDate}
+   539→                        getDeadlineInfo={getDeadlineInfo}
+   540→                      />
+   541→                    ))}
+   542→                  </AnimatePresence>
+   543→                </div>
+   544→              )}
+   545→            </TabsContent>
+   546→          ))}
+   547→        </Tabs>
+   548→      </div>
+   549→    </TooltipProvider>
+   550→  )
+   551→}
+   552→
+   553→/* ────────────── Goal Card ────────────── */
+   554→
+   555→interface GoalCardProps {
+   556→  goal: Goal
+   557→  index: number
+   558→  expanded: boolean
+   559→  onToggleExpand: () => void
+   560→  onToggleMilestone: (milestoneId: string) => void
+   561→  onDelete: () => void
+   562→  formatDate: (d: string) => string
+   563→  getDeadlineInfo: (d: string) => { text: string; urgent: boolean } | null
+   564→}
+   565→
+   566→function GoalCard({
+   567→  goal,
+   568→  index,
+   569→  expanded,
+   570→  onToggleExpand,
+   571→  onToggleMilestone,
+   572→  onDelete,
+   573→  formatDate,
+   574→  getDeadlineInfo,
+   575→}: GoalCardProps) {
+   576→  const deadlineInfo = getDeadlineInfo(goal.deadline)
+   577→  const completedMilestones = goal.milestones.filter((m) => m.completed).length
+   578→  const totalMilestones = goal.milestones.length
+   579→
+   580→  return (
+   581→    <motion.div
+   582→      layout
+   583→      initial={{ opacity: 0, y: 20 }}
+   584→      animate={{ opacity: 1, y: 0 }}
+   585→      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+   586→      transition={{ duration: 0.35, delay: index * 0.05 }}
+   587→    >
+   588→      <Card className="rounded-2xl border-0 shadow-sm glass overflow-hidden">
+   589→        {/* ── Card Header ── */}
+   590→        <button
+   591→          onClick={onToggleExpand}
+   592→          className="w-full text-right p-4 md:p-5 flex items-start gap-3 cursor-pointer"
+   593→        >
+   594→          {/* Progress circle */}
+   595→          <div className="relative w-12 h-12 shrink-0 mt-0.5">
+   596→            <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+   597→              <circle
+   598→                cx="24"
+   599→                cy="24"
+   600→                r="20"
+   601→                fill="none"
+   602→                stroke="currentColor"
+   603→                strokeWidth="3"
+   604→                className="text-muted/50"
+   605→              />
+   606→              <motion.circle
+   607→                cx="24"
+   608→                cy="24"
+   609→                r="20"
+   610→                fill="none"
+   611→                stroke="url(#emeraldGrad)"
+   612→                strokeWidth="3"
+   613→                strokeLinecap="round"
+   614→                strokeDasharray={`${2 * Math.PI * 20}`}
+   615→                initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+   616→                animate={{
+   617→                  strokeDashoffset:
+   618→                    2 * Math.PI * 20 - (goal.progress / 100) * (2 * Math.PI * 20),
+   619→                }}
+   620→                transition={{ duration: 1, ease: 'easeOut', delay: index * 0.08 }}
+   621→              />
+   622→              <defs>
+   623→                <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+   624→                  <stop offset="0%" stopColor="oklch(0.55 0.14 163)" />
+   625→                  <stop offset="100%" stopColor="oklch(0.35 0.10 160)" />
+   626→                </linearGradient>
+   627→              </defs>
+   628→            </svg>
+   629→            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground">
+   630→              {goal.progress}%
+   631→            </span>
+   632→          </div>
+   633→
+   634→          {/* Info */}
+   635→          <div className="flex-1 min-w-0">
+   636→            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+   637→              <h3 className="font-semibold text-sm md:text-base truncate">{goal.title}</h3>
+   638→              <Badge
+   639→                variant="outline"
+   640→                className={cn('text-[10px] px-2 py-0 rounded-full font-medium', TYPE_COLORS[goal.type])}
+   641→              >
+   642→                {TYPE_LABELS[goal.type]}
+   643→              </Badge>
+   644→            </div>
+   645→
+   646→            {/* Progress bar */}
+   647→            <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden mb-2 max-w-xs">
+   648→              <motion.div
+   649→                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+   650→                initial={{ width: 0 }}
+   651→                animate={{ width: `${goal.progress}%` }}
+   652→                transition={{ duration: 0.8, ease: 'easeOut', delay: index * 0.08 }}
+   653→              />
+   654→            </div>
+   655→
+   656→            {/* Meta */}
+   657→            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   658→              {goal.deadline && (
+   659→                <span className={cn('flex items-center gap-1', deadlineInfo?.urgent && 'text-gold')}>
+   660→                  <Calendar className="w-3 h-3" />
+   661→                  {formatDate(goal.deadline)}
+   662→                  {deadlineInfo && (
+   663→                    <span className="text-[10px] mr-1">({deadlineInfo.text})</span>
+   664→                  )}
+   665→                </span>
+   666→              )}
+   667→              {totalMilestones > 0 && (
+   668→                <span className="flex items-center gap-1">
+   669→                  <CheckCircle2 className="w-3 h-3" />
+   670→                  {completedMilestones} / {totalMilestones}
+   671→                </span>
+   672→              )}
+   673→            </div>
+   674→          </div>
+   675→
+   676→          {/* Expand icon */}
+   677→          <motion.div
+   678→            animate={{ rotate: expanded ? 180 : 0 }}
+   679→            transition={{ duration: 0.2 }}
+   680→            className="shrink-0 mt-1 text-muted-foreground"
+   681→          >
+   682→            <ChevronDown className="w-4 h-4" />
+   683→          </motion.div>
+   684→        </button>
+   685→
+   686→        {/* ── Expanded Content ── */}
+   687→        <AnimatePresence>
+   688→          {expanded && (
+   689→            <motion.div
+   690→              initial={{ height: 0, opacity: 0 }}
+   691→              animate={{ height: 'auto', opacity: 1 }}
+   692→              exit={{ height: 0, opacity: 0 }}
+   693→              transition={{ duration: 0.3, ease: 'easeInOut' }}
+   694→              className="overflow-hidden"
+   695→            >
+   696→              <div className="px-4 md:px-5 pb-4 md:pb-5 pt-0 space-y-4 border-t border-border/40 mt-0 pt-4">
+   697→                {/* Vision */}
+   698→                {goal.vision && (
+   699→                  <div className="space-y-1.5">
+   700→                    <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-accent">
+   701→                      <Eye className="w-3.5 h-3.5" />
+   702→                      الرؤية
+   703→                    </div>
+   704→                    <p className="text-sm text-muted-foreground leading-relaxed pr-5">
+   705→                      {goal.vision}
+   706→                    </p>
+   707→                  </div>
+   708→                )}
+   709→
+   710→                {/* Why */}
+   711→                {goal.why && (
+   712→                  <div className="space-y-1.5">
+   713→                    <div className="flex items-center gap-1.5 text-xs font-medium text-gold">
+   714→                      <Sparkles className="w-3.5 h-3.5" />
+   715→                      لماذا؟
+   716→                    </div>
+   717→                    <p className="text-sm text-muted-foreground leading-relaxed pr-5">
+   718→                      {goal.why}
+   719→                    </p>
+   720→                  </div>
+   721→                )}
+   722→
+   723→                {/* Milestones */}
+   724→                {goal.milestones.length > 0 && (
+   725→                  <div className="space-y-2">
+   726→                    <div className="flex items-center justify-between">
+   727→                      <p className="text-xs font-medium text-muted-foreground">
+   728→                        المعالم ({completedMilestones}/{totalMilestones})
+   729→                      </p>
+   730→                    </div>
+   731→                    <div className="space-y-1.5 max-h-48 overflow-y-auto pl-1">
+   732→                      {goal.milestones
+   733→                        .sort((a, b) => a.order - b.order)
+   734→                        .map((milestone) => (
+   735→                          <motion.div
+   736→                            key={milestone.id}
+   737→                            initial={{ opacity: 0, x: -10 }}
+   738→                            animate={{ opacity: 1, x: 0 }}
+   739→                            transition={{ duration: 0.2 }}
+   740→                            className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/40 transition-colors group"
+   741→                          >
+   742→                            <Checkbox
+   743→                              checked={milestone.completed}
+   744→                              onCheckedChange={() => onToggleMilestone(milestone.id)}
+   745→                              className={cn(
+   746→                                'data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+   747→                              )}
+   748→                            />
+   749→                            <span
+   750→                              className={cn(
+   751→                                'text-sm flex-1 transition-all',
+   752→                                milestone.completed
+   753→                                  ? 'line-through text-muted-foreground/60'
+   754→                                  : 'text-foreground'
+   755→                              )}
+   756→                            >
+   757→                              {milestone.title}
+   758→                            </span>
+   759→                            {milestone.completed && (
+   760→                              <CheckCircle2 className="w-4 h-4 text-emerald-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+   761→                            )}
+   762→                          </motion.div>
+   763→                        ))}
+   764→                    </div>
+   765→                  </div>
+   766→                )}
+   767→
+   768→                {/* Delete */}
+   769→                <div className="flex justify-start pt-1">
+   770→                  <Tooltip>
+   771→                    <TooltipTrigger asChild>
+   772→                      <Button
+   773→                        variant="ghost"
+   774→                        size="sm"
+   775→                        onClick={(e) => {
+   776→                          e.stopPropagation()
+   777→                          onDelete()
+   778→                        }}
+   779→                        className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded-xl text-xs h-8"
+   780→                      >
+   781→                        <Trash2 className="w-3.5 h-3.5 ml-1" />
+   782→                        حذف الهدف
+   783→                      </Button>
+   784→                    </TooltipTrigger>
+   785→                    <TooltipContent>حذف هذا الهدف نهائياً</TooltipContent>
+   786→                  </Tooltip>
+   787→                </div>
+   788→              </div>
+   789→            </motion.div>
+   790→          )}
+   791→        </AnimatePresence>
+   792→      </Card>
+   793→    </motion.div>
+   794→  )
+   795→}
+   796→
+   797→export default GoalsView

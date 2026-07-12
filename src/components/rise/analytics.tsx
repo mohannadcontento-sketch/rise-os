@@ -16,6 +16,10 @@ import {
   Award,
   ArrowUpRight,
   ArrowDownRight,
+  Trophy,
+  Calendar,
+  Timer,
+  Star,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -85,7 +89,61 @@ const CHART_COLORS = [
   'oklch(0.35 0.10 160)',
 ]
 
-const dayNamesAr = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+
+/* Glass-themed tooltip with dark mode support */
+const glassTooltipStyle = {
+  background: 'oklch(0.98 0.002 106 / 0.92)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid oklch(0.88 0.01 160)',
+  borderRadius: '12px',
+  fontSize: 12,
+  direction: 'rtl' as const,
+  padding: '10px 14px',
+  boxShadow: '0 4px 24px oklch(0.55 0.14 163 / 0.08)',
+}
+
+/* Dark mode glass tooltip */
+const darkGlassTooltipStyle = {
+  background: 'oklch(0.18 0.02 155 / 0.92)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid oklch(0.30 0.02 155)',
+  borderRadius: '12px',
+  fontSize: 12,
+  direction: 'rtl' as const,
+  padding: '10px 14px',
+  boxShadow: '0 4px 24px oklch(0 0 0 / 0.3)',
+}
+
+/* Custom tooltip renderer */
+function GlassTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const isDark = document.documentElement.classList.contains('dark')
+  return (
+    <div
+      className={cn(
+        'rounded-xl px-3.5 py-2.5 text-xs space-y-1.5',
+        isDark
+          ? 'bg-[oklch(0.18_0.02_155/0.92)] border border-[oklch(0.30_0.02_155)]'
+          : 'bg-[oklch(0.98_0.002_106/0.92)] border border-[oklch(0.88_0.01_160)]'
+      )}
+      style={{ backdropFilter: 'blur(16px)', boxShadow: isDark ? '0 4px 24px oklch(0 0 0/0.3)' : '0 4px 24px oklch(0.55 0.14 163/0.08)' }}
+    >
+      <p className={cn('font-semibold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{label}</p>
+      {payload.map((entry, i) => (
+        <div key={i} className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className={isDark ? 'text-[oklch(0.70_0.01_160)]' : 'text-[oklch(0.50_0.01_160)]'}>{entry.name}</span>
+          </div>
+          <span className={cn('font-bold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 /* ────────────── Component ────────────── */
 
@@ -127,7 +185,6 @@ export default function Analytics() {
 
   // ─── Computed Charts ───
 
-  // Productivity trend (daily scores)
   const productivityData = useMemo(() => {
     if (!dashboard?.dailyScores) return []
     const scores = dashboard.dailyScores.slice(-(period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90))
@@ -137,7 +194,6 @@ export default function Analytics() {
     }))
   }, [dashboard, period])
 
-  // Habit completion rate trend
   const habitTrendData = useMemo(() => {
     if (!habits) return []
     const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
@@ -158,7 +214,6 @@ export default function Analytics() {
     return result
   }, [habits, period])
 
-  // Focus time by day of week
   const focusByDayData = useMemo(() => {
     if (!focus) return []
     const dayMap: Record<string, number> = {}
@@ -176,7 +231,6 @@ export default function Analytics() {
     }))
   }, [focus])
 
-  // Task completion (from dashboard)
   const taskCompletionData = useMemo(() => {
     if (!dashboard?.dailyScores) return []
     const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
@@ -187,7 +241,6 @@ export default function Analytics() {
     }))
   }, [dashboard, period])
 
-  // Health trends
   const healthTrendsData = useMemo(() => {
     if (!health?.logs) return []
     const logs = health.logs.slice(-(period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90)).reverse()
@@ -199,7 +252,6 @@ export default function Analytics() {
     }))
   }, [health, period])
 
-  // Goal progress distribution (pie chart - from scores breakdown)
   const goalDistributionData = useMemo(() => {
     if (!dashboard?.dailyScores?.length) return []
     const latest = dashboard.dailyScores[dashboard.dailyScores.length - 1]
@@ -214,11 +266,44 @@ export default function Analytics() {
     ]
   }, [dashboard])
 
-  // Insights
+  // Best/Worst Day
+  const { bestDay, worstDay } = useMemo(() => {
+    if (!dashboard?.dailyScores || dashboard.dailyScores.length < 2) {
+      return { bestDay: null, worstDay: null }
+    }
+    const dayScores: Record<number, { total: number; count: number }> = {}
+    dashboard.dailyScores.forEach((s) => {
+      const day = new Date(s.date).getDay()
+      if (!dayScores[day]) dayScores[day] = { total: 0, count: 0 }
+      dayScores[day].total += s.score
+      dayScores[day].count++
+    })
+    let bestKey = 0, worstKey = 0, bestAvg = 0, worstAvg = 10
+    Object.entries(dayScores).forEach(([day, { total, count }]) => {
+      const avg = total / count
+      if (avg > bestAvg) { bestAvg = avg; bestKey = parseInt(day) }
+      if (avg < worstAvg) { worstAvg = avg; worstKey = parseInt(day) }
+    })
+    return {
+      bestDay: { name: dayNamesAr[bestKey], avg: Math.round(bestAvg * 10) / 10 },
+      worstDay: { name: dayNamesAr[worstKey], avg: Math.round(worstAvg * 10) / 10 },
+    }
+  }, [dashboard])
+
+  // Personal Records
+  const personalRecords = useMemo(() => {
+    if (!dashboard?.dailyScores || !focus) return null
+    const scores = dashboard.dailyScores
+    const highestScore = scores.length > 0 ? Math.round(Math.max(...scores.map((s) => s.score)) * 10) / 10 : 0
+    const longestFocus = focus.sessions.length > 0 ? Math.max(...focus.sessions.filter((s) => s.completed).map((s) => s.actualMin || 0)) : 0
+    const mostTasks = scores.length > 0 ? Math.round(Math.max(...scores.map((s) => s.taskScore)) * 10) / 10 : 0
+    return { highestScore, longestFocus, mostTasks }
+  }, [dashboard, focus])
+
   const insights = useMemo(() => {
     const items: { icon: React.ElementType; text: string; type: 'positive' | 'negative' | 'neutral' }[] = []
     if (dashboard) {
-      const { streak, longestStreak, totalTasksDone, totalFocusMin, dailyScores } = dashboard.user
+      const { streak, longestStreak, totalTasksDone, totalFocusMin } = dashboard.user
       items.push({
         icon: Flame,
         text: streak > 0 ? `سلسلتك الحالية: ${streak} يوم متتالي` : 'ابدأ سلسلتك اليوم!',
@@ -239,8 +324,8 @@ export default function Analytics() {
         text: `إجمالي وقت التركيز: ${Math.round(totalFocusMin / 60)} ساعة`,
         type: 'positive',
       })
-      if (dailyScores.length >= 2) {
-        const lastWeek = dailyScores.slice(-7)
+      if (dashboard.dailyScores?.length >= 2) {
+        const lastWeek = dashboard.dailyScores.slice(-7)
         const avg = lastWeek.reduce((s, d) => s + d.score, 0) / lastWeek.length
         items.push({
           icon: avg >= 7 ? TrendingUp : TrendingDown,
@@ -297,22 +382,31 @@ export default function Analytics() {
           </h2>
           <p className="text-sm text-muted-foreground mt-1">نظرة شاملة على أدائك وتقدمك</p>
         </div>
-        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
-          {(Object.keys(periodLabels) as Period[]).map((p) => (
-            <Button
-              key={p}
-              size="sm"
-              variant="ghost"
-              onClick={() => setPeriod(p)}
-              className={cn(
-                'rounded-lg text-xs',
-                period === p && 'bg-background shadow-sm text-foreground font-semibold'
-              )}
-            >
-              {periodLabels[p]}
-            </Button>
-          ))}
-        </div>
+        {/* Period Selector with gradient border */}
+        <motion.div
+          className="p-[1px] rounded-xl bg-gradient-to-l from-emerald-accent/40 via-emerald-accent/20 to-gold/30"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="flex items-center gap-0.5 bg-background/80 dark:bg-card/80 rounded-xl p-1">
+            {(Object.keys(periodLabels) as Period[]).map((p) => (
+              <Button
+                key={p}
+                size="sm"
+                variant="ghost"
+                onClick={() => setPeriod(p)}
+                className={cn(
+                  'rounded-lg text-xs transition-all',
+                  period === p
+                    ? 'bg-gradient-to-l from-emerald-accent to-emerald-accent/80 text-white font-semibold shadow-md shadow-emerald-accent/20'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {periodLabels[p]}
+              </Button>
+            ))}
+          </div>
+        </motion.div>
       </div>
 
       {/* Overview Cards */}
@@ -341,11 +435,84 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Charts Row 1 */}
+      {/* Best/Worst Day + Personal Records */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {bestDay && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+            <Card className="glass border-emerald-accent/20 overflow-hidden">
+              <div className="bg-gradient-to-l from-emerald-accent/8 to-transparent p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-accent/15">
+                    <TrendingUp className="w-4 h-4 text-emerald-accent" />
+                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground">أفضل يوم</p>
+                </div>
+                <p className="text-2xl font-bold text-emerald-accent">{bestDay.name}</p>
+                <p className="text-sm text-muted-foreground">متوسط: <span className="font-semibold text-foreground">{bestDay.avg}</span></p>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+        {worstDay && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+            <Card className="glass border-rose-500/20 overflow-hidden">
+              <div className="bg-gradient-to-l from-rose-500/8 to-transparent p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 rounded-lg bg-rose-500/15">
+                    <TrendingDown className="w-4 h-4 text-rose-500" />
+                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground">يوم يحتاج تحسين</p>
+                </div>
+                <p className="text-2xl font-bold text-rose-500">{worstDay.name}</p>
+                <p className="text-sm text-muted-foreground">متوسط: <span className="font-semibold text-foreground">{worstDay.avg}</span></p>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+        {personalRecords && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+            <Card className="glass border-gold/20 overflow-hidden">
+              <div className="bg-gradient-to-l from-gold/8 to-transparent p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 rounded-lg bg-gold/15">
+                    <Trophy className="w-4 h-4 text-gold" />
+                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground">الأرقام القياسية</p>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-gold" />
+                      <span className="text-muted-foreground text-xs">أعلى درجة يومية</span>
+                    </div>
+                    <span className="font-bold text-foreground">{personalRecords.highestScore}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5 text-emerald-accent" />
+                      <span className="text-muted-foreground text-xs">أطول جلسة تركيز</span>
+                    </div>
+                    <span className="font-bold text-foreground">{personalRecords.longestFocus} دقيقة</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-forest" />
+                      <span className="text-muted-foreground text-xs">أعلى إنجاز مهام</span>
+                    </div>
+                    <span className="font-bold text-foreground">{personalRecords.mostTasks}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Charts Row 1 - Glass Cards */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Productivity Trend */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="glass">
+          <Card className="glass overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-emerald-accent" />
@@ -360,15 +527,7 @@ export default function Analytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
                       <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
-                      <Tooltip
-                        contentStyle={{
-                          background: 'oklch(0.995 0.001 106)',
-                          border: '1px solid oklch(0.90 0.01 160)',
-                          borderRadius: '12px',
-                          fontSize: 12,
-                          direction: 'rtl',
-                        }}
-                      />
+                      <Tooltip content={<GlassTooltip />} />
                       <Line
                         type="monotone"
                         dataKey="score"
@@ -390,7 +549,7 @@ export default function Analytics() {
 
         {/* Habit Completion Trend */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Card className="glass">
+          <Card className="glass overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Target className="w-4 h-4 text-forest" />
@@ -405,16 +564,7 @@ export default function Analytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
                       <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} unit="%" />
-                      <Tooltip
-                        contentStyle={{
-                          background: 'oklch(0.995 0.001 106)',
-                          border: '1px solid oklch(0.90 0.01 160)',
-                          borderRadius: '12px',
-                          fontSize: 12,
-                          direction: 'rtl',
-                        }}
-                        formatter={(v: number) => [`${v}%`, 'النسبة']}
-                      />
+                      <Tooltip content={<GlassTooltip />} />
                       <defs>
                         <linearGradient id="habitGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.3} />
@@ -440,11 +590,11 @@ export default function Analytics() {
         </motion.div>
       </div>
 
-      {/* Charts Row 2 */}
+      {/* Charts Row 2 - Glass Cards */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Focus Time Distribution */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="glass">
+          <Card className="glass overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Brain className="w-4 h-4 text-gold" />
@@ -458,16 +608,7 @@ export default function Analytics() {
                     <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }} />
                     <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'oklch(0.995 0.001 106)',
-                        border: '1px solid oklch(0.90 0.01 160)',
-                        borderRadius: '12px',
-                        fontSize: 12,
-                        direction: 'rtl',
-                      }}
-                      formatter={(v: number) => [`${v} ساعة`, 'التركيز']}
-                    />
+                    <Tooltip content={<GlassTooltip />} />
                     <Bar
                       dataKey="hours"
                       fill="oklch(0.55 0.14 163)"
@@ -483,7 +624,7 @@ export default function Analytics() {
 
         {/* Goal Progress Distribution (Pie) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-          <Card className="glass">
+          <Card className="glass overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-500" />
@@ -509,15 +650,7 @@ export default function Analytics() {
                             <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            background: 'oklch(0.995 0.001 106)',
-                            border: '1px solid oklch(0.90 0.01 160)',
-                            borderRadius: '12px',
-                            fontSize: 12,
-                            direction: 'rtl',
-                          }}
-                        />
+                        <Tooltip content={<GlassTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -539,9 +672,9 @@ export default function Analytics() {
         </motion.div>
       </div>
 
-      {/* Health Trends */}
+      {/* Health Trends - Glass Card */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <Card className="glass">
+        <Card className="glass overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-rose-500" />
@@ -556,15 +689,7 @@ export default function Analytics() {
                     <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
                     <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'oklch(0.995 0.001 106)',
-                        border: '1px solid oklch(0.90 0.01 160)',
-                        borderRadius: '12px',
-                        fontSize: 12,
-                        direction: 'rtl',
-                      }}
-                    />
+                    <Tooltip content={<GlassTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 11, direction: 'rtl' }} />
                     <Line type="monotone" dataKey="sleep" stroke="oklch(0.55 0.10 250)" strokeWidth={2} name="النوم (ساعات)" />
                     <Line type="monotone" dataKey="water" stroke="oklch(0.60 0.15 200)" strokeWidth={2} name="الماء (كؤوس)" />
@@ -579,9 +704,9 @@ export default function Analytics() {
         </Card>
       </motion.div>
 
-      {/* Insights */}
+      {/* Insights - Glass Card */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <Card className="glass">
+        <Card className="glass overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Brain className="w-4 h-4 text-emerald-accent" />

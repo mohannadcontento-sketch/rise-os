@@ -20,6 +20,7 @@ import {
   Heart,
   Battery,
   Tag,
+  CalendarDays,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,15 +54,32 @@ interface JournalData {
 
 /* ────────────── Constants ────────────── */
 
-const MOOD_EMOJIS: { value: number; emoji: string; label: string }[] = [
-  { value: 1, emoji: '😞', label: 'سيء جداً' },
-  { value: 2, emoji: '😐', label: 'سيء' },
-  { value: 3, emoji: '🙂', label: 'عادي' },
-  { value: 4, emoji: '😊', label: 'جيد' },
-  { value: 5, emoji: '😄', label: 'ممتاز' },
+const MOOD_EMOJIS: { value: number; emoji: string; label: string; color: string }[] = [
+  { value: 1, emoji: '😞', label: 'سيء جداً', color: 'bg-red-500/15 ring-red-500/30' },
+  { value: 2, emoji: '😐', label: 'سيء', color: 'bg-gray-400/15 ring-gray-400/30' },
+  { value: 3, emoji: '🙂', label: 'عادي', color: 'bg-gold/15 ring-gold/30' },
+  { value: 4, emoji: '😊', label: 'جيد', color: 'bg-emerald-accent/15 ring-emerald-accent/30' },
+  { value: 5, emoji: '😄', label: 'ممتاز', color: 'bg-emerald-accent/20 ring-emerald-accent/40' },
 ]
 
 const ENERGY_LABELS = ['منهك', 'متعب', 'عادي', 'نشيط', 'ممتليء طاقة']
+
+const MOOD_STRIP_COLORS: Record<number, string> = {
+  1: 'bg-red-500',
+  2: 'bg-gray-400',
+  3: 'bg-gold',
+  4: 'bg-emerald-accent',
+  5: 'bg-emerald-accent',
+}
+
+const TEXTAREA_ACCENT_COLORS: Record<string, string> = {
+  content: 'border-r-[3px] border-r-emerald-accent/50',
+  gratitude: 'border-r-[3px] border-r-rose-400/50',
+  wins: 'border-r-[3px] border-r-gold/50',
+  challenges: 'border-r-[3px] border-r-orange-400/50',
+  ideas: 'border-r-[3px] border-r-yellow-400/50',
+  tomorrowPlan: 'border-r-[3px] border-r-forest-light/50',
+}
 
 const EMPTY_FORM: Omit<JournalEntry, 'id' | 'date' | 'tags'> = {
   content: '',
@@ -269,8 +287,9 @@ export default function Journal() {
 
       {/* Stats */}
       <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 md:gap-4">
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
               <Calendar className="w-4 h-4 text-emerald-accent" />
             </div>
@@ -278,8 +297,9 @@ export default function Journal() {
             <span className="text-[11px] text-muted-foreground">إجمالي المدخلات</span>
           </CardContent>
         </Card>
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
               <Flame className="w-4 h-4 text-gold" />
             </div>
@@ -287,8 +307,9 @@ export default function Journal() {
             <span className="text-[11px] text-muted-foreground">أيام متتالية</span>
           </CardContent>
         </Card>
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
               <Smile className="w-4 h-4 text-forest" />
             </div>
@@ -352,162 +373,195 @@ export default function Journal() {
           <CardContent className="space-y-5">
             {showForm ? (
               <>
-                {/* Journal Content */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-emerald-accent" />
-                    اليوميات
-                  </label>
-                  <Textarea
-                    value={form.content}
-                    onChange={(e) => updateForm('content', e.target.value)}
-                    placeholder="اكتب أفكارك ومشاعرك اليوم..."
-                    className="min-h-[120px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
-                </div>
-
-                {/* Gratitude */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-rose-400" />
-                    الامتنان
-                  </label>
-                  <Textarea
-                    value={form.gratitude}
-                    onChange={(e) => updateForm('gratitude', e.target.value)}
-                    placeholder="ما الذي تشكر الله عليه اليوم؟"
-                    className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
-                </div>
-
-                {/* Wins */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-gold" />
-                    الانتصارات
-                  </label>
-                  <Textarea
-                    value={form.wins}
-                    onChange={(e) => updateForm('wins', e.target.value)}
-                    placeholder="ما هي إنجازاتك اليوم؟"
-                    className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
-                </div>
-
-                {/* Challenges */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-orange-400" />
-                    التحديات
-                  </label>
-                  <Textarea
-                    value={form.challenges}
-                    onChange={(e) => updateForm('challenges', e.target.value)}
-                    placeholder="ما هي التحديات التي واجهتها؟"
-                    className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
-                </div>
-
-                {/* Mood Selector */}
-                <div className="space-y-3">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Smile className="w-4 h-4 text-emerald-accent" />
-                    المزاج
-                  </label>
-                  <div className="flex items-center gap-2 justify-center py-2">
-                    {MOOD_EMOJIS.map((m) => (
-                      <motion.button
-                        key={m.value}
-                        whileHover={{ scale: 1.15 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => updateForm('mood', m.value)}
-                        className={cn(
-                          'text-3xl p-2 rounded-xl transition-all duration-200',
-                          form.mood === m.value
-                            ? 'bg-emerald-accent/15 scale-110 shadow-md'
-                            : 'hover:bg-muted/50 opacity-60 hover:opacity-100'
-                        )}
-                        title={m.label}
-                      >
-                        {m.emoji}
-                      </motion.button>
-                    ))}
-                  </div>
-                  <p className="text-center text-xs text-muted-foreground">
-                    {MOOD_EMOJIS.find((m) => m.value === form.mood)?.label}
-                  </p>
-                </div>
-
-                {/* Energy Slider */}
-                <div className="space-y-3">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Battery className="w-4 h-4 text-forest" />
-                    الطاقة: <span className="text-emerald-accent font-bold">{ENERGY_LABELS[form.energy - 1]}</span>
-                  </label>
-                  <div className="flex items-center gap-3 px-1">
-                    <span className="text-xs text-muted-foreground">١</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={5}
-                      value={form.energy}
-                      onChange={(e) => updateForm('energy', parseInt(e.target.value))}
-                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer accent-emerald-accent"
-                      style={{
-                        background: `linear-gradient(to left, var(--color-emerald-accent) ${((form.energy - 1) / 4) * 100}%, var(--color-muted) ${((form.energy - 1) / 4) * 100}%)`,
-                      }}
+                {/* Paper texture form background */}
+                <div className="rounded-2xl p-4 -mx-2 space-y-5 bg-[repeating-linear-gradient(0deg,transparent,transparent_27px,oklch(0.5_0_0/0.03)_27px,oklch(0.5_0_0/0.03)_28px)]">
+                  {/* Journal Content */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-emerald-accent" />
+                      اليوميات
+                    </label>
+                    <Textarea
+                      value={form.content}
+                      onChange={(e) => updateForm('content', e.target.value)}
+                      placeholder="اكتب أفكارك ومشاعرك اليوم..."
+                      className={cn(
+                        'min-h-[120px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+                        TEXTAREA_ACCENT_COLORS.content
+                      )}
+                      dir="rtl"
                     />
-                    <span className="text-xs text-muted-foreground">٥</span>
                   </div>
-                </div>
 
-                {/* Ideas */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-gold" />
-                    أفكار
-                  </label>
-                  <Textarea
-                    value={form.ideas}
-                    onChange={(e) => updateForm('ideas', e.target.value)}
-                    placeholder="أي أفكار جديدة أو إلهامات..."
-                    className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
-                </div>
+                  {/* Gratitude */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-rose-400" />
+                      الامتنان
+                    </label>
+                    <Textarea
+                      value={form.gratitude}
+                      onChange={(e) => updateForm('gratitude', e.target.value)}
+                      placeholder="ما الذي تشكر الله عليه اليوم؟"
+                      className={cn(
+                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+                        TEXTAREA_ACCENT_COLORS.gratitude
+                      )}
+                      dir="rtl"
+                    />
+                  </div>
 
-                {/* Tomorrow's Plan */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-forest-light" />
-                    خطة الغد
-                  </label>
-                  <Textarea
-                    value={form.tomorrowPlan}
-                    onChange={(e) => updateForm('tomorrowPlan', e.target.value)}
-                    placeholder="ما الذي تخطط لفعله غداً؟"
-                    className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
-                </div>
+                  {/* Wins */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-gold" />
+                      الانتصارات
+                    </label>
+                    <Textarea
+                      value={form.wins}
+                      onChange={(e) => updateForm('wins', e.target.value)}
+                      placeholder="ما هي إنجازاتك اليوم؟"
+                      className={cn(
+                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+                        TEXTAREA_ACCENT_COLORS.wins
+                      )}
+                      dir="rtl"
+                    />
+                  </div>
 
-                {/* Tags */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-muted-foreground" />
-                    الوسوم
-                  </label>
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="أدخل وسوم مفصولة بفواصل..."
-                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                    dir="rtl"
-                  />
+                  {/* Challenges */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-orange-400" />
+                      التحديات
+                    </label>
+                    <Textarea
+                      value={form.challenges}
+                      onChange={(e) => updateForm('challenges', e.target.value)}
+                      placeholder="ما هي التحديات التي واجهتها؟"
+                      className={cn(
+                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+                        TEXTAREA_ACCENT_COLORS.challenges
+                      )}
+                      dir="rtl"
+                    />
+                  </div>
+
+                  {/* Mood Selector with spring animation */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Smile className="w-4 h-4 text-emerald-accent" />
+                      المزاج
+                    </label>
+                    <div className="flex items-center gap-2 justify-center py-2">
+                      {MOOD_EMOJIS.map((m) => (
+                        <motion.button
+                          key={m.value}
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.85 }}
+                          animate={form.mood === m.value ? { scale: [1, 1.35, 1.1] } : { scale: 1 }}
+                          transition={form.mood === m.value
+                            ? { type: 'spring', stiffness: 400, damping: 10, duration: 0.5 }
+                            : { duration: 0.2 }
+                          }
+                          onClick={() => updateForm('mood', m.value)}
+                          className={cn(
+                            'text-3xl p-2 rounded-xl transition-all duration-200 ring-1',
+                            form.mood === m.value
+                              ? `${m.color} shadow-md`
+                              : 'ring-transparent hover:bg-muted/50 opacity-60 hover:opacity-100'
+                          )}
+                          title={m.label}
+                        >
+                          {m.emoji}
+                        </motion.button>
+                      ))}
+                    </div>
+                    <p className="text-center text-xs text-muted-foreground">
+                      {MOOD_EMOJIS.find((m) => m.value === form.mood)?.label}
+                    </p>
+                  </div>
+
+                  {/* Energy Slider with gradient fill */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Battery className="w-4 h-4 text-forest" />
+                      الطاقة: <span className="text-emerald-accent font-bold">{ENERGY_LABELS[form.energy - 1]}</span>
+                    </label>
+                    <div className="flex items-center gap-3 px-1">
+                      <span className="text-xs text-muted-foreground">١</span>
+                      <div className="flex-1 relative">
+                        <div className="absolute inset-0 h-2 rounded-full top-1/2 -translate-y-1/2 bg-muted" />
+                        <div
+                          className="absolute inset-y-0 right-0 h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${((form.energy - 1) / 4) * 100}%`,
+                            background: 'linear-gradient(to left, #ef4444, #f97316, #eab308, #22c55e, #10b981)',
+                          }}
+                        />
+                        <input
+                          type="range"
+                          min={1}
+                          max={5}
+                          value={form.energy}
+                          onChange={(e) => updateForm('energy', parseInt(e.target.value))}
+                          className="relative z-10 w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-accent bg-transparent"
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground">٥</span>
+                    </div>
+                  </div>
+
+                  {/* Ideas */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4 text-gold" />
+                      أفكار
+                    </label>
+                    <Textarea
+                      value={form.ideas}
+                      onChange={(e) => updateForm('ideas', e.target.value)}
+                      placeholder="أي أفكار جديدة أو إلهامات..."
+                      className={cn(
+                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+                        TEXTAREA_ACCENT_COLORS.ideas
+                      )}
+                      dir="rtl"
+                    />
+                  </div>
+
+                  {/* Tomorrow's Plan */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-forest-light" />
+                      خطة الغد
+                    </label>
+                    <Textarea
+                      value={form.tomorrowPlan}
+                      onChange={(e) => updateForm('tomorrowPlan', e.target.value)}
+                      placeholder="ما الذي تخطط لفعله غداً؟"
+                      className={cn(
+                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+                        TEXTAREA_ACCENT_COLORS.tomorrowPlan
+                      )}
+                      dir="rtl"
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-muted-foreground" />
+                      الوسوم
+                    </label>
+                    <Input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      placeholder="أدخل وسوم مفصولة بفواصل..."
+                      className="rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
+                      dir="rtl"
+                    />
+                  </div>
                 </div>
 
                 {/* Save Button */}
@@ -629,7 +683,7 @@ export default function Journal() {
                       key={entry.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
+                      exit={{ opacity: 0, x: -20, scale: 0.95 }}
                       transition={{ delay: index * 0.03 }}
                     >
                       <button
@@ -640,20 +694,29 @@ export default function Journal() {
                       >
                         <div
                           className={cn(
-                            'rounded-xl p-4 transition-all duration-200',
-                            'hover:bg-muted/50 border border-transparent hover:border-border/50',
+                            'rounded-xl p-4 transition-all duration-200 relative overflow-hidden',
+                            'hover:shadow-md hover:-translate-y-0.5 border border-transparent hover:border-border/50',
                             expandedId === entry.id && 'bg-muted/30 border-border/50'
                           )}
                         >
-                          <div className="flex items-center justify-between mb-2">
+                          {/* Mood color strip */}
+                          <div className={cn(
+                            'absolute top-0 right-0 bottom-0 w-1 rounded-r-xl',
+                            MOOD_STRIP_COLORS[entry.mood] || 'bg-gray-400'
+                          )} />
+
+                          <div className="flex items-center justify-between mb-2 pr-2">
                             <div className="flex items-center gap-2">
                               <span className="text-xl">{getMoodEmoji(entry.mood)}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(entry.date).toLocaleDateString('ar-SA', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                })}
-                              </span>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <CalendarDays className="w-3 h-3" />
+                                <span>
+                                  {new Date(entry.date).toLocaleDateString('ar-SA', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })}
+                                </span>
+                              </div>
                             </div>
                             <div className="flex items-center gap-1">
                               {entry.tags &&
@@ -677,7 +740,7 @@ export default function Journal() {
                             </div>
                           </div>
 
-                          <p className="text-sm text-foreground/80 line-clamp-2">
+                          <p className="text-sm text-foreground/80 line-clamp-2 pr-2">
                             {entry.content || 'لا يوجد محتوى'}
                           </p>
 
@@ -690,7 +753,7 @@ export default function Journal() {
                                 transition={{ duration: 0.3 }}
                                 className="overflow-hidden"
                               >
-                                <div className="pt-3 mt-3 border-t border-border/50 space-y-3">
+                                <div className="pt-3 mt-3 border-t border-border/50 space-y-3 pr-2">
                                   {entry.gratitude && (
                                     <div>
                                       <span className="text-xs font-semibold text-rose-400 flex items-center gap-1 mb-1">

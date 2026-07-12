@@ -344,7 +344,7 @@ export default function Health() {
             <div className="flex items-baseline gap-1">
               <Input
                 type="number"
-                value={form.sleepHours || ''}
+                value={form.sleepHours ? Number(form.sleepHours.toFixed(1)) : ''}
                 onChange={(e) => updateForm('sleepHours', parseFloat(e.target.value) || 0)}
                 className="w-16 h-8 text-lg font-bold text-center rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0"
                 placeholder="٠"

@@ -197,6 +197,19 @@ function getPriorityColor(priority: string): string {
   }
 }
 
+function getPriorityBorderColor(priority: string): string {
+  switch (priority) {
+    case 'high':
+      return 'border-r-2 border-r-red-500/60'
+    case 'medium':
+      return 'border-r-2 border-r-gold/60'
+    case 'low':
+      return 'border-r-2 border-r-emerald-accent/60'
+    default:
+      return 'border-r-2 border-r-border/40'
+  }
+}
+
 function getPriorityLabel(priority: string): string {
   switch (priority) {
     case 'high':
@@ -253,6 +266,32 @@ function getQuoteOfTheDay(): string {
   return QUOTES[index]
 }
 
+/* ────────────── Mini Sparkline ────────────── */
+
+function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data, 0)
+  const range = max - min || 1
+  const barCount = data.length
+  return (
+    <div className="flex items-end gap-[2px] h-6">
+      {data.map((val, i) => {
+        const height = Math.max(((val - min) / range) * 100, 8)
+        return (
+          <motion.div
+            key={i}
+            className={cn('w-[3px] rounded-full', color)}
+            initial={{ height: 0 }}
+            animate={{ height: `${height}%` }}
+            transition={{ delay: 0.6 + i * 0.04, duration: 0.3, ease: 'easeOut' }}
+            style={{ opacity: 0.3 + (val / max) * 0.5 }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
 /* ────────────── Animation Variants ────────────── */
 
 const containerVariants = {
@@ -269,7 +308,7 @@ const itemVariants = {
 }
 
 const scaleHover = {
-  whileHover: { scale: 1.02, transition: { duration: 0.2 } },
+  whileHover: { y: -2, transition: { duration: 0.2, ease: 'easeOut' } },
   whileTap: { scale: 0.98 },
 }
 
@@ -403,13 +442,43 @@ function DashboardSkeleton() {
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="glass rounded-lg px-3 py-2 text-xs shadow-lg border border-border/50" dir="rtl">
-      <p className="font-semibold text-foreground mb-1">{label}</p>
+    <div className="glass rounded-xl px-4 py-2.5 text-xs shadow-xl border border-white/10 dark:border-white/5" dir="rtl">
+      <p className="font-semibold text-foreground mb-1.5">{label}</p>
       {payload.map((entry: any, i: number) => (
-        <p key={i} className="text-muted-foreground">
+        <p key={i} className="text-muted-foreground flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-accent inline-block" />
           {entry.name}: {toArabicNum(Math.round(entry.value))}
         </p>
       ))}
+    </div>
+  )
+}
+
+/* ────────────── Section Header ────────────── */
+
+function SectionHeader({ icon: Icon, children, badge, iconColor }: { icon: React.ElementType; children: React.ReactNode; badge?: React.ReactNode; iconColor?: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <CardTitle className="text-[15px] font-bold tracking-tight flex items-center gap-2.5 border-r-[3px] border-r-emerald-accent pr-2.5 py-0.5">
+        <Icon className={cn('w-4 h-4', iconColor || 'text-emerald-accent')} />
+        {children}
+      </CardTitle>
+      {badge}
+    </div>
+  )
+}
+
+/* ────────────── Premium Glass Card ────────────── */
+
+function PremiumGlass({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn(
+      'glass rounded-2xl border border-white/10 dark:border-white/5',
+      'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.04)]',
+      'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_1px_3px_rgba(0,0,0,0.2)]',
+      className
+    )}>
+      {children}
     </div>
   )
 }
@@ -476,6 +545,12 @@ export default function Dashboard() {
     dayLabel: getDayLabel(d.date),
   }))
 
+  // Sparkline data derived from daily scores
+  const morningTrend = dailyScores.map(d => d.morningScore)
+  const taskTrend = dailyScores.map(d => d.taskScore)
+  const habitTrend = dailyScores.map(d => d.habitScore)
+  const focusTrend = dailyScores.map(d => d.focusScore)
+
   return (
     <motion.div
       className="space-y-6 p-4 lg:p-6"
@@ -485,51 +560,59 @@ export default function Dashboard() {
       animate="show"
     >
       {/* ══════════ 1. Top Welcome & Stats Bar ══════════ */}
-      <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            {new Date().getHours() >= 4 && new Date().getHours() < 17 ? (
-              <Sun className="w-4 h-4 text-gold" />
-            ) : (
-              <Moon className="w-4 h-4 text-emerald-accent" />
-            )}
-            <span>{greeting}،</span>
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{user.name}</h1>
-        </div>
-
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Level Badge */}
-          <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[200px]">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shrink-0">
-              <Zap className="w-5 h-5 text-forest-dark" />
+      <motion.div variants={itemVariants} className="relative">
+        {/* Gradient background for hero */}
+        <div className="absolute inset-0 -m-4 lg:-m-6 rounded-3xl bg-gradient-to-bl from-forest/[0.04] via-emerald-accent/[0.03] to-transparent dark:from-emerald-accent/[0.06] dark:via-forest/[0.04] pointer-events-none" />
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              {new Date().getHours() >= 4 && new Date().getHours() < 17 ? (
+                <Sun className="w-4 h-4 text-gold" />
+              ) : (
+                <Moon className="w-4 h-4 text-emerald-accent" />
+              )}
+              <span>{greeting}،</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-foreground">
-                  المستوى {toArabicNum(user.level)}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {toArabicNum(xpInLevel(user.xp))} / {toArabicNum(XP_PER_LEVEL)}
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-primary/10 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${xpPercent(user.xp)}%` }}
-                  transition={{ duration: 1.2, ease: 'easeOut' }}
-                />
-              </div>
-            </div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{user.name}</h1>
           </div>
 
-          {/* Streak */}
-          <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 pulse-glow">
-            <Flame className="w-5 h-5 text-orange-500" />
-            <div>
-              <p className="text-sm font-bold leading-none">{toArabicNum(user.streak)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">أيام متتالية</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Level Badge */}
+            <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[200px] border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shrink-0 shadow-md">
+                <Zap className="w-5 h-5 text-forest-dark" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-foreground">
+                    المستوى {toArabicNum(user.level)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {toArabicNum(xpInLevel(user.xp))} / {toArabicNum(XP_PER_LEVEL)}
+                  </span>
+                </div>
+                {/* XP bar with glow */}
+                <div className="relative">
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-l from-gold/30 to-gold-light/20 blur-sm opacity-60" />
+                  <div className="relative h-1.5 rounded-full bg-primary/10 overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${xpPercent(user.xp)}%` }}
+                      transition={{ duration: 1.2, ease: 'easeOut' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Streak */}
+            <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 pulse-glow border border-white/10 dark:border-white/5">
+              <Flame className="w-5 h-5 text-orange-500" />
+              <div>
+                <p className="text-sm font-bold leading-none">{toArabicNum(user.streak)}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">أيام متتالية</p>
+              </div>
             </div>
           </div>
         </div>
@@ -539,73 +622,97 @@ export default function Dashboard() {
       <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {/* Morning Score */}
         <motion.div {...scaleHover}>
-          <div className="glass rounded-2xl p-4 lg:p-5 flex items-center gap-4">
-            <CircularProgress
-              value={today.morningScore}
-              size={64}
-              strokeWidth={5}
-              color="stroke-gold"
-            />
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">درجة الصباح</p>
-              <p className="text-xl font-bold text-foreground">
-                <AnimatedNumber value={today.morningScore} />
-                <span className="text-sm font-normal text-muted-foreground mr-1">/ ١٠٠</span>
-              </p>
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+            <div className="flex items-center gap-4">
+              <CircularProgress
+                value={today.morningScore}
+                size={64}
+                strokeWidth={5}
+                color="stroke-gold"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">درجة الصباح</p>
+                <p className="text-xl font-bold text-foreground">
+                  <AnimatedNumber value={today.morningScore} />
+                  <span className="text-sm font-normal text-muted-foreground mr-1">/ ١٠٠</span>
+                </p>
+              </div>
             </div>
-          </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+              <MiniSparkline data={morningTrend} color="bg-gold" />
+            </div>
+          </PremiumGlass>
         </motion.div>
 
         {/* Tasks Completed */}
         <motion.div {...scaleHover}>
-          <div className="glass rounded-2xl p-4 lg:p-5 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-7 h-7 text-emerald-accent" />
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+                <CheckCircle2 className="w-7 h-7 text-emerald-accent" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">المهام المكتملة</p>
+                <p className="text-xl font-bold text-foreground">
+                  <AnimatedNumber value={today.tasksCompleted} />
+                  <span className="text-sm font-normal text-muted-foreground mr-1">
+                    / {toArabicNum(today.tasksTotal)}
+                  </span>
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">المهام المكتملة</p>
-              <p className="text-xl font-bold text-foreground">
-                <AnimatedNumber value={today.tasksCompleted} />
-                <span className="text-sm font-normal text-muted-foreground mr-1">
-                  / {toArabicNum(today.tasksTotal)}
-                </span>
-              </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+              <MiniSparkline data={taskTrend} color="bg-emerald-accent" />
             </div>
-          </div>
+          </PremiumGlass>
         </motion.div>
 
         {/* Habits */}
         <motion.div {...scaleHover}>
-          <div className="glass rounded-2xl p-4 lg:p-5 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0">
-              <Target className="w-7 h-7 text-forest" />
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+                <Target className="w-7 h-7 text-forest" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">العادات</p>
+                <p className="text-xl font-bold text-foreground">
+                  <AnimatedNumber value={today.habitsCompleted} />
+                  <span className="text-sm font-normal text-muted-foreground mr-1">
+                    / {toArabicNum(today.habitsTotal)}
+                  </span>
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">العادات</p>
-              <p className="text-xl font-bold text-foreground">
-                <AnimatedNumber value={today.habitsCompleted} />
-                <span className="text-sm font-normal text-muted-foreground mr-1">
-                  / {toArabicNum(today.habitsTotal)}
-                </span>
-              </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+              <MiniSparkline data={habitTrend} color="bg-forest" />
             </div>
-          </div>
+          </PremiumGlass>
         </motion.div>
 
         {/* Focus */}
         <motion.div {...scaleHover}>
-          <div className="glass rounded-2xl p-4 lg:p-5 flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0">
-              <Clock className="w-7 h-7 text-gold" />
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+                <Clock className="w-7 h-7 text-gold" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">التركيز</p>
+                <p className="text-xl font-bold text-foreground">
+                  <AnimatedNumber value={today.focusMin} />
+                  <span className="text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">التركيز</p>
-              <p className="text-xl font-bold text-foreground">
-                <AnimatedNumber value={today.focusMin} />
-                <span className="text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
-              </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+              <MiniSparkline data={focusTrend} color="bg-gold" />
             </div>
-          </div>
+          </PremiumGlass>
         </motion.div>
       </motion.div>
 
@@ -613,19 +720,19 @@ export default function Dashboard() {
       {chartData.length > 0 && (
         <motion.div variants={itemVariants}>
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
-            <CardHeader className="pb-2 pt-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-accent" />
+            <CardHeader className="pb-3 pt-0">
+              <SectionHeader icon={TrendingUp} iconColor="text-emerald-accent">
                 أداء الأسبوع
-              </CardTitle>
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="glass rounded-2xl p-4 lg:p-5" style={{ height: 240 }}>
+              <PremiumGlass className="p-4 lg:p-5" style={{ height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.3} />
+                        <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.35} />
+                        <stop offset="50%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.12} />
                         <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
@@ -657,7 +764,7 @@ export default function Dashboard() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
+              </PremiumGlass>
             </CardContent>
           </Card>
         </motion.div>
@@ -671,18 +778,16 @@ export default function Dashboard() {
           {/* Upcoming Tasks */}
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
-                  المهام القادمة
-                </CardTitle>
+              <SectionHeader icon={CheckCircle2} iconColor="text-emerald-accent" badge={
                 <Badge variant="secondary" className="text-[10px]">
                   {toArabicNum(upcomingTasks.length)} مهام
                 </Badge>
-              </div>
+              }>
+                المهام القادمة
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="glass rounded-2xl divide-y divide-border/40 overflow-hidden">
+              <PremiumGlass className="divide-y divide-border/30 overflow-hidden">
                 {upcomingTasks.length === 0 ? (
                   <div className="p-6 text-center text-sm text-muted-foreground">
                     <Sparkles className="w-8 h-8 mx-auto mb-2 text-gold/40" />
@@ -695,9 +800,12 @@ export default function Dashboard() {
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.3 + i * 0.06, duration: 0.35 }}
-                      className="flex items-center gap-3 px-4 py-3 last:pb-3 first:pt-3 hover:bg-primary/[0.02] transition-colors"
+                      className={cn(
+                        'flex items-center gap-3 px-4 py-3 last:pb-3 first:pt-3 transition-all duration-200',
+                        getPriorityBorderColor(task.priority),
+                        'hover:bg-emerald-accent/[0.03] dark:hover:bg-emerald-accent/[0.05]'
+                      )}
                     >
-                      <div className={cn('w-2 h-2 rounded-full shrink-0', getPriorityColor(task.priority).split(' ')[0].replace('bg-', 'bg-'))} style={{ backgroundColor: task.priority === 'high' ? 'oklch(0.577 0.245 27.325)' : task.priority === 'medium' ? 'oklch(0.78 0.12 85)' : 'oklch(0.55 0.14 163)', opacity: 0.7 }} />
                       <span className="flex-1 text-sm font-medium text-foreground truncate">{task.title}</span>
                       {task.projectName && (
                         <span
@@ -713,7 +821,7 @@ export default function Dashboard() {
                     </motion.div>
                   ))
                 )}
-              </div>
+              </PremiumGlass>
             </CardContent>
           </Card>
 
@@ -721,18 +829,16 @@ export default function Dashboard() {
           {activeGoals.length > 0 && (
             <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
               <CardHeader className="pb-3 pt-0">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <Target className="w-4 h-4 text-forest" />
-                    الأهداف النشطة
-                  </CardTitle>
+                <SectionHeader icon={Target} iconColor="text-forest" badge={
                   <Badge variant="secondary" className="text-[10px]">
                     {toArabicNum(activeGoals.length)} أهداف
                   </Badge>
-                </div>
+                }>
+                  الأهداف النشطة
+                </SectionHeader>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="glass rounded-2xl p-4 space-y-4">
+                <PremiumGlass className="p-4 space-y-4">
                   {activeGoals.map((goal, i) => (
                     <motion.div
                       key={goal.id}
@@ -756,7 +862,7 @@ export default function Dashboard() {
                       </p>
                     </motion.div>
                   ))}
-                </div>
+                </PremiumGlass>
               </CardContent>
             </Card>
           )}
@@ -767,18 +873,16 @@ export default function Dashboard() {
           {/* Today's Habits */}
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-orange-500" />
-                  تتبع العادات اليوم
-                </CardTitle>
+              <SectionHeader icon={Flame} iconColor="text-orange-500" badge={
                 <Badge variant="secondary" className="text-[10px]">
                   {toArabicNum(today.habitsCompleted)} / {toArabicNum(today.habitsTotal)}
                 </Badge>
-              </div>
+              }>
+                تتبع العادات اليوم
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="glass rounded-2xl p-4">
+              <PremiumGlass className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {habits.map((habit, i) => (
                     <motion.div
@@ -800,7 +904,16 @@ export default function Dashboard() {
                           habit.todayCompleted && 'data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
                         )}
                       />
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-lg" style={{ backgroundColor: `${habit.color}15` }}>
+                      <div
+                        className={cn(
+                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-lg transition-shadow duration-300',
+                          habit.todayCompleted && 'pulse-glow'
+                        )}
+                        style={{
+                          backgroundColor: `${habit.color}15`,
+                          boxShadow: habit.todayCompleted ? `0 0 12px ${habit.color}40` : 'none',
+                        }}
+                      >
                         {habit.icon}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -814,7 +927,7 @@ export default function Dashboard() {
                     </motion.div>
                   ))}
                 </div>
-              </div>
+              </PremiumGlass>
             </CardContent>
           </Card>
 
@@ -822,10 +935,9 @@ export default function Dashboard() {
           {achievements.length > 0 && (
             <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
               <CardHeader className="pb-3 pt-0">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Award className="w-4 h-4 text-gold" />
+                <SectionHeader icon={Award} iconColor="text-gold">
                   الإنجازات الأخيرة
-                </CardTitle>
+                </SectionHeader>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -835,7 +947,8 @@ export default function Dashboard() {
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5 + i * 0.08, duration: 0.35 }}
-                      className="glass rounded-xl p-3 min-w-[140px] flex-shrink-0 text-center space-y-2 hover:scale-[1.03] transition-transform"
+                      whileHover={{ y: -3, transition: { duration: 0.2 } }}
+                      className="shine glass rounded-xl p-3 min-w-[140px] flex-shrink-0 text-center space-y-2 border border-white/10 dark:border-white/5 cursor-default"
                     >
                       <div className="text-2xl">{ach.badgeIcon}</div>
                       <p className="text-xs font-semibold text-foreground truncate">{ach.badgeName}</p>
@@ -856,13 +969,12 @@ export default function Dashboard() {
         {health && (
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Heart className="w-4 h-4 text-red-500" />
+              <SectionHeader icon={Heart} iconColor="text-red-500">
                 الصحة اليوم
-              </CardTitle>
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="glass rounded-2xl p-4">
+              <PremiumGlass className="p-4">
                 <div className="grid grid-cols-2 gap-3">
                   {/* Sleep */}
                   <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
@@ -896,7 +1008,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </PremiumGlass>
             </CardContent>
           </Card>
         )}
@@ -905,13 +1017,12 @@ export default function Dashboard() {
         {activeBooks.length > 0 && (
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-forest" />
+              <SectionHeader icon={BookOpen} iconColor="text-forest">
                 القراءة الحالية
-              </CardTitle>
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="glass rounded-2xl p-4 space-y-4">
+              <PremiumGlass className="p-4 space-y-4">
                 {activeBooks.map((book, i) => (
                   <motion.div
                     key={i}
@@ -932,7 +1043,7 @@ export default function Dashboard() {
                     <Progress value={book.progress} className="h-1.5" />
                   </motion.div>
                 ))}
-              </div>
+              </PremiumGlass>
             </CardContent>
           </Card>
         )}
@@ -940,20 +1051,23 @@ export default function Dashboard() {
         {/* Quote of the Day */}
         <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
           <CardHeader className="pb-3 pt-0">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Quote className="w-4 h-4 text-gold" />
+            <SectionHeader icon={Quote} iconColor="text-gold">
               اقتباس اليوم
-            </CardTitle>
+            </SectionHeader>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="shine glass rounded-2xl p-5 lg:p-6 flex flex-col items-center justify-center text-center min-h-[200px]">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold/20 to-gold-light/20 flex items-center justify-center mb-4">
+            <div className="shine glass rounded-2xl p-5 lg:p-6 flex flex-col items-center justify-center text-center min-h-[200px] border border-white/10 dark:border-white/5 relative overflow-hidden">
+              {/* Decorative watermark quotation mark */}
+              <span className="absolute top-2 right-4 text-[120px] font-serif leading-none opacity-[0.04] dark:opacity-[0.06] text-foreground select-none pointer-events-none" aria-hidden="true">
+                "
+              </span>
+              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-gold/20 to-gold-light/20 flex items-center justify-center mb-4 shadow-[0_0_20px_oklch(0.78_0.12_85/0.1)]">
                 <Star className="w-5 h-5 text-gold" />
               </div>
-              <blockquote className="text-base lg:text-lg font-semibold leading-relaxed text-foreground/90 mb-3 max-w-xs">
+              <blockquote className="relative text-base lg:text-lg font-semibold leading-relaxed text-foreground/90 mb-3 max-w-xs">
                 {quote}
               </blockquote>
-              <div className="flex items-center gap-1.5">
+              <div className="relative flex items-center gap-1.5">
                 <div className="w-6 h-px bg-gold/40" />
                 <Sparkles className="w-3 h-3 text-gold/60" />
                 <div className="w-6 h-px bg-gold/40" />
@@ -968,12 +1082,9 @@ export default function Dashboard() {
         <motion.div variants={itemVariants}>
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-gold" />
-                  جلسات التركيز الأخيرة
-                </CardTitle>
-              </div>
+              <SectionHeader icon={Clock} iconColor="text-gold">
+                جلسات التركيز الأخيرة
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -983,7 +1094,8 @@ export default function Dashboard() {
                     initial={{ opacity: 0, x: 12 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.6 + i * 0.06, duration: 0.3 }}
-                    className="glass rounded-xl p-3 min-w-[120px] flex-shrink-0 text-center space-y-1.5"
+                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                    className="glass rounded-xl p-3 min-w-[120px] flex-shrink-0 text-center space-y-1.5 border border-white/10 dark:border-white/5"
                   >
                     <Brain className="w-5 h-5 mx-auto text-emerald-accent" />
                     <p className="text-sm font-bold text-foreground">{toArabicNum(session.actualMin)} د</p>
@@ -1004,15 +1116,13 @@ export default function Dashboard() {
         <motion.div variants={itemVariants}>
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <FolderKanban className="w-4 h-4 text-emerald-accent" />
-                  المشاريع
-                </CardTitle>
+              <SectionHeader icon={FolderKanban} iconColor="text-emerald-accent" badge={
                 <Badge variant="secondary" className="text-[10px]">
                   {toArabicNum(data.projects.length)} مشاريع
                 </Badge>
-              </div>
+              }>
+                المشاريع
+              </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1022,7 +1132,8 @@ export default function Dashboard() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 + i * 0.07, duration: 0.35 }}
-                    className="glass rounded-xl p-4 space-y-2.5 hover:scale-[1.02] transition-transform"
+                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                    className="glass rounded-xl p-4 space-y-2.5 border border-white/10 dark:border-white/5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default"
                   >
                     <div className="flex items-center gap-2.5">
                       <div
@@ -1050,4 +1161,3 @@ export default function Dashboard() {
     </motion.div>
   )
 }
-

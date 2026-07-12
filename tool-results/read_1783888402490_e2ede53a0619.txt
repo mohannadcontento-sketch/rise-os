@@ -1,0 +1,747 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  PieChart,
+     7→  Pie,
+     8→  Cell,
+     9→  BarChart,
+    10→  Bar,
+    11→  XAxis,
+    12→  YAxis,
+    13→  Tooltip,
+    14→  ResponsiveContainer,
+    15→  CartesianGrid,
+    16→} from 'recharts'
+    17→import {
+    18→  Wallet,
+    19→  TrendingUp,
+    20→  TrendingDown,
+    21→  PiggyBank,
+    22→  Landmark,
+    23→  Plus,
+    24→  Trash2,
+    25→  ArrowUpRight,
+    26→  ArrowDownRight,
+    27→  Repeat,
+    28→  CreditCard,
+    29→  Receipt,
+    30→  ShoppingBag,
+    31→  Utensils,
+    32→  Car,
+    33→  Home,
+    34→  Zap,
+    35→  Gift,
+    36→  GraduationCap,
+    37→  Briefcase,
+    38→  Heart,
+    39→  Sparkles,
+    40→} from 'lucide-react'
+    41→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    42→import { Button } from '@/components/ui/button'
+    43→import { Input } from '@/components/ui/input'
+    44→import {
+    45→  Dialog,
+    46→  DialogContent,
+    47→  DialogHeader,
+    48→  DialogTitle,
+    49→  DialogTrigger,
+    50→} from '@/components/ui/dialog'
+    51→import {
+    52→  Select,
+    53→  SelectContent,
+    54→  SelectItem,
+    55→  SelectTrigger,
+    56→  SelectValue,
+    57→} from '@/components/ui/select'
+    58→import { Badge } from '@/components/ui/badge'
+    59→import { Separator } from '@/components/ui/separator'
+    60→import { Skeleton } from '@/components/ui/skeleton'
+    61→import { cn } from '@/lib/utils'
+    62→import { toast } from 'sonner'
+    63→
+    64→/* ────────────── Types ────────────── */
+    65→
+    66→interface FinanceRecord {
+    67→  id: string
+    68→  type: string
+    69→  category: string
+    70→  description: string
+    71→  amount: number
+    72→  date: string
+    73→  recurring: boolean
+    74→}
+    75→
+    76→interface FinanceData {
+    77→  records: FinanceRecord[]
+    78→}
+    79→
+    80→/* ────────────── Constants ────────────── */
+    81→
+    82→const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string }> = {
+    83→  دخل: { label: 'الدخل', color: 'bg-emerald-accent/10 text-emerald-accent', icon: TrendingUp, amountColor: 'text-emerald-accent' },
+    84→  مصروف: { label: 'المصروفات', color: 'bg-orange-500/10 text-orange-500', icon: TrendingDown, amountColor: 'text-orange-500' },
+    85→  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest' },
+    86→  استثمار: { label: 'الاستثمار', color: 'bg-sky-500/10 text-sky-500', icon: Landmark, amountColor: 'text-sky-500' },
+    87→  اشتراك: { label: 'الاشتراكات', color: 'bg-purple-500/10 text-purple-500', icon: CreditCard, amountColor: 'text-purple-500' },
+    88→}
+    89→
+    90→const CATEGORY_ICONS: Record<string, React.ElementType> = {
+    91→  راتب: Briefcase,
+    92→  حر: Sparkles,
+    93→  طعام: Utensils,
+    94→  مواصلات: Car,
+    95→  سكن: Home,
+    96→  فواتير: Zap,
+    97→  تسوق: ShoppingBag,
+    98→  هدايا: Gift,
+    99→  تعليم: GraduationCap,
+   100→  صحة: Heart,
+   101→  ترفيه: Gift,
+   102→  أخرى: Receipt,
+   103→}
+   104→
+   105→const PIE_COLORS = [
+   106→  'var(--color-emerald-accent)',
+   107→  'var(--color-gold)',
+   108→  'var(--color-forest)',
+   109→  'var(--color-forest-light)',
+   110→  'var(--color-chart-5)',
+   111→  'var(--color-chart-3)',
+   112→  'var(--color-chart-4)',
+   113→  'var(--color-chart-1)',
+   114→  'var(--color-chart-2)',
+   115→]
+   116→
+   117→const containerVariants = {
+   118→  hidden: { opacity: 0 },
+   119→  show: {
+   120→    opacity: 1,
+   121→    transition: { staggerChildren: 0.06 },
+   122→  },
+   123→}
+   124→
+   125→const itemVariants = {
+   126→  hidden: { opacity: 0, y: 16 },
+   127→  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+   128→}
+   129→
+   130→const EMPTY_FORM = {
+   131→  type: 'مصروف',
+   132→  category: '',
+   133→  description: '',
+   134→  amount: 0,
+   135→  date: new Date().toISOString().split('T')[0],
+   136→  recurring: false,
+   137→}
+   138→
+   139→/* ────────────── Component ────────────── */
+   140→
+   141→export default function Finance() {
+   142→  const [data, setData] = useState<FinanceData | null>(null)
+   143→  const [loading, setLoading] = useState(true)
+   144→  const [dialogOpen, setDialogOpen] = useState(false)
+   145→  const [saving, setSaving] = useState(false)
+   146→  const [deleting, setDeleting] = useState<string | null>(null)
+   147→
+   148→  const [form, setForm] = useState({ ...EMPTY_FORM })
+   149→
+   150→  /* ─── Fetch ─── */
+   151→  const fetchFinance = useCallback(async () => {
+   152→    try {
+   153→      const res = await fetch('/api/rise/finance')
+   154→      if (res.ok) {
+   155→        const json = await res.json()
+   156→        setData(json)
+   157→      }
+   158→    } catch {
+   159→      toast.error('فشل في تحميل البيانات المالية')
+   160→    } finally {
+   161→      setLoading(false)
+   162→    }
+   163→  }, [])
+   164→
+   165→  useEffect(() => {
+   166→    fetchFinance()
+   167→  }, [fetchFinance])
+   168→
+   169→  /* ─── Save Record ─── */
+   170→  const handleSave = async () => {
+   171→    if (!form.category || !form.amount) {
+   172→      toast.error('يرجى ملء الفئة والمبلغ')
+   173→      return
+   174→    }
+   175→    setSaving(true)
+   176→    try {
+   177→      const res = await fetch('/api/rise/finance', {
+   178→        method: 'POST',
+   179→        headers: { 'Content-Type': 'application/json' },
+   180→        body: JSON.stringify(form),
+   181→      })
+   182→      if (res.ok) {
+   183→        toast.success('تم إضافة السجل بنجاح ✨')
+   184→        setDialogOpen(false)
+   185→        setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
+   186→        fetchFinance()
+   187→      } else {
+   188→        toast.error('فشل في إضافة السجل')
+   189→      }
+   190→    } catch {
+   191→      toast.error('حدث خطأ أثناء الحفظ')
+   192→    } finally {
+   193→      setSaving(false)
+   194→    }
+   195→  }
+   196→
+   197→  /* ─── Delete Record ─── */
+   198→  const handleDelete = async (id: string) => {
+   199→    setDeleting(id)
+   200→    try {
+   201→      const res = await fetch(`/api/rise/finance?id=${id}`, { method: 'DELETE' })
+   202→      if (res.ok) {
+   203→        toast.success('تم حذف السجل')
+   204→        fetchFinance()
+   205→      }
+   206→    } catch {
+   207→      toast.error('فشل في حذف السجل')
+   208→    } finally {
+   209→      setDeleting(null)
+   210→    }
+   211→  }
+   212→
+   213→  const updateForm = (field: string, value: string | number | boolean) => {
+   214→    setForm((prev) => ({ ...prev, [field]: value }))
+   215→  }
+   216→
+   217→  /* ─── Computed Stats ─── */
+   218→  const stats = useMemo(() => {
+   219→    const records = data?.records || []
+   220→    const income = records.filter((r) => r.type === 'دخل').reduce((sum, r) => sum + r.amount, 0)
+   221→    const expenses = records.filter((r) => r.type === 'مصروف').reduce((sum, r) => sum + r.amount, 0)
+   222→    const savings = records.filter((r) => r.type === 'ادخار').reduce((sum, r) => sum + r.amount, 0)
+   223→    const investment = records.filter((r) => r.type === 'استثمار').reduce((sum, r) => sum + r.amount, 0)
+   224→    return { income, expenses, savings, investment }
+   225→  }, [data])
+   226→
+   227→  /* ─── Grouped Records ─── */
+   228→  const groupedRecords = useMemo(() => {
+   229→    const records = data?.records || []
+   230→    const groups: Record<string, FinanceRecord[]> = {}
+   231→    records.forEach((r) => {
+   232→      if (!groups[r.type]) groups[r.type] = []
+   233→      groups[r.type].push(r)
+   234→    })
+   235→    // Sort each group by date desc
+   236→    Object.values(groups).forEach((g) => g.sort((a, b) => b.date.localeCompare(a.date)))
+   237→    return groups
+   238→  }, [data])
+   239→
+   240→  /* ─── Expense by Category (for pie chart) ─── */
+   241→  const expenseByCategory = useMemo(() => {
+   242→    const expenses = (data?.records || []).filter((r) => r.type === 'مصروف')
+   243→    const map: Record<string, number> = {}
+   244→    expenses.forEach((r) => {
+   245→      map[r.category] = (map[r.category] || 0) + r.amount
+   246→    })
+   247→    return Object.entries(map)
+   248→      .map(([name, value]) => ({ name, قيمة: value }))
+   249→      .sort((a, b) => b.قيمة - a.قيمة)
+   250→  }, [data])
+   251→
+   252→  /* ─── Monthly Income vs Expenses ─── */
+   253→  const monthlyChartData = useMemo(() => {
+   254→    const records = data?.records || []
+   255→    const months: Record<string, { month: string; دخل: number; مصروفات: number }> = {}
+   256→    
+   257→    // Last 6 months
+   258→    for (let i = 5; i >= 0; i--) {
+   259→      const d = new Date()
+   260→      d.setMonth(d.getMonth() - i)
+   261→      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+   262→      months[key] = {
+   263→        month: d.toLocaleDateString('ar-SA', { month: 'short' }),
+   264→        دخل: 0,
+   265→        مصروفات: 0,
+   266→      }
+   267→    }
+   268→
+   269→    records.forEach((r) => {
+   270→      const key = r.date.substring(0, 7)
+   271→      if (months[key]) {
+   272→        if (r.type === 'دخل') months[key].دخل += r.amount
+   273→        if (r.type === 'مصروف') months[key].مصروفات += r.amount
+   274→      }
+   275→    })
+   276→
+   277→    return Object.values(months)
+   278→  }, [data])
+   279→
+   280→  const tooltipStyle = {
+   281→    backgroundColor: 'var(--color-popover)',
+   282→    border: '1px solid var(--color-border)',
+   283→    borderRadius: '12px',
+   284→    fontSize: '12px',
+   285→    direction: 'rtl' as const,
+   286→  }
+   287→
+   288→  const formatAmount = (amount: number) => {
+   289→    return amount.toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+   290→  }
+   291→
+   292→  /* ─── Loading ─── */
+   293→  if (loading) {
+   294→    return (
+   295→      <div className="space-y-4 p-4">
+   296→        <Skeleton className="h-8 w-48" />
+   297→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   298→          {[1, 2, 3, 4].map((i) => (
+   299→            <Skeleton key={i} className="h-28 rounded-2xl" />
+   300→          ))}
+   301→        </div>
+   302→        <Skeleton className="h-64 rounded-2xl" />
+   303→      </div>
+   304→    )
+   305→  }
+   306→
+   307→  return (
+   308→    <motion.div
+   309→      variants={containerVariants}
+   310→      initial="hidden"
+   311→      animate="show"
+   312→      className="space-y-6 p-4 md:p-6"
+   313→    >
+   314→      {/* Header */}
+   315→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   316→        <div className="flex items-center gap-3">
+   317→          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
+   318→            <Wallet className="w-5 h-5 text-white" />
+   319→          </div>
+   320→          <div>
+   321→            <h2 className="text-xl font-bold text-foreground">المالية</h2>
+   322→            <p className="text-xs text-muted-foreground">تتبع دخلك ومصروفاتك واستثماراتك</p>
+   323→          </div>
+   324→        </div>
+   325→
+   326→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   327→          <DialogTrigger asChild>
+   328→            <motion.div whileTap={{ scale: 0.95 }}>
+   329→              <Button className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-10 text-sm font-semibold">
+   330→                <Plus className="w-4 h-4 ml-1" />
+   331→                إضافة سجل
+   332→              </Button>
+   333→            </motion.div>
+   334→          </DialogTrigger>
+   335→          <DialogContent className="max-w-md glass border-0">
+   336→            <DialogHeader>
+   337→              <DialogTitle className="text-right flex items-center gap-2">
+   338→                <Plus className="w-5 h-5 text-emerald-accent" />
+   339→                سجل مالي جديد
+   340→              </DialogTitle>
+   341→            </DialogHeader>
+   342→            <div className="space-y-4 pt-2">
+   343→              {/* Type */}
+   344→              <div className="space-y-1.5">
+   345→                <label className="text-sm font-semibold text-foreground">النوع</label>
+   346→                <Select
+   347→                  value={form.type}
+   348→                  onValueChange={(val) => updateForm('type', val)}
+   349→                >
+   350→                  <SelectTrigger className="rounded-xl border-0 bg-muted/50">
+   351→                    <SelectValue />
+   352→                  </SelectTrigger>
+   353→                  <SelectContent>
+   354→                    {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
+   355→                      <SelectItem key={key} value={key}>
+   356→                        {cfg.label}
+   357→                      </SelectItem>
+   358→                    ))}
+   359→                  </SelectContent>
+   360→                </Select>
+   361→              </div>
+   362→
+   363→              {/* Category */}
+   364→              <div className="space-y-1.5">
+   365→                <label className="text-sm font-semibold text-foreground">الفئة</label>
+   366→                <Input
+   367→                  value={form.category}
+   368→                  onChange={(e) => updateForm('category', e.target.value)}
+   369→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   370→                  placeholder="مثال: طعام، مواصلات..."
+   371→                  dir="rtl"
+   372→                />
+   373→              </div>
+   374→
+   375→              {/* Description */}
+   376→              <div className="space-y-1.5">
+   377→                <label className="text-sm font-semibold text-foreground">الوصف</label>
+   378→                <Input
+   379→                  value={form.description}
+   380→                  onChange={(e) => updateForm('description', e.target.value)}
+   381→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   382→                  placeholder="وصف اختياري..."
+   383→                  dir="rtl"
+   384→                />
+   385→              </div>
+   386→
+   387→              {/* Amount & Date */}
+   388→              <div className="grid grid-cols-2 gap-3">
+   389→                <div className="space-y-1.5">
+   390→                  <label className="text-sm font-semibold text-foreground">المبلغ</label>
+   391→                  <Input
+   392→                    type="number"
+   393→                    value={form.amount || ''}
+   394→                    onChange={(e) => updateForm('amount', parseFloat(e.target.value) || 0)}
+   395→                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   396→                    placeholder="٠"
+   397→                    min={0}
+   398→                  />
+   399→                </div>
+   400→                <div className="space-y-1.5">
+   401→                  <label className="text-sm font-semibold text-foreground">التاريخ</label>
+   402→                  <Input
+   403→                    type="date"
+   404→                    value={form.date}
+   405→                    onChange={(e) => updateForm('date', e.target.value)}
+   406→                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   407→                  />
+   408→                </div>
+   409→              </div>
+   410→
+   411→              {/* Recurring toggle */}
+   412→              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+   413→                <input
+   414→                  type="checkbox"
+   415→                  checked={form.recurring}
+   416→                  onChange={(e) => updateForm('recurring', e.target.checked)}
+   417→                  className="w-4 h-4 rounded accent-emerald-accent"
+   418→                />
+   419→                <Repeat className="w-4 h-4 text-muted-foreground" />
+   420→                <span className="text-sm text-foreground">مكرر شهرياً</span>
+   421→              </label>
+   422→
+   423→              {/* Save */}
+   424→              <motion.div whileTap={{ scale: 0.98 }}>
+   425→                <Button
+   426→                  onClick={handleSave}
+   427→                  disabled={saving}
+   428→                  className="w-full bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 text-sm font-semibold"
+   429→                >
+   430→                  {saving ? 'جاري الحفظ...' : 'حفظ السجل'}
+   431→                </Button>
+   432→              </motion.div>
+   433→            </div>
+   434→          </DialogContent>
+   435→        </Dialog>
+   436→      </motion.div>
+   437→
+   438→      {/* Summary Cards */}
+   439→      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+   440→        {/* Income */}
+   441→        <Card className="glass border-0 shadow-sm">
+   442→          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+   443→            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   444→              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   445→            </div>
+   446→            <span className="text-xl font-bold text-emerald-accent count-up">
+   447→              {formatAmount(stats.income)}
+   448→            </span>
+   449→            <span className="text-[11px] text-muted-foreground">الدخل</span>
+   450→          </CardContent>
+   451→        </Card>
+   452→
+   453→        {/* Expenses */}
+   454→        <Card className="glass border-0 shadow-sm">
+   455→          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+   456→            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+   457→              <TrendingDown className="w-4 h-4 text-orange-500" />
+   458→            </div>
+   459→            <span className="text-xl font-bold text-orange-500 count-up">
+   460→              {formatAmount(stats.expenses)}
+   461→            </span>
+   462→            <span className="text-[11px] text-muted-foreground">المصروفات</span>
+   463→          </CardContent>
+   464→        </Card>
+   465→
+   466→        {/* Savings */}
+   467→        <Card className="glass border-0 shadow-sm">
+   468→          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+   469→            <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+   470→              <PiggyBank className="w-4 h-4 text-forest" />
+   471→            </div>
+   472→            <span className="text-xl font-bold text-forest count-up">
+   473→              {formatAmount(stats.savings)}
+   474→            </span>
+   475→            <span className="text-[11px] text-muted-foreground">الادخار</span>
+   476→          </CardContent>
+   477→        </Card>
+   478→
+   479→        {/* Investment */}
+   480→        <Card className="glass border-0 shadow-sm">
+   481→          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+   482→            <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
+   483→              <Landmark className="w-4 h-4 text-sky-500" />
+   484→            </div>
+   485→            <span className="text-xl font-bold text-sky-500 count-up">
+   486→              {formatAmount(stats.investment)}
+   487→            </span>
+   488→            <span className="text-[11px] text-muted-foreground">الاستثمار</span>
+   489→          </CardContent>
+   490→        </Card>
+   491→      </motion.div>
+   492→
+   493→      {/* Charts Row */}
+   494→      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   495→        {/* Expense Pie Chart */}
+   496→        <Card className="glass border-0 shadow-sm">
+   497→          <CardHeader className="pb-2">
+   498→            <CardTitle className="text-sm font-bold">توزيع المصروفات حسب الفئة</CardTitle>
+   499→          </CardHeader>
+   500→          <CardContent>
+   501→            {expenseByCategory.length === 0 ? (
+   502→              <div className="text-center py-10">
+   503→                <Receipt className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   504→                <p className="text-sm text-muted-foreground">لا توجد مصروفات بعد</p>
+   505→              </div>
+   506→            ) : (
+   507→              <div className="flex flex-col items-center">
+   508→                <div className="h-52 w-full">
+   509→                  <ResponsiveContainer width="100%" height="100%">
+   510→                    <PieChart>
+   511→                      <Pie
+   512→                        data={expenseByCategory}
+   513→                        cx="50%"
+   514→                        cy="50%"
+   515→                        innerRadius={50}
+   516→                        outerRadius={85}
+   517→                        paddingAngle={3}
+   518→                        dataKey="قيمة"
+   519→                      >
+   520→                        {expenseByCategory.map((_, index) => (
+   521→                          <Cell
+   522→                            key={index}
+   523→                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+   524→                            stroke="none"
+   525→                          />
+   526→                        ))}
+   527→                      </Pie>
+   528→                      <Tooltip
+   529→                        contentStyle={tooltipStyle}
+   530→                        formatter={(value: number) => [`${formatAmount(value)} ر.س`, 'المبلغ']}
+   531→                      />
+   532→                    </PieChart>
+   533→                  </ResponsiveContainer>
+   534→                </div>
+   535→                {/* Legend */}
+   536→                <div className="flex flex-wrap items-center gap-2 justify-center mt-2 px-2">
+   537→                  {expenseByCategory.map((entry, index) => (
+   538→                    <div key={entry.name} className="flex items-center gap-1.5">
+   539→                      <div
+   540→                        className="w-2.5 h-2.5 rounded-full"
+   541→                        style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+   542→                      />
+   543→                      <span className="text-[10px] text-muted-foreground">{entry.name}</span>
+   544→                    </div>
+   545→                  ))}
+   546→                </div>
+   547→              </div>
+   548→            )}
+   549→          </CardContent>
+   550→        </Card>
+   551→
+   552→        {/* Income vs Expenses Bar Chart */}
+   553→        <Card className="glass border-0 shadow-sm">
+   554→          <CardHeader className="pb-2">
+   555→            <CardTitle className="text-sm font-bold">الدخل مقابل المصروفات</CardTitle>
+   556→          </CardHeader>
+   557→          <CardContent>
+   558→            <div className="h-64">
+   559→              <ResponsiveContainer width="100%" height="100%">
+   560→                <BarChart data={monthlyChartData} barCategoryGap="15%">
+   561→                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   562→                  <XAxis
+   563→                    dataKey="month"
+   564→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   565→                    axisLine={false}
+   566→                    tickLine={false}
+   567→                  />
+   568→                  <YAxis
+   569→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   570→                    axisLine={false}
+   571→                    tickLine={false}
+   572→                    width={45}
+   573→                    tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+   574→                  />
+   575→                  <Tooltip
+   576→                    contentStyle={tooltipStyle}
+   577→                    formatter={(value: number, name: string) => [
+   578→                      `${formatAmount(value)} ر.س`,
+   579→                      name,
+   580→                    ]}
+   581→                  />
+   582→                  <Bar dataKey="دخل" fill="var(--color-emerald-accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
+   583→                  <Bar dataKey="مصروفات" fill="var(--color-orange-500)" radius={[4, 4, 0, 0]} opacity={0.85} />
+   584→                </BarChart>
+   585→              </ResponsiveContainer>
+   586→            </div>
+   587→          </CardContent>
+   588→        </Card>
+   589→      </motion.div>
+   590→
+   591→      {/* Monthly Summary */}
+   592→      <motion.div variants={itemVariants}>
+   593→        <Card className="glass border-0 shadow-sm">
+   594→          <CardHeader className="pb-3">
+   595→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   596→              <Receipt className="w-4 h-4 text-gold" />
+   597→              ملخص الشهر الحالي
+   598→            </CardTitle>
+   599→          </CardHeader>
+   600→          <CardContent>
+   601→            {(() => {
+   602→              const now = new Date()
+   603→              const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+   604→              const monthRecords = (data?.records || []).filter((r) => r.date.startsWith(currentMonth))
+   605→              const mIncome = monthRecords.filter((r) => r.type === 'دخل').reduce((s, r) => s + r.amount, 0)
+   606→              const mExpenses = monthRecords.filter((r) => r.type === 'مصروف').reduce((s, r) => s + r.amount, 0)
+   607→              const mSavings = monthRecords.filter((r) => r.type === 'ادخار').reduce((s, r) => s + r.amount, 0)
+   608→              const mInvestment = monthRecords.filter((r) => r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
+   609→              const mSubscriptions = monthRecords.filter((r) => r.type === 'اشتراك').reduce((s, r) => s + r.amount, 0)
+   610→              const net = mIncome - mExpenses - mSavings - mInvestment - mSubscriptions
+   611→              const savingsRate = mIncome > 0 ? Math.round(((mSavings + mInvestment) / mIncome) * 100) : 0
+   612→
+   613→              return (
+   614→                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   615→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   616→                    <p className="text-[11px] text-muted-foreground mb-1">صافي الرصيد</p>
+   617→                    <span className={cn('text-lg font-bold', net >= 0 ? 'text-emerald-accent' : 'text-orange-500')}>
+   618→                      {net >= 0 ? '+' : ''}{formatAmount(net)}
+   619→                    </span>
+   620→                  </div>
+   621→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   622→                    <p className="text-[11px] text-muted-foreground mb-1">الاشتراكات</p>
+   623→                    <span className="text-lg font-bold text-purple-500">{formatAmount(mSubscriptions)}</span>
+   624→                  </div>
+   625→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   626→                    <p className="text-[11px] text-muted-foreground mb-1">نسبة الادخار</p>
+   627→                    <span className="text-lg font-bold text-forest">{savingsRate}%</span>
+   628→                  </div>
+   629→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   630→                    <p className="text-[11px] text-muted-foreground mb-1">عدد العمليات</p>
+   631→                    <span className="text-lg font-bold text-foreground">{monthRecords.length}</span>
+   632→                  </div>
+   633→                </div>
+   634→              )
+   635→            })()}
+   636→          </CardContent>
+   637→        </Card>
+   638→      </motion.div>
+   639→
+   640→      {/* Transaction List */}
+   641→      <motion.div variants={itemVariants}>
+   642→        <Card className="glass border-0 shadow-sm">
+   643→          <CardHeader className="pb-3">
+   644→            <CardTitle className="text-sm font-bold">سجل المعاملات</CardTitle>
+   645→          </CardHeader>
+   646→          <CardContent>
+   647→            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+   648→              {Object.keys(groupedRecords).length === 0 ? (
+   649→                <div className="text-center py-10">
+   650→                  <Wallet className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   651→                  <p className="text-sm text-muted-foreground">لا توجد معاملات بعد</p>
+   652→                  <p className="text-xs text-muted-foreground/60 mt-1">اضغط &quot;إضافة سجل&quot; للبدء</p>
+   653→                </div>
+   654→              ) : (
+   655→                Object.entries(groupedRecords).map(([type, records]) => {
+   656→                  const config = TYPE_CONFIG[type]
+   657→                  if (!config) return null
+   658→                  const Icon = config.icon
+   659→                  const total = records.reduce((s, r) => s + r.amount, 0)
+   660→
+   661→                  return (
+   662→                    <div key={type}>
+   663→                      {/* Group header */}
+   664→                      <div className="flex items-center gap-2 mb-2 px-1">
+   665→                        <div className={cn('w-6 h-6 rounded-md flex items-center justify-center', config.color)}>
+   666→                          <Icon className="w-3.5 h-3.5" />
+   667→                        </div>
+   668→                        <span className="text-sm font-semibold text-foreground">{config.label}</span>
+   669→                        <Badge variant="secondary" className="text-[10px] rounded-full bg-muted text-muted-foreground border-0">
+   670→                          {records.length}
+   671→                        </Badge>
+   672→                        <span className="text-xs text-muted-foreground mr-auto">
+   673→                          {formatAmount(total)} ر.س
+   674→                        </span>
+   675→                      </div>
+   676→
+   677→                      {/* Records */}
+   678→                      <div className="space-y-1.5 mb-4">
+   679→                        <AnimatePresence>
+   680→                          {records.map((record, index) => {
+   681→                            const CatIcon = CATEGORY_ICONS[record.category] || Receipt
+   682→                            const isPositive = record.type === 'دخل'
+   683→                            return (
+   684→                              <motion.div
+   685→                                key={record.id}
+   686→                                initial={{ opacity: 0, x: 10 }}
+   687→                                animate={{ opacity: 1, x: 0 }}
+   688→                                exit={{ opacity: 0, x: -10 }}
+   689→                                transition={{ delay: index * 0.02 }}
+   690→                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors group"
+   691→                              >
+   692→                                <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', config.color)}>
+   693→                                  <CatIcon className="w-4 h-4" />
+   694→                                </div>
+   695→                                <div className="flex-1 min-w-0">
+   696→                                  <div className="flex items-center gap-2">
+   697→                                    <span className="text-sm font-medium text-foreground truncate">
+   698→                                      {record.description || record.category}
+   699→                                    </span>
+   700→                                    {record.recurring && (
+   701→                                      <Repeat className="w-3 h-3 text-muted-foreground shrink-0" />
+   702→                                    )}
+   703→                                  </div>
+   704→                                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+   705→                                    <span>{record.category}</span>
+   706→                                    <span>•</span>
+   707→                                    <span>
+   708→                                      {new Date(record.date).toLocaleDateString('ar-SA', {
+   709→                                        month: 'short',
+   710→                                        day: 'numeric',
+   711→                                      })}
+   712→                                    </span>
+   713→                                  </div>
+   714→                                </div>
+   715→                                <div className="flex items-center gap-2 shrink-0">
+   716→                                  <div className="text-left">
+   717→                                    <span className={cn('text-sm font-bold', config.amountColor)}>
+   718→                                      {isPositive ? '+' : '-'}{formatAmount(record.amount)}
+   719→                                    </span>
+   720→                                  </div>
+   721→                                  <motion.button
+   722→                                    whileTap={{ scale: 0.9 }}
+   723→                                    onClick={() => handleDelete(record.id)}
+   724→                                    disabled={deleting === record.id}
+   725→                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+   726→                                  >
+   727→                                    <Trash2 className="w-3.5 h-3.5" />
+   728→                                  </motion.button>
+   729→                                </div>
+   730→                              </motion.div>
+   731→                            )
+   732→                          })}
+   733→                        </AnimatePresence>
+   734→                      </div>
+   735→
+   736→                      <Separator className="my-2" />
+   737→                    </div>
+   738→                  )
+   739→                })
+   740→              )}
+   741→            </div>
+   742→          </CardContent>
+   743→        </Card>
+   744→      </motion.div>
+   745→    </motion.div>
+   746→  )
+   747→}

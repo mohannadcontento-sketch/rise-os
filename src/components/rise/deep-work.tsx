@@ -32,6 +32,9 @@ import {
   Timer,
   TrendingUp,
   Target,
+  Sparkles,
+  Star,
+  CheckCircle2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -61,19 +64,19 @@ interface FocusData {
 /* ────────────── Constants ────────────── */
 
 const DURATION_OPTIONS = [
-  { label: 'بومودورو', value: 25, icon: Timer, color: 'text-rose-400' },
-  { label: 'عميق ٥٠', value: 50, icon: Brain, color: 'text-emerald-accent' },
-  { label: 'عميق ٩٠', value: 90, icon: Target, color: 'text-forest' },
-  { label: 'عميق ١٢٠', value: 120, icon: Zap, color: 'text-gold' },
+  { label: 'بومودورو', value: 25, icon: Timer, color: 'text-rose-400', bgAccent: 'bg-rose-400/5' },
+  { label: 'عميق ٥٠', value: 50, icon: Brain, color: 'text-emerald-accent', bgAccent: 'bg-emerald-accent/5' },
+  { label: 'عميق ٩٠', value: 90, icon: Target, color: 'text-forest', bgAccent: 'bg-forest/5' },
+  { label: 'عميق ١٢٠', value: 120, icon: Zap, color: 'text-gold', bgAccent: 'bg-gold/5' },
 ]
 
 const AMBIENT_SOUNDS = [
-  { label: 'مطر', icon: CloudRain, color: 'bg-blue-400/10 text-blue-400' },
-  { label: 'غابة', icon: TreePine, color: 'bg-emerald-accent/10 text-emerald-accent' },
-  { label: 'قهوة', icon: Coffee, color: 'bg-amber-600/10 text-amber-600' },
-  { label: 'محيط', icon: Waves, color: 'bg-cyan-500/10 text-cyan-500' },
-  { label: 'نار', icon: Flame, color: 'bg-orange-500/10 text-orange-500' },
-  { label: 'رياح', icon: Wind, color: 'bg-teal-400/10 text-teal-400' },
+  { label: 'مطر', icon: CloudRain, color: 'bg-blue-400/10 text-blue-400', waveColor: 'rgba(96, 165, 250, 0.08)' },
+  { label: 'غابة', icon: TreePine, color: 'bg-emerald-accent/10 text-emerald-accent', waveColor: 'rgba(16, 185, 129, 0.08)' },
+  { label: 'قهوة', icon: Coffee, color: 'bg-amber-600/10 text-amber-600', waveColor: 'rgba(217, 119, 6, 0.08)' },
+  { label: 'محيط', icon: Waves, color: 'bg-cyan-500/10 text-cyan-500', waveColor: 'rgba(6, 182, 212, 0.08)' },
+  { label: 'نار', icon: Flame, color: 'bg-orange-500/10 text-orange-500', waveColor: 'rgba(249, 115, 22, 0.08)' },
+  { label: 'رياح', icon: Wind, color: 'bg-teal-400/10 text-teal-400', waveColor: 'rgba(45, 212, 191, 0.08)' },
 ]
 
 const containerVariants = {
@@ -116,6 +119,7 @@ export default function DeepWork() {
   const [sessionCompleted, setSessionCompleted] = useState(false)
   const [sessionStartTime, setSessionStartTime] = useState<string | null>(null)
   const [sessionNotes, setSessionNotes] = useState('')
+  const [celebrateKey, setCelebrateKey] = useState(0)
 
   // Ambient sounds (visual only)
   const [activeSounds, setActiveSounds] = useState<Set<string>>(new Set())
@@ -151,6 +155,7 @@ export default function DeepWork() {
             setIsRunning(false)
             setIsPaused(false)
             setSessionCompleted(true)
+            setCelebrateKey((k) => k + 1)
             return 0
           }
           return prev - 1
@@ -328,7 +333,7 @@ export default function DeepWork() {
         </div>
       </motion.div>
 
-      {/* Duration Selector */}
+      {/* Duration Selector with glow */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {DURATION_OPTIONS.map((opt) => {
           const Icon = opt.icon
@@ -341,34 +346,66 @@ export default function DeepWork() {
               onClick={() => handleDurationSelect(opt.value)}
               disabled={isRunning}
               className={cn(
-                'glass rounded-2xl p-4 text-center transition-all duration-200',
+                'glass rounded-2xl p-4 text-center transition-all duration-200 relative overflow-hidden',
                 isActive
-                  ? 'ring-2 ring-emerald-accent/50 bg-emerald-accent/5 shadow-md'
+                  ? 'ring-2 ring-emerald-accent/60 bg-emerald-accent/5 shadow-lg shadow-emerald-accent/10'
                   : 'hover:bg-muted/30',
                 isRunning && 'opacity-50 cursor-not-allowed'
               )}
             >
+              {isActive && (
+                <motion.div
+                  className="absolute inset-0 pointer-events-none"
+                  animate={{
+                    boxShadow: [
+                      'inset 0 0 15px rgba(16,185,129,0.05)',
+                      'inset 0 0 25px rgba(16,185,129,0.1)',
+                      'inset 0 0 15px rgba(16,185,129,0.05)',
+                    ],
+                  }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              )}
               <Icon className={cn('w-5 h-5 mx-auto mb-1.5', opt.color)} />
-              <span className="text-sm font-bold text-foreground block">{opt.label}</span>
-              <span className="text-[11px] text-muted-foreground">{opt.value} دقيقة</span>
+              <span className="text-sm font-bold text-foreground block">{opt.value} دقيقة</span>
+              <span className="text-[11px] text-muted-foreground">{opt.label}</span>
             </motion.button>
           )
         })}
       </motion.div>
 
-      {/* Timer */}
+      {/* Timer with breathing glow */}
       <motion.div variants={itemVariants} className="flex justify-center">
         <div className="relative">
           <AnimatePresence>
             {sessionCompleted && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.5 }}
+                key={celebrateKey}
+                initial={{ opacity: 0, scale: 0.3 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.5 }}
                 className="absolute inset-0 flex flex-col items-center justify-center z-10"
               >
+                {/* Celebration burst particles */}
+                {[...Array(8)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full"
+                    style={{
+                      backgroundColor: i % 2 === 0 ? 'var(--color-gold)' : 'var(--color-emerald-accent)',
+                    }}
+                    initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
+                    animate={{
+                      x: Math.cos((i / 8) * Math.PI * 2) * 100,
+                      y: Math.sin((i / 8) * Math.PI * 2) * 100,
+                      opacity: 0,
+                      scale: [0, 1.5, 0.5],
+                    }}
+                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                  />
+                ))}
                 <motion.div
-                  animate={{ rotate: [0, -10, 10, -10, 0] }}
+                  animate={{ rotate: [0, -10, 10, -10, 0], scale: [1, 1.2, 1] }}
                   transition={{ duration: 0.5, repeat: 3 }}
                 >
                   <PartyPopper className="w-12 h-12 text-gold mb-2" />
@@ -392,41 +429,68 @@ export default function DeepWork() {
             )}
           </AnimatePresence>
 
-          <svg width="280" height="280" viewBox="0 0 280 280" className="transform -rotate-90">
-            {/* Background circle */}
-            <circle
-              cx="140"
-              cy="140"
-              r="120"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="8"
-              className="text-muted/50"
-            />
-            {/* Progress circle */}
-            <motion.circle
-              cx="140"
-              cy="140"
-              r="120"
-              fill="none"
-              stroke="url(#timerGradient)"
-              strokeWidth="8"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-              className={cn(
-                isRunning && !isPaused && 'pulse-glow'
-              )}
-            />
-            {/* Gradient def */}
-            <defs>
-              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="var(--color-emerald-accent)" />
-                <stop offset="100%" stopColor="var(--color-forest)" />
-              </linearGradient>
-            </defs>
-          </svg>
+          {/* Breathing glow wrapper */}
+          <motion.div
+            animate={isRunning && !isPaused ? {
+              boxShadow: [
+                '0 0 20px rgba(16,185,129,0.15)',
+                '0 0 40px rgba(16,185,129,0.25)',
+                '0 0 20px rgba(16,185,129,0.15)',
+              ],
+            } : isPaused ? {
+              boxShadow: [
+                '0 0 15px rgba(234,179,8,0.1)',
+                '0 0 25px rgba(234,179,8,0.18)',
+                '0 0 15px rgba(234,179,8,0.1)',
+              ],
+            } : {}}
+            transition={{
+              duration: isPaused ? 3 : 2,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+            className="rounded-full"
+          >
+            <svg width="280" height="280" viewBox="0 0 280 280" className="transform -rotate-90">
+              {/* Background circle */}
+              <circle
+                cx="140"
+                cy="140"
+                r="120"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+                className="text-muted/50"
+              />
+              {/* Progress circle with gradient stroke */}
+              <motion.circle
+                cx="140"
+                cy="140"
+                r="120"
+                fill="none"
+                stroke="url(#timerGradient)"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                style={{
+                  filter: isRunning && !isPaused
+                    ? 'drop-shadow(0 0 6px var(--color-emerald-accent))'
+                    : isPaused
+                      ? 'drop-shadow(0 0 4px var(--color-gold))'
+                      : 'none',
+                }}
+              />
+              {/* Gradient def: emerald → gold */}
+              <defs>
+                <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="var(--color-emerald-accent)" />
+                  <stop offset="100%" stopColor="var(--color-gold)" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </motion.div>
 
           {/* Timer text overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -447,7 +511,7 @@ export default function DeepWork() {
             {isRunning && !isPaused && (
               <motion.div
                 className="w-2 h-2 rounded-full bg-emerald-accent mt-2"
-                animate={{ opacity: [1, 0.3, 1] }}
+                animate={{ opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               />
             )}
@@ -552,7 +616,7 @@ export default function DeepWork() {
         </motion.div>
       )}
 
-      {/* Ambient Sounds */}
+      {/* Ambient Sounds with unique colors and wave animation */}
       <motion.div variants={itemVariants}>
         <Card className="glass border-0 shadow-sm">
           <CardHeader className="pb-3">
@@ -573,15 +637,51 @@ export default function DeepWork() {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => toggleSound(sound.label)}
                     className={cn(
-                      'rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all duration-200 border',
+                      'rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all duration-200 border relative overflow-hidden',
                       isActive
-                        ? 'border-emerald-accent/40 bg-emerald-accent/5 shadow-sm'
-                        : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                        ? 'border-emerald-accent/40 shadow-sm'
+                        : 'border-transparent hover:bg-muted/30'
                     )}
                   >
+                    {/* Wave animation background for active sounds */}
+                    {isActive && (
+                      <div className="absolute inset-0 overflow-hidden rounded-2xl">
+                        <motion.div
+                          className="absolute bottom-0 left-0 right-0 h-full"
+                          style={{ backgroundColor: sound.waveColor }}
+                          animate={{
+                            backgroundPosition: ['0% 100%', '100% 0%', '0% 100%'],
+                          }}
+                          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+                        {[...Array(3)].map((_, waveIdx) => (
+                          <motion.div
+                            key={waveIdx}
+                            className="absolute bottom-0 left-0 right-0 rounded-full"
+                            style={{
+                              backgroundColor: sound.waveColor,
+                              height: '40%',
+                              originY: '1',
+                            }}
+                            animate={{
+                              scaleX: [0.3, 0.7, 0.3],
+                              opacity: [0.3, 0.7, 0.3],
+                              y: [0, -5, 0],
+                            }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: 'easeInOut',
+                              delay: waveIdx * 0.4,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+
                     <div
                       className={cn(
-                        'w-10 h-10 rounded-xl flex items-center justify-center transition-colors',
+                        'w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 relative z-10',
                         isActive ? sound.color : 'bg-muted text-muted-foreground'
                       )}
                     >
@@ -589,7 +689,7 @@ export default function DeepWork() {
                     </div>
                     <span
                       className={cn(
-                        'text-xs font-medium',
+                        'text-xs font-medium relative z-10',
                         isActive ? 'text-foreground' : 'text-muted-foreground'
                       )}
                     >
@@ -597,9 +697,9 @@ export default function DeepWork() {
                     </span>
                     {isActive && (
                       <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="w-1.5 h-1.5 rounded-full bg-emerald-accent"
+                        animate={{ scale: [1, 1.5, 1], opacity: [1, 0.3, 1] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                        className="w-1.5 h-1.5 rounded-full bg-emerald-accent relative z-10"
                       />
                     )}
                   </motion.button>
@@ -610,10 +710,11 @@ export default function DeepWork() {
         </Card>
       </motion.div>
 
-      {/* Statistics */}
+      {/* Statistics with glass gradient borders */}
       <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 md:gap-4">
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
               <Clock className="w-4 h-4 text-emerald-accent" />
             </div>
@@ -621,8 +722,9 @@ export default function DeepWork() {
             <span className="text-[11px] text-muted-foreground">إجمالي الدقائق</span>
           </CardContent>
         </Card>
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
               <Zap className="w-4 h-4 text-gold" />
             </div>
@@ -630,8 +732,9 @@ export default function DeepWork() {
             <span className="text-[11px] text-muted-foreground">جلسات اليوم</span>
           </CardContent>
         </Card>
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1">
+        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
+          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-forest" />
             </div>
@@ -772,4 +875,3 @@ export default function DeepWork() {
     </motion.div>
   )
 }
-

@@ -91,6 +91,20 @@ const TYPE_COLORS: Record<Goal['type'], string> = {
   weekly: 'bg-forest-light/15 text-forest-light border-forest-light/25',
 }
 
+const TYPE_GRADIENT_OVERLAYS: Record<Goal['type'], string> = {
+  annual: 'from-gold/8 via-gold/3 to-transparent',
+  quarterly: 'from-emerald-accent/8 via-emerald-accent/3 to-transparent',
+  monthly: 'from-forest/8 via-forest/3 to-transparent',
+  weekly: 'from-chart-4/8 via-chart-4/3 to-transparent',
+}
+
+const TYPE_GRADIENT_STOPS: Record<Goal['type'], { from: string; to: string }> = {
+  annual: { from: 'oklch(0.78 0.12 85)', to: 'oklch(0.65 0.08 85)' },
+  quarterly: { from: 'oklch(0.55 0.14 163)', to: 'oklch(0.35 0.10 160)' },
+  monthly: { from: 'oklch(0.45 0.10 200)', to: 'oklch(0.35 0.08 200)' },
+  weekly: { from: 'oklch(0.65 0.20 310)', to: 'oklch(0.55 0.15 310)' },
+}
+
 /* ────────────── Component ────────────── */
 
 export function GoalsView() {
@@ -307,7 +321,7 @@ export function GoalsView() {
                 هدف جديد
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogContent className="sm:max-w-md rounded-2xl backdrop-blur-xl" dir="rtl">
               <DialogHeader>
                 <DialogTitle className="text-right">إضافة هدف جديد</DialogTitle>
                 <DialogDescription className="text-right">
@@ -453,43 +467,39 @@ export function GoalsView() {
           </motion.div>
         </div>
 
-        {/* ── Filter Tabs ── */}
+        {/* ── Filter Tabs with emerald underline ── */}
         <Tabs
           value={activeType}
           onValueChange={setActiveType}
           className="w-full"
         >
-          <TabsList className="rounded-xl bg-muted/60 p-1 h-auto flex-wrap">
-            <TabsTrigger
-              value="all"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
-            >
-              الكل
-            </TabsTrigger>
-            <TabsTrigger
-              value="annual"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
-            >
-              سنوي
-            </TabsTrigger>
-            <TabsTrigger
-              value="quarterly"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
-            >
-              ربع سنوي
-            </TabsTrigger>
-            <TabsTrigger
-              value="monthly"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
-            >
-              شهري
-            </TabsTrigger>
-            <TabsTrigger
-              value="weekly"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 py-2 text-sm"
-            >
-              أسبوعي
-            </TabsTrigger>
+          <TabsList className="rounded-xl bg-muted/60 p-1 h-auto flex-wrap relative">
+            {['all', 'annual', 'quarterly', 'monthly', 'weekly'].map((tab) => {
+              const labels: Record<string, string> = { all: 'الكل', annual: 'سنوي', quarterly: 'ربع سنوي', monthly: 'شهري', weekly: 'أسبوعي' }
+              const isActive = activeType === tab
+              return (
+                <TabsTrigger
+                  key={tab}
+                  value={tab}
+                  className={cn(
+                    'rounded-lg px-4 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm relative z-10',
+                  )}
+                >
+                  <motion.span
+                    className="block w-full"
+                  >
+                    {labels[tab]}
+                  </motion.span>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeGoalTab"
+                      className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-3/4 bg-emerald-accent rounded-full z-20"
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
 
           {/* All tabs share the same content */}
@@ -577,6 +587,10 @@ function GoalCard({
   const completedMilestones = goal.milestones.filter((m) => m.completed).length
   const totalMilestones = goal.milestones.length
 
+  const gradientStops = TYPE_GRADIENT_STOPS[goal.type]
+  const gradId = `goalGrad-${goal.id}`
+  const isHighProgress = goal.progress > 50
+
   return (
     <motion.div
       layout
@@ -585,14 +599,17 @@ function GoalCard({
       exit={{ opacity: 0, y: -10, scale: 0.98 }}
       transition={{ duration: 0.35, delay: index * 0.05 }}
     >
-      <Card className="rounded-2xl border-0 shadow-sm glass overflow-hidden">
+      <Card className="rounded-2xl border-0 shadow-sm glass overflow-hidden relative">
+        {/* Gradient overlay based on goal type */}
+        <div className={cn('absolute inset-0 bg-gradient-to-bl pointer-events-none rounded-2xl', TYPE_GRADIENT_OVERLAYS[goal.type])} />
+
         {/* ── Card Header ── */}
         <button
           onClick={onToggleExpand}
-          className="w-full text-right p-4 md:p-5 flex items-start gap-3 cursor-pointer"
+          className="w-full text-right p-4 md:p-5 flex items-start gap-3 cursor-pointer relative z-10"
         >
-          {/* Progress circle */}
-          <div className="relative w-12 h-12 shrink-0 mt-0.5">
+          {/* Progress circle with gradient stroke and glow */}
+          <div className={cn('relative w-12 h-12 shrink-0 mt-0.5', isHighProgress && 'drop-shadow-[0_0_6px_oklch(0.55_0.14_163/0.4)]')}>
             <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
               <circle
                 cx="24"
@@ -603,12 +620,24 @@ function GoalCard({
                 strokeWidth="3"
                 className="text-muted/50"
               />
+              {/* Glow filter for high progress */}
+              {isHighProgress && (
+                <defs>
+                  <filter id={`goalGlow-${goal.id}`} x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+              )}
               <motion.circle
                 cx="24"
                 cy="24"
                 r="20"
                 fill="none"
-                stroke="url(#emeraldGrad)"
+                stroke={`url(#${gradId})`}
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 20}`}
@@ -618,11 +647,12 @@ function GoalCard({
                     2 * Math.PI * 20 - (goal.progress / 100) * (2 * Math.PI * 20),
                 }}
                 transition={{ duration: 1, ease: 'easeOut', delay: index * 0.08 }}
+                filter={isHighProgress ? `url(#goalGlow-${goal.id})` : undefined}
               />
               <defs>
-                <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="oklch(0.55 0.14 163)" />
-                  <stop offset="100%" stopColor="oklch(0.35 0.10 160)" />
+                <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={gradientStops.from} />
+                  <stop offset="100%" stopColor={gradientStops.to} />
                 </linearGradient>
               </defs>
             </svg>
@@ -656,13 +686,17 @@ function GoalCard({
             {/* Meta */}
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               {goal.deadline && (
-                <span className={cn('flex items-center gap-1', deadlineInfo?.urgent && 'text-gold')}>
+                <motion.span
+                  className={cn('flex items-center gap-1', deadlineInfo?.urgent && 'text-gold')}
+                  animate={deadlineInfo?.urgent ? { opacity: [1, 0.5, 1] } : {}}
+                  transition={deadlineInfo?.urgent ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+                >
                   <Calendar className="w-3 h-3" />
                   {formatDate(goal.deadline)}
                   {deadlineInfo && (
                     <span className="text-[10px] mr-1">({deadlineInfo.text})</span>
                   )}
-                </span>
+                </motion.span>
               )}
               {totalMilestones > 0 && (
                 <span className="flex items-center gap-1">
@@ -720,7 +754,7 @@ function GoalCard({
                   </div>
                 )}
 
-                {/* Milestones */}
+                {/* Milestones with timeline */}
                 {goal.milestones.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -728,39 +762,70 @@ function GoalCard({
                         المعالم ({completedMilestones}/{totalMilestones})
                       </p>
                     </div>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto pl-1">
-                      {goal.milestones
-                        .sort((a, b) => a.order - b.order)
-                        .map((milestone) => (
-                          <motion.div
-                            key={milestone.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/40 transition-colors group"
-                          >
-                            <Checkbox
-                              checked={milestone.completed}
-                              onCheckedChange={() => onToggleMilestone(milestone.id)}
-                              className={cn(
-                                'data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                'text-sm flex-1 transition-all',
-                                milestone.completed
-                                  ? 'line-through text-muted-foreground/60'
-                                  : 'text-foreground'
-                              )}
+                    <div className="relative max-h-48 overflow-y-auto pl-1">
+                      {/* Timeline connecting line */}
+                      <div className="absolute top-3 bottom-3 right-[17px] w-px bg-border/50" />
+                      <div className="space-y-1.5">
+                        {goal.milestones
+                          .sort((a, b) => a.order - b.order)
+                          .map((milestone, msIdx) => (
+                            <motion.div
+                              key={milestone.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.2, delay: msIdx * 0.05 }}
+                              className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/40 transition-colors group relative cursor-pointer"
+                              onClick={() => onToggleMilestone(milestone.id)}
                             >
-                              {milestone.title}
-                            </span>
-                            {milestone.completed && (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-accent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            )}
-                          </motion.div>
-                        ))}
+                              {/* Timeline dot */}
+                              <div className="relative z-10 shrink-0">
+                                {milestone.completed ? (
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                                    className="relative"
+                                  >
+                                    <div className="w-[18px] h-[18px] rounded-full bg-emerald-accent flex items-center justify-center shadow-sm shadow-emerald-accent/30">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                    </div>
+                                    {/* Confetti-like sparkles */}
+                                    {[0, 1, 2].map((i) => (
+                                      <motion.span
+                                        key={i}
+                                        className="absolute w-1 h-1 rounded-full bg-gold"
+                                        initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                                        animate={{
+                                          opacity: 0,
+                                          x: [0, (i - 1) * 12, (i - 1) * 16],
+                                          y: [0, -8 - i * 4, -14 - i * 3],
+                                          scale: [1, 0.8, 0],
+                                        }}
+                                        transition={{ duration: 0.6, delay: i * 0.1, ease: 'easeOut' }}
+                                        style={{ top: '50%', left: '50%' }}
+                                      />
+                                    ))}
+                                  </motion.div>
+                                ) : (
+                                  <div className="w-[18px] h-[18px] rounded-full border-2 border-border bg-background" />
+                                )}
+                              </div>
+                              <span
+                                className={cn(
+                                  'text-sm flex-1 transition-all',
+                                  milestone.completed
+                                    ? 'line-through text-muted-foreground/60'
+                                    : 'text-foreground'
+                                )}
+                              >
+                                {milestone.title}
+                              </span>
+                              {milestone.completed && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </motion.div>
+                          ))}
+                      </div>
                     </div>
                   </div>
                 )}

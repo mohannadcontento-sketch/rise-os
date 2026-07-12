@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   TrendingUp,
@@ -15,12 +15,9 @@ import {
   Calendar,
   Star,
   Award,
-  Zap,
   Sparkles,
-  Trophy,
-  Rocket,
-  Heart,
-  MessageCircle,
+  Loader2,
+  Zap,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -70,15 +67,10 @@ const emptyReview = (): WeeklyReview => ({
   nextWeek: { priorities: ['', '', ''], goals: '' },
 })
 
-/* ────────────── Motivational Messages ────────────── */
-
-function getMotivationalMessage(score: number): { icon: React.ElementType; text: string; color: string; bg: string } {
-  if (score >= 9) return { icon: Trophy, text: 'أسبوع أسطوري! أنت في القمة، استمر على هذا المستوى المذهل 🏆', color: 'text-gold', bg: 'bg-gold/10 border-gold/20' }
-  if (score >= 8) return { icon: Rocket, text: 'أداء ممتاز! أنت على المسار الصحيح نحو أهدافك 🚀', color: 'text-emerald-accent', bg: 'bg-emerald-accent/10 border-emerald-accent/20' }
-  if (score >= 7) return { icon: Star, text: 'أسبوع رائع! استمر في التحسن والتميّز ⭐', color: 'text-emerald-accent', bg: 'bg-emerald-accent/10 border-emerald-accent/20' }
-  if (score >= 5) return { icon: TrendingUp, text: 'بداية جيدة، هناك مساحة للتحسين. استمر بالمحاولة! 💪', color: 'text-gold', bg: 'bg-gold/10 border-gold/20' }
-  if (score >= 3) return { icon: Heart, text: 'لا تقلق، كل بداية صعبة. الأهم أنك هنا وتحاول ❤️', color: 'text-orange-500', bg: 'bg-orange-500/10 border-orange-500/20' }
-  return { icon: Sparkles, text: 'الأسبوع القادم فرصة جديدة. ابدأ صغيراً وحقق تقدماً! ✨', color: 'text-rose-500', bg: 'bg-rose-500/10 border-rose-500/20' }
+const MOTIVATIONAL_MESSAGES: Record<string, { title: string; message: string; emoji: string }> = {
+  high: { title: 'أداء استثنائي!', message: 'أنت في مسار النجاح. استمر على هذا المنوال المذهل!', emoji: '🏆' },
+  medium: { title: 'أداء جيد!', message: 'أنت تتقدم بشكل ثابت. حاول أن ترفع سقف توقعاتك!', emoji: '💪' },
+  low: { title: 'هناك مجال للتحسن', message: 'كل أسبوع هو فرصة جديدة. لا تستسلم، استمر بالتقدم!', emoji: '🌱' },
 }
 
 /* ────────────── Component ────────────── */
@@ -107,7 +99,7 @@ export default function WeeklyReview() {
     } catch { /* ignore */ }
     return []
   })
-  const [isAutoFilling, setIsAutoFilling] = useState(false)
+  const [autoFilling, setAutoFilling] = useState(false)
 
   const save = () => {
     const updated = allReviews.some((r) => r.id === review.id)
@@ -161,48 +153,58 @@ export default function WeeklyReview() {
     })
   }
 
-  // Auto-Fill Data
+  // Auto-Fill from APIs
   const handleAutoFill = async () => {
-    setIsAutoFilling(true)
+    setAutoFilling(true)
     try {
-      const [tasksRes, focusRes] = await Promise.all([
-        fetch('/api/rise/tasks'),
-        fetch('/api/rise/focus'),
-      ])
-      const tasksData = await tasksRes.json()
-      const focusData = await focusRes.json()
+      const weekStart = new Date()
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+      const weekStartStr = weekStart.toISOString().split('T')[0]
 
-      // Count completed tasks this week
-      const oneWeekAgo = new Date()
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-      const completedTasks = (tasksData.tasks || []).filter(
-        (t: { status: string; completedAt: string | null }) =>
-          t.status === 'done' && t.completedAt && new Date(t.completedAt) >= oneWeekAgo
-      ).length
+      // Fetch tasks
+      let tasksCompleted = 0
+      try {
+        const tasksRes = await fetch('/api/rise/tasks')
+        const tasksData = await tasksRes.json()
+        const tasks = tasksData.tasks || []
+        tasksCompleted = tasks.filter((t: { done: boolean; createdAt: string }) => {
+          if (!t.done) return false
+          const taskDate = new Date(t.createdAt).toISOString().split('T')[0]
+          return taskDate >= weekStartStr
+        }).length
+      } catch { /* ignore */ }
 
-      // Sum completed focus session minutes this week
-      const completedFocusMin = (focusData.sessions || [])
-        .filter((s: { completed: boolean; startedAt: string }) =>
-          s.completed && new Date(s.startedAt) >= oneWeekAgo
-        )
-        .reduce((sum: number, s: { actualMin: number }) => sum + (s.actualMin || 0), 0)
+      // Fetch focus
+      let focusMinutes = 0
+      try {
+        const focusRes = await fetch('/api/rise/focus')
+        const focusData = await focusRes.json()
+        const sessions = focusData.sessions || []
+        focusMinutes = sessions
+          .filter((s: { completed: boolean; startedAt: string }) => {
+            if (!s.completed) return false
+            const sDate = new Date(s.startedAt).toISOString().split('T')[0]
+            return sDate >= weekStartStr
+          })
+          .reduce((sum: number, s: { actualMin: number }) => sum + (s.actualMin || 0), 0)
+      } catch { /* ignore */ }
 
-      const focusHours = Math.round((completedFocusMin / 60) * 10) / 10
+      const focusHours = Math.round((focusMinutes / 60) * 10) / 10
 
       setReview((prev) => ({
         ...prev,
         numbers: {
           ...prev.numbers,
-          tasksCompleted: completedTasks,
+          tasksCompleted,
           focusHours,
         },
       }))
 
-      toast.success(`تم تعبئة البيانات: ${completedTasks} مهمة مكتملة، ${focusHours} ساعة تركيز`)
+      toast.success(`تم التعبئة التلقائية: ${tasksCompleted} مهمة، ${focusHours} ساعة تركيز`)
     } catch {
-      toast.error('فشل في جلب البيانات')
+      toast.error('فشل في التعبئة التلقائية')
     } finally {
-      setIsAutoFilling(false)
+      setAutoFilling(false)
     }
   }
 
@@ -211,17 +213,9 @@ export default function WeeklyReview() {
     (achievedCount / review.goals.items.length) * 100
   )
 
-  const motivational = getMotivationalMessage(review.goals.score)
-  const MotivationalIcon = motivational.icon
-
-  // Score labels
-  const getScoreLabel = (score: number) => {
-    if (score <= 2) return 'ضعيف'
-    if (score <= 4) return 'مقبول'
-    if (score <= 6) return 'جيد'
-    if (score <= 8) return 'ممتاز'
-    return 'استثنائي'
-  }
+  // Motivational message based on score
+  const scoreLevel = review.goals.score >= 8 ? 'high' : review.goals.score >= 5 ? 'medium' : 'low'
+  const motivational = MOTIVATIONAL_MESSAGES[scoreLevel]
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -246,75 +240,68 @@ export default function WeeklyReview() {
         </div>
       </div>
 
-      {/* Score Card with Visual Slider */}
+      {/* Score (visual slider 1-10) */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="glass overflow-hidden">
-          <div className="bg-gradient-to-l from-emerald-accent/8 via-emerald-accent/3 to-transparent p-5">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">درجة الأسبوع</p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <motion.span
-                      key={review.goals.score}
-                      initial={{ scale: 1.2 }}
-                      animate={{ scale: 1 }}
-                      className="text-4xl font-bold text-emerald-accent"
-                    >
-                      {review.goals.score}
-                    </motion.span>
-                    <div className="flex flex-col">
-                      <span className="text-lg text-muted-foreground">/ 10</span>
-                      <span className={cn('text-xs font-semibold', motivational.color)}>
-                        {getScoreLabel(review.goals.score)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
-                    <motion.div
-                      key={s}
-                      whileHover={{ scale: 1.3, y: -2 }}
-                    >
-                      <button
-                        onClick={() => setReview((prev) => ({ ...prev, goals: { ...prev.goals, score: s } }))}
-                        className={cn(
-                          'w-3.5 h-6 rounded-full transition-all duration-200',
-                          s <= review.goals.score
-                            ? 'bg-emerald-accent shadow-sm shadow-emerald-accent/30'
-                            : 'bg-muted/40 hover:bg-muted/60'
-                        )}
-                      />
-                    </motion.div>
-                  ))}
+          <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm text-muted-foreground">درجة الأسبوع</p>
+                <div className="flex items-center gap-3 mt-2">
+                  <motion.span
+                    key={review.goals.score}
+                    initial={{ scale: 1.3 }}
+                    animate={{ scale: 1 }}
+                    className="text-4xl font-bold text-emerald-accent"
+                  >
+                    {review.goals.score}
+                  </motion.span>
+                  <span className="text-lg text-muted-foreground">/ 10</span>
                 </div>
               </div>
-              {/* Score Slider */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs text-muted-foreground">
-                  <span>ضعيف</span>
-                  <span>استثنائي</span>
-                </div>
-                <Slider
-                  value={[review.goals.score]}
-                  onValueChange={([v]) => setReview((prev) => ({ ...prev, goals: { ...prev.goals, score: v } }))}
-                  min={1}
-                  max={10}
-                  step={1}
-                  className="w-full"
-                />
+              <div className="flex items-center gap-1.5">
+                <Badge className={cn(
+                  'text-xs px-3 py-1',
+                  scoreLevel === 'high' ? 'bg-emerald-accent/15 text-emerald-accent border-emerald-accent/20' :
+                  scoreLevel === 'medium' ? 'bg-gold/15 text-gold border-gold/20' :
+                  'bg-rose-500/15 text-rose-500 border-rose-500/20'
+                )}>
+                  {motivational.emoji} {motivational.title}
+                </Badge>
+              </div>
+            </div>
+            {/* Visual slider 1-10 */}
+            <div className="pt-2">
+              <Slider
+                value={[review.goals.score]}
+                onValueChange={([v]) => setReview((prev) => ({ ...prev, goals: { ...prev.goals, score: v } }))}
+                min={1}
+                max={10}
+                step={1}
+                className="mt-1"
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1 px-0.5">
+                <span>١</span>
+                <span>٢</span>
+                <span>٣</span>
+                <span>٤</span>
+                <span>٥</span>
+                <span>٦</span>
+                <span>٧</span>
+                <span>٨</span>
+                <span>٩</span>
+                <span>١٠</span>
               </div>
             </div>
           </div>
         </Card>
       </motion.div>
 
-      {/* Section 1: Review - with emerald accent border */}
+      {/* Section 1: Review */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="glass">
+        <Card className="glass border-r-4 border-r-emerald-accent">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
+            <CardTitle className="text-base flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
               المراجعة
             </CardTitle>
@@ -363,31 +350,29 @@ export default function WeeklyReview() {
         </Card>
       </motion.div>
 
-      {/* Section 2: Numbers - with Auto-Fill and emerald accent border */}
+      {/* Section 2: Numbers */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="glass">
+        <Card className="glass border-r-4 border-r-gold">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-gold">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Target className="w-4 h-4 text-gold" />
                 الأرقام
               </CardTitle>
-              <motion.div whileHover={{ scale: 1.02 }}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAutoFill}
-                  disabled={isAutoFilling}
-                  className="gap-1.5 text-xs border-emerald-accent/30 text-emerald-accent hover:bg-emerald-accent/10"
-                >
-                  {isAutoFilling ? (
-                    <div className="w-3.5 h-3.5 border-2 border-emerald-accent/30 border-t-emerald-accent rounded-full animate-spin" />
-                  ) : (
-                    <Zap className="w-3.5 h-3.5" />
-                  )}
-                  تعبئة تلقائية
-                </Button>
-              </motion.div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAutoFill}
+                disabled={autoFilling}
+                className="gap-1.5 text-xs border-emerald-accent/30 text-emerald-accent hover:bg-emerald-accent/5"
+              >
+                {autoFilling ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5" />
+                )}
+                تعبئة تلقائية
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -397,24 +382,28 @@ export default function WeeklyReview() {
                   <CheckCircle2 className="w-3 h-3" />
                   المهام المكتملة
                 </Label>
-                <Input
-                  type="number"
-                  value={review.numbers.tasksCompleted}
-                  onChange={(e) => updateNumber('tasksCompleted', parseInt(e.target.value) || 0)}
-                  className="text-center text-lg font-bold h-12"
-                />
+                <div className="relative">
+                  <Input
+                    type="number"
+                    value={review.numbers.tasksCompleted}
+                    onChange={(e) => updateNumber('tasksCompleted', parseInt(e.target.value) || 0)}
+                    className="text-center text-lg font-bold h-12"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Clock className="w-3 h-3" />
                   ساعات التركيز
                 </Label>
-                <Input
-                  type="number"
-                  value={review.numbers.focusHours}
-                  onChange={(e) => updateNumber('focusHours', parseInt(e.target.value) || 0)}
-                  className="text-center text-lg font-bold h-12"
-                />
+                <div className="relative">
+                  <Input
+                    type="number"
+                    value={review.numbers.focusHours}
+                    onChange={(e) => updateNumber('focusHours', parseInt(e.target.value) || 0)}
+                    className="text-center text-lg font-bold h-12"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -452,12 +441,12 @@ export default function WeeklyReview() {
         </Card>
       </motion.div>
 
-      {/* Section 3: Goals - with emerald accent border */}
+      {/* Section 3: Goals */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="glass">
+        <Card className="glass border-r-4 border-r-emerald-accent">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Target className="w-4 h-4 text-emerald-accent" />
                 الأهداف الأسبوعية
               </CardTitle>
@@ -469,8 +458,7 @@ export default function WeeklyReview() {
           <CardContent className="space-y-3">
             {review.goals.items.map((goal, i) => (
               <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-muted/30">
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
+                <button
                   onClick={() => toggleGoalAchieved(i)}
                   className={cn(
                     'w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
@@ -480,7 +468,7 @@ export default function WeeklyReview() {
                   )}
                 >
                   {goal.achieved && <CheckCircle2 className="w-4 h-4" />}
-                </motion.button>
+                </button>
                 <Input
                   placeholder={`الهدف ${i + 1}`}
                   value={goal.text}
@@ -494,17 +482,24 @@ export default function WeeklyReview() {
                 <span>التقدم</span>
                 <span>{overallProgress}%</span>
               </div>
-              <Progress value={overallProgress} className="h-2" />
+              <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${overallProgress}%` }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Section 4: Next Week - with emerald accent border */}
+      {/* Section 4: Next Week */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass">
+        <Card className="glass border-r-4 border-r-forest">
           <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-forest">
+            <CardTitle className="text-base flex items-center gap-2">
               <ArrowLeft className="w-4 h-4 text-forest" />
               الأسبوع القادم
             </CardTitle>
@@ -552,28 +547,23 @@ export default function WeeklyReview() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <Card className={cn('glass border', motivational.bg)}>
-          <CardContent className="p-5">
-            <div className="flex items-start gap-3">
-              <motion.div
-                className="p-2.5 rounded-xl shrink-0"
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-              >
-                <MotivationalIcon className={cn('w-5 h-5', motivational.color)} />
-              </motion.div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <MessageCircle className={cn('w-3.5 h-3.5', motivational.color)} />
-                  <span className="text-xs font-semibold text-muted-foreground">رسالة تحفيزية</span>
-                </div>
-                <p className={cn('text-sm leading-relaxed font-medium', motivational.color)}>
-                  {motivational.text}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className={cn(
+          'glass rounded-2xl p-5 text-center border',
+          scoreLevel === 'high' ? 'border-emerald-accent/20 bg-emerald-accent/5' :
+          scoreLevel === 'medium' ? 'border-gold/20 bg-gold/5' :
+          'border-rose-500/20 bg-rose-500/5'
+        )}>
+          <motion.div
+            key={scoreLevel}
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring' }}
+          >
+            <p className="text-2xl mb-2">{motivational.emoji}</p>
+            <h3 className="font-bold text-base mb-1">{motivational.title}</h3>
+            <p className="text-sm text-muted-foreground">{motivational.message}</p>
+          </motion.div>
+        </div>
       </motion.div>
 
       {/* Previous Reviews */}
@@ -581,9 +571,7 @@ export default function WeeklyReview() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <Card className="glass">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2.5 pr-3 border-r-3 border-r-muted-foreground/30 text-muted-foreground">
-                المراجعات السابقة
-              </CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">المراجعات السابقة</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-48 overflow-y-auto">

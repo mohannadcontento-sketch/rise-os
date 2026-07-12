@@ -131,13 +131,14 @@ export function Sidebar() {
           'fixed top-0 right-0 z-50 h-full w-72 bg-sidebar border-l border-sidebar-border',
           'flex flex-col transition-transform duration-300 ease-out',
           'lg:translate-x-0 lg:static lg:z-auto',
+          'shadow-[inset_-1px_0_0_rgba(0,0,0,0.03)] dark:shadow-[inset_-1px_0_0_rgba(255,255,255,0.02),inset_1px_0_0_rgba(0,0,0,0.1)]',
           sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 pb-3">
+        <div className="flex items-center justify-between p-5 pb-4 relative">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -151,10 +152,12 @@ export function Sidebar() {
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60"
+            className="lg:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60 transition-colors duration-200"
           >
             <X className="w-4 h-4" />
           </button>
+          {/* Gradient line below header: emerald → gold → transparent */}
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-emerald-accent/40 to-gold/30" />
         </div>
 
         {/* Nav */}
@@ -162,7 +165,8 @@ export function Sidebar() {
           {navGroups.map((group, gi) => (
             <div key={gi} className={cn(group.title && 'mt-5')}>
               {group.title && (
-                <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/35">
+                <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-accent/40 inline-block" />
                   {group.title}
                 </p>
               )}
@@ -195,7 +199,8 @@ export function Sidebar() {
                       {isActive && (
                         <motion.div
                           layoutId="activeIndicator"
-                          className="w-1.5 h-1.5 rounded-full bg-sidebar-primary"
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-accent"
+                          transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                         />
                       )}
                     </motion.button>
@@ -207,10 +212,12 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="glass rounded-xl p-3">
+        <div className="p-4 border-t border-sidebar-border relative">
+          {/* Gradient line above footer */}
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-sidebar-border to-transparent" />
+          <div className="glass rounded-xl p-3 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20">
                 م
               </div>
               <div className="flex-1 min-w-0">
@@ -219,18 +226,22 @@ export function Sidebar() {
               </div>
               <ChevronLeft className="w-4 h-4 text-sidebar-foreground/30 rotate-180" />
             </div>
-            <div className="mt-2">
-              <div className="flex justify-between text-[10px] text-sidebar-foreground/50 mb-1">
+            <div className="mt-2.5">
+              <div className="flex justify-between text-[10px] text-sidebar-foreground/50 mb-1.5">
                 <span>الخبرة</span>
                 <span>٠ / ١٠٠</span>
               </div>
-              <div className="h-1.5 rounded-full bg-sidebar-accent overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
-                  initial={{ width: 0 }}
-                  animate={{ width: '0%' }}
-                  transition={{ duration: 1, ease: 'easeOut' }}
-                />
+              <div className="relative">
+                {/* XP bar glow effect */}
+                <div className="absolute -inset-0.5 rounded-full bg-gradient-to-l from-gold/20 to-gold-light/10 blur-[2px] opacity-50" />
+                <div className="relative h-1.5 rounded-full bg-sidebar-accent overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)]">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-l from-gold via-gold to-gold-light shadow-[0_0_8px_oklch(0.78_0.12_85/0.3)]"
+                    initial={{ width: 0 }}
+                    animate={{ width: '0%' }}
+                    transition={{ duration: 1, ease: 'easeOut' }}
+                  />
+                </div>
               </div>
             </div>
           </div>

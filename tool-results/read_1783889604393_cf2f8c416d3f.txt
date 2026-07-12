@@ -1,0 +1,677 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  BookOpen,
+     7→     7→  Plus,
+     8→     8→  Star,
+     9→     9→  ChevronDown,
+    10→    10→  ChevronUp,
+    11→    11→  BookmarkCheck,
+    12→    12→  Library,
+    13→    13→  Search,
+    14→    14→  FileText,
+    15→    15→  Video,
+    16→    16→  GraduationCap,
+    17→    17→  Quote,
+    18→    18→  Highlighter,
+    19→    19→  StickyNote,
+    20→    20→  TrendingUp,
+    21→    21→  Flame,
+    22→    22→  X,
+    23→    23→} from 'lucide-react'
+    24→    24→import { Card, CardContent } from '@/components/ui/card'
+    25→    25→import { Button } from '@/components/ui/button'
+    26→    26→import { Badge } from '@/components/ui/badge'
+    27→    27→import { Input } from '@/components/ui/input'
+    28→    28→import { Textarea } from '@/components/ui/textarea'
+    29→    29→import { Progress } from '@/components/ui/progress'
+    30→    30→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    31→    31→import {
+    32→    32→  Dialog,
+    33→    33→  DialogContent,
+    34→    34→  DialogHeader,
+    35→    35→  DialogTitle,
+    36→    36→  DialogTrigger,
+    37→    37→} from '@/components/ui/dialog'
+    38→    38→import {
+    39→    39→  Select,
+    40→    40→  SelectContent,
+    41→    41→  SelectItem,
+    42→    42→  SelectTrigger,
+    43→    43→  SelectValue,
+    44→    44→} from '@/components/ui/select'
+    45→    45→import { Skeleton } from '@/components/ui/skeleton'
+    46→    46→import { cn } from '@/lib/utils'
+    47→    47→import { toast } from 'sonner'
+    48→    48→
+    49→    49→/* ────────────── Types ────────────── */
+    50→    50→
+    51→    51→interface Book {
+    52→    52→  id: string
+    53→    53→  title: string
+    54→    54→  author: string | null
+    55→    55→  type: string
+    56→    56→  status: string
+    57→    57→  currentPage: number
+    58→    58→  totalPages: number | null
+    59→    59→  progress: number
+    60→    60→  rating: number | null
+    61→    61→  favoriteQuote: string | null
+    62→    62→  highlights: string | null
+    63→    63→  startDate: string | null
+    64→    64→  endDate: string | null
+    65→    65→  notes: string | null
+    66→    66→}
+    67→    67→
+    68→    68→/* ────────────── Helpers ────────────── */
+    69→    69→
+    70→    70→const typeLabels: Record<string, string> = {
+    71→    71→  book: 'كتاب',
+    72→    72→  article: 'مقال',
+    73→    73→  course: 'دورة',
+    74→    74→  video: 'فيديو',
+    75→    75→}
+    76→    76→
+    77→    77→const typeIcons: Record<string, React.ElementType> = {
+    78→    78→  book: BookOpen,
+    79→    79→  article: FileText,
+    80→    80→  course: GraduationCap,
+    81→    81→  video: Video,
+    82→    82→}
+    83→    83→
+    84→    84→const typeColors: Record<string, string> = {
+    85→    85→  book: 'bg-emerald-accent/10 text-emerald-accent',
+    86→    86→  article: 'bg-gold/10 text-gold',
+    87→    87→  course: 'bg-blue-500/10 text-blue-500',
+    88→    88→  video: 'bg-purple-500/10 text-purple-500',
+    89→    89→}
+    90→    90→
+    91→    91→function StarRating({ rating, onRate, readonly = false }: { rating: number; onRate?: (r: number) => void; readonly?: boolean }) {
+    92→    92→  return (
+    93→    93→    <div className="flex gap-0.5">
+    94→    94→      {[1, 2, 3, 4, 5].map((s) => (
+    95→    95→        <button
+    96→    96→          key={s}
+    97→    97→          type="button"
+    98→    98→          disabled={readonly}
+    99→    99→          onClick={() => onRate?.(s)}
+   100→   100→          className={cn('transition-all', !readonly && 'hover:scale-110 cursor-pointer', readonly && 'cursor-default')}
+   101→   101→        >
+   102→   102→          <Star
+   103→   103→            className={cn(
+   104→   104→              'w-4 h-4 transition-colors',
+   105→   105→              s <= rating ? 'fill-gold text-gold' : 'text-muted-foreground/30'
+   106→   106→            )}
+   107→   107→          />
+   108→   108→        </button>
+   109→   109→      ))}
+   110→   110→    </div>
+   111→   111→  )
+   112→   112→}
+   113→   113→
+   114→   114→/* ────────────── Component ────────────── */
+   115→   115→
+   116→   116→export default function Reading() {
+   117→   117→  const [books, setBooks] = useState<Book[]>([])
+   118→   118→  const [loading, setLoading] = useState(true)
+   119→   119→  const [activeTab, setActiveTab] = useState('reading')
+   120→   120→  const [expandedBook, setExpandedBook] = useState<string | null>(null)
+   121→   121→  const [searchQuery, setSearchQuery] = useState('')
+   122→   122→  const [addDialogOpen, setAddDialogOpen] = useState(false)
+   123→   123→
+   124→   124→  // Add book form
+   125→   125→  const [newTitle, setNewTitle] = useState('')
+   126→   126→  const [newAuthor, setNewAuthor] = useState('')
+   127→   127→  const [newType, setNewType] = useState('book')
+   128→   128→  const [newTotalPages, setNewTotalPages] = useState('')
+   129→   129→
+   130→   130→  // Update book
+   131→   131→  const [editNotes, setEditNotes] = useState<Record<string, string>>({})
+   132→   132→  const [editQuote, setEditQuote] = useState<Record<string, string>>({})
+   133→   133→  const [editHighlight, setEditHighlight] = useState<Record<string, string>>({})
+   134→   134→  const [editPage, setEditPage] = useState<Record<string, string>>({})
+   135→   135→
+   136→   136→  const fetchBooks = useCallback(async () => {
+   137→   137→    try {
+   138→   138→      const res = await fetch('/api/rise/books')
+   139→   139→      const data = await res.json()
+   140→   140→      setBooks(data.books || [])
+   141→   141→    } catch {
+   142→   142→      toast.error('فشل في تحميل الكتب')
+   143→   143→    } finally {
+   144→   144→      setLoading(false)
+   145→   145→    }
+   146→   146→  }, [])
+   147→   147→
+   148→   148→  useEffect(() => {
+   149→   149→    fetchBooks()
+   150→   150→  }, [fetchBooks])
+   151→   151→
+   152→   152→  const handleAddBook = async () => {
+   153→   153→    if (!newTitle.trim()) return
+   154→   154→    try {
+   155→   155→      await fetch('/api/rise/books', {
+   156→   156→        method: 'POST',
+   157→   157→        headers: { 'Content-Type': 'application/json' },
+   158→   158→        body: JSON.stringify({
+   159→   159→          title: newTitle,
+   160→   160→          author: newAuthor || null,
+   161→   161→          type: newType,
+   162→   162→          totalPages: newTotalPages ? parseInt(newTotalPages) : null,
+   163→   163→          status: 'reading',
+   164→   164→        }),
+   165→   165→      })
+   166→   166→      toast.success('تمت إضافة الكتاب بنجاح')
+   167→   167→      setNewTitle('')
+   168→   168→      setNewAuthor('')
+   169→   169→      setNewType('book')
+   170→   170→      setNewTotalPages('')
+   171→   171→      setAddDialogOpen(false)
+   172→   172→      fetchBooks()
+   173→   173→    } catch {
+   174→   174→      toast.error('فشل في إضافة الكتاب')
+   175→   175→    }
+   176→   176→  }
+   177→   177→
+   178→   178→  const handleUpdateBook = async (id: string, data: Partial<Book>) => {
+   179→   179→    try {
+   180→   180→      await fetch('/api/rise/books', {
+   181→   181→        method: 'PUT',
+   182→   182→        headers: { 'Content-Type': 'application/json' },
+   183→   183→        body: JSON.stringify({ id, ...data }),
+   184→   184→      })
+   185→   185→      fetchBooks()
+   186→   186→    } catch {
+   187→   187→      toast.error('فشل في تحديث الكتاب')
+   188→   188→    }
+   189→   189→  }
+   190→   190→
+   191→   191→  const handleUpdateProgress = (bookId: string) => {
+   192→   192→    const page = parseInt(editPage[bookId] || '0')
+   193→   193→    const book = books.find((b) => b.id === bookId)
+   194→   194→    if (!book || !book.totalPages) return
+   195→   195→    const progress = Math.min(100, Math.round((page / book.totalPages) * 100))
+   196→   196→    const status = progress >= 100 ? 'completed' : 'reading'
+   197→   197→    handleUpdateBook(bookId, {
+   198→   198→      currentPage: page,
+   199→   199→      progress,
+   200→   200→      status,
+   201→   201→      endDate: progress >= 100 ? new Date().toISOString().split('T')[0] : undefined,
+   202→   202→    })
+   203→   203→    setEditPage((prev) => {
+   204→   204→      const next = { ...prev }
+   205→   205→      delete next[bookId]
+   206→   206→      return next
+   207→   207→    })
+   208→   208→  }
+   209→   209→
+   210→   210→  const handleSaveNotes = (bookId: string) => {
+   211→   211→    handleUpdateBook(bookId, { notes: editNotes[bookId] || null })
+   212→   212→    setEditNotes((prev) => {
+   213→   213→      const next = { ...prev }
+   214→   214→      delete next[bookId]
+   215→   215→      return next
+   216→   216→    })
+   217→   217→  }
+   218→   218→
+   219→   219→  const handleSaveQuote = (bookId: string) => {
+   220→   220→    handleUpdateBook(bookId, { favoriteQuote: editQuote[bookId] || null })
+   221→   221→    setEditQuote((prev) => {
+   222→   222→      const next = { ...prev }
+   223→   223→      delete next[bookId]
+   224→   224→      return next
+   225→   225→    })
+   226→   226→  }
+   227→   227→
+   228→   228→  const handleSaveHighlight = (bookId: string) => {
+   229→   229→    const book = books.find((b) => b.id === bookId)
+   230→   230→    const existing: string[] = book?.highlights ? JSON.parse(book.highlights) : []
+   231→   231→    const newHighlight = editHighlight[bookId]?.trim()
+   232→   232→    if (newHighlight) {
+   233→   233→      existing.push(newHighlight)
+   234→   234→      handleUpdateBook(bookId, { highlights: JSON.stringify(existing) })
+   235→   235→    }
+   236→   236→    setEditHighlight((prev) => {
+   237→   237→      const next = { ...prev }
+   238→   238→      delete next[bookId]
+   239→   239→      return next
+   240→   240→    })
+   241→   241→  }
+   242→   242→
+   243→   243→  // Stats
+   244→   244→  const readingBooks = books.filter((b) => b.status === 'reading')
+   245→   245→  const completedBooks = books.filter((b) => b.status === 'completed')
+   246→   246→  const totalBooks = books.length
+   247→   247→  const totalPagesRead = completedBooks.reduce((sum, b) => sum + (b.totalPages || 0), 0) +
+   248→   248→    readingBooks.reduce((sum, b) => sum + (b.currentPage || 0), 0)
+   249→   249→
+   250→   250→  const filteredBooks = books
+   251→   251→    .filter((b) => b.status === activeTab)
+   252→   252→    .filter((b) => {
+   253→   253→      if (!searchQuery) return true
+   254→   254→      const q = searchQuery.toLowerCase()
+   255→   255→      return b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)
+   256→   256→    })
+   257→   257→
+   258→   258→  return (
+   259→   259→    <div className="space-y-6">
+   260→   260→      {/* Header */}
+   261→   261→      <div className="flex items-center justify-between">
+   262→   262→        <div>
+   263→   263→          <h2 className="text-2xl font-bold tracking-tight">القراءة</h2>
+   264→   264→          <p className="text-sm text-muted-foreground mt-1">تتبع كتبك ومقالاتك ودوراتك التعليمية</p>
+   265→   265→        </div>
+   266→   266→        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+   267→   267→          <DialogTrigger asChild>
+   268→   268→            <Button className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+   269→   269→              <Plus className="w-4 h-4" />
+   270→   270→              إضافة
+   271→   271→            </Button>
+   272→   272→          </DialogTrigger>
+   273→   273→          <DialogContent className="sm:max-w-md" dir="rtl">
+   274→   274→            <DialogHeader>
+   275→   275→              <DialogTitle>إضافة كتاب جديد</DialogTitle>
+   276→   276→            </DialogHeader>
+   277→   277→            <div className="space-y-4 mt-4">
+   278→   278→              <div className="space-y-2">
+   279→   279→                <label className="text-sm font-medium">العنوان</label>
+   280→   280→                <Input
+   281→   281→                  placeholder="عنوان الكتاب أو المقال"
+   282→   282→                  value={newTitle}
+   283→   283→                  onChange={(e) => setNewTitle(e.target.value)}
+   284→   284→                />
+   285→   285→              </div>
+   286→   286→              <div className="space-y-2">
+   287→   287→                <label className="text-sm font-medium">المؤلف</label>
+   288→   288→                <Input
+   289→   289→                  placeholder="اسم المؤلف"
+   290→   290→                  value={newAuthor}
+   291→   291→                  onChange={(e) => setNewAuthor(e.target.value)}
+   292→   292→                />
+   293→   293→              </div>
+   294→   294→              <div className="space-y-2">
+   295→   295→                <label className="text-sm font-medium">النوع</label>
+   296→   296→                <Select value={newType} onValueChange={setNewType}>
+   297→   297→                  <SelectTrigger>
+   298→   298→                    <SelectValue />
+   299→   299→                  </SelectTrigger>
+   300→   300→                  <SelectContent>
+   301→   301→                    <SelectItem value="book">كتاب</SelectItem>
+   302→   302→                    <SelectItem value="article">مقال</SelectItem>
+   303→   303→                    <SelectItem value="course">دورة</SelectItem>
+   304→   304→                    <SelectItem value="video">فيديو</SelectItem>
+   305→   305→                  </SelectContent>
+   306→   306→                </Select>
+   307→   307→              </div>
+   308→   308→              <div className="space-y-2">
+   309→   309→                <label className="text-sm font-medium">عدد الصفحات</label>
+   310→   310→                <Input
+   311→   311→                  type="number"
+   312→   312→                  placeholder="العدد الإجمالي للصفحات"
+   313→   313→                  value={newTotalPages}
+   314→   314→                  onChange={(e) => setNewTotalPages(e.target.value)}
+   315→   315→                />
+   316→   316→              </div>
+   317→   317→              <Button onClick={handleAddBook} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newTitle.trim()}>
+   318→   318→                إضافة للقراءة
+   319→   319→              </Button>
+   320→   320→            </div>
+   321→   321→          </DialogContent>
+   322→   322→        </Dialog>
+   323→   323→      </div>
+   324→   324→
+   325→   325→      {/* Stats Cards */}
+   326→   326→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   327→   327→        {[
+   328→   328→          { label: 'إجمالي الكتب', value: totalBooks, icon: Library, color: 'text-emerald-accent' },
+   329→   329→          { label: 'قيد القراءة', value: readingBooks.length, icon: BookOpen, color: 'text-forest' },
+   330→   330→          { label: 'صفحات مقروءة', value: totalPagesRead, icon: FileText, color: 'text-gold' },
+   331→   331→          { label: 'مكتملة', value: completedBooks.length, icon: BookmarkCheck, color: 'text-emerald-accent' },
+   332→   332→        ].map((stat, i) => (
+   333→   333→          <motion.div
+   334→   334→            key={stat.label}
+   335→   335→            initial={{ opacity: 0, y: 20 }}
+   336→   336→            animate={{ opacity: 1, y: 0 }}
+   337→   337→            transition={{ delay: i * 0.08 }}
+   338→   338→          >
+   339→   339→            <Card className="glass">
+   340→   340→              <CardContent className="p-4">
+   341→   341→                <div className="flex items-center gap-3">
+   342→   342→                  <div className={cn('p-2 rounded-xl bg-background/80', stat.color)}>
+   343→   343→                    <stat.icon className="w-4 h-4" />
+   344→   344→                  </div>
+   345→   345→                  <div>
+   346→   346→                    <p className="text-2xl font-bold">{stat.value}</p>
+   347→   347→                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+   348→   348→                  </div>
+   349→   349→                </div>
+   350→   350→              </CardContent>
+   351→   351→            </Card>
+   352→   352→          </motion.div>
+   353→   353→        ))}
+   354→   354→      </div>
+   355→   355→
+   356→   356→      {/* Currently Reading Highlight */}
+   357→   357→      {readingBooks.length > 0 && (
+   358→   358→        <motion.div
+   359→   359→          initial={{ opacity: 0, y: 20 }}
+   360→   360→          animate={{ opacity: 1, y: 0 }}
+   361→   361→          transition={{ delay: 0.3 }}
+   362→   362→        >
+   363→   363→          <Card className="glass border-emerald-accent/20 overflow-hidden">
+   364→   364→            <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-4">
+   365→   365→              <div className="flex items-center gap-2 mb-3">
+   366→   366→                <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   367→   367→                  <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   368→   368→                </div>
+   369→   369→                <h3 className="font-semibold text-sm">أقرأ الآن</h3>
+   370→   370→              </div>
+   371→   371→              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   372→   372→                {readingBooks.slice(0, 3).map((book) => (
+   373→   373→                  <div key={book.id} className="bg-background/60 rounded-xl p-3 space-y-2">
+   374→   374→                    <div className="flex items-start justify-between gap-2">
+   375→   375→                      <div className="flex-1 min-w-0">
+   376→   376→                        <p className="font-semibold text-sm truncate">{book.title}</p>
+   377→   377→                        <p className="text-xs text-muted-foreground">{book.author}</p>
+   378→   378→                      </div>
+   379→   379→                      <Badge variant="secondary" className={cn('text-[10px] shrink-0', typeColors[book.type])}>
+   380→   380→                        {typeLabels[book.type]}
+   381→   381→                      </Badge>
+   382→   382→                    </div>
+   383→   383→                    <div className="space-y-1">
+   384→   384→                      <div className="flex justify-between text-[11px] text-muted-foreground">
+   385→   385→                        <span>{book.currentPage} / {book.totalPages || '∞'}</span>
+   386→   386→                        <span>{Math.round(book.progress)}%</span>
+   387→   387→                      </div>
+   388→   388→                      <Progress value={book.progress} className="h-2" />
+   389→   389→                    </div>
+   390→   390→                  </div>
+   391→   391→                ))}
+   392→   392→              </div>
+   393→   393→            </div>
+   394→   394→          </Card>
+   395→   395→        </motion.div>
+   396→   396→      )}
+   397→   397→
+   398→   398→      {/* Tabs + Search */}
+   399→   399→      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+   400→   400→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+   401→   401→          <TabsList className="bg-muted/50">
+   402→   402→            <TabsTrigger value="reading">للقراءة</TabsTrigger>
+   403→   403→            <TabsTrigger value="completed">مكتملة</TabsTrigger>
+   404→   404→            <TabsTrigger value="want_to_read">قائمة القراءة</TabsTrigger>
+   405→   405→          </TabsList>
+   406→   406→        </Tabs>
+   407→   407→        <div className="relative">
+   408→   408→          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   409→   409→          <Input
+   410→   410→            placeholder="بحث عن كتاب..."
+   411→   411→            value={searchQuery}
+   412→   412→            onChange={(e) => setSearchQuery(e.target.value)}
+   413→   413→            className="pr-9 w-full sm:w-64"
+   414→   414→          />
+   415→   415→        </div>
+   416→   416→      </div>
+   417→   417→
+   418→   418→      {/* Books Grid */}
+   419→   419→      {loading ? (
+   420→   420→        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   421→   421→          {Array.from({ length: 6 }).map((_, i) => (
+   422→   422→            <Card key={i} className="glass">
+   423→   423→              <CardContent className="p-5 space-y-3">
+   424→   424→                <Skeleton className="h-5 w-3/4" />
+   425→   425→                <Skeleton className="h-4 w-1/2" />
+   426→   426→                <Skeleton className="h-2 w-full" />
+   427→   427→              </CardContent>
+   428→   428→            </Card>
+   429→   429→          ))}
+   430→   430→        </div>
+   431→   431→      ) : filteredBooks.length === 0 ? (
+   432→   432→        <motion.div
+   433→   433→          initial={{ opacity: 0 }}
+   434→   434→          animate={{ opacity: 1 }}
+   435→   435→          className="flex flex-col items-center justify-center py-20 text-center"
+   436→   436→        >
+   437→   437→          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+   438→   438→            <BookOpen className="w-8 h-8 text-muted-foreground/50" />
+   439→   439→          </div>
+   440→   440→          <p className="text-lg font-semibold text-muted-foreground">لا توجد كتب</p>
+   441→   441→          <p className="text-sm text-muted-foreground/70 mt-1">أضف كتابك الأول لبدء التتبع</p>
+   442→   442→        </motion.div>
+   443→   443→      ) : (
+   444→   444→        <motion.div
+   445→   445→          layout
+   446→   446→          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+   447→   447→        >
+   448→   448→          <AnimatePresence mode="popLayout">
+   449→   449→            {filteredBooks.map((book, i) => {
+   450→   450→              const TypeIcon = typeIcons[book.type] || BookOpen
+   451→   451→              const isExpanded = expandedBook === book.id
+   452→   452→              const highlights: string[] = book.highlights ? JSON.parse(book.highlights) : []
+   453→   453→
+   454→   454→              return (
+   455→   455→                <motion.div
+   456→   456→                  key={book.id}
+   457→   457→                  layout
+   458→   458→                  initial={{ opacity: 0, y: 20 }}
+   459→   459→                  animate={{ opacity: 1, y: 0 }}
+   460→   460→                  exit={{ opacity: 0, y: -20 }}
+   461→   461→                  transition={{ delay: i * 0.05 }}
+   462→   462→                >
+   463→   463→                  <Card className={cn('glass overflow-hidden transition-shadow hover:shadow-lg', isExpanded && 'ring-1 ring-emerald-accent/30')}>
+   464→   464→                    <CardContent className="p-5">
+   465→   465→                      {/* Header */}
+   466→   466→                      <div className="flex items-start justify-between gap-2 mb-3">
+   467→   467→                        <div className="flex items-start gap-3 flex-1 min-w-0">
+   468→   468→                          <div className={cn('p-2.5 rounded-xl shrink-0', typeColors[book.type])}>
+   469→   469→                            <TypeIcon className="w-4 h-4" />
+   470→   470→                          </div>
+   471→   471→                          <div className="flex-1 min-w-0">
+   472→   472→                            <h3 className="font-semibold text-sm leading-snug truncate">{book.title}</h3>
+   473→   473→                            {book.author && (
+   474→   474→                              <p className="text-xs text-muted-foreground mt-0.5 truncate">{book.author}</p>
+   475→   475→                            )}
+   476→   476→                          </div>
+   477→   477→                        </div>
+   478→   478→                        <Badge variant="secondary" className={cn('text-[10px] shrink-0', typeColors[book.type])}>
+   479→   479→                          {typeLabels[book.type]}
+   480→   480→                        </Badge>
+   481→   481→                      </div>
+   482→   482→
+   483→   483→                      {/* Progress */}
+   484→   484→                      {book.totalPages && (
+   485→   485→                        <div className="space-y-1.5 mb-3">
+   486→   486→                          <div className="flex justify-between text-[11px] text-muted-foreground">
+   487→   487→                            <span>صفحة {book.currentPage} من {book.totalPages}</span>
+   488→   488→                            <span className="font-semibold text-foreground">{Math.round(book.progress)}%</span>
+   489→   489→                          </div>
+   490→   490→                          <Progress value={book.progress} className="h-2" />
+   491→   491→                        </div>
+   492→   492→                      )}
+   493→   493→
+   494→   494→                      {/* Rating */}
+   495→   495→                      {book.rating && book.status === 'completed' && (
+   496→   496→                        <div className="mb-3">
+   497→   497→                          <StarRating rating={book.rating} readonly />
+   498→   498→                        </div>
+   499→   499→                      )}
+   500→   500→
+   501→   501→                      {/* Favorite Quote */}
+   502→   502→                      {book.favoriteQuote && (
+   503→   503→                        <div className="mb-3 p-3 rounded-lg bg-gold/5 border border-gold/10">
+   504→   504→                          <div className="flex items-center gap-1.5 mb-1">
+   505→   505→                            <Quote className="w-3 h-3 text-gold" />
+   506→   506→                            <span className="text-[10px] font-semibold text-gold">اقتباس مفضل</span>
+   507→   507→                          </div>
+   508→   508→                          <p className="text-xs text-muted-foreground leading-relaxed">&ldquo;{book.favoriteQuote}&rdquo;</p>
+   509→   509→                        </div>
+   510→   510→                      )}
+   511→   511→
+   512→   512→                      {/* Expand Button */}
+   513→   513→                      <button
+   514→   514→                        onClick={() => setExpandedBook(isExpanded ? null : book.id)}
+   515→   515→                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full justify-center pt-2 border-t border-border/50 mt-1"
+   516→   516→                      >
+   517→   517→                        <span>{isExpanded ? 'إخفاء' : 'التفاصيل'}</span>
+   518→   518→                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+   519→   519→                      </button>
+   520→   520→
+   521→   521→                      {/* Expanded Detail */}
+   522→   522→                      <AnimatePresence>
+   523→   523→                        {isExpanded && (
+   524→   524→                          <motion.div
+   525→   525→                            initial={{ height: 0, opacity: 0 }}
+   526→   526→                            animate={{ height: 'auto', opacity: 1 }}
+   527→   527→                            exit={{ height: 0, opacity: 0 }}
+   528→   528→                            transition={{ duration: 0.3 }}
+   529→   529→                            className="overflow-hidden"
+   530→   530→                          >
+   531→   531→                            <div className="pt-4 space-y-4 border-t border-border/50 mt-3">
+   532→   532→                              {/* Update Progress */}
+   533→   533→                              {book.status === 'reading' && book.totalPages && (
+   534→   534→                                <div className="space-y-2">
+   535→   535→                                  <label className="text-xs font-semibold flex items-center gap-1.5">
+   536→   536→                                    <TrendingUp className="w-3 h-3 text-emerald-accent" />
+   537→   537→                                    تحديث الصفحة الحالية
+   538→   538→                                  </label>
+   539→   539→                                  <div className="flex gap-2">
+   540→   540→                                    <Input
+   541→   541→                                      type="number"
+   542→   542→                                      min={0}
+   543→   543→                                      max={book.totalPages}
+   544→   544→                                      value={editPage[book.id] ?? book.currentPage}
+   545→   545→                                      onChange={(e) => setEditPage((prev) => ({ ...prev, [book.id]: e.target.value }))}
+   546→   546→                                      className="h-8 text-sm"
+   547→   547→                                    />
+   548→   548→                                    <Button
+   549→   549→                                      size="sm"
+   550→   550→                                      onClick={() => handleUpdateProgress(book.id)}
+   551→   551→                                      className="h-8 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs px-3"
+   552→   552→                                    >
+   553→   553→                                      تحديث
+   554→   554→                                    </Button>
+   555→   555→                                  </div>
+   556→   556→                                </div>
+   557→   557→                              )}
+   558→   558→
+   559→   559→                              {/* Rating (completed) */}
+   560→   560→                              {book.status === 'completed' && (
+   561→   561→                                <div className="space-y-2">
+   562→   562→                                  <label className="text-xs font-semibold flex items-center gap-1.5">
+   563→   563→                                    <Star className="w-3 h-3 text-gold" />
+   564→   564→                                    التقييم
+   565→   565→                                  </label>
+   566→   566→                                  <StarRating
+   567→   567→                                    rating={book.rating || 0}
+   568→   568→                                    onRate={(r) => handleUpdateBook(book.id, { rating: r })}
+   569→   569→                                  />
+   570→   570→                                </div>
+   571→   571→                              )}
+   572→   572→
+   573→   573→                              {/* Favorite Quote */}
+   574→   574→                              <div className="space-y-2">
+   575→   575→                                <label className="text-xs font-semibold flex items-center gap-1.5">
+   576→   576→                                  <Quote className="w-3 h-3 text-gold" />
+   577→   577→                                  الاقتباس المفضل
+   578→   578→                                </label>
+   579→   579→                                <div className="flex gap-2">
+   580→   580→                                  <Input
+   581→   581→                                    placeholder="أدخل اقتباسك المفضل..."
+   582→   582→                                    value={editQuote[book.id] ?? book.favoriteQuote ?? ''}
+   583→   583→                                    onChange={(e) => setEditQuote((prev) => ({ ...prev, [book.id]: e.target.value }))}
+   584→   584→                                    className="h-8 text-sm"
+   585→   585→                                  />
+   586→   586→                                  <Button
+   587→   587→                                    size="sm"
+   588→   588→                                    variant="outline"
+   589→   589→                                    onClick={() => handleSaveQuote(book.id)}
+   590→   590→                                    className="h-8 text-xs px-3"
+   591→   591→                                  >
+   592→   592→                                    حفظ
+   593→   593→                                  </Button>
+   594→   594→                                </div>
+   595→   595→                              </div>
+   596→   596→
+   597→   597→                              {/* Highlights */}
+   598→   598→                              <div className="space-y-2">
+   599→   599→                                <label className="text-xs font-semibold flex items-center gap-1.5">
+   600→   600→                                  <Highlighter className="w-3 h-3 text-emerald-accent" />
+   601→   601→                                  المقتطفات ({highlights.length})
+   602→   602→                                </label>
+   603→   603→                                <div className="flex gap-2">
+   604→   604→                                  <Input
+   605→   605→                                    placeholder="أضف مقتطف جديد..."
+   606→   606→                                    value={editHighlight[book.id] ?? ''}
+   607→   607→                                    onChange={(e) => setEditHighlight((prev) => ({ ...prev, [book.id]: e.target.value }))}
+   608→   608→                                    className="h-8 text-sm"
+   609→   609→                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveHighlight(book.id)}
+   610→   610→                                  />
+   611→   611→                                  <Button
+   612→   612→                                    size="sm"
+   613→   613→                                    variant="outline"
+   614→   614→                                    onClick={() => handleSaveHighlight(book.id)}
+   615→   615→                                    className="h-8 text-xs px-3"
+   616→   616→                                  >
+   617→   617→                                    أضف
+   618→   618→                                  </Button>
+   619→   619→                                </div>
+   620→   620→                                {highlights.length > 0 && (
+   621→   621→                                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+   622→   622→                                    {highlights.map((h, hi) => (
+   623→   623→                                      <div key={hi} className="text-xs p-2 rounded-lg bg-emerald-accent/5 border border-emerald-accent/10 text-muted-foreground leading-relaxed">
+   624→   624→                                        {h}
+   625→   625→                                      </div>
+   626→   626→                                    ))}
+   627→   627→                                  </div>
+   628→   628→                                )}
+   629→   629→                              </div>
+   630→   630→
+   631→   631→                              {/* Notes */}
+   632→   632→                              <div className="space-y-2">
+   633→   633→                                <label className="text-xs font-semibold flex items-center gap-1.5">
+   634→   634→                                  <StickyNote className="w-3 h-3 text-forest" />
+   635→   635→                                  ملاحظات
+   636→   636→                                </label>
+   637→   637→                                <Textarea
+   638→   638→                                  placeholder="أضف ملاحظاتك هنا..."
+   639→   639→                                  value={editNotes[book.id] ?? book.notes ?? ''}
+   640→   640→                                  onChange={(e) => setEditNotes((prev) => ({ ...prev, [book.id]: e.target.value }))}
+   641→   641→                                  rows={3}
+   642→   642→                                  className="text-sm resize-none"
+   643→   643→                                />
+   644→   644→                                <Button
+   645→   645→                                  size="sm"
+   646→   646→                                  variant="outline"
+   647→   647→                                  onClick={() => handleSaveNotes(book.id)}
+   648→   648→                                  className="text-xs px-3"
+   649→   649→                                >
+   650→   650→                                  حفظ الملاحظات
+   651→   651→                                </Button>
+   652→   652→                              </div>
+   653→   653→
+   654→   654→                              {/* Dates */}
+   655→   655→                              <div className="flex gap-4 text-[11px] text-muted-foreground">
+   656→   656→                                {book.startDate && (
+   657→   657→                                  <span>بدأ: {new Date(book.startDate).toLocaleDateString('ar')}</span>
+   658→   658→                                )}
+   659→   659→                                {book.endDate && (
+   660→   660→                                  <span>أنهى: {new Date(book.endDate).toLocaleDateString('ar')}</span>
+   661→   661→                                )}
+   662→   662→                              </div>
+   663→   663→                            </div>
+   664→   664→                          </motion.div>
+   665→   665→                        )}
+   666→   666→                      </AnimatePresence>
+   667→   667→                    </CardContent>
+   668→   668→                  </Card>
+   669→   669→                </motion.div>
+   670→   670→              )
+   671→   671→            })}
+   672→   672→          </AnimatePresence>
+   673→   673→        </motion.div>
+   674→   674→      )}
+   675→   675→    </div>
+   676→   676→  )
+   677→   677→}
