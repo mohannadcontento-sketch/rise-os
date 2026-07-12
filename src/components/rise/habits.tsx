@@ -1,0 +1,910 @@
+'use client'
+
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Flame,
+  Plus,
+  Zap,
+  Trophy,
+  TrendingUp,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Sparkles,
+  Crown,
+  CalendarDays,
+  Star,
+  Target,
+} from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+
+/* ────────────── Types ────────────── */
+
+interface Habit {
+  id: string
+  name: string
+  icon: string
+  color: string
+  frequency: 'daily' | 'weekdays' | 'weekends' | 'custom'
+  targetCount: number
+  xpReward: number
+}
+
+interface HabitLog {
+  habitId: string
+  date: string
+  completed: boolean
+  count: number
+}
+
+interface HabitsResponse {
+  habits: Habit[]
+  logs: HabitLog[]
+}
+
+const PRESET_COLORS = [
+  { name: 'أخضر زمردي', value: '#10b981' },
+  { name: 'ذهبي', value: '#eab308' },
+  { name: 'برتقالي', value: '#f97316' },
+  { name: 'وردي', value: '#ec4899' },
+  { name: 'بنفسجي', value: '#8b5cf6' },
+  { name: 'أحمر', value: '#ef4444' },
+  { name: 'سماوي', value: '#06b6d4' },
+  { name: 'ليموني', value: '#84cc16' },
+]
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  daily: 'يومياً',
+  weekdays: 'أيام الأسبوع',
+  weekends: 'عطلة نهاية الأسبوع',
+  custom: 'مخصص',
+}
+
+/* ────────────── Helpers ────────────── */
+
+function getHeatLevel(completed: boolean, count: number, target: number): number {
+  if (!completed) return 0
+  if (target <= 1) return count > 0 ? 4 : 0
+  const ratio = count / target
+  if (ratio >= 1) return 4
+  if (ratio >= 0.75) return 3
+  if (ratio >= 0.5) return 2
+  return 1
+}
+
+function getTodayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getDayName(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('ar-SA', { weekday: 'long' })
+}
+
+function getShortDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })
+}
+
+function calcStreak(logs: HabitLog[], habitId: string): { current: number; longest: number } {
+  const habitLogs = logs
+    .filter((l) => l.habitId === habitId && l.completed)
+    .map((l) => l.date)
+    .sort()
+
+  if (habitLogs.length === 0) return { current: 0, longest: 0 }
+
+  const today = getTodayStr()
+  const todayLog = habitLogs.includes(today)
+  let current = 0
+  let longest = 0
+  let streak = 1
+
+  if (todayLog) {
+    current = 1
+  }
+
+  // Calculate all streaks
+  for (let i = 1; i < habitLogs.length; i++) {
+    const prev = new Date(habitLogs[i - 1])
+    const curr = new Date(habitLogs[i])
+    const diffMs = curr.getTime() - prev.getTime()
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays === 1) {
+      streak++
+    } else {
+      longest = Math.max(longest, streak)
+      streak = 1
+    }
+  }
+  longest = Math.max(longest, streak)
+
+  // Calculate current streak
+  if (todayLog && habitLogs.length > 1) {
+    const sorted = [...habitLogs].reverse()
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1])
+      const curr = new Date(sorted[i])
+      const diffMs = prev.getTime() - curr.getTime()
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+      if (diffDays === 1) {
+        current++
+      } else {
+        break
+      }
+    }
+  }
+
+  return { current, longest }
+}
+
+function generateLast30Days(): string[] {
+  const days: string[] = []
+  const today = new Date()
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    days.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    )
+  }
+  return days
+}
+
+function getCompletionRate(logs: HabitLog[], habitId: string): number {
+  const habitLogs = logs.filter((l) => l.habitId === habitId)
+  if (habitLogs.length === 0) return 0
+  const completed = habitLogs.filter((l) => l.completed).length
+  return Math.round((completed / habitLogs.length) * 100)
+}
+
+/* ────────────── Component ────────────── */
+
+export function HabitsView() {
+  const [habits, setHabits] = useState<Habit[]>([])
+  const [logs, setLogs] = useState<HabitLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Form state
+  const [formName, setFormName] = useState('')
+  const [formIcon, setFormIcon] = useState('🎯')
+  const [formColor, setFormColor] = useState('#10b981')
+  const [formFrequency, setFormFrequency] = useState<Habit['frequency']>('daily')
+  const [formTarget, setFormTarget] = useState('1')
+
+  const todayStr = getTodayStr()
+
+  /* ---- Fetch ---- */
+  useEffect(() => {
+    async function fetchHabits() {
+      try {
+        const res = await fetch('/api/rise/habits')
+        if (res.ok) {
+          const data: HabitsResponse = await res.json()
+          setHabits(data.habits)
+          setLogs(data.logs)
+        }
+      } catch {
+        // empty
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchHabits()
+  }, [])
+
+  /* ---- Toggle today's habit ---- */
+  const toggleTodayHabit = useCallback(
+    async (habitId: string) => {
+      const existingLog = logs.find((l) => l.habitId === habitId && l.date === todayStr)
+      const newCompleted = existingLog ? !existingLog.completed : true
+
+      // Optimistic update
+      if (existingLog) {
+        setLogs((prev) =>
+          prev.map((l) =>
+            l.habitId === habitId && l.date === todayStr
+              ? { ...l, completed: newCompleted, count: newCompleted ? 1 : 0 }
+              : l
+          )
+        )
+      } else {
+        setLogs((prev) => [
+          ...prev,
+          { habitId, date: todayStr, completed: newCompleted, count: newCompleted ? 1 : 0 },
+        ])
+      }
+
+      try {
+        await fetch('/api/rise/habits', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            habitId,
+            date: todayStr,
+            completed: newCompleted,
+          }),
+        })
+      } catch {
+        // Revert
+        if (existingLog) {
+          setLogs((prev) =>
+            prev.map((l) =>
+              l.habitId === habitId && l.date === todayStr
+                ? { ...l, completed: existingLog.completed, count: existingLog.count }
+                : l
+            )
+          )
+        } else {
+          setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayStr)))
+        }
+      }
+    },
+    [logs, todayStr]
+  )
+
+  /* ---- Add habit ---- */
+  async function handleAddHabit() {
+    if (!formName.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/rise/habits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formName,
+          icon: formIcon,
+          color: formColor,
+          frequency: formFrequency,
+          targetCount: parseInt(formTarget) || 1,
+        }),
+      })
+      if (res.ok) {
+        const data: HabitsResponse = await res.json()
+        setHabits((prev) => [...prev, ...data.habits])
+        setLogs((prev) => [...prev, ...data.logs])
+        setAddOpen(false)
+        resetForm()
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /* ---- Delete habit ---- */
+  async function deleteHabit(id: string) {
+    setHabits((prev) => prev.filter((h) => h.id !== id))
+    try {
+      await fetch('/api/rise/habits', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+    } catch {
+      // silently fail
+    }
+  }
+
+  function resetForm() {
+    setFormName('')
+    setFormIcon('🎯')
+    setFormColor('#10b981')
+    setFormFrequency('daily')
+    setFormTarget('1')
+  }
+
+  /* ---- Stats ---- */
+  const stats = useMemo(() => {
+    const total = habits.length
+    const todayLogs = logs.filter((l) => l.date === todayStr)
+    const todayCompleted = todayLogs.filter((l) => l.completed).length
+    const todayRate = total > 0 ? Math.round((todayCompleted / total) * 100) : 0
+
+    let longestStreak = 0
+    let bestHabit: Habit | null = null
+    let bestRate = 0
+
+    habits.forEach((h) => {
+      const s = calcStreak(logs, h.id)
+      if (s.longest > longestStreak) longestStreak = s.longest
+      const rate = getCompletionRate(logs, h.id)
+      if (rate > bestRate) {
+        bestRate = rate
+        bestHabit = h
+      }
+    })
+
+    const currentStreak =
+      habits.length > 0
+        ? Math.max(...habits.map((h) => calcStreak(logs, h.id).current))
+        : 0
+
+    return { total, todayRate, longestStreak, currentStreak, bestHabit, bestRate }
+  }, [habits, logs, todayStr])
+
+  /* ---- Heatmap data ---- */
+  const last30Days = useMemo(() => generateLast30Days(), [])
+
+  /* ---- Day-of-week labels (Arabic, Sun=أحد through Sat=سبت) ---- */
+  const dayLabels = ['سبت', 'أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة']
+  // getDay() returns 0=Sun ... 6=Sat. We want Sat=0, Sun=1, Mon=2 ... Fri=6
+  function getDayIndex(dateStr: string): number {
+    const d = new Date(dateStr)
+    const g = d.getDay() // 0=Sun
+    return (g + 1) % 7 // shift: Sun→1, Mon→2, ..., Sat→0
+  }
+
+  /* ──────────── Render ──────────── */
+
+  if (loading) {
+    return (
+      <div className="space-y-6 p-4 md:p-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-10 w-10 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-48 rounded-2xl" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-36 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <div className="space-y-6 p-4 md:p-6">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg">
+              <Flame className="w-5 h-5 text-forest-dark" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">تتبع العادات</h1>
+              <p className="text-xs text-muted-foreground">
+                كرر العادات الجيدة كل يوم وحقق النجاح
+              </p>
+            </div>
+          </div>
+
+          <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) resetForm() }}>
+            <DialogTrigger asChild>
+              <Button
+                size="sm"
+                className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+              >
+                <Plus className="w-4 h-4 ml-1.5" />
+                عادة جديدة
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md rounded-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-right">إضافة عادة جديدة</DialogTitle>
+                <DialogDescription className="text-right">
+                  بنِ عادات قوية تُقربك من أهدافك
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
+                  <div className="space-y-2">
+                    <Label className="text-right text-sm font-medium">الأيقونة</Label>
+                    <Input
+                      value={formIcon}
+                      onChange={(e) => setFormIcon(e.target.value)}
+                      className="w-16 text-center text-2xl h-12 rounded-xl"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right text-sm font-medium">اسم العادة</Label>
+                    <Input
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="مثال: قراءة 30 دقيقة"
+                      className="rounded-xl text-right"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-right text-sm font-medium">اللون</Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {PRESET_COLORS.map((c) => (
+                      <button
+                        key={c.value}
+                        onClick={() => setFormColor(c.value)}
+                        className={cn(
+                          'w-8 h-8 rounded-full transition-all duration-200 border-2',
+                          formColor === c.value
+                            ? 'ring-2 ring-offset-2 ring-offset-background scale-110'
+                            : 'hover:scale-105'
+                        )}
+                        style={{
+                          backgroundColor: c.value,
+                          borderColor: formColor === c.value ? c.value : 'transparent',
+                          ...(formColor === c.value ? { ['--tw-ring-color' as string]: c.value } : {}),
+                        }}
+                      >
+                        <span className="sr-only">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-right text-sm font-medium">التكرار</Label>
+                    <Select
+                      value={formFrequency}
+                      onValueChange={(v) => setFormFrequency(v as Habit['frequency'])}
+                    >
+                      <SelectTrigger className="rounded-xl text-right">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">يومياً</SelectItem>
+                        <SelectItem value="weekdays">أيام الأسبوع</SelectItem>
+                        <SelectItem value="weekends">نهاية الأسبوع</SelectItem>
+                        <SelectItem value="custom">مخصص</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-right text-sm font-medium">الهدف اليومي</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formTarget}
+                      onChange={(e) => setFormTarget(e.target.value)}
+                      className="rounded-xl text-right"
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setAddOpen(false)}
+                  className="rounded-xl"
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={handleAddHabit}
+                  disabled={!formName.trim() || saving}
+                  className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+                >
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin ml-1.5" />
+                  ) : (
+                    <Plus className="w-4 h-4 ml-1.5" />
+                  )}
+                  إضافة
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* ── Statistics ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <Card className="rounded-2xl border-0 shadow-sm glass">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
+                  <Target className="w-4.5 h-4.5 text-emerald-accent" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{stats.total}</p>
+                  <p className="text-[10px] text-muted-foreground">إجمالي العادات</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.06 }}
+          >
+            <Card className="rounded-2xl border-0 shadow-sm glass">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gold/10 flex items-center justify-center">
+                  <Zap className="w-4.5 h-4.5 text-gold" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{stats.todayRate}%</p>
+                  <p className="text-[10px] text-muted-foreground">إنجاز اليوم</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.12 }}
+          >
+            <Card className="rounded-2xl border-0 shadow-sm glass">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-forest/10 flex items-center justify-center">
+                  <Flame className="w-4.5 h-4.5 text-forest" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{stats.currentStreak}</p>
+                  <p className="text-[10px] text-muted-foreground">سلسلة حالية</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.18 }}
+          >
+            <Card className="rounded-2xl border-0 shadow-sm glass">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gold-light/20 flex items-center justify-center">
+                  <Crown className="w-4.5 h-4.5 text-gold" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold truncate max-w-[80px]">
+                    {stats.bestHabit ? `${stats.bestHabit.icon} ${stats.bestHabit.name}` : '—'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">أفضل عادة</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* ── Today's Habits ── */}
+        {habits.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarDays className="w-4 h-4 text-emerald-accent" />
+              <h2 className="text-sm font-semibold">عادات اليوم</h2>
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-2 py-0 rounded-full bg-emerald-accent/10 text-emerald-accent border-0"
+              >
+                {logs.filter((l) => l.date === todayStr && l.completed).length} / {habits.length}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <AnimatePresence mode="popLayout">
+                {habits.map((habit, index) => {
+                  const todayLog = logs.find(
+                    (l) => l.habitId === habit.id && l.date === todayStr
+                  )
+                  const isCompleted = todayLog?.completed ?? false
+                  const streak = calcStreak(logs, habit.id)
+
+                  return (
+                    <motion.div
+                      key={habit.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <Card
+                        className={cn(
+                          'rounded-2xl border-0 shadow-sm overflow-hidden transition-all duration-300',
+                          isCompleted
+                            ? 'bg-card ring-1'
+                            : 'glass'
+                        )}
+                        style={
+                          isCompleted
+                            ? { ['--tw-ring-color' as string]: habit.color + '40' }
+                            : undefined
+                        }
+                      >
+                        <CardContent className="p-4 relative">
+                          {/* Color accent strip */}
+                          <div
+                            className="absolute top-0 right-0 left-0 h-1 transition-opacity duration-300"
+                            style={{
+                              backgroundColor: habit.color,
+                              opacity: isCompleted ? 1 : 0.3,
+                            }}
+                          />
+
+                          {/* Delete button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteHabit(habit.id)
+                            }}
+                            className="absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                            style={{ opacity: 0.4 }}
+                            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.4')}
+                          >
+                            <span className="text-[10px]">✕</span>
+                          </button>
+
+                          {/* Icon and name */}
+                          <div className="text-center mb-3">
+                            <motion.div
+                              animate={isCompleted ? { scale: [1, 1.2, 1] } : {}}
+                              transition={{ duration: 0.3 }}
+                              className="text-3xl mb-1.5"
+                            >
+                              {habit.icon}
+                            </motion.div>
+                            <p className="text-xs font-semibold truncate">{habit.name}</p>
+                          </div>
+
+                          {/* Streak */}
+                          {streak.current > 0 && (
+                            <div className="flex items-center justify-center gap-1 mb-3">
+                              <Flame
+                                className="w-3.5 h-3.5"
+                                style={{ color: habit.color }}
+                              />
+                              <span
+                                className="text-xs font-bold"
+                                style={{ color: habit.color }}
+                              >
+                                {streak.current}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">يوم</span>
+                            </div>
+                          )}
+
+                          {/* Toggle button */}
+                          <motion.button
+                            whileTap={{ scale: 0.92 }}
+                            onClick={() => toggleTodayHabit(habit.id)}
+                            className={cn(
+                              'w-full py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center justify-center gap-1.5',
+                              isCompleted
+                                ? 'text-white shadow-md'
+                                : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                            )}
+                            style={
+                              isCompleted
+                                ? { backgroundColor: habit.color }
+                                : undefined
+                            }
+                          >
+                            {isCompleted ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                تم!
+                              </>
+                            ) : (
+                              <>
+                                <Circle className="w-3.5 h-3.5" />
+                                إتمام
+                              </>
+                            )}
+                          </motion.button>
+
+                          {/* XP badge */}
+                          <div className="flex items-center justify-center gap-1 mt-2">
+                            <Sparkles className="w-3 h-3 text-gold" />
+                            <span className="text-[10px] text-gold font-medium">
+                              +{habit.xpReward} خبرة
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
+        {/* ── Heatmap Section ── */}
+        {habits.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+              <h2 className="text-sm font-semibold">خريطة الإنجاز</h2>
+              <span className="text-[10px] text-muted-foreground">آخر ٣٠ يوم</span>
+            </div>
+
+            <div className="space-y-4 max-h-96 overflow-y-auto pl-1">
+              {habits.map((habit, hIndex) => (
+                <motion.div
+                  key={habit.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: hIndex * 0.05 }}
+                >
+                  <Card className="rounded-2xl border-0 shadow-sm glass">
+                    <CardContent className="p-4">
+                      {/* Habit name */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-base">{habit.icon}</span>
+                        <span className="text-xs font-semibold">{habit.name}</span>
+                        <div className="flex-1" />
+                        <div className="flex items-center gap-1">
+                          <Flame className="w-3 h-3" style={{ color: habit.color }} />
+                          <span className="text-[10px] font-medium" style={{ color: habit.color }}>
+                            {calcStreak(logs, habit.id).current}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Heatmap grid: 7 rows (days) × 5 cols (weeks) */}
+                      <div className="overflow-x-auto">
+                        <div className="flex gap-0.5 min-w-fit">
+                          {/* Day labels */}
+                          <div className="flex flex-col gap-0.5 ml-1.5">
+                            {dayLabels.map((label, di) => (
+                              <div
+                                key={label}
+                                className="w-7 text-[9px] text-muted-foreground/50 flex items-center justify-end pr-1"
+                                style={{ height: '14px' }}
+                              >
+                                {di % 2 === 0 ? label : ''}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Week columns */}
+                          {Array.from({ length: 5 }).map((_, weekIdx) => {
+                            const weekDays = last30Days.filter(
+                              (_, i) => Math.floor(i / 7) === weekIdx
+                            )
+
+                            return (
+                              <div key={weekIdx} className="flex flex-col gap-0.5">
+                                {/* Render 7 cells per week */}
+                                {Array.from({ length: 7 }).map((_, daySlot) => {
+                                  // Find the day that falls in this week and this day-of-week
+                                  const dayInWeek = weekDays.find(
+                                    (d) => getDayIndex(d) === daySlot
+                                  )
+                                  const isToday = dayInWeek === todayStr
+
+                                  let heatLevel = 0
+                                  if (dayInWeek) {
+                                    const log = logs.find(
+                                      (l) => l.habitId === habit.id && l.date === dayInWeek
+                                    )
+                                    if (log) {
+                                      heatLevel = getHeatLevel(
+                                        log.completed,
+                                        log.count,
+                                        habit.targetCount
+                                      )
+                                    }
+                                  }
+
+                                  return (
+                                    <Tooltip key={`${weekIdx}-${daySlot}`}>
+                                      <TooltipTrigger asChild>
+                                        <div
+                                          className={cn(
+                                            'w-[14px] h-[14px] rounded-sm transition-colors duration-200',
+                                            dayInWeek ? `heat-${heatLevel}` : 'bg-transparent',
+                                            isToday &&
+                                              'ring-1 ring-foreground/30 ring-offset-1 ring-offset-background'
+                                          )}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-[10px] px-2 py-1 rounded-lg"
+                                      >
+                                        {dayInWeek ? (
+                                          <span>
+                                            {getDayName(dayInWeek)}، {getShortDate(dayInWeek)}
+                                            {heatLevel > 0 ? ' ✅' : ' ⬜'}
+                                          </span>
+                                        ) : (
+                                          <span>—</span>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )
+                                })}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Heatmap legend */}
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <span className="text-[10px] text-muted-foreground">أقل</span>
+              <div className="flex gap-0.5">
+                {[0, 1, 2, 3, 4].map((level) => (
+                  <div key={level} className={cn('w-3 h-3 rounded-sm', `heat-${level}`)} />
+                ))}
+              </div>
+              <span className="text-[10px] text-muted-foreground">أكثر</span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Empty State ── */}
+        {habits.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center py-20 text-center"
+          >
+            <div className="w-20 h-20 rounded-full bg-gold/10 flex items-center justify-center mb-6">
+              <Flame className="w-10 h-10 text-gold" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">ابدأ ببناء عاداتك</h3>
+            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
+              النجاح ليس حدثاً عابراً، بل هو نتيجة عادات يومية متكررة. أضف عادتك الأولى وابدأ
+              رحلة التغيير!
+            </p>
+            <Button
+              onClick={() => setAddOpen(true)}
+              className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/20"
+            >
+              <Plus className="w-4 h-4 ml-1.5" />
+              أضف أول عادة
+            </Button>
+          </motion.div>
+        )}
+      </div>
+    </TooltipProvider>
+  )
+}
+
+export default HabitsView
