@@ -25,7 +25,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
-import { LogOut } from 'lucide-react'
+import { PWAInstallPrompt, ConnectionStatus, BluetoothSharePanel } from '@/lib/pwa'
+import { LogOut, Bluetooth } from 'lucide-react'
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -188,6 +189,7 @@ export default function RiseOSApp() {
     journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
   }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
   const [fabOpen, setFabOpen] = useState(false)
+  const [btPanelOpen, setBtPanelOpen] = useState(false)
   const [themeRotating, setThemeRotating] = useState(false)
   const mountedRef = useRef(false)
   const mounted = useSyncExternalStore(
@@ -379,6 +381,20 @@ export default function RiseOSApp() {
             <kbd className="pointer-events-none ml-1 inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               ⌘K
             </kbd>
+          </Button>
+
+          {/* Connection Status */}
+          <ConnectionStatus />
+
+          {/* Bluetooth Share */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-muted-foreground hover:text-blue-500"
+            onClick={() => setBtPanelOpen(true)}
+            title="مشاركة بلوتوث"
+          >
+            <Bluetooth className="w-4 h-4" />
           </Button>
 
           {/* Theme toggle with rotation */}
@@ -657,6 +673,12 @@ export default function RiseOSApp() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* PWA Install Prompt */}
+      <PWAInstallPrompt />
+
+      {/* Bluetooth Share Panel */}
+      <BluetoothSharePanel isOpen={btPanelOpen} onClose={() => setBtPanelOpen(false)} />
     </div>
   )
 }

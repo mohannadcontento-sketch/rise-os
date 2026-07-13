@@ -1,0 +1,60 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "productName": "RiseOS",
+  "version": "1.0.0",
+  "identifier": "com.riseos.app",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../out"
+  },
+  "app": {
+    "title": "RiseOS — نظام حياتك التشغيلي",
+    "windows": [
+      {
+        "title": "RiseOS",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "copyright": "",
+    "category": "Productivity",
+    "shortDescription": "نظام حياتك التشغيلي",
+    "longDescription": "RiseOS — نظام تشغيل الحياة الشامل. إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم.",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    },
+    "bluetooth": {
+      "enable": true
+    }
+  }
+}

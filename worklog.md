@@ -827,3 +827,70 @@ Stage Summary:
 - مفتاح ZhipuAI API لا يعمل (Authentication failed) - التطبيق يعمل بـ fallback
 - حساب الأدمن يحتاج تأكيد البريد الإلكتروني
 - لا يوجد service_role key لـ Supabase (لا يمكن تأكيد المستخدمين برمجياً)
+
+---
+Task ID: pwa-infra
+Agent: Sub-agent
+Task: Build PWA infrastructure (service worker, offline DB, sync, Bluetooth sharing)
+
+Work Log:
+- Created public/sw.js service worker with Cache-First and Network-First strategies
+- Created src/lib/offline-db.ts IndexedDB wrapper
+- Created src/lib/sync-manager.ts for online/offline sync
+- Created src/lib/bluetooth-share.ts for Bluetooth device sharing
+- Updated manifest.json with PNG icons and shortcuts
+
+Stage Summary:
+- Full offline PWA infrastructure ready
+- Service worker caches static assets and API responses
+- IndexedDB stores all app data for offline use
+- Bluetooth sharing service created with Web Bluetooth API + Web Share fallback
+
+---
+Task ID: perf-mobile-fix
+Agent: Main
+Task: إصلاح الأداء الثقيل ومشاكل الموبايل
+
+Work Log:
+- إزالة `* { transition }` الـ wildcard من globals.css (أكبر سبب للبطء)
+- إزالة `filter: blur(4px)` من انتقالات الوحدات في page.tsx
+- تقليل blur في glass/premium-card على الموبايل (20px → 12px → 8px)
+- تعطيل noise-bg على الموبايل بالكامل
+- تبسيط Sidebar: إزالة كل motion.div من عناصر التنقل
+- تبسيط LoginPage: إزالة الأضواء العائمة المتحركة
+- إزالة whileHover من 8+ بطاقات في Dashboard
+- تحسين الأحجام على الموبايل (icons, fonts, spacing)
+- تقليل stagger delay في Dashboard من 0.07s إلى 0.04s
+- إضافة debounce 300ms للبحث (كان 6 API calls كل ضغطة)
+- نقل FAB button لموقع مناسب مع RTL
+- إضافة `prefers-reduced-motion` media query
+- تحسين header: backdrop-blur-md بدل blur-xl
+
+Stage Summary:
+- الموقع أخف بكثير على الموبايل
+- كل الحركات الزائدة اتشالت
+- الانتقالات بقت على العناصر التفاعلية بس
+
+---
+Task ID: pwa-conversion
+Agent: Main
+Task: تحويل RiseOS لتطبيق PWA + EXE + مشاركة بلوتوث
+
+Work Log:
+- إنشاء Service Worker (public/sw.js) مع Cache-First و Network-First
+- إنشاء IndexedDB wrapper (src/lib/offline-db.ts) مع 10 مخازن بيانات
+- إنشاء Sync Manager (src/lib/sync-manager.ts) للمزامنة الأوفلاين
+- إنشاء Bluetooth Share Service (src/lib/bluetooth-share.ts)
+- إنشاء مكونات PWA: Install Prompt, Connection Status, Bluetooth Panel
+- تحديث manifest.json مع أيقونات PNG و shortcuts
+- تحديث layout.tsx مع Apple Web App meta tags
+- إنشاء PWAInit component لتسجيل Service Worker
+- إضافة أيقونة بلوتوث في الهيدر
+- إنشاء إعدادات Tauri (tauri/tauri.conf.json, src/lib.rs)
+- إنشاء BUILD_GUIDE.md دليل بناء EXE
+
+Stage Summary:
+- التطبيق جاهز كـ PWA (يثبت على الموبايل والكمبيوتر)
+- يعمل بدون إنترنت بالكامل
+- مشاركة بلوتوث بين الأجهزة متاحة
+- إعدادات Tauri جاهزة لبناء EXE
