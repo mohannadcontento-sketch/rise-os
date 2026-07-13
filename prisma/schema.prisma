@@ -343,3 +343,30 @@ model PlannerItem {
 
   @@unique([userId, date, section, order])
 }
+
+// ==================== AUTH & LIMITS ====================
+
+model UserAIUsage {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  monthlyUsed   Int      @default(0)
+  monthlyLimit  Int      @default(100)
+  totalUsed     Int      @default(0)
+  month         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model UserStorage {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  supabaseId    String?
+  email         String?
+  name          String?
+  role          String   @default("user") // admin, user
+  storageUsed   Int      @default(0) // in bytes
+  storageLimit  Int      @default(10485760) // 10MB default
+  aiLimit       Int      @default(100) // monthly AI messages
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

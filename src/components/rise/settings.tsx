@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Settings as SettingsIcon,
@@ -32,6 +32,10 @@ import {
   Flame,
   Trophy,
   Star,
+  Users,
+  Bot,
+  Database,
+  Save,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -58,6 +62,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useTheme } from 'next-themes'
+import { useRiseStore } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -120,10 +125,250 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
+/* ────────────── Admin Panel ────────────── */
+
+function AdminPanel() {
+  const { auth } = useRiseStore()
+  const [users, setUsers] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [editingUser, setEditingUser] = useState<string | null>(null)
+  const [editStorageLimit, setEditStorageLimit] = useState('')
+  const [editAiLimit, setEditAiLimit] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      if (!auth?.accessToken || auth.accessToken === 'guest') return
+      setLoading(true)
+      try {
+        const res = await fetch('/api/rise/admin/users', {
+          headers: { 'Authorization': `Bearer ${auth.accessToken}` }
+        })
+        const data = await res.json()
+        if (mounted && data.users) setUsers(data.users)
+      } catch (err) {
+        console.error('Failed to fetch users:', err)
+      }
+      if (mounted) setLoading(false)
+    }
+    load()
+    return () => { mounted = false }
+  }, [auth?.accessToken])
+
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/rise/admin/users', {
+        headers: { 'Authorization': `Bearer ${auth?.accessToken}` }
+      })
+      const data = await res.json()
+      if (data.users) setUsers(data.users)
+    } catch (err) {
+      console.error('Failed to fetch users:', err)
+    }
+    setLoading(false)
+  }
+
+  const updateUserLimits = async (supabaseUserId: string) => {
+    try {
+      await fetch('/api/rise/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth?.accessToken}`,
+        },
+        body: JSON.stringify({
+          supabaseUserId,
+          storageLimit: parseInt(editStorageLimit) * 1024 * 1024, // MB to bytes
+          aiLimit: parseInt(editAiLimit),
+        }),
+      })
+      toast.success('تم تحديث الصلاحيات')
+      setEditingUser(null)
+      fetchUsers()
+    } catch {
+      toast.error('فشل التحديث')
+    }
+  }
+
+  const deleteUser = async (supabaseUserId: string, email: string) => {
+    if (!confirm(`هل أنت متأكد من حذف المستخدم ${email}؟`)) return
+    try {
+      await fetch('/api/rise/admin/users', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth?.accessToken}`,
+        },
+        body: JSON.stringify({ supabaseUserId }),
+      })
+      toast.success('تم حذف المستخدم')
+      fetchUsers()
+    } catch {
+      toast.error('فشل الحذف')
+    }
+  }
+
+  const formatMB = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.4 }}
+      className="space-y-4"
+    >
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-gold/30 to-transparent" />
+
+      <Card className="glass border border-gold/20 overflow-hidden border-r-4 border-r-gold/50 premium-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-gold" />
+            </div>
+            <div>
+              <span>لوحة تحكم الأدمن</span>
+              <Badge className="mr-2 bg-gold/20 text-gold text-[10px] px-2 py-0.5">Admin</Badge>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 rounded-xl bg-muted/30 text-center">
+              <Users className="w-5 h-5 mx-auto mb-1 text-emerald-accent" />
+              <p className="text-lg font-bold">{users.length}</p>
+              <p className="text-[10px] text-muted-foreground">مستخدم</p>
+            </div>
+            <div className="p-3 rounded-xl bg-muted/30 text-center">
+              <Bot className="w-5 h-5 mx-auto mb-1 text-gold" />
+              <p className="text-lg font-bold">
+                {users.reduce((acc: number, u: any) => acc + (u.aiUsed || 0), 0)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">رسائل AI</p>
+            </div>
+            <div className="p-3 rounded-xl bg-muted/30 text-center">
+              <Database className="w-5 h-5 mx-auto mb-1 text-forest" />
+              <p className="text-lg font-bold">
+                {formatMB(users.reduce((acc: number, u: any) => acc + (u.storageUsed || 0), 0))}
+              </p>
+              <p className="text-[10px] text-muted-foreground">تخزين</p>
+            </div>
+          </div>
+
+          {/* Users list */}
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <motion.div
+                  className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+              </div>
+            ) : users.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-8">لا يوجد مستخدمين بعد</p>
+            ) : (
+              users.map((user: any) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shrink-0">
+                    <span className="text-xs font-bold text-white">
+                      {(user.name || user.email || '؟').charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{user.name || 'مستخدم'}</p>
+                      {user.isAdmin && (
+                        <Badge className="bg-gold/20 text-gold text-[9px] px-1.5 py-0">أدمن</Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                  </div>
+
+                  {editingUser === user.id ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Input
+                        type="number"
+                        value={editStorageLimit}
+                        onChange={(e) => setEditStorageLimit(e.target.value)}
+                        placeholder="MB"
+                        className="w-16 h-7 text-xs text-center"
+                        dir="ltr"
+                      />
+                      <Input
+                        type="number"
+                        value={editAiLimit}
+                        onChange={(e) => setEditAiLimit(e.target.value)}
+                        placeholder="AI"
+                        className="w-16 h-7 text-xs text-center"
+                        dir="ltr"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 bg-emerald-accent hover:bg-emerald-accent/90"
+                        onClick={() => updateUserLimits(user.id)}
+                      >
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2"
+                        onClick={() => setEditingUser(null)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-lg" dir="ltr">
+                        {formatMB(user.storageLimit)} | {user.aiLimit} AI
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => {
+                          setEditingUser(user.id)
+                          setEditStorageLimit(String(Math.round(user.storageLimit / (1024 * 1024))))
+                          setEditAiLimit(String(user.aiLimit))
+                        }}
+                        title="تعديل الصلاحيات"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      {!user.isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 hover:text-destructive"
+                          onClick={() => deleteUser(user.id, user.email)}
+                          title="حذف المستخدم"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
 /* ────────────── Component ────────────── */
 
 export default function Settings() {
   const { theme, setTheme } = useTheme()
+  const { auth } = useRiseStore()
   const [settings, setSettings] = useState<SettingsData>(() => {
     if (typeof window === 'undefined') return defaultSettings
     try {
@@ -834,6 +1079,11 @@ export default function Settings() {
           </CardContent>
         </Card>
       </motion.div>
+      {/* ══ Admin Panel ══ */}
+      {auth?.isAdmin && (
+        <AdminPanel />
+      )}
+
       {/* Version Footer */}
       <div className="text-center pt-4 pb-2">
         <div className="h-[1px] bg-gradient-to-l from-transparent via-border to-transparent mb-4" />

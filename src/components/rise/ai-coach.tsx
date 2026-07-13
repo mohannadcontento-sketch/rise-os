@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles,
@@ -16,9 +16,13 @@ import {
   Moon,
   MessageCircle,
   Zap,
+  AlertCircle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useRiseStore } from '@/store/app-store'
 
 /* ────────────── Types ────────────── */
 
@@ -27,140 +31,104 @@ interface ChatMessage {
   role: 'user' | 'ai'
   content: string
   timestamp: number
+  isFallback?: boolean
 }
 
-/* ────────────── Response Engine ────────────── */
+/* ────────────── Fallback Response Engine ────────────── */
 
 function randomFrom(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-function generateResponse(message: string): string {
+function generateFallbackResponse(message: string): string {
   const msg = message.toLowerCase()
 
-  // Morning advice
   if (msg.includes('صباح') || msg.includes('صباحي')) {
     return randomFrom([
-      '🌿 صباح الخير! ابدأ يومك بهدوء. خذ نفساً عميقاً، اشرب كوب ماء دافئ، وامنح نفسك 5 دقائق من التأمل قبل الانطلاق. الصباح الهادئ يصنع يوماً مثمراً.',
-      '☀️ تذكر: أول 60 دقيقة من يومك تحدد مساره. استثمرها فيما يهمك حقاً — لا في هاتفك. ابدأ بأهم مهمة قبل أن يبدأ العالم بطلب شيء منك.',
-      '💧 نصيحة صباحية: لا تفتح هاتفك خلال أول 30 دقيقة. بدلاً من ذلك، اكتب 3 أشياء تشكر الله عليها وخطّط لثلاث مهمات رئيسية. هذا يضعك في وضع التحكم لا الاستجابة.',
+      '🌿 صباح الخير! ابدأ يومك بهدوء. خذ نفساً عميقاً، اشرب كوب ماء دافئ، وامنح نفسك 5 دقائق من التأمل قبل الانطلاق.',
+      '☀️ تذكر: أول 60 دقيقة من يومك تحدد مساره. استثمرها فيما يهمك حقاً.',
+      '💧 نصيحة صباحية: لا تفتح هاتفك خلال أول 30 دقيقة. اكتب 3 أشياء تشكر الله عليها.',
     ])
   }
 
-  // Habits
   if (msg.includes('عادة') || msg.includes('عادات')) {
     return randomFrom([
-      '🎯 تذكر: لا تحاول بناء عادات متعددة دفعة واحدة. ابدأ بعادة واحدة صغيرة وثبتها لمدة 21 يوماً قبل إضافة أخرى. الاستمرارية أهم من الكثافة.',
-      '📊 متوسط بناء عادة جديدة هو 66 يوماً، ليس 21. كن صبوراً مع نفسك. الأيام الصعبة هي التي تبني العادة، لا الأيام السهلة.',
-      '🔥 سر العادات: اجعلها سهلة جداً لدرجة أنك لا تستطيع رفضها. إذا أردت القراءة، ضع الكتاب على وسادتك. إذا أردت التمرين، حضّر ملابسك من الليل.',
+      '🎯 لا تحاول بناء عادات متعددة دفعة واحدة. ابدأ بعادة واحدة صغيرة وثبتها لمدة 21 يوماً.',
+      '📊 متوسط بناء عادة جديدة هو 66 يوماً. كن صبوراً مع نفسك.',
+      '🔥 سر العادات: اجعلها سهلة جداً لدرجة أنك لا تستطيع رفضها.',
     ])
   }
 
-  // Focus / productivity
   if (msg.includes('تركيز') || msg.includes('إنتاجي') || msg.includes('عمل')) {
     return randomFrom([
-      '🧠 قاعدة العمل العميق: اختر مهمة واحدة، أغلق كل المشتتات (هاتف، إشعارات)، واعمل لمدة 50 دقيقة متواصلة. ثم خذ استراحة 10 دقائق. هذه الدورة تغيّر كل شيء.',
-      '⚡ أهم مهارة في عصرنا: القدرة على التركيز العميق. تدرب يومياً — ابدأ بـ 25 دقيقة وزِد تدريجياً. بعد أسبوع ستلاحظ فرقاً هائلاً في جودة عملك.',
-      '📋 نصيحة: في نهاية كل يوم، اكتب أهم 3 مهام للغد. في الصباح، ابدأ بالمهمة الأولى فوراً. هذه البساطة هي سر الأشخاص الأكثر إنتاجية في العالم.',
+      '🧠 قاعدة العمل العميق: اختر مهمة واحدة، أغلق كل المشتتات، واعمل لمدة 50 دقيقة متواصلة.',
+      '⚡ أهم مهارة في عصرنا: القدرة على التركيز العميق. تدرب يومياً.',
+      '📋 في نهاية كل يوم، اكتب أهم 3 مهام للغد. هذه البساطة هي سر الإنتاجية.',
     ])
   }
 
-  // Goals
   if (msg.includes('هدف') || msg.includes('أهداف')) {
     return randomFrom([
-      '🎯 الأهداف الذكية تحتاج أن تكون: محددة، قابلة للقياس، واقعية، ومحددة بوقت. بدلاً من "أريد أن أصبح أفضل"، قل "سأقراءة كتابين هذا الشهر وأتمرن 4 مرات أسبوعياً".',
-      '🚀 اقسم أهدافك الكبيرة إلى خطوات صغيرة يمكنك تنفيذها اليوم. هدف "كتابة كتاب" يبدأ بكتابة 300 كلمة اليوم. التقدم الصغير يبني الزخم الكبير.',
+      '🎯 الأهداف الذكية: محددة، قابلة للقياس، واقعية، ومحددة بوقت.',
+      '🚀 اقسم أهدافك الكبيرة إلى خطوات صغيرة يمكنك تنفيذها اليوم.',
     ])
   }
 
-  // Health / sleep
   if (msg.includes('نوم') || msg.includes('صحة') || msg.includes('صح')) {
     return randomFrom([
-      '😴 النوم هو أقوى أداءتك. 7-8 ساعات من النوم الجيد تزيد إنتاجيتك بنسبة 20% على الأقل. ضع موعد نوم ثابت وحافظ عليه كأهم موعد في يومك.',
-      '💧 لا تقلل من شرب الماء! الجفاف حتى بنسبة 2% يقلل التركيز والطاقة. ضع زجاجة ماء بجانبك دائماً وحدد هدفاً: 8 أكواب يومياً.',
-      '🏃 الحركة ليست رفاهية — إنها ضرورة. حتى 15 دقيقة من المشي تزيد إبداعك بنسبة 60%. اجعل التمرين جزءاً غير قابل للتفاوض من يومك.',
+      '😴 النوم هو أقوى أدواتك. 7-8 ساعات تزيد إنتاجيتك بنسبة 20%.',
+      '💧 لا تقلل من شرب الماء! الجفاف يقلل التركيز والطاقة.',
+      '🏃 حتى 15 دقيقة من المشي تزيد إبداعك بنسبة 60%.',
     ])
   }
 
-  // Motivation / general
   if (msg.includes('تحفيز') || msg.includes('محبط') || msg.includes('صعب') || msg.includes('تعب')) {
     return randomFrom([
-      '💪 تذكر: كل شخص ناجح مر بلحظات إحباط. الفرق ليس عدم الشعور بالإحباط — بل القدرة على الاستمرار رغمه. أنت أقوى مما تعتقد.',
-      '🌟 لا تقارن بدايتك بموسم حصاد الآخرين. كل شخص له رحلته الخاصة. ركّز على التحسن اليومي، ليس على الكمال. 1% تحسن يومياً = 37 مرة أفضل في نهاية السنة.',
-      '🔥 "النجاح ليس نهائياً والفشل ليس قاتلاً. الشجاعة للاستمرار هي ما يهم." — ونستون تشرشل. استمر، فكل خطوة تقربك.',
+      '💪 تذكر: كل شخص ناجح مر بلحظات إحباط. الفرق هو القدرة على الاستمرار.',
+      '🌟 لا تقارن بدايتك بموسم حصاد الآخرين. 1% تحسن يومياً = 37 مرة أفضل.',
+      '🔥 "النجاح ليس نهائياً والفشل ليس قاتلاً. الشجاعة للاستمرار هي ما يهم."',
     ])
   }
 
-  // Weekly review
   if (msg.includes('مراجعة') || msg.includes('مراجع')) {
     return randomFrom([
-      '📊 حان وقت المراجعة الأسبوعية! اسأل نفسك 3 أسئلة: ما الذي سار بشكل جيد؟ ما الذي يمكن تحسينه؟ ما أهم درس تعلمته؟ خذ 10 دقائق واكتب إجاباتك. المراجعة المنتظمة تضاعف أثر كل جهد تبذله.',
-      '🔄 في المراجعة الأسبوعية، انظر إلى أهدافك: كم منها حققت؟ ما الذي عطلك؟ ما المهارات التي طورتها؟ الوعي الذاتي هو الخطوة الأولى نحو النمو. لا تحكم على نفسك بقسوة، بل تعلم من التجربة!',
-      '📈 نصيحة المراجعة: قارن نفسك بنفسك الأسبوع الماضي، لا بالآخرين. التقدم بالنسبة لنفسك هو المقياس الحقيقي. حتى تحسن بسيط يستحق الاحتفال.',
+      '📊 حان وقت المراجعة! ما الذي سار بشكل جيد؟ ما الذي يمكن تحسينه؟',
+      '🔄 قارن نفسك بنفسك الأسبوع الماضي. التقدم بالنسبة لنفسك هو المقياس الحقيقي.',
     ])
   }
 
-  // Default responses
   return randomFrom([
-    '🌟 أنا هنا لمساعدتك! يمكنك سؤالي عن: بناء العادات، زيادة التركيز، تحديد الأهداف، تحسين الصحة، أو الحصول على تحفيز. ما الذي يشغل بالك الآن؟',
-    '💡 تذكير: أفضل استثمار هو الاستثمار في نفسك. خصص 30 دقيقة يومياً للتعلم والتطوير. هذا الوقت سيعود عليك أضعافاً مضاعفة.',
-    '🌱 نموذج 1%: إذا تحسنت 1% كل يوم، بعد سنة ستكون 37 مرة أفضل. ابدأ اليوم بخطوة صغيرة نحو النسخة الأفضل منك.',
-    '🎯 السر: لا تنتظر الدافع لتبدأ. ابدأ والدفع سيأتي. الحركة تولّد الطاقة. حتى 5 دقائق من العمل على مهمتك ستكسر حاجز المماطلة.',
-    '📊 راجع أسبوعك: ما الذي سار بشكل جيد؟ ما الذي يمكن تحسينه؟ ما أهم درس تعلمته؟ المراجعة الأسبوعية تضاعف أثر كل جهد تبذله.',
+    '🌟 أنا هنا لمساعدتك! يمكنك سؤالي عن: بناء العادات، زيادة التركيز، تحديد الأهداف، تحسين الصحة، أو الحصول على تحفيز.',
+    '💡 تذكير: أفضل استثمار هو الاستثمار في نفسك. خصص 30 دقيقة يومياً للتعلم والتطوير.',
+    '🌱 نموذج 1%: إذا تحسنت 1% كل يوم، بعد سنة ستكون 37 مرة أفضل.',
+    '🎯 لا تنتظر الدافع لتبدأ. ابدأ والدافع سيأتي.',
   ])
 }
 
 /* ────────────── Quick Actions ────────────── */
 
 const quickActions = [
-  {
-    id: 'morning',
-    label: 'نصيحة صباحية',
-    icon: Sun,
-    color: 'bg-gold/10 text-gold hover:bg-gold/20',
-    triggerWord: 'صباح',
-  },
-  {
-    id: 'review',
-    label: 'مراجعة أسبوعية',
-    icon: TrendingUp,
-    color: 'bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20',
-    triggerWord: 'مراجعة',
-  },
-  {
-    id: 'habits',
-    label: 'اقتراح عادات',
-    icon: Target,
-    color: 'bg-forest/10 text-forest hover:bg-forest/20',
-    triggerWord: 'عادة',
-  },
-  {
-    id: 'productivity',
-    label: 'نصيحة إنتاجية',
-    icon: Lightbulb,
-    color: 'bg-purple-500/10 text-purple-500 hover:bg-purple-500/20',
-    triggerWord: 'تركيز',
-  },
+  { id: 'morning', label: 'نصيحة صباحية', icon: Sun, color: 'bg-gold/10 text-gold hover:bg-gold/20', triggerWord: 'صباح' },
+  { id: 'review', label: 'مراجعة أسبوعية', icon: TrendingUp, color: 'bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20', triggerWord: 'مراجعة' },
+  { id: 'habits', label: 'اقتراح عادات', icon: Target, color: 'bg-forest/10 text-forest hover:bg-forest/20', triggerWord: 'عادة' },
+  { id: 'productivity', label: 'نصيحة إنتاجية', icon: Lightbulb, color: 'bg-purple-500/10 text-purple-500 hover:bg-purple-500/20', triggerWord: 'تركيز' },
 ]
 
-/* ────────────── AI Avatar with Orbits ────────────── */
+/* ────────────── AI Avatar ────────────── */
 
-function AIAvatar({ size = 40 }: { size?: number }) {
+function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: boolean }) {
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      {/* Orbiting ring 1 */}
       <motion.div
         className="absolute inset-[-6px] rounded-full border border-dashed border-emerald-accent/30"
         animate={{ rotate: 360 }}
         transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
       />
-      {/* Orbiting ring 2 */}
       <motion.div
         className="absolute inset-[-10px] rounded-full border border-dashed border-gold/20"
         animate={{ rotate: -360 }}
         transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
       />
-      {/* Orbiting dot */}
       <motion.div
         className="absolute w-2 h-2 rounded-full bg-emerald-accent"
         style={{ top: -6, left: '50%', marginLeft: -4 }}
@@ -173,7 +141,6 @@ function AIAvatar({ size = 40 }: { size?: number }) {
           transition={{ duration: 2, repeat: Infinity }}
         />
       </motion.div>
-      {/* Main avatar */}
       <div className={cn(
         'relative z-10 rounded-full flex items-center justify-center',
         'bg-gradient-to-br from-emerald-accent via-forest to-emerald-accent',
@@ -181,6 +148,11 @@ function AIAvatar({ size = 40 }: { size?: number }) {
       )} style={{ width: size, height: size }}>
         <Brain className={cn('text-white', size > 35 ? 'w-5 h-5' : 'w-3.5 h-3.5')} />
       </div>
+      {/* Online indicator */}
+      <div className={cn(
+        'absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full border-2 border-background',
+        isOnline ? 'bg-emerald-accent' : 'bg-muted-foreground/50'
+      )} />
     </div>
   )
 }
@@ -195,6 +167,7 @@ const suggestedPrompts = [
 /* ────────────── Component ────────────── */
 
 export default function AICoach() {
+  const { auth } = useRiseStore()
   const STORAGE_KEY = 'rise-ai-chat'
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -202,13 +175,13 @@ export default function AICoach() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
     return []
   })
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null)
+  const [aiUsage, setAiUsage] = useState<{ used: number; limit: number; total: number } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -222,9 +195,47 @@ export default function AICoach() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  const addAIMessage = (content: string) => {
+  const sendToAI = useCallback(async (message: string, history: ChatMessage[]) => {
+    if (auth?.accessToken === 'guest') {
+      return { response: generateFallbackResponse(message), fallback: true }
+    }
+
+    try {
+      const chatHistory = history.slice(-6).map(m => ({
+        role: m.role,
+        content: m.content,
+      }))
+
+      const res = await fetch('/api/rise/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          userId: auth?.userId || 'guest',
+          history: chatHistory,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.usage) {
+        setAiUsage(data.usage)
+      }
+
+      // Detect API status
+      if (apiOnline === null) {
+        setApiOnline(!data.fallback)
+      }
+
+      return { response: data.response, fallback: data.fallback }
+    } catch {
+      return { response: generateFallbackResponse(message), fallback: true }
+    }
+  }, [auth, apiOnline])
+
+  const addAIMessage = useCallback((content: string, isFallback = false) => {
     setIsTyping(true)
-    const delay = Math.min(content.length * 8, 2000)
+    const delay = isFallback ? Math.min(content.length * 5, 1000) : 1500
     setTimeout(() => {
       setIsTyping(false)
       setMessages((prev) => [
@@ -234,49 +245,60 @@ export default function AICoach() {
           role: 'ai',
           content,
           timestamp: Date.now(),
+          isFallback,
         },
       ])
     }, delay)
-  }
+  }, [])
 
-  const handleQuickAction = (actionId: string) => {
+  const handleQuickAction = useCallback((actionId: string) => {
     const action = quickActions.find((a) => a.id === actionId)
     if (!action) return
 
-    // Add user message
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: action.label,
-        timestamp: Date.now(),
-      },
-    ])
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: action.label,
+      timestamp: Date.now(),
+    }
 
-    // Generate response via keyword matching using trigger word
-    const response = generateResponse(action.triggerWord)
-    addAIMessage(response)
-  }
+    setMessages((prev) => [...prev, userMsg])
 
-  const handleSend = () => {
-    if (!input.trim()) return
+    // Use local fallback for quick actions for instant response
+    const response = generateFallbackResponse(action.triggerWord)
+    addAIMessage(response, true)
+  }, [addAIMessage])
+
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isTyping) return
     const userMessage = input.trim()
     setInput('')
 
-    setMessages((prev) => [
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userMessage,
+      timestamp: Date.now(),
+    }
+
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
+
+    setIsTyping(true)
+    const { response, fallback } = await sendToAI(userMessage, messages)
+    setIsTyping(false)
+
+    setMessages(prev => [
       ...prev,
       {
         id: crypto.randomUUID(),
-        role: 'user',
-        content: userMessage,
+        role: 'ai',
+        content: response,
         timestamp: Date.now(),
+        isFallback: fallback,
       },
     ])
-
-    const response = generateResponse(userMessage)
-    addAIMessage(response)
-  }
+  }, [input, isTyping, messages, sendToAI])
 
   const clearChat = () => {
     setMessages([])
@@ -305,10 +327,31 @@ export default function AICoach() {
       {/* Header */}
       <div className="flex items-center justify-between shrink-0 relative z-10">
         <div className="flex items-center gap-3">
-          <AIAvatar size={44} />
+          <AIAvatar size={44} isOnline={apiOnline !== false} />
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">المدرب الذكي</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">مساعدك الشخصي للنمو والتطوير</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">المدرب الذكي</h2>
+              {apiOnline === false && (
+                <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                  <WifiOff className="w-3 h-3" />
+                  وضع محلي
+                </span>
+              )}
+              {apiOnline === true && (
+                <span className="flex items-center gap-1 text-[10px] text-emerald-accent bg-emerald-accent/10 px-2 py-0.5 rounded-full">
+                  <Wifi className="w-3 h-3" />
+                  متصل
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              مساعدك الشخصي للنمو والتطوير
+              {aiUsage && (
+                <span className="mr-2 text-xs opacity-70">
+                  ({aiUsage.used}/{aiUsage.limit} رسالة)
+                </span>
+              )}
+            </p>
           </div>
         </div>
         {hasMessages && (
@@ -319,7 +362,7 @@ export default function AICoach() {
         )}
       </div>
 
-      {/* Quick Actions with gradient borders */}
+      {/* Quick Actions */}
       {!hasMessages && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -339,7 +382,6 @@ export default function AICoach() {
                   onClick={() => handleQuickAction(action.id)}
                   className="flex items-center gap-3 p-4 rounded-2xl glass transition-all hover:shadow-lg relative overflow-hidden group"
                 >
-                  {/* Gradient border effect */}
                   <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   <div className="p-2 rounded-xl bg-background/60">
                     <Icon className="w-5 h-5" />
@@ -350,7 +392,6 @@ export default function AICoach() {
             })}
           </div>
 
-          {/* Suggested Prompts */}
           <div className="mt-6">
             <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
               <MessageCircle className="w-3.5 h-3.5" />
@@ -367,8 +408,13 @@ export default function AICoach() {
                     transition={{ delay: 0.4 + i * 0.1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
-                      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: prompt.text, timestamp: Date.now() }])
-                      addAIMessage(generateResponse(prompt.text))
+                      const msg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: prompt.text, timestamp: Date.now() }
+                      setMessages(prev => [...prev, msg])
+                      setIsTyping(true)
+                      sendToAI(prompt.text, [...messages, msg]).then(({ response, fallback }) => {
+                        setIsTyping(false)
+                        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'ai', content: response, timestamp: Date.now(), isFallback: fallback }])
+                      })
                     }}
                     className="flex items-center gap-3 w-full p-3 rounded-xl glass hover:bg-muted/30 transition-all text-right group"
                   >
@@ -394,13 +440,12 @@ export default function AICoach() {
               animate={{ opacity: 1, y: 0 }}
               className={cn('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}
             >
-              {msg.role === 'ai' ? <AIAvatar size={32} /> : (
+              {msg.role === 'ai' ? <AIAvatar size={32} isOnline={!msg.isFallback} /> : (
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 bg-muted/50">
                   <User className="w-4 h-4 text-muted-foreground" />
                 </div>
               )}
 
-              {/* Message Bubble with glass effect */}
               <div className={cn(
                 'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed backdrop-blur-sm',
                 msg.role === 'ai'
@@ -408,12 +453,20 @@ export default function AICoach() {
                   : 'bg-gradient-to-br from-emerald-accent to-forest text-white rounded-tl-sm shadow-md shadow-emerald-accent/10'
               )}>
                 <p className="whitespace-pre-wrap">{msg.content}</p>
-                <p className={cn(
-                  'text-[10px] mt-1.5',
+                <div className={cn(
+                  'flex items-center gap-2 mt-1.5',
                   msg.role === 'ai' ? 'text-muted-foreground/60' : 'text-white/60'
                 )}>
-                  {new Date(msg.timestamp).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
-                </p>
+                  <p className="text-[10px]">
+                    {new Date(msg.timestamp).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  {msg.isFallback && msg.role === 'ai' && (
+                    <span className="flex items-center gap-0.5 text-[9px]">
+                      <AlertCircle className="w-2.5 h-2.5" />
+                      محلي
+                    </span>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}
@@ -451,7 +504,7 @@ export default function AICoach() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Actions Bar (show after messages) */}
+      {/* Quick Actions Bar */}
       {hasMessages && (
         <div className="shrink-0 flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
           {quickActions.map((action) => {

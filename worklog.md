@@ -764,3 +764,66 @@ Work Log:
 7. إضافة نظام إشعارات Web Push API
 8. إضافة وضع عرض مخصص (Custom Views) للمهام
 9. إضافة تكامل مع تطبيقات خارجية (Google Calendar, Notion)
+---
+Task ID: 8
+Agent: Main
+Task: إضافة Supabase Auth + ZhipuAI API + نظام صلاحيات أدمن + ليمت تخزين وAI
+
+Work Log:
+- تثبيت @supabase/supabase-js
+- إنشاء src/lib/supabase.ts (Supabase client + ZhipuAI JWT generator)
+- إنشاء 4 API routes للمصادقة:
+  - /api/auth/login (تسجيل دخول مع معالجة أخطاء Supabase بالعربي)
+  - /api/auth/signup (إنشاء حساب جديد)
+  - /api/auth/session (التحقق من الجلسة)
+  - /api/auth/refresh (تجديد الجلسة)
+  - /api/auth/resend (إعادة إرسال رابط التأكيد)
+- إنشاء صفحة تسجيل دخول premium (login-page.tsx) مع:
+  - تصميم glassmorphism مع أوراب متحركة
+  - تبديل تسجيل دخول/حساب جديد
+  - زر إظهار/إخفاء كلمة المرور
+  - زر إعادة إرسال رابط التأكيد
+  - وضع ضيف (بدون تسجيل)
+- تحديث page.tsx لإضافة:
+  - فحص المصادقة عند التحميل
+  - عرض صفحة الدخول إذا غير مسجل
+  - زر تسجيل خروج + avatar في header
+  - شارة "أدمن" للمستخدم الأدمن
+- إنشاء API لـ ZhipuAI (/api/rise/ai-chat):
+  - محاولة الاتصال بـ ZhipuAI أولاً
+  - Fallback ذكي للاستجابات المحلية إذا فشل API
+  - تتبع استخدام AI لكل مستخدم (شهري)
+  - التحقق من حدود الاستخدام
+- تحديث المدرب الذكي (ai-coach.tsx):
+  - مؤشر حالة الاتصال (متصل/وضع محلي)
+  - عرض عدد الرسائل المتبقية
+  - علامة "محلي" على الرسائل الـ fallback
+- إضافة نموذجين جديدين لـ Prisma:
+  - UserAIUsage (تتبع استخدام AI)
+  - UserStorage (حدود التخزين + الصلاحيات)
+- إنشاء لوحة تحكم الأدمن في الإعدادات:
+  - عرض قائمة المستخدمين
+  - تعديل حدود التخزين (MB)
+  - تعديل حدود AI (رسائل شهرياً)
+  - حذف المستخدمين
+  - إحصائيات (عدد المستخدمين، رسائل AI، تخزين)
+- إنشاء حساب الأدمن في Supabase (mhndsyd872@gmail.com)
+- تحديث app-store.ts لإضافة حالة المصادقة
+
+Stage Summary:
+- نظام مصادقة كامل مع Supabase (تسجيل + دخول + جلسات)
+- صفحة دخول premium بالعربي مع glassmorphism
+- ZhipuAI API متكامل مع fallback ذكي (API key لا يعمل حالياً)
+- تتبع استخدام AI لكل مستخدم (شهرية)
+- لوحة تحكم أدمن كاملة
+- حدود تخزين وAI لكل مستخدم
+- وضع ضيف يعمل بدون تسجيل
+- Lint: 0 أخطاء | Build: ناجح | جميع APIs: تعمل
+- ملاحظة: يجب تعطيل تأكيد البريد الإلكتروني في Supabase Dashboard
+  (Authentication > Settings > Email > إلغاء تحديد "Confirm email")
+  أو تأكيد البريد عبر الرابط المرسل
+
+المخاطر:
+- مفتاح ZhipuAI API لا يعمل (Authentication failed) - التطبيق يعمل بـ fallback
+- حساب الأدمن يحتاج تأكيد البريد الإلكتروني
+- لا يوجد service_role key لـ Supabase (لا يمكن تأكيد المستخدمين برمجياً)

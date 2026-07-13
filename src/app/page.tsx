@@ -3,6 +3,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import { Sidebar } from '@/components/rise/sidebar'
+import LoginPage from '@/components/rise/login-page'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target,
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
+import { LogOut } from 'lucide-react'
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -177,7 +179,7 @@ interface SearchBook { id: string; title: string; author: string | null; status:
 interface SearchKnowledge { id: string; title: string; type: string; folder: string | null }
 
 export default function RiseOSApp() {
-  const { activeModule, setActiveModule, toggleSidebar } = useRiseStore()
+  const { activeModule, setActiveModule, toggleSidebar, auth, setAuth, logout } = useRiseStore()
   const { theme, setTheme } = useTheme()
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -194,13 +196,71 @@ export default function RiseOSApp() {
     () => false
   )
 
-  // Keyboard shortcuts
+  // Auth check
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        const stored = localStorage.getItem('rise-auth')
+        const userInfo = localStorage.getItem('rise-user-info')
+        if (stored && userInfo) {
+          const session = JSON.parse(stored)
+          const user = JSON.parse(userInfo)
+          if (session.access_token && session.access_token !== 'guest') {
+            // Validate session
+            fetch('/api/auth/session', {
+              headers: { 'Authorization': `Bearer ${session.access_token}` }
+            }).then(r => r.json()).then(data => {
+              if (data.user) {
+                setAuth({
+                  isAuthenticated: true,
+                  userId: data.user.id,
+                  userEmail: data.user.email || '',
+                  userName: data.user.email?.split('@')[0] || '',
+                  isAdmin: data.user.isAdmin,
+                  accessToken: session.access_token,
+                })
+              } else {
+                localStorage.removeItem('rise-auth')
+                localStorage.removeItem('rise-user-info')
+              }
+            }).catch(() => {
+              // Session invalid, but keep local data accessible
+            })
+          } else if (session.access_token === 'guest') {
+            setAuth({
+              isAuthenticated: true,
+              userId: 'guest',
+              userEmail: 'ضيف',
+              userName: 'ضيف',
+              isAdmin: false,
+              accessToken: 'guest',
+            })
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    checkAuth()
+  }, [setAuth])
+
+  const handleLogin = useCallback((data: { user: { id: string; email: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
+    setAuth({
+      isAuthenticated: true,
+      userId: data.user.id,
+      userEmail: data.user.email,
+      userName: data.user.email?.split('@')[0] || '',
+      isAdmin: data.user.isAdmin,
+      accessToken: data.session.access_token,
+    })
+  }, [setAuth])
+
+  // Keyboard shortcuts (must be before conditional return)
   useKeyboardShortcuts()
 
   useEffect(() => {
-    // Seed demo data on first load
-    fetch('/api/rise/seed', { method: 'POST' }).catch(() => {})
-  }, [])
+    if (auth) {
+      fetch('/api/rise/seed', { method: 'POST' }).catch(() => {})
+    }
+  }, [auth])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -227,7 +287,7 @@ export default function RiseOSApp() {
   }, [])
 
   useEffect(() => {
-    if (!searchOpen || searchQuery.length < 2) {
+    if (!searchOpen || searchQuery.length < 2 || !auth) {
       return
     }
     const q = searchQuery.toLowerCase()
@@ -251,7 +311,7 @@ export default function RiseOSApp() {
       })
     })
     return () => controller.abort()
-  }, [searchQuery, searchOpen])
+  }, [searchQuery, searchOpen, auth])
 
   /* Today's date in Arabic */
   const todayArabic = useMemo(() => {
@@ -270,6 +330,11 @@ export default function RiseOSApp() {
 
   const ActiveComponent = moduleComponents[activeModule]
   const ModuleIcon = moduleIconMap[activeModule]
+
+  // Show login if not authenticated (after all hooks)
+  if (!auth) {
+    return <LoginPage onLogin={handleLogin} />
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -329,6 +394,24 @@ export default function RiseOSApp() {
                   <Moon className="w-4 h-4" />
                 )}
               </span>
+            </Button>
+          )}
+
+          {/* User avatar / logout */}
+          {mounted && auth && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-2 text-xs text-muted-foreground hover:text-destructive"
+              onClick={logout}
+              title={auth.userEmail}
+            >
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
+                <span className="text-[10px] font-bold text-white">{auth.userName.charAt(0).toUpperCase()}</span>
+              </div>
+              <span className="hidden sm:inline max-w-[100px] truncate">{auth.userName}</span>
+              {auth.isAdmin && <span className="text-[9px] bg-gold/20 text-gold px-1.5 py-0.5 rounded-full font-medium">أدمن</span>}
+              <LogOut className="w-3.5 h-3.5" />
             </Button>
           )}
         </header>
