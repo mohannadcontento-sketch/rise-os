@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 
 const USER_ID = 'rise-default-user'
 
 export async function GET() {
   try {
+    await ensureDb()
     const [
       tasks,
       projects,

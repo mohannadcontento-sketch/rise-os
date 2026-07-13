@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getToday } from '@/lib/rise-utils'
 
 const USER_ID = 'rise-default-user'
@@ -40,6 +40,7 @@ async function calculateScoreForDate(date: string) {
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureDb()
     // Support fetching scores for specific dates (comma-separated)
     const { searchParams } = new URL(req.url)
     const datesParam = searchParams.get('dates')

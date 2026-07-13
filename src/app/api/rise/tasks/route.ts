@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 
 const USER_ID = 'rise-default-user'
 
 export async function GET() {
   try {
+    await ensureDb()
     const tasks = await db.task.findMany({
       where: { userId: USER_ID },
       orderBy: { order: 'asc' },
@@ -19,6 +20,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureDb()
     const body = await req.json()
     const task = await db.task.create({
       data: { userId: USER_ID, ...body },
@@ -32,6 +34,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    await ensureDb()
     const { id, ...body } = await req.json()
     const task = await db.task.update({
       where: { id, userId: USER_ID },
@@ -46,6 +49,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    await ensureDb()
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })

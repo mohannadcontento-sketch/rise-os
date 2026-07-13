@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
 
 const USER_ID = 'rise-default-user'
 
 export async function GET() {
   try {
+    await ensureDb()
     const today = getToday()
     const last30 = getLast30Days()
     const weekDays = getWeekDays()

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 
 const USER_ID = 'rise-default-user'
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureDb()
     const { amount, reason } = await req.json()
     if (!amount || amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
 

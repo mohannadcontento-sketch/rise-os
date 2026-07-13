@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 const DEFAULT_USER_ID = 'rise-default-user'
 
 export async function POST() {
   try {
+    await ensureDb()
     let user = await db.user.findUnique({ where: { id: DEFAULT_USER_ID } })
     
     if (!user) {

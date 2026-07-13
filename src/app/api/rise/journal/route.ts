@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getToday } from '@/lib/rise-utils'
 
 const USER_ID = 'rise-default-user'
 
 export async function GET() {
   try {
+    await ensureDb()
     const today = getToday()
     const journal = await db.journal.findFirst({ where: { userId: USER_ID, date: today } })
     const recentJournals = await db.journal.findMany({
@@ -21,6 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureDb()
     const body = await req.json()
     const existing = await db.journal.findFirst({
       where: { userId: USER_ID, date: body.date || getToday() },

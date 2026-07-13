@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 
 const USER_ID = 'rise-default-user'
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureDb()
     const { searchParams } = new URL(req.url)
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
 
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureDb()
     const body = await req.json()
     const { date, section, title, time } = body
 
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    await ensureDb()
     const { id, ...body } = await req.json()
 
     const item = await db.plannerItem.update({
@@ -66,6 +69,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    await ensureDb()
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
