@@ -205,6 +205,20 @@ class BluetoothShareService {
   }
 }
 
-// ─── Singleton ──────────────────────────────────────────────────────────
+// ─── Lazy Singleton (safe for SSR) ─────────────────────────────────────────
 
-export const bluetoothShare = new BluetoothShareService();
+let _bluetoothShare: BluetoothShareService | null = null;
+
+export function getBluetoothShare(): BluetoothShareService {
+  if (!_bluetoothShare) {
+    _bluetoothShare = new BluetoothShareService();
+  }
+  return _bluetoothShare;
+}
+
+/** Backwards-compatible alias */
+export const bluetoothShare = new Proxy({} as BluetoothShareService, {
+  get(_target, prop) {
+    return Reflect.get(getBluetoothShare(), prop);
+  },
+});

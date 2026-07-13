@@ -202,6 +202,20 @@ class SyncManager {
   }
 }
 
-// ─── Singleton ──────────────────────────────────────────────────────────
+// ─── Lazy Singleton (safe for SSR) ─────────────────────────────────────────
 
-export const syncManager = new SyncManager();
+let _syncManager: SyncManager | null = null;
+
+export function getSyncManager(): SyncManager {
+  if (!_syncManager) {
+    _syncManager = new SyncManager();
+  }
+  return _syncManager;
+}
+
+/** Backwards-compatible alias */
+export const syncManager = new Proxy({} as SyncManager, {
+  get(_target, prop) {
+    return Reflect.get(getSyncManager(), prop);
+  },
+});

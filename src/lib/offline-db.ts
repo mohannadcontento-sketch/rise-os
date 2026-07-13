@@ -260,6 +260,20 @@ export class OfflineDB {
   }
 }
 
-// ─── Singleton ──────────────────────────────────────────────────────────
+// ─── Lazy Singleton (safe for SSR) ─────────────────────────────────────────
 
-export const offlineDB = new OfflineDB();
+let _offlineDB: OfflineDB | null = null;
+
+export function getOfflineDB(): OfflineDB {
+  if (!_offlineDB) {
+    _offlineDB = new OfflineDB();
+  }
+  return _offlineDB;
+}
+
+/** Backwards-compatible alias */
+export const offlineDB = new Proxy({} as OfflineDB, {
+  get(_target, prop) {
+    return Reflect.get(getOfflineDB(), prop);
+  },
+});
