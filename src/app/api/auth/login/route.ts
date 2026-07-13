@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,13 +8,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'البريد وكلمة المرور مطلوبان' }, { status: 400 })
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // Try Supabase — if not configured, return helpful error
+    const { getSupabase } = await import('@/lib/supabase')
+    let supabaseClient
+    try {
+      supabaseClient = getSupabase()
+    } catch {
+      return NextResponse.json({
+        error: 'خدمة تسجيل الدخول غير متوفرة حالياً. استخدم وضع الضيف للمتابعة.',
+        guestFallback: true,
+      }, { status: 503 })
+    }
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
       email,
       password,
     })
 
     if (error) {
-      // Handle specific Supabase errors
       if (error.message.includes('Invalid login') || error.message.includes('Invalid credentials')) {
         return NextResponse.json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' }, { status: 401 })
       }
@@ -41,6 +51,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch {
-    return NextResponse.json({ error: 'حدث خطأ في تسجيل الدخول' }, { status: 500 })
+    return NextResponse.json({
+      error: 'خدمة تسجيل الدخول غير متوفرة حالياً. استخدم وضع الضيف.',
+      guestFallback: true,
+    }, { status: 503 })
   }
 }

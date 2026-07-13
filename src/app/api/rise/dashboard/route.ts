@@ -9,7 +9,8 @@ const USER_ID = 'rise-default-user'
 
 export async function GET() {
   try {
-    await ensureDb()
+    const dbReady = await ensureDb()
+    if (!dbReady) return NextResponse.json(fallbackDashboard())
     const today = getToday()
     const last30 = getLast30Days()
     const weekDays = getWeekDays()
@@ -23,6 +24,7 @@ export async function GET() {
         where: { userId: USER_ID },
         orderBy: { createdAt: 'desc' },
         take: 10,
+        include: { project: { select: { name: true, color: true } } },
       }),
       // Habits
       db.habit.findMany({ where: { userId: USER_ID } }),
@@ -91,7 +93,12 @@ export async function GET() {
         focusMin: todayFocusMin,
         morningScore: morningLog?.score || 0,
       },
-      tasks,
+      tasks: tasks.map(t => ({
+        ...t,
+        done: t.status === 'done',
+        projectName: t.project?.name,
+        projectColor: t.project?.color,
+      })),
       habits: habits.map(h => ({
         ...h,
         todayCompleted: todayHabitsLogs.find(l => l.habitId === h.id)?.completed || false,
@@ -125,11 +132,11 @@ function fallbackDashboard() {
     user: { name: 'مستخدم RiseOS', level: 7, xp: 650, streak: 12, longestStreak: 21, totalFocusMin: 4200, totalTasksDone: 187, xpToNextLevel: 100, avatar: null },
     today: { tasksCompleted: 0, tasksTotal: 5, habitsCompleted: 0, habitsTotal: 3, focusMin: 0, morningScore: 0 },
     tasks: [
-      { id: '1', title: 'إكمال التصميم', status: 'done', priority: 'high', xpReward: 25 },
-      { id: '2', title: 'كتابة الفصل الثالث', status: 'in_progress', priority: 'high', xpReward: 30 },
-      { id: '3', title: 'مراجعة الكود', status: 'todo', priority: 'medium', xpReward: 15 },
-      { id: '4', title: 'تمرين رياضي', status: 'todo', priority: 'medium', xpReward: 20 },
-      { id: '5', title: 'قراءة 30 صفحة', status: 'todo', priority: 'low', xpReward: 10 },
+      { id: '1', title: 'إكمال التصميم', done: true, priority: 'high', xpReward: 25 },
+      { id: '2', title: 'كتابة الفصل الثالث', done: false, priority: 'high', xpReward: 30 },
+      { id: '3', title: 'مراجعة الكود', done: false, priority: 'medium', xpReward: 15 },
+      { id: '4', title: 'تمرين رياضي', done: false, priority: 'medium', xpReward: 20 },
+      { id: '5', title: 'قراءة 30 صفحة', done: false, priority: 'low', xpReward: 10 },
     ],
     habits: [
       { id: 'h1', name: 'شرب الماء', icon: '💧', color: '#3B82F6', frequency: 'daily', targetCount: 8, xpReward: 10 },

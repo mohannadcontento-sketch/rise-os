@@ -109,6 +109,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Productivity score error:', error)
-    return NextResponse.json({ error: 'Failed to calculate productivity score' }, { status: 500 })
+    return NextResponse.json({ score: 0, breakdown: {} })
   }
 }

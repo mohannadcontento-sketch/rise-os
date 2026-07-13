@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       reason: reason || 'unknown',
     })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 })
+    console.error('Earn XP error:', error)
+    return NextResponse.json({ xp: 0, leveled: false, newLevel: 1 })
   }
 }

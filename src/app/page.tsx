@@ -198,7 +198,7 @@ export default function RiseOSApp() {
     () => false
   )
 
-  // Auth check
+  // Auth check — auto-login as guest if no stored session
   useEffect(() => {
     const checkAuth = () => {
       try {
@@ -208,7 +208,7 @@ export default function RiseOSApp() {
           const session = JSON.parse(stored)
           const user = JSON.parse(userInfo)
           if (session.access_token && session.access_token !== 'guest') {
-            // Validate session
+            // Validate session with server
             fetch('/api/auth/session', {
               headers: { 'Authorization': `Bearer ${session.access_token}` }
             }).then(r => r.json()).then(data => {
@@ -222,11 +222,34 @@ export default function RiseOSApp() {
                   accessToken: session.access_token,
                 })
               } else {
-                localStorage.removeItem('rise-auth')
-                localStorage.removeItem('rise-user-info')
+                // Session invalid — fallback to guest
+                const guestSession = { access_token: 'guest', refresh_token: 'guest', expires_at: 9999999999 }
+                const guestUser = { id: 'guest', email: 'ضيف', isAdmin: false }
+                localStorage.setItem('rise-auth', JSON.stringify(guestSession))
+                localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
+                setAuth({
+                  isAuthenticated: true,
+                  userId: 'guest',
+                  userEmail: 'ضيف',
+                  userName: 'ضيف',
+                  isAdmin: false,
+                  accessToken: 'guest',
+                })
               }
             }).catch(() => {
-              // Session invalid, but keep local data accessible
+              // Server unreachable — fallback to guest so app still works
+              const guestSession = { access_token: 'guest', refresh_token: 'guest', expires_at: 9999999999 }
+              const guestUser = { id: 'guest', email: 'ضيف', isAdmin: false }
+              localStorage.setItem('rise-auth', JSON.stringify(guestSession))
+              localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
+              setAuth({
+                isAuthenticated: true,
+                userId: 'guest',
+                userEmail: 'ضيف',
+                userName: 'ضيف',
+                isAdmin: false,
+                accessToken: 'guest',
+              })
             })
           } else if (session.access_token === 'guest') {
             setAuth({
@@ -238,8 +261,36 @@ export default function RiseOSApp() {
               accessToken: 'guest',
             })
           }
+        } else {
+          // No stored session — auto-login as guest
+          const guestSession = { access_token: 'guest', refresh_token: 'guest', expires_at: 9999999999 }
+          const guestUser = { id: 'guest', email: 'ضيف', isAdmin: false }
+          localStorage.setItem('rise-auth', JSON.stringify(guestSession))
+          localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
+          setAuth({
+            isAuthenticated: true,
+            userId: 'guest',
+            userEmail: 'ضيف',
+            userName: 'ضيف',
+            isAdmin: false,
+            accessToken: 'guest',
+          })
         }
-      } catch { /* ignore */ }
+      } catch {
+        // Any error — auto-login as guest
+        const guestSession = { access_token: 'guest', refresh_token: 'guest', expires_at: 9999999999 }
+        const guestUser = { id: 'guest', email: 'ضيف', isAdmin: false }
+        localStorage.setItem('rise-auth', JSON.stringify(guestSession))
+        localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
+        setAuth({
+          isAuthenticated: true,
+          userId: 'guest',
+          userEmail: 'ضيف',
+          userName: 'ضيف',
+          isAdmin: false,
+          accessToken: 'guest',
+        })
+      }
     }
     checkAuth()
   }, [setAuth])

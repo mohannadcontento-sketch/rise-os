@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +12,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' }, { status: 400 })
     }
 
-    const { data, error } = await supabase.auth.signUp({
+    // Try Supabase — if not configured, return helpful error
+    const { getSupabase } = await import('@/lib/supabase')
+    let supabaseClient
+    try {
+      supabaseClient = getSupabase()
+    } catch {
+      return NextResponse.json({
+        error: 'خدمة إنشاء الحساب غير متوفرة حالياً. استخدم وضع الضيف للمتابعة.',
+        guestFallback: true,
+      }, { status: 503 })
+    }
+
+    const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
       options: {
@@ -44,6 +55,9 @@ export async function POST(request: NextRequest) {
       needsConfirmation: !data.session,
     })
   } catch {
-    return NextResponse.json({ error: 'حدث خطأ في إنشاء الحساب' }, { status: 500 })
+    return NextResponse.json({
+      error: 'خدمة إنشاء الحساب غير متوفرة حالياً. استخدم وضع الضيف.',
+      guestFallback: true,
+    }, { status: 503 })
   }
 }

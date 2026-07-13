@@ -1,11 +1,12 @@
 import { PrismaClient } from '@prisma/client'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { SCHEMA_SQL } from './db-schema'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
   dbReady: boolean
+  dbInitFailed: boolean
 }
 
 /**
@@ -22,8 +23,18 @@ function ensureDatabasePath() {
       try { mkdirSync(dbDir, { recursive: true }) } catch { /* ignore */ }
     }
     const dbPath = join(dbDir, 'riseos.db')
+    // Ensure the file exists (SQLite needs this)
+    if (!existsSync(dbPath)) {
+      try { writeFileSync(dbPath, '') } catch { /* ignore */ }
+    }
     url = `file:${dbPath}`
     process.env.DATABASE_URL = url
+  } else {
+    // Local dev: ensure db directory exists
+    const dbDir = join(process.cwd(), 'db')
+    if (!existsSync(dbDir)) {
+      try { mkdirSync(dbDir, { recursive: true }) } catch { /* ignore */ }
+    }
   }
 
   return url
@@ -44,42 +55,73 @@ if (!globalForPrisma.prisma) globalForPrisma.prisma = db
  * Ensures the database tables exist and has seed data.
  * On first request in a serverless environment, this creates all tables
  * and seeds them. Safe to call multiple times.
+ *
+ * Returns true if DB is ready, false if initialization failed.
+ * Routes should check this and return fallback data on failure.
  */
-let _initPromise: Promise<void> | null = null
+let _initPromise: Promise<boolean> | null = null
 
-export async function ensureDb(): Promise<void> {
-  if (globalForPrisma.dbReady) return
+export async function ensureDb(): Promise<boolean> {
+  if (globalForPrisma.dbReady) return true
+  if (globalForPrisma.dbInitFailed) return false
   if (_initPromise) return _initPromise
 
   _initPromise = (async () => {
     try {
+      // Verify Prisma can connect
+      await db.$queryRawUnsafe('SELECT 1')
+
       // Check if User table exists
       const result = await db.$queryRawUnsafe(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='User' LIMIT 1"
       ) as Array<{ name: string }>
 
       if (result.length === 0) {
-        // Tables don't exist — create them
-        await db.$executeRawUnsafe(SCHEMA_SQL)
+        // Tables don't exist — create them one by one for safety
+        const statements = SCHEMA_SQL.split(';').filter(s => s.trim())
+        for (const stmt of statements) {
+          try {
+            await db.$executeRawUnsafe(stmt)
+          } catch (e) {
+            console.error('[DB] Statement failed (may already exist):', (e as Error).message?.substring(0, 100))
+          }
+        }
       }
 
       // Auto-seed if no user exists (handles cold starts on Vercel)
-      const userCount = await db.user.count()
-      if (userCount === 0) {
-        await autoSeed()
+      try {
+        const userCount = await db.user.count()
+        if (userCount === 0) {
+          await autoSeed()
+        }
+      } catch (seedErr) {
+        console.error('[DB] Seed failed:', (seedErr as Error).message?.substring(0, 100))
+        // Don't fail the whole init — seed is optional
       }
 
       globalForPrisma.dbReady = true
+      return true
     } catch (error) {
-      console.error('[DB] Failed to initialize:', error)
+      console.error('[DB] Failed to initialize:', (error as Error).message?.substring(0, 200))
+      globalForPrisma.dbInitFailed = true
       _initPromise = null
+      return false
     }
   })()
 
   return _initPromise
 }
 
-/** Minimal seed — creates user only for first request to succeed */
+/**
+ * Reset the init state — allows retrying DB initialization.
+ * Useful when a previous cold start failed.
+ */
+export function resetDbInit() {
+  _initPromise = null
+  globalForPrisma.dbInitFailed = false
+}
+
+/** Minimal seed — creates user + settings + demo data */
 async function autoSeed() {
   const USER_ID = 'rise-default-user'
 

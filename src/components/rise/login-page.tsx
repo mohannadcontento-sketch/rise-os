@@ -42,6 +42,15 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       const data = await res.json()
 
       if (!res.ok) {
+        // If Supabase not configured, auto-switch to guest
+        if (data.guestFallback) {
+          const guestSession = { access_token: 'guest', refresh_token: 'guest', expires_at: 9999999999 }
+          const guestUser = { id: 'guest', email: 'ضيف', isAdmin: false }
+          localStorage.setItem('rise-auth', JSON.stringify(guestSession))
+          localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
+          onLogin({ user: guestUser, session: guestSession })
+          return
+        }
         setError(data.error || 'حدث خطأ')
         setLoading(false)
         return
