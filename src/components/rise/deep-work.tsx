@@ -514,7 +514,7 @@ export default function DeepWork() {
                 scale: [1, 1.03, 1],
                 opacity: [0.3, 0.6, 0.3],
               }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
             />
           )}
           <AnimatePresence>
@@ -541,12 +541,12 @@ export default function DeepWork() {
                       opacity: 0,
                       scale: [0, 1.5, 0.5],
                     }}
-                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                    transition={{ type: 'tween', duration: 1.2, ease: 'easeOut' }}
                   />
                 ))}
                 <motion.div
                   animate={{ rotate: [0, -10, 10, -10, 0], scale: [1, 1.2, 1] }}
-                  transition={{ duration: 0.5, repeat: 3 }}
+                  transition={{ type: 'tween', duration: 0.5, repeat: 3, repeatType: 'reverse' }}
                 >
                   <PartyPopper className="w-12 h-12 text-gold mb-2" />
                 </motion.div>
@@ -662,7 +662,7 @@ export default function DeepWork() {
               <motion.div
                 className="w-2 h-2 rounded-full bg-emerald-accent mt-2"
                 animate={{ opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
+                transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse' }}
               />
             )}
           </div>
@@ -848,7 +848,7 @@ export default function DeepWork() {
                     {isActive && (
                       <motion.div
                         animate={{ scale: [1, 1.5, 1], opacity: [1, 0.3, 1] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                        transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
                         className="w-1.5 h-1.5 rounded-full bg-emerald-accent relative z-10"
                       />
                     )}

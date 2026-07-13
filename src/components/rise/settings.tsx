@@ -566,7 +566,7 @@ export default function Settings() {
                 <motion.div
                   className="absolute inset-[-4px] rounded-full bg-gradient-to-br from-emerald-accent via-forest to-gold"
                   animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.05, 1] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  transition={{ type: 'tween', duration: 3, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
                 />
                 <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-emerald-accent/25">
                   {settings.userName.charAt(0)}

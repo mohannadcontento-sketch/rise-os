@@ -183,15 +183,23 @@
 
 /* Glassmorphism */
 .glass {
-  background: oklch(0.995 0 0 / 60%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: oklch(0.995 0 0 / 80%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid oklch(0.90 0.01 160 / 30%);
 }
 
 .dark .glass {
-  background: oklch(0.15 0.02 155 / 60%);
+  background: oklch(0.15 0.02 155 / 80%);
   border: 1px solid oklch(0.40 0.02 155 / 40%);
+}
+
+/* Reduce glass blur on mobile for performance */
+@media (max-width: 768px) {
+  .glass {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
 }
 
 /* Animated gradient background */
@@ -287,8 +295,8 @@
   animation: countUp 0.5s ease-out forwards;
 }
 
-/* Smooth transitions for theme */
-* {
+/* Smooth transitions — only for interactive elements */
+button, a, input, textarea, select, [role="button"], .glass, .premium-card {
   transition-property: background-color, border-color, color, box-shadow, opacity;
   transition-duration: 200ms;
   transition-timing-function: ease;
@@ -299,9 +307,9 @@
    ═══════════════════════════════════════════════════════ */
 .premium-card {
   position: relative;
-  background: oklch(0.995 0.001 106 / 75%);
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  background: oklch(0.995 0.001 106 / 85%);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
   border: 1px solid oklch(0.90 0.01 160 / 40%);
   border-radius: 0.75rem;
   box-shadow:
@@ -312,13 +320,30 @@
 }
 
 .dark .premium-card {
-  background: oklch(0.16 0.02 155 / 75%);
+  background: oklch(0.16 0.02 155 / 85%);
   border: 1px solid oklch(0.35 0.02 155 / 45%);
   box-shadow:
     0 1px 2px oklch(0 0 0 / 0.2),
     0 4px 8px oklch(0 0 0 / 0.15),
     0 8px 24px oklch(0 0 0 / 0.2),
     inset 0 1px 0 oklch(1 0 0 / 0.08);
+}
+
+@media (max-width: 768px) {
+  .premium-card {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.04),
+      0 4px 8px oklch(0 0 0 / 0.04),
+      inset 0 1px 0 oklch(1 0 0 / 0.6);
+  }
+  .dark .premium-card {
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.2),
+      0 4px 8px oklch(0 0 0 / 0.15),
+      inset 0 1px 0 oklch(1 0 0 / 0.08);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -407,8 +432,21 @@
   border-radius: inherit;
 }
 
+/* Disable noise on mobile for performance */
+@media (max-width: 768px) {
+  .noise-bg::before {
+    display: none;
+  }
+}
+
 .dark .noise-bg::before {
   opacity: 0.05;
+}
+
+@media (max-width: 768px) {
+  .dark .noise-bg::before {
+    display: none;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -484,6 +522,12 @@
     4px 0 80px -20px oklch(0.55 0.14 163 / 0.06);
 }
 
+@media (max-width: 768px) {
+  .dark .sidebar-glow {
+    box-shadow: none;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════
    Header gradient bottom border
    ═══════════════════════════════════════════════════════ */
@@ -546,4 +590,15 @@
 
 .module-title-animate {
   animation: fadeInRight 0.4s ease-out;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Reduced motion — disable animations for users who prefer it
+   ═══════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -392,7 +392,7 @@ export default function Learning() {
           >
             <motion.div
               animate={{ scale: [1, 1.15, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
+              transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse' }}
             >
               <Flame className="w-4 h-4 text-orange-500" />
             </motion.div>

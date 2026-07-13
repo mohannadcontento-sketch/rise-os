@@ -138,7 +138,7 @@ function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: bo
         <motion.div
           className="w-2 h-2 rounded-full bg-gold"
           animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse' }}
         />
       </motion.div>
       <div className={cn(

@@ -620,7 +620,7 @@ export default function Journal() {
                           whileTap={{ scale: 0.85 }}
                           animate={form.mood === m.value ? { scale: [1, 1.4, 1.15] } : { scale: 1, y: 0 }}
                           transition={form.mood === m.value
-                            ? { type: 'spring', stiffness: 400, damping: 10, duration: 0.5 }
+                            ? { type: 'tween', stiffness: 400, damping: 10, duration: 0.5 }
                             : { duration: 0.2 }
                           }
                           onClick={() => updateForm('mood', m.value)}

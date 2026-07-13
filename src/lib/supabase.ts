@@ -1,10 +1,27 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Lazy singleton — avoids crashing during build when env vars are absent
+let _supabase: SupabaseClient | null = null
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) {
+      throw new Error('Supabase environment variables are not configured')
+    }
+    _supabase = createClient(url, key)
+  }
+  return _supabase
+}
+
+// Convenience export for direct usage (runtime only)
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    return Reflect.get(getSupabase(), prop)
+  },
+})
 
 // Generate ZhipuAI JWT token
 export function generateZhipuToken(): string {

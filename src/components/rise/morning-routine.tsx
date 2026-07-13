@@ -429,7 +429,7 @@ function RoutineItemRow({
       <motion.div
         initial={false}
         animate={checked ? { scale: [1, 1.25, 1] } : { scale: 1 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
+        transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
         whileTap={{ scale: 0.85 }}
       >
         <Checkbox
@@ -705,7 +705,7 @@ export default function MorningRoutine() {
               <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                 <motion.div
                   animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
-                  transition={{ duration: 3, repeat: Infinity, repeatDelay: 3 }}
+                  transition={{ type: 'tween', duration: 3, repeat: Infinity, repeatDelay: 3 }}
                 >
                   <Sunrise className="w-6 h-6 text-gold" />
                 </motion.div>
@@ -730,7 +730,7 @@ export default function MorningRoutine() {
                 <motion.button
                   onClick={handleStartMorning}
                   animate={{ scale: [1, 1.04, 1] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
                   whileHover={{ scale: 1.06 }}
                   whileTap={{ scale: 0.96 }}
                   className="flex items-center gap-2 bg-gradient-to-l from-emerald-accent to-forest hover:from-emerald-accent/90 hover:to-forest/90 text-white shadow-lg shadow-emerald-accent/20 rounded-xl h-12 px-6 text-sm font-semibold"

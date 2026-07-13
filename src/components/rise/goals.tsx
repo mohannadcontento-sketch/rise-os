@@ -860,7 +860,7 @@ function GoalCard({
                                           y: [0, -8 - i * 4, -14 - i * 3],
                                           scale: [1, 0.8, 0],
                                         }}
-                                        transition={{ duration: 0.6, delay: i * 0.1, ease: 'easeOut' }}
+                                        transition={{ type: 'tween', duration: 0.6, delay: i * 0.1, ease: 'easeOut' }}
                                         style={{ top: '50%', left: '50%' }}
                                       />
                                     ))}

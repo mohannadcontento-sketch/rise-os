@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import {
@@ -107,7 +107,6 @@ function toArabicNum(n: number): string {
 
 export function Sidebar() {
   const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser } = useRiseStore()
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [quickNotes, setQuickNotes] = useState('')
   const notesRef = useRef<HTMLTextAreaElement>(null)
@@ -174,10 +173,7 @@ export function Sidebar() {
       {/* Mobile overlay */}
       <AnimatePresence>
         {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <div
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
@@ -187,8 +183,8 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed top-0 right-0 z-50 h-full w-72 bg-sidebar border-l border-sidebar-border',
-          'flex flex-col duration-300 ease-out',
+          'fixed top-0 right-0 z-50 h-full w-64 sm:w-72 bg-sidebar border-l border-sidebar-border',
+          'flex flex-col duration-200 ease-out',
           'lg:static lg:z-auto',
           'shadow-[inset_-1px_0_0_rgba(0,0,0,0.03)] dark:shadow-[inset_-1px_0_0_rgba(255,255,255,0.02),inset_1px_0_0_rgba(0,0,0,0.1)]',
           'sidebar-glow',
@@ -196,38 +192,33 @@ export function Sidebar() {
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 pb-4 relative">
-          <div className="flex items-center gap-3">
-            <motion.div
-              className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20"
-              whileHover={{ rotate: 12, scale: 1.05 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-            >
-              <Zap className="w-5 h-5 text-white" />
-            </motion.div>
+        <div className="flex items-center justify-between p-4 pb-3 relative">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-md shadow-emerald-accent/20">
+              <Zap className="w-4 h-4 text-white" />
+            </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">
+              <h1 className="text-base font-bold tracking-tight text-sidebar-foreground">
                 RiseOS
               </h1>
-              <p className="text-[10px] text-sidebar-foreground/50 -mt-0.5 font-medium">
+              <p className="text-[9px] text-sidebar-foreground/50 -mt-0.5 font-medium hidden sm:block">
                 امتلك صباحك. امتلك حياتك.
               </p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60 transition-colors duration-200"
+            className="lg:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60"
           >
             <X className="w-4 h-4" />
           </button>
-          {/* Gradient line below header */}
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-emerald-accent/40 to-gold/30" />
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        <nav className="flex-1 overflow-y-auto px-2.5 pb-4">
           {navGroups.map((group, gi) => (
-            <div key={gi} className={cn(group.title && 'mt-5')}>
+            <div key={gi} className={cn(group.title && 'mt-4')}>
               {group.title && (
                 <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-accent/40 inline-block" />
@@ -239,39 +230,31 @@ export function Sidebar() {
                   const Icon = item.icon
                   const isActive = activeModule === item.id
                   return (
-                    <motion.button
+                    <button
                       key={item.id}
-                      whileTap={{ scale: 0.97 }}
                       onClick={() => setActiveModule(item.id)}
-                      onMouseEnter={() => setHoveredItem(item.id)}
-                      onMouseLeave={() => setHoveredItem(null)}
                       className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                        'w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium',
                         'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
+                        'active:scale-[0.97]',
                         isActive && 'bg-sidebar-primary/10 text-sidebar-primary font-semibold shadow-sm'
                       )}
                     >
-                      <motion.div
+                      <div
                         className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200',
+                          'w-7 h-7 rounded-lg flex items-center justify-center',
                           isActive
                             ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md'
                             : 'bg-sidebar-accent/50 text-sidebar-foreground/50'
                         )}
-                        animate={isActive ? { scale: [1, 1.1, 1] } : hoveredItem === item.id ? { scale: 1.05 } : {}}
-                        transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                       >
-                        <Icon className="w-4 h-4" />
-                      </motion.div>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
                       <span className="flex-1 text-right">{item.label}</span>
                       {isActive && (
-                        <motion.div
-                          layoutId="activeIndicator"
-                          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-accent"
-                          transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                        />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-accent" />
                       )}
-                    </motion.button>
+                    </button>
                   )
                 })}
               </div>
@@ -280,16 +263,16 @@ export function Sidebar() {
         </nav>
 
         {/* Quick Notes Section */}
-        <div className="px-3 pb-2">
+        <div className="px-2.5 pb-2">
           <div className="rounded-xl border border-gradient p-0.5">
             <div className="glass rounded-[10px] overflow-hidden">
               {/* Collapsed Header */}
               <button
                 onClick={() => setNotesExpanded(!notesExpanded)}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-primary/[0.02] transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-primary/[0.02]"
               >
-                <div className="w-7 h-7 rounded-lg bg-gold/10 flex items-center justify-center shrink-0">
-                  <Pencil className="w-3.5 h-3.5 text-gold" />
+                <div className="w-6 h-6 rounded-lg bg-gold/10 flex items-center justify-center shrink-0">
+                  <Pencil className="w-3 h-3 text-gold" />
                 </div>
                 {!notesExpanded && (
                   <span className="text-xs text-muted-foreground truncate flex-1 text-right">
@@ -299,24 +282,13 @@ export function Sidebar() {
                 {notesExpanded && (
                   <span className="text-xs font-medium text-foreground flex-1 text-right">ملاحظات سريعة</span>
                 )}
-                <motion.div
-                  animate={{ rotate: notesExpanded ? 180 : 0 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
-                >
-                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/50" />
-                </motion.div>
+                <ChevronDown className={cn('w-3 h-3 text-muted-foreground/50 transition-transform duration-200', notesExpanded && 'rotate-180')} />
               </button>
 
               {/* Expanded Textarea */}
               <AnimatePresence>
                 {notesExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
-                    className="overflow-hidden"
-                  >
+                  <div className="overflow-hidden">
                     <div className="px-3 pb-3 pt-1">
                       <textarea
                         ref={notesRef}
@@ -326,7 +298,7 @@ export function Sidebar() {
                         rows={3}
                         dir="rtl"
                         className={cn(
-                          'w-full bg-white/5 dark:bg-white/[0.03] backdrop-blur-sm',
+                          'w-full bg-white/5 dark:bg-white/[0.03]',
                           'border border-white/10 dark:border-white/5',
                           'rounded-lg px-3 py-2 text-xs text-foreground leading-relaxed',
                           'resize-none focus:outline-none focus:ring-1 focus:ring-emerald-accent/30 focus:border-emerald-accent/20',
@@ -342,14 +314,14 @@ export function Sidebar() {
                         {quickNotes.length > 0 && (
                           <button
                             onClick={() => setQuickNotes('')}
-                            className="text-[9px] text-muted-foreground/40 hover:text-destructive transition-colors"
+                            className="text-[9px] text-muted-foreground/40 hover:text-destructive"
                           >
                             مسح
                           </button>
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
               </AnimatePresence>
             </div>
@@ -357,17 +329,13 @@ export function Sidebar() {
         </div>
 
         {/* Footer - User Card */}
-        <div className="p-4 border-t border-sidebar-border relative">
+        <div className="p-3 border-t border-sidebar-border relative">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-sidebar-border to-transparent" />
-          <div className="glass rounded-xl p-3 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
-            <div className="flex items-center gap-3">
-              <motion.div
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20"
-                whileHover={{ scale: 1.08 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-              >
+          <div className="glass rounded-xl p-2.5 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20">
                 {user?.name?.charAt(0) || 'م'}
-              </motion.div>
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-sidebar-foreground truncate">
                   {user?.name || 'مستخدم RiseOS'}
@@ -382,23 +350,20 @@ export function Sidebar() {
                   )}
                 </p>
               </div>
-              <ChevronLeft className="w-4 h-4 text-sidebar-foreground/30 rotate-180" />
+              <ChevronLeft className="w-3.5 h-3.5 text-sidebar-foreground/30 rotate-180" />
             </div>
-            <div className="mt-2.5">
-              <div className="flex justify-between text-[10px] text-sidebar-foreground/50 mb-1.5">
+            <div className="mt-2">
+              <div className="flex justify-between text-[10px] text-sidebar-foreground/50 mb-1">
                 <span>الخبرة</span>
                 <span>
                   {user ? `${toArabicNum(user.currentXp)} / ${toArabicNum(user.xpToNext)}` : '٠ / ١٠٠'}
                 </span>
               </div>
               <div className="relative">
-                <div className="absolute -inset-0.5 rounded-full bg-gradient-to-l from-gold/20 to-gold-light/10 blur-[2px] opacity-50" />
-                <div className="relative h-1.5 rounded-full bg-sidebar-accent overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)]">
-                  <motion.div
-                    className="h-full rounded-full bg-gradient-to-l from-gold via-gold to-gold-light"
-                    initial={{ width: 0 }}
-                    animate={{ width: user ? `${Math.min(user.progress, 100)}%` : '0%' }}
-                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                <div className="h-1.5 rounded-full bg-sidebar-accent overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-l from-gold via-gold to-gold-light transition-all duration-700 ease-out"
+                    style={{ width: user ? `${Math.min(user.progress, 100)}%` : '0%' }}
                   />
                 </div>
               </div>

@@ -292,25 +292,27 @@ export default function RiseOSApp() {
     }
     const q = searchQuery.toLowerCase()
     const controller = new AbortController()
-    Promise.all([
-      fetch('/api/rise/tasks', { signal: controller.signal }).then(r => r.json()).catch(() => ({ tasks: [] })),
-      fetch('/api/rise/habits', { signal: controller.signal }).then(r => r.json()).catch(() => ({ habits: [] })),
-      fetch('/api/rise/goals', { signal: controller.signal }).then(r => r.json()).catch(() => ({ goals: [] })),
-      fetch('/api/rise/journal', { signal: controller.signal }).then(r => r.json()).catch(() => ({ journals: [] })),
-      fetch('/api/rise/books', { signal: controller.signal }).then(r => r.json()).catch(() => ({ books: [] })),
-      fetch('/api/rise/knowledge', { signal: controller.signal }).then(r => r.json()).catch(() => ({ items: [] })),
-    ]).then(([tasksData, habitsData, goalsData, journalsData, booksData, knowledgeData]) => {
-      if (controller.signal.aborted) return
-      setSearchResults({
-        tasks: (tasksData.tasks || []).filter((t: SearchTask) => t.title.toLowerCase().includes(q)).slice(0, 5),
-        habits: (habitsData.habits || []).filter((h: SearchHabit) => h.name.toLowerCase().includes(q)).slice(0, 5),
-        goals: (goalsData.goals || []).filter((g: SearchGoal) => g.title.toLowerCase().includes(q)).slice(0, 5),
-        journals: (journalsData.journals || []).filter((j: SearchJournal) => j.content.toLowerCase().includes(q)).slice(0, 5),
-        books: (booksData.books || []).filter((b: SearchBook) => b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)).slice(0, 5),
-        knowledge: ((knowledgeData as any).items || []).filter((k: SearchKnowledge) => k.title.toLowerCase().includes(q)).slice(0, 5),
+    const timer = setTimeout(() => {
+      Promise.all([
+        fetch('/api/rise/tasks', { signal: controller.signal }).then(r => r.json()).catch(() => ({ tasks: [] })),
+        fetch('/api/rise/habits', { signal: controller.signal }).then(r => r.json()).catch(() => ({ habits: [] })),
+        fetch('/api/rise/goals', { signal: controller.signal }).then(r => r.json()).catch(() => ({ goals: [] })),
+        fetch('/api/rise/journal', { signal: controller.signal }).then(r => r.json()).catch(() => ({ journals: [] })),
+        fetch('/api/rise/books', { signal: controller.signal }).then(r => r.json()).catch(() => ({ books: [] })),
+        fetch('/api/rise/knowledge', { signal: controller.signal }).then(r => r.json()).catch(() => ({ items: [] })),
+      ]).then(([tasksData, habitsData, goalsData, journalsData, booksData, knowledgeData]) => {
+        if (controller.signal.aborted) return
+        setSearchResults({
+          tasks: (tasksData.tasks || []).filter((t: SearchTask) => t.title.toLowerCase().includes(q)).slice(0, 5),
+          habits: (habitsData.habits || []).filter((h: SearchHabit) => h.name.toLowerCase().includes(q)).slice(0, 5),
+          goals: (goalsData.goals || []).filter((g: SearchGoal) => g.title.toLowerCase().includes(q)).slice(0, 5),
+          journals: (journalsData.journals || []).filter((j: SearchJournal) => j.content.toLowerCase().includes(q)).slice(0, 5),
+          books: (booksData.books || []).filter((b: SearchBook) => b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)).slice(0, 5),
+          knowledge: ((knowledgeData as any).items || []).filter((k: SearchKnowledge) => k.title.toLowerCase().includes(q)).slice(0, 5),
+        })
       })
-    })
-    return () => controller.abort()
+    }, 300)
+    return () => { clearTimeout(timer); controller.abort() }
   }, [searchQuery, searchOpen, auth])
 
   /* Today's date in Arabic */
@@ -342,7 +344,7 @@ export default function RiseOSApp() {
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 md:px-6 py-3 bg-background/80 backdrop-blur-xl noise-bg header-gradient-border">
+        <header className="sticky top-0 z-30 flex items-center gap-3 px-3 sm:px-4 md:px-6 py-2.5 bg-background/90 backdrop-blur-md header-gradient-border">
           <Button
             variant="ghost"
             size="icon"
@@ -421,10 +423,10 @@ export default function RiseOSApp() {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeModule}
-              initial={{ opacity: 0, y: 8, scale: 0.99, filter: 'blur(4px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -8, scale: 0.99, filter: 'blur(4px)' }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30, mass: 0.8 }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
               className="p-4 md:p-6"
             >
               {/* Module title with accent bar & date */}
@@ -596,15 +598,15 @@ export default function RiseOSApp() {
       {/* ══════════ FAB - Quick Add ══════════ */}
       <AnimatePresence>
         {activeModule !== 'dashboard' && activeModule !== 'settings' && (
-          <div className="fixed bottom-6 left-6 z-50 flex flex-col-reverse items-center gap-3">
+          <div className="fixed bottom-5 right-5 z-50 flex flex-col-reverse items-center gap-3">
             {/* Action items */}
             <AnimatePresence>
               {fabOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.15 }}
                   className="flex flex-col gap-2 mb-2"
                 >
                   {([
@@ -612,26 +614,22 @@ export default function RiseOSApp() {
                     { label: 'عادة جديدة', icon: Flame, module: 'habits' as ModuleId, color: 'text-orange-500' },
                     { label: 'يومية جديدة', icon: PenLine, module: 'journal' as ModuleId, color: 'text-forest' },
                     { label: 'تسجيل صحي', icon: HeartPulse, module: 'health' as ModuleId, color: 'text-rose-500' },
-                  ] as const).map((action, i) => {
+                  ] as const).map((action) => {
                     const ActionIcon = action.icon
                     return (
-                      <motion.button
+                      <button
                         key={action.label}
-                        initial={{ opacity: 0, x: -20, scale: 0.8 }}
-                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                        exit={{ opacity: 0, x: -20, scale: 0.8 }}
-                        transition={{ delay: i * 0.05, type: 'spring', stiffness: 400, damping: 25 }}
                         onClick={() => {
                           setFabOpen(false)
                           setActiveModule(action.module)
                         }}
                         className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl glass border border-white/10 dark:border-white/5 shadow-lg hover:shadow-xl transition-shadow group"
                       >
-                        <div className="w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <div className="w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center">
                           <ActionIcon className={cn('w-3.5 h-3.5', action.color)} />
                         </div>
                         <span className="text-sm font-medium text-foreground whitespace-nowrap">{action.label}</span>
-                      </motion.button>
+                      </button>
                     )
                   })}
                 </motion.div>
@@ -643,18 +641,17 @@ export default function RiseOSApp() {
               layout
               onClick={() => setFabOpen(!fabOpen)}
               className={cn(
-                'w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl transition-shadow',
+                'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-xl transition-shadow',
                 'bg-gradient-to-br from-emerald-accent to-forest',
                 'hover:shadow-emerald-accent/30 hover:shadow-2xl'
               )}
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
+              whileTap={{ scale: 0.93 }}
             >
               <motion.span
                 animate={{ rotate: fabOpen ? 45 : 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                transition={{ duration: 0.2 }}
               >
-                <Zap className="w-6 h-6 text-white" />
+                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </motion.span>
             </motion.button>
           </div>

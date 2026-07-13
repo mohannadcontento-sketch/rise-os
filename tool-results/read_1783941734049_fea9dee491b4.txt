@@ -1,0 +1,1426 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Plus,
+     7→  Search,
+     8→  List,
+     9→  LayoutGrid,
+    10→  CalendarDays,
+    11→  Clock,
+    12→  Zap,
+    13→  Trash2,
+    14→  ChevronDown,
+    15→  ChevronUp,
+    16→  ChevronLeft,
+    17→  ChevronRight,
+    18→  Filter,
+    19→  MoreHorizontal,
+    20→  CalendarClock,
+    21→  CheckCircle2,
+    22→  Circle,
+    23→  Loader2,
+    24→  Inbox,
+    25→  Sparkles,
+    26→  Lock,
+    27→  Link2,
+    28→  GripVertical,
+    29→} from 'lucide-react'
+    30→import {
+    31→  DndContext,
+    32→  DragOverlay,
+    33→  closestCenter,
+    34→  PointerSensor,
+    35→  useSensor,
+    36→  useSensors,
+    37→  type DragStartEvent,
+    38→  type DragEndEvent,
+    39→} from '@dnd-kit/core'
+    40→import {
+    41→  SortableContext,
+    42→  useSortable,
+    43→  verticalListSortingStrategy,
+    44→  arrayMove,
+    45→} from '@dnd-kit/sortable'
+    46→import { CSS } from '@dnd-kit/utilities'
+    47→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    48→import { Button } from '@/components/ui/button'
+    49→import { Badge } from '@/components/ui/badge'
+    50→import { Checkbox } from '@/components/ui/checkbox'
+    51→import { Input } from '@/components/ui/input'
+    52→import { Skeleton } from '@/components/ui/skeleton'
+    53→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    54→import {
+    55→  Dialog,
+    56→  DialogContent,
+    57→  DialogHeader,
+    58→  DialogTitle,
+    59→  DialogTrigger,
+    60→  DialogFooter,
+    61→  DialogClose,
+    62→} from '@/components/ui/dialog'
+    63→import {
+    64→  Select,
+    65→  SelectContent,
+    66→  SelectItem,
+    67→  SelectTrigger,
+    68→  SelectValue,
+    69→} from '@/components/ui/select'
+    70→import {
+    71→  DropdownMenu,
+    72→  DropdownMenuContent,
+    73→  DropdownMenuItem,
+    74→  DropdownMenuTrigger,
+    75→  DropdownMenuSeparator,
+    76→} from '@/components/ui/dropdown-menu'
+    77→import { Label } from '@/components/ui/label'
+    78→import { Textarea } from '@/components/ui/textarea'
+    79→import { cn } from '@/lib/utils'
+    80→import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
+    81→import { notifyTaskComplete } from '@/lib/notifications'
+    82→import { toast } from 'sonner'
+    83→import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
+    84→import { ar } from 'date-fns/locale'
+    85→
+    86→/* ────────────── Types ────────────── */
+    87→
+    88→interface SubTask {
+    89→  id: string
+    90→  title: string
+    91→  completed: boolean
+    92→}
+    93→
+    94→interface Task {
+    95→  id: string
+    96→  title: string
+    97→  description?: string | null
+    98→  status: string
+    99→  priority: string
+   100→  label?: string | null
+   101→  projectId?: string | null
+   102→  project?: { name: string; color: string } | null
+   103→  dueDate?: string | null
+   104→  xpReward: number
+   105→  completedAt?: string | null
+   106→  subtasks: SubTask[]
+   107→  order: number
+   108→  dependsOn?: string | null
+   109→}
+   110→
+   111→interface Project {
+   112→  id: string
+   113→  name: string
+   114→  color: string
+   115→}
+   116→
+   117→type ViewType = 'list' | 'board' | 'calendar'
+   118→
+   119→const STATUSES = ['todo', 'in_progress', 'done'] as const
+   120→
+   121→/* ────────────── Animation Variants ────────────── */
+   122→
+   123→const containerVariants = {
+   124→  hidden: { opacity: 0 },
+   125→  visible: {
+   126→    opacity: 1,
+   127→    transition: { staggerChildren: 0.04 },
+   128→  },
+   129→}
+   130→
+   131→const itemVariants = {
+   132→  hidden: { opacity: 0, y: 12, scale: 0.98 },
+   133→  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] as const } },
+   134→  exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
+   135→}
+   136→
+   137→const cardHover = { scale: 1.01, transition: { type: 'spring' as const, stiffness: 400, damping: 25 } }
+   138→
+   139→/* Priority left border colors */
+   140→const priorityBorderColors: Record<string, string> = {
+   141→  urgent: 'border-r-red-500',
+   142→  high: 'border-r-orange-500',
+   143→  medium: 'border-r-gold',
+   144→  low: 'border-r-blue-500',
+   145→}
+   146→
+   147→/* Animated Counter Component */
+   148→function AnimatedCounter({ target, className }: { target: number; className?: string }) {
+   149→  const [count, setCount] = useState(0)
+   150→  const rafRef = useRef<number>(0)
+   151→  const startTimeRef = useRef<number>(0)
+   152→
+   153→  useEffect(() => {
+   154→    startTimeRef.current = Date.now()
+   155→    if (target === 0) {
+   156→      const id = requestAnimationFrame(() => setCount(0))
+   157→      return () => cancelAnimationFrame(id)
+   158→    }
+   159→    const animate = () => {
+   160→      const elapsed = Date.now() - startTimeRef.current
+   161→      const progress = Math.min(elapsed / 800, 1)
+   162→      const eased = 1 - Math.pow(1 - progress, 3)
+   163→      setCount(Math.round(eased * target))
+   164→      if (progress < 1) rafRef.current = requestAnimationFrame(animate)
+   165→    }
+   166→    rafRef.current = requestAnimationFrame(animate)
+   167→    return () => cancelAnimationFrame(rafRef.current)
+   168→  }, [target])
+   169→
+   170→  return (
+   171→    <motion.span
+   172→      key={count}
+   173→      initial={{ y: -4, opacity: 0 }}
+   174→      animate={{ y: 0, opacity: 1 }}
+   175→      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+   176→      className={className}
+   177→    >
+   178→      {count}
+   179→    </motion.span>
+   180→  )
+   181→}
+   182→
+   183→/* ────────────── Priority Dot ────────────── */
+   184→
+   185→const priorityDotColors: Record<string, string> = {
+   186→  urgent: 'bg-red-500',
+   187→  high: 'bg-orange-500',
+   188→  medium: 'bg-gold',
+   189→  low: 'bg-blue-500',
+   190→}
+   191→
+   192→/* ────────────── Component ────────────── */
+   193→
+   194→export function Tasks() {
+   195→  const [tasks, setTasks] = useState<Task[]>([])
+   196→  const [projects, setProjects] = useState<Project[]>([])
+   197→  const [loading, setLoading] = useState(true)
+   198→  const [view, setView] = useState<ViewType>('list')
+   199→  const [addOpen, setAddOpen] = useState(false)
+   200→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   201→  const [searchQuery, setSearchQuery] = useState('')
+   202→
+   203→  // Filters
+   204→  const [filterPriority, setFilterPriority] = useState<string>('all')
+   205→  const [filterProject, setFilterProject] = useState<string>('all')
+   206→  const [filterStatus, setFilterStatus] = useState<string>('all')
+   207→
+   208→  // Add task form
+   209→  const [formTitle, setFormTitle] = useState('')
+   210→  const [formDesc, setFormDesc] = useState('')
+   211→  const [formPriority, setFormPriority] = useState('medium')
+   212→  const [formProject, setFormProject] = useState<string>('none')
+   213→  const [formDueDate, setFormDueDate] = useState('')
+   214→  const [formDependsOn, setFormDependsOn] = useState<string[]>([])
+   215→  const [submitting, setSubmitting] = useState(false)
+   216→
+   217→  // Calendar state
+   218→  const [calendarMonth, setCalendarMonth] = useState(new Date())
+   219→
+   220→  const fetchData = useCallback(async () => {
+   221→    try {
+   222→      const res = await fetch('/api/rise/tasks')
+   223→      const data = await res.json()
+   224→      setTasks(data.tasks || [])
+   225→      setProjects(data.projects || [])
+   226→    } catch {
+   227→      /* ignore */
+   228→    } finally {
+   229→      setLoading(false)
+   230→    }
+   231→  }, [])
+   232→
+   233→  useEffect(() => {
+   234→    fetchData()
+   235→  }, [fetchData])
+   236→
+   237→  /* ── Filtering ── */
+   238→  const isTaskBlocked = useCallback((task: Task): boolean => {
+   239→    if (!task.dependsOn) return false
+   240→    const deps = task.dependsOn.split(',').filter(Boolean)
+   241→    return deps.some((depId) => {
+   242→      const depTask = tasks.find((t) => t.id === depId)
+   243→      return depTask && depTask.status !== 'done'
+   244→    })
+   245→  }, [tasks])
+   246→
+   247→  const filteredTasks = useMemo(() => {
+   248→    return tasks.filter((t) => {
+   249→      if (filterPriority !== 'all' && t.priority !== filterPriority) return false
+   250→      if (filterProject !== 'all' && t.projectId !== filterProject) return false
+   251→      if (filterStatus !== 'all' && t.status !== filterStatus) return false
+   252→      if (filterStatus === 'blocked' && !isTaskBlocked(t)) return false
+   253→      if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
+   254→      return true
+   255→    })
+   256→  }, [tasks, filterPriority, filterProject, filterStatus, filterStatus, searchQuery, isTaskBlocked])
+   257→
+   258→  const groupedTasks = useMemo(() => {
+   259→    const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
+   260→    for (const t of filteredTasks) {
+   261→      if (groups[t.status]) groups[t.status].push(t)
+   262→    }
+   263→    return groups
+   264→  }, [filteredTasks])
+   265→
+   266→  /* ── Mutations ── */
+   267→  const toggleTask = async (task: Task) => {
+   268→    const isDone = task.status === 'done'
+   269→    const newStatus = isDone ? 'todo' : 'done'
+   270→    const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
+   271→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   272→    try {
+   273→      await fetch('/api/rise/tasks', {
+   274→        method: 'PUT',
+   275→        headers: { 'Content-Type': 'application/json' },
+   276→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   277→      })
+   278→      if (!isDone) {
+   279→        notifyTaskComplete(task.title, task.xpReward)
+   280→        fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+   281→        // Check if completing this task unblocks dependent tasks
+   282→        checkUnblockedTasks(task.id)
+   283→      }
+   284→    } catch {
+   285→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   286→    }
+   287→  }
+   288→
+   289→  const moveTask = async (task: Task, newStatus: string) => {
+   290→    const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
+   291→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   292→    try {
+   293→      await fetch('/api/rise/tasks', {
+   294→        method: 'PUT',
+   295→        headers: { 'Content-Type': 'application/json' },
+   296→        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
+   297→      })
+   298→      if (newStatus === 'done') {
+   299→        fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+   300→        // Check if completing this task unblocks dependent tasks
+   301→        checkUnblockedTasks(task.id)
+   302→      }
+   303→    } catch {
+   304→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   305→    }
+   306→  }
+   307→
+   308→  const deleteTask = async (taskId: string) => {
+   309→    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+   310→    try {
+   311→      await fetch(`/api/rise/tasks?id=${taskId}`, { method: 'DELETE' })
+   312→    } catch {
+   313→      fetchData()
+   314→    }
+   315→  }
+   316→
+   317→  const toggleSubtask = async (task: Task, subtaskId: string, completed: boolean) => {
+   318→    const optimistic = {
+   319→      ...task,
+   320→      subtasks: task.subtasks.map((s) => (s.id === subtaskId ? { ...s, completed: !completed } : s)),
+   321→    }
+   322→    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+   323→    try {
+   324→      await fetch('/api/rise/tasks', {
+   325→        method: 'PUT',
+   326→        headers: { 'Content-Type': 'application/json' },
+   327→        body: JSON.stringify({
+   328→          id: task.id,
+   329→          subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
+   330→        }),
+   331→      })
+   332→    } catch {
+   333→      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+   334→    }
+   335→  }
+   336→
+   337→  const createTask = async () => {
+   338→    if (!formTitle.trim()) return
+   339→    setSubmitting(true)
+   340→    try {
+   341→      const body: Record<string, unknown> = {
+   342→        title: formTitle.trim(),
+   343→        description: formDesc.trim() || null,
+   344→        priority: formPriority,
+   345→        dueDate: formDueDate || null,
+   346→      }
+   347→      if (formProject !== 'none') body.projectId = formProject
+   348→      if (formDependsOn.length > 0) body.dependsOn = formDependsOn.join(',')
+   349→      await fetch('/api/rise/tasks', {
+   350→        method: 'POST',
+   351→        headers: { 'Content-Type': 'application/json' },
+   352→        body: JSON.stringify(body),
+   353→      })
+   354→      setFormTitle('')
+   355→      setFormDesc('')
+   356→      setFormPriority('medium')
+   357→      setFormProject('none')
+   358→      setFormDueDate('')
+   359→      setFormDependsOn([])
+   360→      setAddOpen(false)
+   361→      fetchData()
+   362→    } catch {
+   363→      /* ignore */
+   364→    } finally {
+   365→      setSubmitting(false)
+   366→    }
+   367→  }
+   368→
+   369→  /* ── Check unblocked tasks ── */
+   370→  const checkUnblockedTasks = (completedTaskId: string) => {
+   371→    const unblocked = tasks.filter((t) => {
+   372→      if (!t.dependsOn || t.status === 'done') return false
+   373→      const deps = t.dependsOn.split(',').filter(Boolean)
+   374→      // This task was blocked by the completed task
+   375→      if (!deps.includes(completedTaskId)) return false
+   376→      // Now check if ALL dependencies are done
+   377→      const allDepsDone = deps.every((depId) => {
+   378→        const dep = tasks.find((tt) => tt.id === depId)
+   379→        return dep && dep.status === 'done'
+   380→      })
+   381→      return allDepsDone
+   382→    })
+   383→    if (unblocked.length > 0) {
+   384→      toast.success('🔓 تم فتح مهام محظورة', {
+   385→        description: unblocked.map((t) => t.title).join('، '),
+   386→        duration: 4000,
+   387→      })
+   388→    }
+   389→  }
+   390→
+   391→  /* ── Calendar helpers ── */
+   392→  const calendarDays = useMemo(() => {
+   393→    const monthStart = startOfMonth(calendarMonth)
+   394→    const monthEnd = endOfMonth(calendarMonth)
+   395→    const start = startOfWeek(monthStart, { weekStartsOn: 6 })
+   396→    const end = startOfWeek(monthEnd, { weekStartsOn: 6 })
+   397→    // Go to end of that week
+   398→    const finalEnd = addDays(end, 6)
+   399→    return eachDayOfInterval({ start, end })
+   400→  }, [calendarMonth])
+   401→
+   402→  const getTasksForDate = (date: Date) => {
+   403→    const dateStr = format(date, 'yyyy-MM-dd')
+   404→    return filteredTasks.filter((t) => t.dueDate === dateStr && t.status !== 'done')
+   405→  }
+   406→
+   407→  const weekDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
+   408→
+   409→  /* ── Status column config ── */
+   410→  const statusColumns = [
+   411→    { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-blue-500', bg: 'bg-blue-500/5' },
+   412→    { key: 'in_progress', label: 'قيد التنفيذ', icon: Clock, color: 'text-gold', bg: 'bg-gold/5' },
+   413→    { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/5' },
+   414→  ]
+   415→
+   416→  /* ── Drag & Drop state ── */
+   417→  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+   418→  const dragSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+   419→
+   420→  const handleDragStart = useCallback((event: DragStartEvent) => {
+   421→    setActiveDragId(String(event.active.id))
+   422→  }, [])
+   423→
+   424→  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+   425→    setActiveDragId(null)
+   426→    const { active, over } = event
+   427→    if (!over || active.id === over.id) return
+   428→
+   429→    const activeTask = tasks.find((t) => t.id === String(active.id))
+   430→    if (!activeTask) return
+   431→
+   432→    // Find tasks with same status
+   433→    const statusTasks = tasks.filter((t) => t.status === activeTask.status)
+   434→    const oldIndex = statusTasks.findIndex((t) => t.id === activeTask.id)
+   435→    const newIndex = statusTasks.findIndex((t) => t.id === String(over.id))
+   436→    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+   437→
+   438→    // Reorder within status group
+   439→    const reordered = arrayMove(statusTasks, oldIndex, newIndex)
+   440→    const updates = reordered.map((t, i) => ({ id: t.id, order: i }))
+   441→
+   442→    // Optimistic update
+   443→    setTasks((prev) => {
+   444→      const newTasks = prev.map((t) => {
+   445→        if (t.status !== activeTask.status) return t
+   446→        const idx = updates.findIndex((u) => u.id === t.id)
+   447→        if (idx === -1) return t
+   448→        return { ...t, order: updates[idx].order }
+   449→      })
+   450→      return newTasks.sort((a, b) => a.order - b.order)
+   451→    })
+   452→
+   453→    try {
+   454→      await Promise.all(updates.map((u) =>
+   455→        fetch('/api/rise/tasks', {
+   456→          method: 'PUT',
+   457→          headers: { 'Content-Type': 'application/json' },
+   458→          body: JSON.stringify(u),
+   459→        })
+   460→      ))
+   461→    } catch { fetchData() }
+   462→  }, [tasks, fetchData])
+   463→
+   464→  const activeDragTask = activeDragId ? tasks.find((t) => t.id === activeDragId) : null
+   465→
+   466→  /* ────────────── Render: Task Item (List) ────────────── */
+   467→  const renderTaskItem = (task: Task, index: number) => {
+   468→    const isExpanded = expandedId === task.id
+   469→    const isDone = task.status === 'done'
+   470→    const completedSubs = task.subtasks.filter((s) => s.completed).length
+   471→    const blocked = isTaskBlocked(task)
+   472→    const depNames = task.dependsOn
+   473→      ? task.dependsOn.split(',').filter(Boolean).map((id) => tasks.find((t) => t.id === id)?.title).filter(Boolean)
+   474→      : []
+   475→
+   476→    return (
+   477→      <motion.div
+   478→        key={task.id}
+   479→        variants={itemVariants}
+   480→        layout
+   481→        className="group"
+   482→      >
+   483→        <motion.div
+   484→          className={cn(
+   485→            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300',
+   486→            'hover:shadow-lg hover:shadow-emerald-accent/8',
+   487→            priorityBorderColors[task.priority] || 'border-r-border',
+   488→            isDone && 'opacity-60',
+   489→            blocked && !isDone && 'opacity-60'
+   490→          )}
+   491→          whileHover={{ scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+   492→        >
+   493→          <div className="flex items-start gap-3">
+   494→            {/* Drag Handle */}
+   495→            <div
+   496→              className="pt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+   497→              aria-label="اسحب لإعادة الترتيب"
+   498→            >
+   499→              <GripVertical className="w-4 h-4" />
+   500→            </div>
+   501→
+   502→            {/* Checkbox */}
+   503→            <div className="pt-0.5">
+   504→              <motion.div
+   505→                whileTap={{ scale: 0.8 }}
+   506→                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+   507→              >
+   508→                {blocked && !isDone ? (
+   509→                  <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+   510→                    <Lock className="w-3 h-3 text-muted-foreground/50" />
+   511→                  </div>
+   512→                ) : (
+   513→                  <Checkbox
+   514→                    checked={isDone}
+   515→                    onCheckedChange={() => toggleTask(task)}
+   516→                    disabled={blocked && !isDone}
+   517→                    className={cn(
+   518→                      'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+   519→                    )}
+   520→                  />
+   521→                )}
+   522→              </motion.div>
+   523→            </div>
+   524→
+   525→            {/* Content */}
+   526→            <div className="flex-1 min-w-0">
+   527→              <div className="flex items-center gap-2 flex-wrap">
+   528→                <button
+   529→                  onClick={() => setExpandedId(isExpanded ? null : task.id)}
+   530→                  className={cn(
+   531→                    'text-sm font-semibold text-right transition-colors',
+   532→                    isDone ? 'line-through text-muted-foreground' : 'text-foreground'
+   533→                  )}
+   534→                >
+   535→                  {task.title}
+   536→                </button>
+   537→
+   538→                {/* Priority badge */}
+   539→                <Badge
+   540→                  variant="secondary"
+   541→                  className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   542→                >
+   543→                  <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+   544→                  {priorityLabels[task.priority]}
+   545→                </Badge>
+   546→
+   547→                {/* Project dot */}
+   548→                {task.project && (
+   549→                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   550→                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+   551→                    {task.project.name}
+   552→                  </span>
+   553→                )}
+   554→
+   555→                {/* XP */}
+   556→                {task.xpReward > 0 && (
+   557→                  <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
+   558→                    <Zap className="w-3 h-3" />
+   559→                    {task.xpReward}
+   560→                  </span>
+   561→                )}
+   562→
+   563→                {/* Blocked badge */}
+   564→                {blocked && !isDone && (
+   565→                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium rounded-full bg-muted text-muted-foreground">
+   566→                    <Lock className="w-3 h-3 ml-1" />
+   567→                    محظورة
+   568→                  </Badge>
+   569→                )}
+   570→
+   571→                {/* Dependency chain badge */}
+   572→                {depNames.length > 0 && !blocked && !isDone && (
+   573→                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium rounded-full bg-gold/10 text-gold">
+   574→                    <Link2 className="w-3 h-3 ml-1" />
+   575→                    {depNames.length} تبعية
+   576→                  </Badge>
+   577→                )}
+   578→              </div>
+   579→
+   580→              {/* Meta row */}
+   581→              <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+   582→                {task.dueDate && (
+   583→                  <span className="flex items-center gap-1">
+   584→                    <CalendarClock className="w-3 h-3" />
+   585→                    {formatDateShort(task.dueDate)}
+   586→                  </span>
+   587→                )}
+   588→                {task.subtasks.length > 0 && (
+   589→                  <span className="flex items-center gap-1">
+   590→                    <CheckCircle2 className="w-3 h-3" />
+   591→                    {completedSubs}/{task.subtasks.length}
+   592→                  </span>
+   593→                )}
+   594→              </div>
+   595→
+   596→              {/* Expanded content */}
+   597→              <AnimatePresence>
+   598→                {isExpanded && (
+   599→                  <motion.div
+   600→                    initial={{ height: 0, opacity: 0 }}
+   601→                    animate={{ height: 'auto', opacity: 1 }}
+   602→                    exit={{ height: 0, opacity: 0 }}
+   603→                    transition={{ duration: 0.2 }}
+   604→                    className="overflow-hidden"
+   605→                  >
+   606→                    {task.description && (
+   607→                      <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{task.description}</p>
+   608→                    )}
+   609→                    {/* Dependency info */}
+   610→                    {depNames.length > 0 && (
+   611→                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+   612→                        <Link2 className="w-3 h-3" />
+   613→                        <span>يعتمد على: {depNames.join('، ')}</span>
+   614→                      </div>
+   615→                    )}
+   616→                    {task.subtasks.length > 0 && (
+   617→                      <div className="mt-3 space-y-1.5">
+   618→                        {task.subtasks.map((sub) => (
+   619→                          <label key={sub.id} className="flex items-center gap-2 cursor-pointer group/sub">
+   620→                            <Checkbox
+   621→                              checked={sub.completed}
+   622→                              onCheckedChange={() => toggleSubtask(task, sub.id, sub.completed)}
+   623→                              className="w-4 h-4 rounded-md data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   624→                            />
+   625→                            <span
+   626→                              className={cn(
+   627→                                'text-xs transition-colors',
+   628→                                sub.completed ? 'line-through text-muted-foreground' : 'text-foreground/80'
+   629→                              )}
+   630→                            >
+   631→                              {sub.title}
+   632→                            </span>
+   633→                          </label>
+   634→                        ))}
+   635→                      </div>
+   636→                    )}
+   637→                  </motion.div>
+   638→                )}
+   639→              </AnimatePresence>
+   640→            </div>
+   641→
+   642→            {/* Actions */}
+   643→            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   644→              <button
+   645→                onClick={() => setExpandedId(isExpanded ? null : task.id)}
+   646→                className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
+   647→              >
+   648→                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+   649→              </button>
+   650→              <DropdownMenu>
+   651→                <DropdownMenuTrigger asChild>
+   652→                  <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+   653→                    <MoreHorizontal className="w-4 h-4" />
+   654→                  </button>
+   655→                </DropdownMenuTrigger>
+   656→                <DropdownMenuContent align="end">
+   657→                  <DropdownMenuItem
+   658→                    onClick={() => {
+   659→                      const nextIdx = (STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length
+   660→                      moveTask(task, STATUSES[nextIdx])
+   661→                    }}
+   662→                  >
+   663→                    نقل إلى: {statusLabels[STATUSES[(STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length]]}
+   664→                  </DropdownMenuItem>
+   665→                  <DropdownMenuSeparator />
+   666→                  <DropdownMenuItem
+   667→                    onClick={() => deleteTask(task.id)}
+   668→                    className="text-red-500 focus:text-red-500"
+   669→                  >
+   670→                    <Trash2 className="w-4 h-4 ml-2" />
+   671→                    حذف
+   672→                  </DropdownMenuItem>
+   673→                </DropdownMenuContent>
+   674→              </DropdownMenu>
+   675→            </div>
+   676→          </div>
+   677→        </motion.div>
+   678→      </motion.div>
+   679→    )
+   680→  }
+   681→
+   682→  /* ────────────── Render: Board Card ────────────── */
+   683→  const boardColBorderColors: Record<string, string> = {
+   684→    todo: 'border-t-blue-500',
+   685→    in_progress: 'border-t-emerald-accent',
+   686→    done: 'border-t-gold',
+   687→  }
+   688→  const boardColGradientBorders: Record<string, string> = {
+   689→    todo: 'linear-gradient(135deg, oklch(0.55 0.22 260), oklch(0.60 0.18 250))',
+   690→    in_progress: 'linear-gradient(135deg, oklch(0.65 0.17 163), oklch(0.55 0.14 163))',
+   691→    done: 'linear-gradient(135deg, oklch(0.78 0.12 85), oklch(0.88 0.06 85))',
+   692→  }
+   693→  const boardColHeaderBg: Record<string, string> = {
+   694→    todo: 'bg-blue-500/8',
+   695→    in_progress: 'bg-emerald-accent/8',
+   696→    done: 'bg-gold/8',
+   697→  }
+   698→  const renderBoardCard = (task: Task) => {
+   699→    const isDone = task.status === 'done'
+   700→    const completedSubs = task.subtasks.filter((s) => s.completed).length
+   701→
+   702→    return (
+   703→      <motion.div
+   704→        key={task.id}
+   705→        variants={itemVariants}
+   706→        layout
+   707→        whileHover={cardHover}
+   708→      >
+   709→        <motion.div
+   710→          className={cn(
+   711→            'glass rounded-2xl p-4 border-r-4 transition-all duration-300 cursor-pointer',
+   712→            'hover:shadow-lg hover:shadow-emerald-accent/8',
+   713→            priorityBorderColors[task.priority] || 'border-r-border',
+   714→            isDone && 'opacity-60',
+   715→            task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-500/[0.03]' : '',
+   716→            task.priority === 'medium' ? 'bg-gold/[0.03]' : '',
+   717→            task.priority === 'low' ? 'bg-emerald-accent/[0.03]' : '',
+   718→          )}
+   719→          whileHover={{ scale: 1.02, y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+   720→          onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
+   721→        >
+   722→          <div className="flex items-start justify-between gap-2 mb-2">
+   723→            <Badge
+   724→              variant="secondary"
+   725→              className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+   726→            >
+   727→              <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+   728→              {priorityLabels[task.priority]}
+   729→            </Badge>
+   730→            <DropdownMenu>
+   731→              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+   732→                <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+   733→                  <MoreHorizontal className="w-3.5 h-3.5" />
+   734→                </button>
+   735→              </DropdownMenuTrigger>
+   736→              <DropdownMenuContent align="end">
+   737→                {statusColumns
+   738→                  .filter((c) => c.key !== task.status)
+   739→                  .map((col) => (
+   740→                    <DropdownMenuItem key={col.key} onClick={() => moveTask(task, col.key)}>
+   741→                      نقل إلى: {col.label}
+   742→                    </DropdownMenuItem>
+   743→                  ))}
+   744→                <DropdownMenuSeparator />
+   745→                <DropdownMenuItem
+   746→                  onClick={() => deleteTask(task.id)}
+   747→                  className="text-red-500 focus:text-red-500"
+   748→                >
+   749→                  <Trash2 className="w-4 h-4 ml-2" />
+   750→                  حذف
+   751→                </DropdownMenuItem>
+   752→              </DropdownMenuContent>
+   753→            </DropdownMenu>
+   754→          </div>
+   755→
+   756→          <p className={cn('text-sm font-semibold text-right', isDone && 'line-through text-muted-foreground')}>
+   757→            {task.title}
+   758→          </p>
+   759→
+   760→          {task.description && (
+   761→            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
+   762→          )}
+   763→
+   764→          <div className="flex items-center gap-2 mt-3 flex-wrap">
+   765→            {task.project && (
+   766→              <span className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5">
+   767→                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+   768→                {task.project.name}
+   769→              </span>
+   770→            )}
+   771→            {task.dueDate && (
+   772→              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+   773→                <CalendarClock className="w-3 h-3" />
+   774→                {formatDateShort(task.dueDate)}
+   775→              </span>
+   776→            )}
+   777→          </div>
+   778→
+   779→          {/* Subtask progress bar */}
+   780→          {task.subtasks.length > 0 && (
+   781→            <div className="mt-3">
+   782→              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+   783→                <span>المهام الفرعية</span>
+   784→                <span>{completedSubs}/{task.subtasks.length}</span>
+   785→              </div>
+   786→              <div className="h-1 rounded-full bg-muted overflow-hidden">
+   787→                <motion.div
+   788→                  className="h-full rounded-full bg-emerald-accent"
+   789→                  initial={false}
+   790→                  animate={{ width: `${task.subtasks.length > 0 ? (completedSubs / task.subtasks.length) * 100 : 0}%` }}
+   791→                  transition={{ duration: 0.3 }}
+   792→                />
+   793→              </div>
+   794→            </div>
+   795→          )}
+   796→
+   797→          {/* XP */}
+   798→          <div className="flex items-center justify-between mt-3">
+   799→            <span className="flex items-center gap-0.5 text-[11px] text-gold font-medium">
+   800→              <Zap className="w-3 h-3" />
+   801→              {task.xpReward} خبرة
+   802→            </span>
+   803→            <Checkbox
+   804→              checked={isDone}
+   805→              onCheckedChange={() => {
+   806→                toggleTask(task)
+   807→              }}
+   808→              className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+   809→            />
+   810→          </div>
+   811→        </motion.div>
+   812→      </motion.div>
+   813→    )
+   814→  }
+   815→
+   816→  /* ────────────── Render: Loading ────────────── */
+   817→  if (loading) {
+   818→    return (
+   819→      <div className="space-y-4">
+   820→        <div className="flex items-center gap-3">
+   821→          <Skeleton className="h-10 w-64 rounded-xl" />
+   822→          <Skeleton className="h-10 w-10 rounded-xl" />
+   823→        </div>
+   824→        <div className="flex gap-2">
+   825→          <Skeleton className="h-8 w-20 rounded-lg" />
+   826→          <Skeleton className="h-8 w-20 rounded-lg" />
+   827→          <Skeleton className="h-8 w-20 rounded-lg" />
+   828→        </div>
+   829→        <div className="space-y-3">
+   830→          {Array.from({ length: 5 }).map((_, i) => (
+   831→            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+   832→          ))}
+   833→        </div>
+   834→      </div>
+   835→    )
+   836→  }
+   837→
+   838→  /* ────────────── Render: Main ────────────── */
+   839→  if (filteredTasks.length === 0 && !loading) {
+   840→    return (
+   841→      <motion.div
+   842→        initial={{ opacity: 0, y: 20 }}
+   843→        animate={{ opacity: 1, y: 0 }}
+   844→        className="flex flex-col items-center justify-center py-16 text-center"
+   845→      >
+   846→        <div className="relative mb-6">
+   847→          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-accent/15 to-forest/10 flex items-center justify-center">
+   848→            <Inbox className="w-10 h-10 text-emerald-accent/50" />
+   849→          </div>
+   850→          <motion.div
+   851→            className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-gold/20 flex items-center justify-center"
+   852→            animate={{ y: [0, -5, 0] }}
+   853→            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+   854→          >
+   855→            <Sparkles className="w-3.5 h-3.5 text-gold" />
+   856→          </motion.div>
+   857→        </div>
+   858→        <h3 className="text-lg font-bold text-foreground mb-2">لا توجد مهام بعد</h3>
+   859→        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+   860→          ابدأ بإضافة مهمتك الأولى ونظّم يومك بشكل أفضل. كل مهمة تُنجزها تقربك من أهدافك!
+   861→        </p>
+   862→        <Button
+   863→          onClick={() => setAddOpen(true)}
+   864→          className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+   865→        >
+   866→          <Plus className="w-4 h-4 ml-1.5" />
+   867→          أضف أول مهمة
+   868→        </Button>
+   869→      </motion.div>
+   870→    )
+   871→  }
+   872→
+   873→  return (
+   874→    <div className="space-y-5">
+   875→      {/* Header bar */}
+   876→      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   877→        {/* Search */}
+   878→        <div className="relative flex-1 w-full sm:max-w-xs">
+   879→          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   880→          <Input
+   881→            placeholder="ابحث في المهام..."
+   882→            value={searchQuery}
+   883→            onChange={(e) => setSearchQuery(e.target.value)}
+   884→            className="pr-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
+   885→          />
+   886→        </div>
+   887→
+   888→        <div className="flex items-center gap-2">
+   889→          {/* Filters */}
+   890→          <DropdownMenu>
+   891→            <DropdownMenuTrigger asChild>
+   892→              <Button variant="outline" size="sm" className="h-10 rounded-xl gap-1.5 text-xs font-medium">
+   893→                <Filter className="w-3.5 h-3.5" />
+   894→                تصفية
+   895→              </Button>
+   896→            </DropdownMenuTrigger>
+   897→            <DropdownMenuContent align="end" className="w-56">
+   898→              <div className="p-2 space-y-3">
+   899→                <div>
+   900→                  <Label className="text-[11px] text-muted-foreground mb-1 block">الأولوية</Label>
+   901→                  <Select value={filterPriority} onValueChange={setFilterPriority}>
+   902→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   903→                      <SelectValue />
+   904→                    </SelectTrigger>
+   905→                    <SelectContent>
+   906→                      <SelectItem value="all">الكل</SelectItem>
+   907→                      <SelectItem value="urgent">عاجل</SelectItem>
+   908→                      <SelectItem value="high">مرتفع</SelectItem>
+   909→                      <SelectItem value="medium">متوسط</SelectItem>
+   910→                      <SelectItem value="low">منخفض</SelectItem>
+   911→                    </SelectContent>
+   912→                  </Select>
+   913→                </div>
+   914→                <div>
+   915→                  <Label className="text-[11px] text-muted-foreground mb-1 block">المشروع</Label>
+   916→                  <Select value={filterProject} onValueChange={setFilterProject}>
+   917→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   918→                      <SelectValue />
+   919→                    </SelectTrigger>
+   920→                    <SelectContent>
+   921→                      <SelectItem value="all">الكل</SelectItem>
+   922→                      {projects.map((p) => (
+   923→                        <SelectItem key={p.id} value={p.id}>
+   924→                          <span className="flex items-center gap-2">
+   925→                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+   926→                            {p.name}
+   927→                          </span>
+   928→                        </SelectItem>
+   929→                      ))}
+   930→                    </SelectContent>
+   931→                  </Select>
+   932→                </div>
+   933→                <div>
+   934→                  <Label className="text-[11px] text-muted-foreground mb-1 block">الحالة</Label>
+   935→                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+   936→                    <SelectTrigger className="h-8 text-xs rounded-lg">
+   937→                      <SelectValue />
+   938→                    </SelectTrigger>
+   939→                    <SelectContent>
+   940→                      <SelectItem value="all">الكل</SelectItem>
+   941→                      <SelectItem value="todo">للتنفيذ</SelectItem>
+   942→                      <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+   943→                      <SelectItem value="done">مكتمل</SelectItem>
+   944→                    </SelectContent>
+   945→                  </Select>
+   946→                </div>
+   947→              </div>
+   948→            </DropdownMenuContent>
+   949→          </DropdownMenu>
+   950→
+   951→          {/* View tabs */}
+   952→          <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
+   953→            <TabsList className="h-10 rounded-xl p-1">
+   954→              <TabsTrigger value="list" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   955→                <List className="w-3.5 h-3.5" />
+   956→                <span className="hidden sm:inline">قائمة</span>
+   957→              </TabsTrigger>
+   958→              <TabsTrigger value="board" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   959→                <LayoutGrid className="w-3.5 h-3.5" />
+   960→                <span className="hidden sm:inline">لوحة</span>
+   961→              </TabsTrigger>
+   962→              <TabsTrigger value="calendar" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+   963→                <CalendarDays className="w-3.5 h-3.5" />
+   964→                <span className="hidden sm:inline">تقويم</span>
+   965→              </TabsTrigger>
+   966→            </TabsList>
+   967→          </Tabs>
+   968→
+   969→          {/* Add task */}
+   970→          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+   971→            <DialogTrigger asChild>
+   972→              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20">
+   973→                <Plus className="w-4 h-4" />
+   974→                مهمة جديدة
+   975→              </Button>
+   976→            </DialogTrigger>
+   977→            <DialogContent className="sm:max-w-md backdrop-blur-xl" dir="rtl">
+   978→              <DialogHeader>
+   979→                <DialogTitle className="text-lg font-bold flex items-center gap-2">
+   980→                  <Sparkles className="w-5 h-5 text-gold" />
+   981→                  مهمة جديدة
+   982→                </DialogTitle>
+   983→              </DialogHeader>
+   984→              <div className="space-y-4 mt-2">
+   985→                <div>
+   986→                  <Label className="text-xs font-medium mb-1.5 block">العنوان</Label>
+   987→                  <Input
+   988→                    placeholder="ماذا تريد إنجازه؟"
+   989→                    value={formTitle}
+   990→                    onChange={(e) => setFormTitle(e.target.value)}
+   991→                    className="rounded-xl h-10 focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+   992→                    onKeyDown={(e) => e.key === 'Enter' && createTask()}
+   993→                  />
+   994→                </div>
+   995→                <div>
+   996→                  <Label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</Label>
+   997→                  <Textarea
+   998→                    placeholder="أضف تفاصيل..."
+   999→                    value={formDesc}
+  1000→                    onChange={(e) => setFormDesc(e.target.value)}
+  1001→                    className="rounded-xl min-h-[80px] text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+  1002→                  />
+  1003→                </div>
+  1004→                <div className="grid grid-cols-2 gap-3">
+  1005→                  <div>
+  1006→                    <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
+  1007→                    <Select value={formPriority} onValueChange={setFormPriority}>
+  1008→                      <SelectTrigger className="rounded-xl h-10 text-sm">
+  1009→                        <SelectValue />
+  1010→                      </SelectTrigger>
+  1011→                      <SelectContent>
+  1012→                        <SelectItem value="urgent">
+  1013→                          <span className="flex items-center gap-2">
+  1014→                            <span className="w-2 h-2 rounded-full bg-red-500" />
+  1015→                            عاجل
+  1016→                          </span>
+  1017→                        </SelectItem>
+  1018→                        <SelectItem value="high">
+  1019→                          <span className="flex items-center gap-2">
+  1020→                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+  1021→                            مرتفع
+  1022→                          </span>
+  1023→                        </SelectItem>
+  1024→                        <SelectItem value="medium">
+  1025→                          <span className="flex items-center gap-2">
+  1026→                            <span className="w-2 h-2 rounded-full bg-gold" />
+  1027→                            متوسط
+  1028→                          </span>
+  1029→                        </SelectItem>
+  1030→                        <SelectItem value="low">
+  1031→                          <span className="flex items-center gap-2">
+  1032→                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+  1033→                            منخفض
+  1034→                          </span>
+  1035→                        </SelectItem>
+  1036→                      </SelectContent>
+  1037→                    </Select>
+  1038→                  </div>
+  1039→                  <div>
+  1040→                    <Label className="text-xs font-medium mb-1.5 block">المشروع</Label>
+  1041→                    <Select value={formProject} onValueChange={setFormProject}>
+  1042→                      <SelectTrigger className="rounded-xl h-10 text-sm">
+  1043→                        <SelectValue />
+  1044→                      </SelectTrigger>
+  1045→                      <SelectContent>
+  1046→                        <SelectItem value="none">بدون مشروع</SelectItem>
+  1047→                        {projects.map((p) => (
+  1048→                          <SelectItem key={p.id} value={p.id}>
+  1049→                            <span className="flex items-center gap-2">
+  1050→                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+  1051→                              {p.name}
+  1052→                            </span>
+  1053→                          </SelectItem>
+  1054→                        ))}
+  1055→                      </SelectContent>
+  1056→                    </Select>
+  1057→                  </div>
+  1058→                </div>
+  1059→                <div>
+  1060→                  <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق (اختياري)</Label>
+  1061→                  <Input
+  1062→                    type="date"
+  1063→                    value={formDueDate}
+  1064→                    onChange={(e) => setFormDueDate(e.target.value)}
+  1065→                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+  1066→                  />
+  1067→                </div>
+  1068→                {/* Dependencies */}
+  1069→                {tasks.length > 0 && (
+  1070→                  <div>
+  1071→                    <Label className="text-xs font-medium mb-1.5 block flex items-center gap-1.5">
+  1072→                      <Link2 className="w-3.5 h-3.5" />
+  1073→                      يعتمد على (اختياري)
+  1074→                    </Label>
+  1075→                    <div className="space-y-1.5 max-h-32 overflow-y-auto rounded-xl border border-border/60 p-2">
+  1076→                      {tasks
+  1077→                        .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
+  1078→                        .map((t) => (
+  1079→                          <label key={t.id} className="flex items-center gap-2 cursor-pointer group/dep hover:bg-muted/40 rounded-lg px-2 py-1.5 transition-colors">
+  1080→                            <Checkbox
+  1081→                              checked={formDependsOn.includes(t.id)}
+  1082→                              onCheckedChange={(checked) => {
+  1083→                                if (checked) {
+  1084→                                  setFormDependsOn((prev) => [...prev, t.id])
+  1085→                                } else {
+  1086→                                  setFormDependsOn((prev) => prev.filter((id) => id !== t.id))
+  1087→                                }
+  1088→                              }}
+  1089→                              className="w-4 h-4 rounded-md data-[state=checked]:bg-gold data-[state=checked]:border-gold"
+  1090→                            />
+  1091→                            <span className="text-xs text-foreground truncate">{t.title}</span>
+  1092→                            <span className="text-[10px] text-muted-foreground mr-auto">
+  1093→                              {statusLabels[t.status] || t.status}
+  1094→                            </span>
+  1095→                          </label>
+  1096→                        ))}
+  1097→                    </div>
+  1098→                  </div>
+  1099→                )}
+  1100→              </div>
+  1101→              <DialogFooter className="gap-2 mt-4">
+  1102→                <DialogClose asChild>
+  1103→                  <Button variant="outline" className="rounded-xl text-sm">
+  1104→                    إلغاء
+  1105→                  </Button>
+  1106→                </DialogClose>
+  1107→                <Button
+  1108→                  onClick={createTask}
+  1109→                  disabled={!formTitle.trim() || submitting}
+  1110→                  className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+  1111→                >
+  1112→                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+  1113→                  إنشاء المهمة
+  1114→                </Button>
+  1115→              </DialogFooter>
+  1116→            </DialogContent>
+  1117→          </Dialog>
+  1118→        </div>
+  1119→      </div>
+  1120→
+  1121→      {/* Filter bar - glass card with rounded-full buttons */}
+  1122→      <motion.div
+  1123→        initial={{ opacity: 0, y: 8 }}
+  1124→        animate={{ opacity: 1, y: 0 }}
+  1125→        transition={{ delay: 0.1 }}
+  1126→        className="glass rounded-2xl p-2.5 flex flex-wrap items-center gap-1.5"
+  1127→      >
+  1128→        {['all', 'todo', 'in_progress', 'done', 'blocked'].map((status) => {
+  1129→          const isActive = filterStatus === status
+  1130→          const label = status === 'all' ? 'الكل' : status === 'todo' ? 'للتنفيذ' : status === 'in_progress' ? 'قيد التنفيذ' : status === 'blocked' ? 'محظورة' : 'مكتمل'
+  1131→          return (
+  1132→            <motion.button
+  1133→              key={status}
+  1134→              whileTap={{ scale: 0.95 }}
+  1135→              onClick={() => setFilterStatus(status)}
+  1136→              className={cn(
+  1137→                'px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+  1138→                isActive && status !== 'blocked'
+  1139→                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+  1140→                  : isActive && status === 'blocked'
+  1141→                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/25'
+  1142→                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+  1143→              )}
+  1144→            >
+  1145→              {status === 'blocked' && <Lock className="w-3 h-3 ml-1 inline" />}
+  1146→              {label}
+  1147→            </motion.button>
+  1148→          )
+  1149→        })}
+  1150→        <div className="w-px h-5 bg-border/60 mx-1" />
+  1151→        {['all', 'urgent', 'high', 'medium', 'low'].map((priority) => {
+  1152→          const isActive = filterPriority === priority
+  1153→          const label = priority === 'all' ? 'كل الأولويات' : priorityLabels[priority]
+  1154→          return (
+  1155→            <motion.button
+  1156→              key={priority}
+  1157→              whileTap={{ scale: 0.95 }}
+  1158→              onClick={() => setFilterPriority(priority)}
+  1159→              className={cn(
+  1160→                'px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
+  1161→                isActive
+  1162→                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+  1163→                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+  1164→              )}
+  1165→            >
+  1166→              {priority !== 'all' && (
+  1167→                <span className={cn('w-1.5 h-1.5 rounded-full inline-block ml-1', priorityDotColors[priority])} />
+  1168→              )}
+  1169→              {label}
+  1170→            </motion.button>
+  1171→          )
+  1172→        })}
+  1173→      </motion.div>
+  1174→
+  1175→      {/* Stats summary */}
+  1176→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+  1177→        {[
+  1178→          { label: 'الكل', count: tasks.length, color: 'text-foreground' },
+  1179→          { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-blue-500' },
+  1180→          { label: 'قيد التنفيذ', count: tasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
+  1181→          { label: 'مكتمل', count: tasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
+  1182→        ].map((s, i) => (
+  1183→          <motion.div
+  1184→            key={s.label}
+  1185→            initial={{ opacity: 0, y: 12 }}
+  1186→            animate={{ opacity: 1, y: 0 }}
+  1187→            transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+  1188→            className="glass rounded-2xl p-3.5 text-center"
+  1189→          >
+  1190→            <p className={cn('text-xl font-bold tabular-nums', s.color)}>
+  1191→              <AnimatedCounter target={s.count} className={cn('text-xl font-bold tabular-nums', s.color)} />
+  1192→            </p>
+  1193→            <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
+  1194→          </motion.div>
+  1195→        ))}
+  1196→      </div>
+  1197→
+  1198→      {/* ── List View (with Drag & Drop) ── */}
+  1199→      {view === 'list' && (
+  1200→        <DndContext
+  1201→          sensors={dragSensors}
+  1202→          collisionDetection={closestCenter}
+  1203→          onDragStart={handleDragStart}
+  1204→          onDragEnd={handleDragEnd}
+  1205→        >
+  1206→          <DragOverlay>
+  1207→            {activeDragTask ? (
+  1208→              <div className="glass rounded-2xl p-4 border-r-4 border-r-emerald-accent shadow-2xl shadow-emerald-accent/20 backdrop-blur-xl opacity-90 rotate-2 scale-105 max-w-md">
+  1209→                <div className="flex items-center gap-3">
+  1210→                  <GripVertical className="w-4 h-4 text-muted-foreground/50" />
+  1211→                  <span className="text-sm font-semibold text-foreground truncate">{activeDragTask.title}</span>
+  1212→                  <Badge className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[activeDragTask.priority])}>
+  1213→                    {priorityLabels[activeDragTask.priority]}
+  1214→                  </Badge>
+  1215→                </div>
+  1216→              </div>
+  1217→            ) : null}
+  1218→          </DragOverlay>
+  1219→          <motion.div
+  1220→            variants={containerVariants}
+  1221→            initial="hidden"
+  1222→            animate="visible"
+  1223→            className="space-y-2"
+  1224→          >
+  1225→            {STATUSES.map((status) => {
+  1226→              const col = statusColumns.find((c) => c.key === status)!
+  1227→              const statusTasks = groupedTasks[status]
+  1228→              return (
+  1229→                <div key={status}>
+  1230→                  <div className="flex items-center gap-2 mb-2 px-1">
+  1231→                    <col.icon className={cn('w-4 h-4', col.color)} />
+  1232→                    <span className="text-sm font-semibold">{col.label}</span>
+  1233→                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+  1234→                      {statusTasks.length}
+  1235→                    </Badge>
+  1236→                  </div>
+  1237→                  <AnimatePresence mode="popLayout">
+  1238→                    {statusTasks.length === 0 ? (
+  1239→                      <motion.div
+  1240→                        key="empty"
+  1241→                        initial={{ opacity: 0 }}
+  1242→                        animate={{ opacity: 1 }}
+  1243→                        className="glass rounded-2xl p-6 text-center text-sm text-muted-foreground"
+  1244→                      >
+  1245→                        لا توجد مهام
+  1246→                      </motion.div>
+  1247→                    ) : (
+  1248→                      <SortableContext items={statusTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+  1249→                        <div className="space-y-2">
+  1250→                          {statusTasks.map((task, idx) => renderTaskItem(task, idx))}
+  1251→                        </div>
+  1252→                      </SortableContext>
+  1253→                    )}
+  1254→                  </AnimatePresence>
+  1255→                </div>
+  1256→              )
+  1257→            })}
+  1258→          </motion.div>
+  1259→        </DndContext>
+  1260→      )}
+  1261→
+  1262→      {/* ── Board View ── */}
+  1263→      {view === 'board' && (
+  1264→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  1265→          {statusColumns.map((col) => {
+  1266→            const colTasks = groupedTasks[col.key]
+  1267→            return (
+  1268→              <motion.div
+  1269→                key={col.key}
+  1270→                initial={{ opacity: 0, y: 16 }}
+  1271→                animate={{ opacity: 1, y: 0 }}
+  1272→                transition={{ delay: statusColumns.indexOf(col) * 0.1 }}
+  1273→                className={cn('flex flex-col min-h-[200px] glass rounded-2xl overflow-hidden border-t-[3px]', boardColBorderColors[col.key])}
+  1274→              >
+  1275→                <div className={cn('flex items-center gap-2 mb-3 px-3 pt-3 pb-2', col.color, boardColHeaderBg[col.key])}>
+  1276→                  <col.icon className="w-4 h-4" />
+  1277→                  <span className="text-sm font-semibold">{col.label}</span>
+  1278→                  <Badge variant="secondary" className="text-[10px] h-5 min-w-[22px] px-1.5 rounded-full justify-center font-bold bg-background/50">
+  1279→                    {colTasks.length}
+  1280→                  </Badge>
+  1281→                </div>
+  1282→                <div className="flex-1 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+  1283→                  <AnimatePresence mode="popLayout">
+  1284→                    {colTasks.length === 0 ? (
+  1285→                      <motion.div
+  1286→                        key="empty"
+  1287→                        initial={{ opacity: 0 }}
+  1288→                        animate={{ opacity: 1 }}
+  1289→                        className="glass rounded-2xl p-8 text-center"
+  1290→                      >
+  1291→                        <Inbox className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+  1292→                        <p className="text-xs text-muted-foreground">لا توجد مهام</p>
+  1293→                      </motion.div>
+  1294→                    ) : (
+  1295→                      colTasks.map((task) => renderBoardCard(task))
+  1296→                    )}
+  1297→                  </AnimatePresence>
+  1298→                </div>
+  1299→              </motion.div>
+  1300→            )
+  1301→          })}
+  1302→        </div>
+  1303→      )}
+  1304→
+  1305→      {/* ── Calendar View ── */}
+  1306→      {view === 'calendar' && (
+  1307→        <motion.div
+  1308→          initial={{ opacity: 0, y: 12 }}
+  1309→          animate={{ opacity: 1, y: 0 }}
+  1310→        >
+  1311→          <Card className="glass overflow-hidden rounded-2xl border-0">
+  1312→            <CardHeader className="pb-2">
+  1313→              <div className="flex items-center justify-between">
+  1314→                <CardTitle className="text-base font-bold">
+  1315→                  {format(calendarMonth, 'MMMM yyyy', { locale: ar })}
+  1316→                </CardTitle>
+  1317→                <div className="flex items-center gap-1">
+  1318→                  <Button
+  1319→                    variant="ghost"
+  1320→                    size="icon"
+  1321→                    className="h-8 w-8 rounded-lg"
+  1322→                    onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+  1323→                  >
+  1324→                    <ChevronRight className="w-4 h-4" />
+  1325→                  </Button>
+  1326→                  <Button
+  1327→                    variant="ghost"
+  1328→                    size="sm"
+  1329→                    className="h-8 px-2 text-xs rounded-lg"
+  1330→                    onClick={() => setCalendarMonth(new Date())}
+  1331→                  >
+  1332→                    اليوم
+  1333→                  </Button>
+  1334→                  <Button
+  1335→                    variant="ghost"
+  1336→                    size="icon"
+  1337→                    className="h-8 w-8 rounded-lg"
+  1338→                    onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+  1339→                  >
+  1340→                    <ChevronLeft className="w-4 h-4" />
+  1341→                  </Button>
+  1342→                </div>
+  1343→              </div>
+  1344→            </CardHeader>
+  1345→            <CardContent>
+  1346→              {/* Week day headers */}
+  1347→              <div className="grid grid-cols-7 gap-1 mb-1">
+  1348→                {weekDays.map((d) => (
+  1349→                  <div key={d} className="text-center text-[11px] font-medium text-muted-foreground py-2">
+  1350→                    {d}
+  1351→                  </div>
+  1352→                ))}
+  1353→              </div>
+  1354→              {/* Calendar grid */}
+  1355→              <div className="grid grid-cols-7 gap-1">
+  1356→                {calendarDays.map((day, idx) => {
+  1357→                  const dayTasks = getTasksForDate(day)
+  1358→                  const isCurrentMonth = isSameMonth(day, calendarMonth)
+  1359→                  const isToday = isSameDay(day, new Date())
+  1360→                  const hasTasks = dayTasks.length > 0
+  1361→
+  1362→                  return (
+  1363→                    <motion.div
+  1364→                      key={idx}
+  1365→                      initial={false}
+  1366→                      className={cn(
+  1367→                        'min-h-[72px] sm:min-h-[88px] rounded-xl p-1.5 transition-colors',
+  1368→                        isCurrentMonth ? 'bg-background' : 'bg-muted/30',
+  1369→                        isToday && 'ring-2 ring-emerald-accent ring-offset-1 ring-offset-background',
+  1370→                        hasTasks && 'bg-emerald-accent/5'
+  1371→                      )}
+  1372→                    >
+  1373→                      <span
+  1374→                        className={cn(
+  1375→                          'text-[11px] font-medium block text-center',
+  1376→                          isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/40',
+  1377→                          isToday && 'text-emerald-accent font-bold'
+  1378→                        )}
+  1379→                      >
+  1380→                        {format(day, 'd')}
+  1381→                      </span>
+  1382→                      <div className="mt-0.5 space-y-0.5 max-h-[56px] sm:max-h-[64px] overflow-y-auto">
+  1383→                        {dayTasks.slice(0, 3).map((t) => (
+  1384→                          <div
+  1385→                            key={t.id}
+  1386→                            className={cn(
+  1387→                              'text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium',
+  1388→                              t.priority === 'urgent' && 'bg-red-500/10 text-red-600 dark:text-red-400',
+  1389→                              t.priority === 'high' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  1390→                              t.priority === 'medium' && 'bg-gold/10 text-yellow-700 dark:text-gold',
+  1391→                              t.priority === 'low' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+  1392→                            )}
+  1393→                          >
+  1394→                            {t.title}
+  1395→                          </div>
+  1396→                        ))}
+  1397→                        {dayTasks.length > 3 && (
+  1398→                          <p className="text-[9px] text-muted-foreground text-center">+{dayTasks.length - 3}</p>
+  1399→                        )}
+  1400→                      </div>
+  1401→                    </motion.div>
+  1402→                  )
+  1403→                })}
+  1404→              </div>
+  1405→            </CardContent>
+  1406→          </Card>
+  1407→        </motion.div>
+  1408→      )}
+  1409→
+  1410→      {/* Expanded task panel (mobile friendly overlay) */}
+  1411→      <AnimatePresence>
+  1412→        {expandedId && view === 'board' && (
+  1413→          <motion.div
+  1414→            initial={{ opacity: 0 }}
+  1415→            animate={{ opacity: 1 }}
+  1416→            exit={{ opacity: 0 }}
+  1417→            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 md:hidden"
+  1418→            onClick={() => setExpandedId(null)}
+  1419→          />
+  1420→        )}
+  1421→      </AnimatePresence>
+  1422→    </div>
+  1423→  )
+  1424→}
+  1425→
+  1426→export default Tasks

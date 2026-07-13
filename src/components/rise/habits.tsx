@@ -643,7 +643,7 @@ export function HabitsView() {
               <div className="relative flex items-center gap-3">
                 <motion.div
                   animate={{ scale: [1, 1.15, 1], rotate: [0, 8, -8, 0] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
                   className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg shrink-0"
                 >
                   <Trophy className="w-5 h-5 text-forest-dark" />
@@ -834,7 +834,7 @@ export function HabitsView() {
                           <div className="text-center mb-3">
                             <motion.div
                               animate={isCompleted ? { scale: [1, 1.2, 1] } : {}}
-                              transition={{ duration: 0.3 }}
+                              transition={{ type: 'tween', duration: 0.3 }}
                               className="text-3xl mb-1.5"
                             >
                               {habit.icon}
@@ -847,7 +847,7 @@ export function HabitsView() {
                             <div className="flex items-center justify-center gap-1 mb-3">
                               <motion.div
                                 animate={streak.current > 3 ? { scale: [1, 1.3, 1] } : {}}
-                                transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                                transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
                               >
                                 <Flame
                                   className="w-4 h-4"

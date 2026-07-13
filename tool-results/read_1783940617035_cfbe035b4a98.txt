@@ -1,0 +1,665 @@
+     1→'use client'
+     2→
+     3→import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+     4→import { useRiseStore } from '@/store/app-store'
+     5→import { Sidebar } from '@/components/rise/sidebar'
+     6→import LoginPage from '@/components/rise/login-page'
+     7→import { motion, AnimatePresence } from 'framer-motion'
+     8→import {
+     9→  CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target,
+    10→  LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
+    11→  Brain, GraduationCap, Heart, Wallet, Calendar as CalendarIcon, Network, BarChart3,
+    12→  Sparkles, Settings as SettingsIcon, Zap,
+    13→  HeartPulse, PenLine,
+    14→} from 'lucide-react'
+    15→import { useTheme } from 'next-themes'
+    16→import {
+    17→  CommandDialog,
+    18→  CommandEmpty,
+    19→  CommandGroup,
+    20→  CommandInput,
+    21→  CommandItem,
+    22→  CommandList,
+    23→} from '@/components/ui/command'
+    24→import { Button } from '@/components/ui/button'
+    25→import { cn } from '@/lib/utils'
+    26→import type { ModuleId } from '@/store/app-store'
+    27→import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
+    28→import { LogOut } from 'lucide-react'
+    29→
+    30→// Lazy load all modules
+    31→const Dashboard = lazy(() => import('@/components/rise/dashboard'))
+    32→const MorningRoutine = lazy(() => import('@/components/rise/morning-routine'))
+    33→const DailyPlanner = lazy(() => import('@/components/rise/daily-planner'))
+    34→const Tasks = lazy(() => import('@/components/rise/tasks'))
+    35→const Projects = lazy(() => import('@/components/rise/projects'))
+    36→const Goals = lazy(() => import('@/components/rise/goals'))
+    37→const Habits = lazy(() => import('@/components/rise/habits'))
+    38→const Journal = lazy(() => import('@/components/rise/journal'))
+    39→const DeepWork = lazy(() => import('@/components/rise/deep-work'))
+    40→const Reading = lazy(() => import('@/components/rise/reading'))
+    41→const Learning = lazy(() => import('@/components/rise/learning'))
+    42→const Health = lazy(() => import('@/components/rise/health'))
+    43→const Finance = lazy(() => import('@/components/rise/finance'))
+    44→const Calendar = lazy(() => import('@/components/rise/calendar'))
+    45→const SecondBrain = lazy(() => import('@/components/rise/second-brain'))
+    46→const WeeklyReview = lazy(() => import('@/components/rise/weekly-review'))
+    47→const MonthlyReview = lazy(() => import('@/components/rise/monthly-review'))
+    48→const Analytics = lazy(() => import('@/components/rise/analytics'))
+    49→const AICoach = lazy(() => import('@/components/rise/ai-coach'))
+    50→const Settings = lazy(() => import('@/components/rise/settings'))
+    51→
+    52→const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
+    53→  'dashboard': Dashboard,
+    54→  'morning': MorningRoutine,
+    55→  'planner': DailyPlanner,
+    56→  'tasks': Tasks,
+    57→  'projects': Projects,
+    58→  'goals': Goals,
+    59→  'habits': Habits,
+    60→  'journal': Journal,
+    61→  'deepwork': DeepWork,
+    62→  'reading': Reading,
+    63→  'learning': Learning,
+    64→  'health': Health,
+    65→  'finance': Finance,
+    66→  'calendar': Calendar,
+    67→  'brain': SecondBrain,
+    68→  'weekly-review': WeeklyReview,
+    69→  'monthly-review': MonthlyReview,
+    70→  'analytics': Analytics,
+    71→  'ai-coach': AICoach,
+    72→  'settings': Settings,
+    73→}
+    74→
+    75→const moduleNames: Record<ModuleId, string> = {
+    76→  'dashboard': 'لوحة التحكم',
+    77→  'morning': 'الروتين الصباحي',
+    78→  'planner': 'المخطط اليومي',
+    79→  'tasks': 'المهام',
+    80→  'projects': 'المشاريع',
+    81→  'goals': 'الأهداف',
+    82→  'habits': 'تتبع العادات',
+    83→  'journal': 'اليوميات',
+    84→  'deepwork': 'العمل العميق',
+    85→  'reading': 'القراءة',
+    86→  'learning': 'التعلم',
+    87→  'health': 'الصحة',
+    88→  'finance': 'المالية',
+    89→  'calendar': 'التقويم',
+    90→  'brain': 'الدماغ الثاني',
+    91→  'weekly-review': 'مراجعة أسبوعية',
+    92→  'monthly-review': 'مراجعة شهرية',
+    93→  'analytics': 'التحليلات',
+    94→  'ai-coach': 'المدرب الذكي',
+    95→  'settings': 'الإعدادات',
+    96→}
+    97→
+    98→function LoadingFallback() {
+    99→  return (
+   100→    <div className="flex items-center justify-center h-64">
+   101→      <div className="relative flex items-center justify-center w-20 h-20">
+   102→        {/* Outer orbiting dots */}
+   103→        {[0, 1, 2].map((i) => (
+   104→          <span
+   105→            key={`outer-${i}`}
+   106→            className="orbit-dot-outer absolute w-2 h-2 rounded-full bg-emerald-accent/70"
+   107→            style={{ animationDelay: `${-i * 0.6}s` }}
+   108→          />
+   109→        ))}
+   110→        {/* Inner orbiting dots */}
+   111→        {[0, 1, 2].map((i) => (
+   112→          <span
+   113→            key={`inner-${i}`}
+   114→            className="orbit-dot-inner absolute w-1.5 h-1.5 rounded-full bg-gold/60"
+   115→            style={{ animationDelay: `${-i * 0.5}s` }}
+   116→          />
+   117→        ))}
+   118→        {/* Center Zap icon */}
+   119→        <Zap className="w-5 h-5 text-forest relative z-10" />
+   120→        <p className="absolute -bottom-8 text-sm text-muted-foreground">جاري التحميل...</p>
+   121→      </div>
+   122→    </div>
+   123→  )
+   124→}
+   125→
+   126→/* Module icon map for top bar indicator */
+   127→const moduleIconMap: Record<ModuleId, React.ElementType> = {
+   128→  'dashboard': LayoutDashboard,
+   129→  'morning': Sun,
+   130→  'planner': CalendarDays,
+   131→  'tasks': CheckSquare,
+   132→  'projects': FolderKanban,
+   133→  'goals': Target,
+   134→  'habits': Flame,
+   135→  'journal': BookOpen,
+   136→  'deepwork': Brain,
+   137→  'reading': BookOpen,
+   138→  'learning': GraduationCap,
+   139→  'health': Heart,
+   140→  'finance': Wallet,
+   141→  'calendar': CalendarIcon,
+   142→  'brain': Network,
+   143→  'weekly-review': BarChart3,
+   144→  'monthly-review': BarChart3,
+   145→  'analytics': BarChart3,
+   146→  'ai-coach': Sparkles,
+   147→  'settings': SettingsIcon,
+   148→}
+   149→
+   150→/* Module accent color map */
+   151→const moduleAccentMap: Record<ModuleId, string> = {
+   152→  'dashboard': 'bg-emerald-accent',
+   153→  'morning': 'bg-gold',
+   154→  'planner': 'bg-emerald-accent',
+   155→  'tasks': 'bg-emerald-accent',
+   156→  'projects': 'bg-forest',
+   157→  'goals': 'bg-gold',
+   158→  'habits': 'bg-gold',
+   159→  'journal': 'bg-forest',
+   160→  'deepwork': 'bg-emerald-accent',
+   161→  'reading': 'bg-gold',
+   162→  'learning': 'bg-emerald-accent',
+   163→  'health': 'bg-emerald-accent',
+   164→  'finance': 'bg-gold',
+   165→  'calendar': 'bg-forest',
+   166→  'brain': 'bg-emerald-accent',
+   167→  'weekly-review': 'bg-forest',
+   168→  'monthly-review': 'bg-forest',
+   169→  'analytics': 'bg-emerald-accent',
+   170→  'ai-coach': 'bg-gold',
+   171→  'settings': 'bg-foreground/30',
+   172→}
+   173→
+   174→interface SearchTask { id: string; title: string; status: string; xpReward: number }
+   175→interface SearchHabit { id: string; name: string; icon: string; color: string }
+   176→interface SearchGoal { id: string; title: string; type: string; progress: number }
+   177→interface SearchJournal { id: string; date: string; content: string; mood: number | null }
+   178→interface SearchBook { id: string; title: string; author: string | null; status: string }
+   179→interface SearchKnowledge { id: string; title: string; type: string; folder: string | null }
+   180→
+   181→export default function RiseOSApp() {
+   182→  const { activeModule, setActiveModule, toggleSidebar, auth, setAuth, logout } = useRiseStore()
+   183→  const { theme, setTheme } = useTheme()
+   184→  const [searchOpen, setSearchOpen] = useState(false)
+   185→  const [searchQuery, setSearchQuery] = useState('')
+   186→  const [searchResults, setSearchResults] = useState<{
+   187→    tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[]
+   188→    journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
+   189→  }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
+   190→  const [fabOpen, setFabOpen] = useState(false)
+   191→  const [themeRotating, setThemeRotating] = useState(false)
+   192→  const mountedRef = useRef(false)
+   193→  const mounted = useSyncExternalStore(
+   194→    () => () => {},
+   195→    () => (mountedRef.current = true, true),
+   196→    () => false
+   197→  )
+   198→
+   199→  // Auth check
+   200→  useEffect(() => {
+   201→    const checkAuth = () => {
+   202→      try {
+   203→        const stored = localStorage.getItem('rise-auth')
+   204→        const userInfo = localStorage.getItem('rise-user-info')
+   205→        if (stored && userInfo) {
+   206→          const session = JSON.parse(stored)
+   207→          const user = JSON.parse(userInfo)
+   208→          if (session.access_token && session.access_token !== 'guest') {
+   209→            // Validate session
+   210→            fetch('/api/auth/session', {
+   211→              headers: { 'Authorization': `Bearer ${session.access_token}` }
+   212→            }).then(r => r.json()).then(data => {
+   213→              if (data.user) {
+   214→                setAuth({
+   215→                  isAuthenticated: true,
+   216→                  userId: data.user.id,
+   217→                  userEmail: data.user.email || '',
+   218→                  userName: data.user.email?.split('@')[0] || '',
+   219→                  isAdmin: data.user.isAdmin,
+   220→                  accessToken: session.access_token,
+   221→                })
+   222→              } else {
+   223→                localStorage.removeItem('rise-auth')
+   224→                localStorage.removeItem('rise-user-info')
+   225→              }
+   226→            }).catch(() => {
+   227→              // Session invalid, but keep local data accessible
+   228→            })
+   229→          } else if (session.access_token === 'guest') {
+   230→            setAuth({
+   231→              isAuthenticated: true,
+   232→              userId: 'guest',
+   233→              userEmail: 'ضيف',
+   234→              userName: 'ضيف',
+   235→              isAdmin: false,
+   236→              accessToken: 'guest',
+   237→            })
+   238→          }
+   239→        }
+   240→      } catch { /* ignore */ }
+   241→    }
+   242→    checkAuth()
+   243→  }, [setAuth])
+   244→
+   245→  const handleLogin = useCallback((data: { user: { id: string; email: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
+   246→    setAuth({
+   247→      isAuthenticated: true,
+   248→      userId: data.user.id,
+   249→      userEmail: data.user.email,
+   250→      userName: data.user.email?.split('@')[0] || '',
+   251→      isAdmin: data.user.isAdmin,
+   252→      accessToken: data.session.access_token,
+   253→    })
+   254→  }, [setAuth])
+   255→
+   256→  // Keyboard shortcuts (must be before conditional return)
+   257→  useKeyboardShortcuts()
+   258→
+   259→  useEffect(() => {
+   260→    if (auth) {
+   261→      fetch('/api/rise/seed', { method: 'POST' }).catch(() => {})
+   262→    }
+   263→  }, [auth])
+   264→
+   265→  useEffect(() => {
+   266→    const handleKeyDown = (e: KeyboardEvent) => {
+   267→      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+   268→        e.preventDefault()
+   269→        setSearchOpen(true)
+   270→      }
+   271→    }
+   272→    window.addEventListener('keydown', handleKeyDown)
+   273→    return () => window.removeEventListener('keydown', handleKeyDown)
+   274→  }, [])
+   275→
+   276→  /* ── Global search ── */
+   277→  const handleSearchQuery = useCallback((query: string) => {
+   278→    setSearchQuery(query)
+   279→  }, [])
+   280→
+   281→  const handleSearchOpenChange = useCallback((open: boolean) => {
+   282→    setSearchOpen(open)
+   283→    if (!open) {
+   284→      setSearchQuery('')
+   285→      setSearchResults({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
+   286→    }
+   287→  }, [])
+   288→
+   289→  useEffect(() => {
+   290→    if (!searchOpen || searchQuery.length < 2 || !auth) {
+   291→      return
+   292→    }
+   293→    const q = searchQuery.toLowerCase()
+   294→    const controller = new AbortController()
+   295→    Promise.all([
+   296→      fetch('/api/rise/tasks', { signal: controller.signal }).then(r => r.json()).catch(() => ({ tasks: [] })),
+   297→      fetch('/api/rise/habits', { signal: controller.signal }).then(r => r.json()).catch(() => ({ habits: [] })),
+   298→      fetch('/api/rise/goals', { signal: controller.signal }).then(r => r.json()).catch(() => ({ goals: [] })),
+   299→      fetch('/api/rise/journal', { signal: controller.signal }).then(r => r.json()).catch(() => ({ journals: [] })),
+   300→      fetch('/api/rise/books', { signal: controller.signal }).then(r => r.json()).catch(() => ({ books: [] })),
+   301→      fetch('/api/rise/knowledge', { signal: controller.signal }).then(r => r.json()).catch(() => ({ items: [] })),
+   302→    ]).then(([tasksData, habitsData, goalsData, journalsData, booksData, knowledgeData]) => {
+   303→      if (controller.signal.aborted) return
+   304→      setSearchResults({
+   305→        tasks: (tasksData.tasks || []).filter((t: SearchTask) => t.title.toLowerCase().includes(q)).slice(0, 5),
+   306→        habits: (habitsData.habits || []).filter((h: SearchHabit) => h.name.toLowerCase().includes(q)).slice(0, 5),
+   307→        goals: (goalsData.goals || []).filter((g: SearchGoal) => g.title.toLowerCase().includes(q)).slice(0, 5),
+   308→        journals: (journalsData.journals || []).filter((j: SearchJournal) => j.content.toLowerCase().includes(q)).slice(0, 5),
+   309→        books: (booksData.books || []).filter((b: SearchBook) => b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)).slice(0, 5),
+   310→        knowledge: ((knowledgeData as any).items || []).filter((k: SearchKnowledge) => k.title.toLowerCase().includes(q)).slice(0, 5),
+   311→      })
+   312→    })
+   313→    return () => controller.abort()
+   314→  }, [searchQuery, searchOpen, auth])
+   315→
+   316→  /* Today's date in Arabic */
+   317→  const todayArabic = useMemo(() => {
+   318→    const now = new Date()
+   319→    const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+   320→    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+   321→    return `${days[now.getDay()]}، ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
+   322→  }, [])
+   323→
+   324→  /* Theme toggle with rotation */
+   325→  const handleThemeToggle = useCallback(() => {
+   326→    setThemeRotating(true)
+   327→    setTheme(theme === 'dark' ? 'light' : 'dark')
+   328→    setTimeout(() => setThemeRotating(false), 500)
+   329→  }, [theme, setTheme])
+   330→
+   331→  const ActiveComponent = moduleComponents[activeModule]
+   332→  const ModuleIcon = moduleIconMap[activeModule]
+   333→
+   334→  // Show login if not authenticated (after all hooks)
+   335→  if (!auth) {
+   336→    return <LoginPage onLogin={handleLogin} />
+   337→  }
+   338→
+   339→  return (
+   340→    <div className="flex h-screen overflow-hidden bg-background">
+   341→      <Sidebar />
+   342→
+   343→      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+   344→        {/* Top bar */}
+   345→        <header className="sticky top-0 z-30 flex items-center gap-3 px-4 md:px-6 py-3 bg-background/80 backdrop-blur-xl noise-bg header-gradient-border">
+   346→          <Button
+   347→            variant="ghost"
+   348→            size="icon"
+   349→            className="lg:hidden"
+   350→            onClick={toggleSidebar}
+   351→          >
+   352→            <Menu className="w-5 h-5" />
+   353→          </Button>
+   354→
+   355→          {/* Module indicator dot */}
+   356→          <div className={cn(
+   357→            'relative flex items-center justify-center w-7 h-7 rounded-lg shrink-0',
+   358→            'bg-muted/50'
+   359→          )}>
+   360→            <ModuleIcon className="w-3.5 h-3.5 text-foreground/70" />
+   361→            <span className={cn(
+   362→              'absolute -bottom-0.5 -left-0.5 w-2 h-2 rounded-full',
+   363→              moduleAccentMap[activeModule]
+   364→            )} />
+   365→          </div>
+   366→
+   367→          <div className="flex-1" />
+   368→
+   369→          {/* Search trigger */}
+   370→          <Button
+   371→            variant="outline"
+   372→            className="hidden sm:flex items-center gap-2 text-muted-foreground h-9 px-3 text-sm font-normal border-dashed search-glass-btn"
+   373→            onClick={() => setSearchOpen(true)}
+   374→          >
+   375→            <Search className="w-4 h-4" />
+   376→            <span>بحث...</span>
+   377→            <kbd className="pointer-events-none ml-1 inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+   378→              ⌘K
+   379→            </kbd>
+   380→          </Button>
+   381→
+   382→          {/* Theme toggle with rotation */}
+   383→          {mounted && (
+   384→            <Button
+   385→              variant="ghost"
+   386→              size="icon"
+   387→              className="h-9 w-9"
+   388→              onClick={handleThemeToggle}
+   389→            >
+   390→              <span className={cn(themeRotating && 'theme-rotate', 'inline-flex')}>
+   391→                {theme === 'dark' ? (
+   392→                  <Sun className="w-4 h-4" />
+   393→                ) : (
+   394→                  <Moon className="w-4 h-4" />
+   395→                )}
+   396→              </span>
+   397→            </Button>
+   398→          )}
+   399→
+   400→          {/* User avatar / logout */}
+   401→          {mounted && auth && (
+   402→            <Button
+   403→              variant="ghost"
+   404→              size="sm"
+   405→              className="h-9 gap-2 text-xs text-muted-foreground hover:text-destructive"
+   406→              onClick={logout}
+   407→              title={auth.userEmail}
+   408→            >
+   409→              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
+   410→                <span className="text-[10px] font-bold text-white">{auth.userName.charAt(0).toUpperCase()}</span>
+   411→              </div>
+   412→              <span className="hidden sm:inline max-w-[100px] truncate">{auth.userName}</span>
+   413→              {auth.isAdmin && <span className="text-[9px] bg-gold/20 text-gold px-1.5 py-0.5 rounded-full font-medium">أدمن</span>}
+   414→              <LogOut className="w-3.5 h-3.5" />
+   415→            </Button>
+   416→          )}
+   417→        </header>
+   418→
+   419→        {/* Content */}
+   420→        <div className="flex-1 overflow-y-auto">
+   421→          <AnimatePresence mode="wait">
+   422→            <motion.div
+   423→              key={activeModule}
+   424→              initial={{ opacity: 0, y: 8, scale: 0.99, filter: 'blur(4px)' }}
+   425→              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+   426→              exit={{ opacity: 0, y: -8, scale: 0.99, filter: 'blur(4px)' }}
+   427→              transition={{ type: 'spring', stiffness: 300, damping: 30, mass: 0.8 }}
+   428→              className="p-4 md:p-6"
+   429→            >
+   430→              {/* Module title with accent bar & date */}
+   431→              <div className="mb-6 flex items-stretch gap-3 module-title-animate" key={`title-${activeModule}`}>
+   432→                <div className={cn(
+   433→                  'w-1 rounded-full shrink-0',
+   434→                  moduleAccentMap[activeModule]
+   435→                )} />
+   436→                <div className="flex flex-col justify-center">
+   437→                  <h2 className="text-2xl font-bold tracking-tight">
+   438→                    {moduleNames[activeModule]}
+   439→                  </h2>
+   440→                  <p className="text-xs text-muted-foreground mt-0.5">{todayArabic}</p>
+   441→                </div>
+   442→              </div>
+   443→              <Suspense fallback={<LoadingFallback />}>
+   444→                <ActiveComponent />
+   445→              </Suspense>
+   446→            </motion.div>
+   447→          </AnimatePresence>
+   448→        </div>
+   449→      </main>
+   450→
+   451→      {/* Command palette */}
+   452→      <CommandDialog open={searchOpen} onOpenChange={handleSearchOpenChange}>
+   453→        <CommandInput placeholder="ابحث عن أي شيء..." dir="rtl" onInput={(e) => handleSearchQuery((e.target as HTMLInputElement).value)} />
+   454→        <CommandList>
+   455→          <CommandEmpty>لم يتم العثور على نتائج.</CommandEmpty>
+   456→
+   457→          {searchQuery.length >= 2 && searchResults.tasks.length > 0 && (
+   458→            <CommandGroup heading={`المهام (${searchResults.tasks.length})`}>
+   459→              {searchResults.tasks.map((task) => (
+   460→                <CommandItem
+   461→                  key={task.id}
+   462→                  onSelect={() => {
+   463→                    setActiveModule('tasks')
+   464→                    setSearchOpen(false)
+   465→                  }}
+   466→                  className="flex-row-reverse justify-end gap-2"
+   467→                >
+   468→                  {task.status === 'done'
+   469→                    ? <CheckCircle2 className="w-4 h-4 text-emerald-accent shrink-0" />
+   470→                    : <Circle className="w-4 h-4 text-muted-foreground shrink-0" />
+   471→                  }
+   472→                  <span className="flex-1 text-right truncate">{task.title}</span>
+   473→                  <span className="text-[10px] text-gold font-medium shrink-0">+{task.xpReward} XP</span>
+   474→                </CommandItem>
+   475→              ))}
+   476→            </CommandGroup>
+   477→          )}
+   478→
+   479→          {searchQuery.length >= 2 && searchResults.habits.length > 0 && (
+   480→            <CommandGroup heading={`العادات (${searchResults.habits.length})`}>
+   481→              {searchResults.habits.map((habit) => (
+   482→                <CommandItem
+   483→                  key={habit.id}
+   484→                  onSelect={() => {
+   485→                    setActiveModule('habits')
+   486→                    setSearchOpen(false)
+   487→                  }}
+   488→                  className="flex-row-reverse justify-end gap-2"
+   489→                >
+   490→                  <Flame className="w-4 h-4 text-orange-500 shrink-0" />
+   491→                  <span className="flex-1 text-right truncate">{habit.name}</span>
+   492→                </CommandItem>
+   493→              ))}
+   494→            </CommandGroup>
+   495→          )}
+   496→
+   497→          {searchQuery.length >= 2 && searchResults.goals.length > 0 && (
+   498→            <CommandGroup heading={`الأهداف (${searchResults.goals.length})`}>
+   499→              {searchResults.goals.map((goal) => (
+   500→                <CommandItem
+   501→                  key={goal.id}
+   502→                  onSelect={() => {
+   503→                    setActiveModule('goals')
+   504→                    setSearchOpen(false)
+   505→                  }}
+   506→                  className="flex-row-reverse justify-end gap-2"
+   507→                >
+   508→                  <Target className="w-4 h-4 text-forest shrink-0" />
+   509→                  <span className="flex-1 text-right truncate">{goal.title}</span>
+   510→                  <span className="text-[10px] text-muted-foreground shrink-0">{goal.progress}%</span>
+   511→                </CommandItem>
+   512→              ))}
+   513→            </CommandGroup>
+   514→          )}
+   515→
+   516→          {searchQuery.length >= 2 && searchResults.journals.length > 0 && (
+   517→            <CommandGroup heading={`اليوميات (${searchResults.journals.length})`}>
+   518→              {searchResults.journals.map((journal) => (
+   519→                <CommandItem
+   520→                  key={journal.id}
+   521→                  onSelect={() => {
+   522→                    setActiveModule('journal')
+   523→                    setSearchOpen(false)
+   524→                  }}
+   525→                  className="flex-row-reverse justify-end gap-2"
+   526→                >
+   527→                  <BookOpen className="w-4 h-4 text-forest shrink-0" />
+   528→                  <span className="flex-1 text-right truncate">{journal.content.slice(0, 60)}...</span>
+   529→                  <span className="text-[10px] text-muted-foreground shrink-0">{journal.date}</span>
+   530→                </CommandItem>
+   531→              ))}
+   532→            </CommandGroup>
+   533→          )}
+   534→
+   535→          {searchQuery.length >= 2 && searchResults.books.length > 0 && (
+   536→            <CommandGroup heading={`الكتب (${searchResults.books.length})`}>
+   537→              {searchResults.books.map((book) => (
+   538→                <CommandItem
+   539→                  key={book.id}
+   540→                  onSelect={() => {
+   541→                    setActiveModule('reading')
+   542→                    setSearchOpen(false)
+   543→                  }}
+   544→                  className="flex-row-reverse justify-end gap-2"
+   545→                >
+   546→                  <BookOpen className="w-4 h-4 text-gold shrink-0" />
+   547→                  <span className="flex-1 text-right truncate">{book.title}</span>
+   548→                  {book.author && <span className="text-[10px] text-muted-foreground shrink-0">{book.author}</span>}
+   549→                </CommandItem>
+   550→              ))}
+   551→            </CommandGroup>
+   552→          )}
+   553→
+   554→          {searchQuery.length >= 2 && searchResults.knowledge.length > 0 && (
+   555→            <CommandGroup heading={`الملفات (${searchResults.knowledge.length})`}>
+   556→              {searchResults.knowledge.map((item) => (
+   557→                <CommandItem
+   558→                  key={item.id}
+   559→                  onSelect={() => {
+   560→                    setActiveModule('brain')
+   561→                    setSearchOpen(false)
+   562→                  }}
+   563→                  className="flex-row-reverse justify-end gap-2"
+   564→                >
+   565→                  <Network className="w-4 h-4 text-emerald-accent shrink-0" />
+   566→                  <span className="flex-1 text-right truncate">{item.title}</span>
+   567→                  {item.folder && <span className="text-[10px] text-muted-foreground shrink-0">{item.folder}</span>}
+   568→                </CommandItem>
+   569→              ))}
+   570→            </CommandGroup>
+   571→          )}
+   572→
+   573→          <CommandGroup heading="الوحدات">
+   574→            {(Object.keys(moduleNames) as ModuleId[]).map((id) => (
+   575→              <CommandItem
+   576→                key={id}
+   577→                onSelect={() => {
+   578→                  setActiveModule(id)
+   579→                  setSearchOpen(false)
+   580→                }}
+   581→                className={cn(
+   582→                  'flex-row-reverse justify-end gap-2',
+   583→                  activeModule === id && 'bg-accent'
+   584→                )}
+   585→              >
+   586→                {moduleNames[id]}
+   587→              </CommandItem>
+   588→            ))}
+   589→          </CommandGroup>
+   590→        </CommandList>
+   591→      </CommandDialog>
+   592→
+   593→      {/* Keyboard Shortcuts Dialog */}
+   594→      <KeyboardShortcutsDialog />
+   595→
+   596→      {/* ══════════ FAB - Quick Add ══════════ */}
+   597→      <AnimatePresence>
+   598→        {activeModule !== 'dashboard' && activeModule !== 'settings' && (
+   599→          <div className="fixed bottom-6 left-6 z-50 flex flex-col-reverse items-center gap-3">
+   600→            {/* Action items */}
+   601→            <AnimatePresence>
+   602→              {fabOpen && (
+   603→                <motion.div
+   604→                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
+   605→                  animate={{ opacity: 1, y: 0, scale: 1 }}
+   606→                  exit={{ opacity: 0, y: 10, scale: 0.9 }}
+   607→                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+   608→                  className="flex flex-col gap-2 mb-2"
+   609→                >
+   610→                  {([
+   611→                    { label: 'مهمة جديدة', icon: CheckSquare, module: 'tasks' as ModuleId, color: 'text-emerald-accent' },
+   612→                    { label: 'عادة جديدة', icon: Flame, module: 'habits' as ModuleId, color: 'text-orange-500' },
+   613→                    { label: 'يومية جديدة', icon: PenLine, module: 'journal' as ModuleId, color: 'text-forest' },
+   614→                    { label: 'تسجيل صحي', icon: HeartPulse, module: 'health' as ModuleId, color: 'text-rose-500' },
+   615→                  ] as const).map((action, i) => {
+   616→                    const ActionIcon = action.icon
+   617→                    return (
+   618→                      <motion.button
+   619→                        key={action.label}
+   620→                        initial={{ opacity: 0, x: -20, scale: 0.8 }}
+   621→                        animate={{ opacity: 1, x: 0, scale: 1 }}
+   622→                        exit={{ opacity: 0, x: -20, scale: 0.8 }}
+   623→                        transition={{ delay: i * 0.05, type: 'spring', stiffness: 400, damping: 25 }}
+   624→                        onClick={() => {
+   625→                          setFabOpen(false)
+   626→                          setActiveModule(action.module)
+   627→                        }}
+   628→                        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl glass border border-white/10 dark:border-white/5 shadow-lg hover:shadow-xl transition-shadow group"
+   629→                      >
+   630→                        <div className="w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center group-hover:scale-110 transition-transform">
+   631→                          <ActionIcon className={cn('w-3.5 h-3.5', action.color)} />
+   632→                        </div>
+   633→                        <span className="text-sm font-medium text-foreground whitespace-nowrap">{action.label}</span>
+   634→                      </motion.button>
+   635→                    )
+   636→                  })}
+   637→                </motion.div>
+   638→              )}
+   639→            </AnimatePresence>
+   640→
+   641→            {/* Main FAB button */}
+   642→            <motion.button
+   643→              layout
+   644→              onClick={() => setFabOpen(!fabOpen)}
+   645→              className={cn(
+   646→                'w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl transition-shadow',
+   647→                'bg-gradient-to-br from-emerald-accent to-forest',
+   648→                'hover:shadow-emerald-accent/30 hover:shadow-2xl'
+   649→              )}
+   650→              whileHover={{ scale: 1.08 }}
+   651→              whileTap={{ scale: 0.95 }}
+   652→            >
+   653→              <motion.span
+   654→                animate={{ rotate: fabOpen ? 45 : 0 }}
+   655→                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   656→              >
+   657→                <Zap className="w-6 h-6 text-white" />
+   658→              </motion.span>
+   659→            </motion.button>
+   660→          </div>
+   661→        )}
+   662→      </AnimatePresence>
+   663→    </div>
+   664→  )
+   665→}

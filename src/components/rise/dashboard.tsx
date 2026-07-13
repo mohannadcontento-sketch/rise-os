@@ -317,39 +317,19 @@ const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.07, delayChildren: 0.1 },
+    transition: { staggerChildren: 0.04, delayChildren: 0.05 },
   },
 }
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] as const } },
-}
-
-const scaleHover = {
-  whileHover: { y: -2, transition: { duration: 0.2, ease: 'easeOut' as const } },
-  whileTap: { scale: 0.98 },
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
 }
 
 /* ────────────── Animated Number ────────────── */
 
-function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: number }) {
-  const [display, setDisplay] = useState(0)
-
-  useEffect(() => {
-    let start = 0
-    const end = value
-    if (start === end) return
-    const incrementTime = duration / Math.max(end, 1)
-    const timer = setInterval(() => {
-      start += 1
-      setDisplay(start)
-      if (start >= end) clearInterval(timer)
-    }, incrementTime)
-    return () => clearInterval(timer)
-  }, [value, duration])
-
-  return <>{toArabicNum(display)}</>
+function AnimatedNumber({ value }: { value: number; duration?: number }) {
+  return <>{toArabicNum(value)}</>
 }
 
 /* ────────────── Circular Progress ────────────── */
@@ -389,9 +369,9 @@ function CircularProgress({
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
+          initial={false}
           animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.2, ease: 'easeOut' }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
@@ -870,7 +850,7 @@ function MotivationalWall() {
               >
                 <motion.div
                   animate={isFav ? { scale: [1, 1.3, 1] } : {}}
-                  transition={{ duration: 0.3 }}
+                  transition={{ type: 'tween', duration: 0.3 }}
                 >
                   <Heart
                     className={cn(
@@ -1132,7 +1112,7 @@ export default function Dashboard() {
                 height: `${2 + (i % 3)}px`,
               }}
               animate={{ opacity: [0.15, 0.6, 0.15], scale: [1, 1.4, 1] }}
-              transition={{ duration: 3 + (i % 3), repeat: Infinity, delay: i * 0.4, ease: 'easeInOut' }}
+              transition={{ type: 'tween', duration: 3 + (i % 3), repeat: Infinity, delay: i * 0.4, ease: 'easeInOut' }}
             />
           ))}
         </div>
@@ -1230,22 +1210,20 @@ export default function Dashboard() {
             </TooltipProvider>
 
             {/* Streak with animated fire */}
-            <motion.div
+            <div
               className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 border border-white/10 dark:border-white/5"
-              whileHover={{ scale: 1.03 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             >
               <motion.div
                 animate={{ scale: [1, 1.25, 1], rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
               >
-                <Flame className="w-5 h-5 text-orange-500" style={{ filter: 'drop-shadow(0 0 6px oklch(0.55 0.18 25 / 0.5))' }} />
+                <Flame className="w-5 h-5 text-orange-500" />
               </motion.div>
               <div>
                 <p className="text-sm font-bold leading-none text-gradient-gold">{toArabicNum(user.streak)}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">أيام متتالية</p>
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -1263,24 +1241,24 @@ export default function Dashboard() {
       {/* ══════════ 3. Score Cards Row ══════════ */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {/* Morning Score */}
-        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
-            <div className="flex items-center gap-4">
+        <motion.div variants={itemVariants}>
+          <PremiumGlass className="p-4 lg:p-5 cursor-default">
+            <div className="flex items-center gap-3 sm:gap-4">
               <CircularProgress
                 value={today.morningScore}
-                size={64}
-                strokeWidth={5}
+                size={56}
+                strokeWidth={4}
                 color="stroke-gold"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">درجة الصباح</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">درجة الصباح</p>
+                <p className="text-lg sm:text-xl font-bold text-foreground">
                   <AnimatedNumber value={today.morningScore} />
-                  <span className="text-sm font-normal text-muted-foreground mr-1">/ ١٠٠</span>
+                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">/ ١٠٠</span>
                 </p>
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-2 sm:mt-3 flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">الاتجاه</span>
               <MiniSparkline data={morningTrend} color="bg-gold" />
             </div>
@@ -1288,23 +1266,23 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Tasks Completed */}
-        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
-                <CheckCircle2 className="w-7 h-7 text-emerald-accent" />
+        <motion.div variants={itemVariants}>
+          <PremiumGlass className="p-4 lg:p-5 cursor-default">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-accent" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">المهام المكتملة</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">المهام المكتملة</p>
+                <p className="text-lg sm:text-xl font-bold text-foreground">
                   <AnimatedNumber value={today.tasksCompleted} />
-                  <span className="text-sm font-normal text-muted-foreground mr-1">
+                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">
                     / {toArabicNum(today.tasksTotal)}
                   </span>
                 </p>
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-2 sm:mt-3 flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">الاتجاه</span>
               <MiniSparkline data={taskTrend} color="bg-emerald-accent" />
             </div>
@@ -1312,23 +1290,23 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Habits */}
-        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
-                <Target className="w-7 h-7 text-forest" />
+        <motion.div variants={itemVariants}>
+          <PremiumGlass className="p-4 lg:p-5 cursor-default">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0">
+                <Target className="w-6 h-6 sm:w-7 sm:h-7 text-forest" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">العادات</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">العادات</p>
+                <p className="text-lg sm:text-xl font-bold text-foreground">
                   <AnimatedNumber value={today.habitsCompleted} />
-                  <span className="text-sm font-normal text-muted-foreground mr-1">
+                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">
                     / {toArabicNum(today.habitsTotal)}
                   </span>
                 </p>
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-2 sm:mt-3 flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">الاتجاه</span>
               <MiniSparkline data={habitTrend} color="bg-forest" />
             </div>
@@ -1336,21 +1314,21 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Focus */}
-        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
-                <Clock className="w-7 h-7 text-gold" />
+        <motion.div variants={itemVariants}>
+          <PremiumGlass className="p-4 lg:p-5 cursor-default">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0">
+                <Clock className="w-6 h-6 sm:w-7 sm:h-7 text-gold" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">التركيز</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">التركيز</p>
+                <p className="text-lg sm:text-xl font-bold text-foreground">
                   <AnimatedNumber value={today.focusMin} />
-                  <span className="text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
+                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
                 </p>
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between">
+            <div className="mt-2 sm:mt-3 flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">الاتجاه</span>
               <MiniSparkline data={focusTrend} color="bg-gold" />
             </div>
@@ -1368,7 +1346,7 @@ export default function Dashboard() {
               </SectionHeader>
             </CardHeader>
             <CardContent className="pt-0">
-              <PremiumGlass className="p-4 lg:p-5" style={{ height: 250 }}>
+              <PremiumGlass className="p-4 lg:p-5" style={{ height: 200, minHeight: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                     <defs>
@@ -1619,8 +1597,7 @@ export default function Dashboard() {
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5 + i * 0.08, duration: 0.35 }}
-                      whileHover={{ y: -3, transition: { duration: 0.2 } }}
-                      className="shine glass rounded-xl p-3 min-w-[140px] flex-shrink-0 text-center space-y-2 border border-white/10 dark:border-white/5 cursor-default"
+                      className="shine glass rounded-xl p-3 min-w-[130px] sm:min-w-[140px] flex-shrink-0 text-center space-y-2 border border-white/10 dark:border-white/5 cursor-default"
                     >
                       <div className="text-2xl">{ach.badgeIcon}</div>
                       <p className="text-xs font-semibold text-foreground truncate">{ach.badgeName}</p>
@@ -1649,8 +1626,7 @@ export default function Dashboard() {
                         key={badge.id}
                         initial={{ opacity: 0, scale: 0.85 }}
                         animate={{ opacity: earned ? 1 : 0.4, scale: 1 }}
-                        transition={{ delay: 0.6 + i * 0.04, duration: 0.4, type: 'spring', stiffness: 200 }}
-                        whileHover={earned ? { y: -3, scale: 1.03, transition: { duration: 0.2 } } : undefined}
+                        transition={{ delay: 0.3 + i * 0.03, duration: 0.3 }}
                         className={cn(
                           'rounded-xl p-3 text-center space-y-1.5 border transition-shadow duration-300',
                           earned
@@ -1661,7 +1637,7 @@ export default function Dashboard() {
                         <motion.div
                           className="text-2xl"
                           animate={earned ? { rotate: [0, -10, 10, -5, 5, 0], scale: [1, 1.2, 1] } : {}}
-                          transition={{ delay: 0.8 + i * 0.04, duration: 0.6 }}
+                          transition={{ type: 'tween', delay: 0.8 + i * 0.04, duration: 0.6 }}
                         >
                           {badge.icon}
                         </motion.div>
@@ -1797,9 +1773,8 @@ export default function Dashboard() {
                     key={i}
                     initial={{ opacity: 0, x: 12 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.6 + i * 0.06, duration: 0.3 }}
-                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
-                    className="glass rounded-xl p-3 min-w-[120px] flex-shrink-0 text-center space-y-1.5 border border-white/10 dark:border-white/5"
+                    transition={{ delay: 0.4 + i * 0.05, duration: 0.25 }}
+                    className="glass rounded-xl p-3 min-w-[110px] sm:min-w-[120px] flex-shrink-0 text-center space-y-1.5 border border-white/10 dark:border-white/5"
                   >
                     <Brain className="w-5 h-5 mx-auto text-emerald-accent" />
                     <p className="text-sm font-bold text-foreground">{toArabicNum(session.actualMin)} د</p>
@@ -1835,9 +1810,8 @@ export default function Dashboard() {
                     key={project.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 + i * 0.07, duration: 0.35 }}
-                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
-                    className="glass rounded-xl p-4 space-y-2.5 border border-white/10 dark:border-white/5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default"
+                    transition={{ delay: 0.3 + i * 0.05, duration: 0.25 }}
+                    className="glass rounded-xl p-4 space-y-2.5 border border-white/10 dark:border-white/5 cursor-default"
                   >
                     <div className="flex items-center gap-2.5">
                       <div

@@ -723,7 +723,7 @@ export default function SecondBrain() {
                                     >
                                       <motion.span
                                         animate={item.isFavorite ? { scale: [1, 1.4, 1] } : { scale: 1 }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+                                        transition={{ type: 'tween', stiffness: 400, damping: 10 }}
                                       >
                                         <Heart className={cn('w-3.5 h-3.5 transition-colors', item.isFavorite ? 'text-rose-500 fill-rose-500' : 'text-muted-foreground/30 hover:text-rose-400')} />
                                       </motion.span>
