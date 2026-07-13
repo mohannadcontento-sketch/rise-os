@@ -2,7 +2,7 @@
 // Handles bidirectional sync between IndexedDB (offline) and the server API.
 // Strategy: server-wins on conflict, periodic background sync when online.
 
-import { offlineDB, type StoreName, type SyncStatusRecord } from './offline-db';
+import { getOfflineDB, type StoreName, type SyncStatusRecord } from './offline-db';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -100,7 +100,7 @@ class SyncManager {
    * accept the server version.
    */
   private async pushUnsynced(): Promise<void> {
-    const unsynced = await offlineDB.getUnsynced();
+    const unsynced = await getOfflineDB().getUnsynced();
     if (unsynced.length === 0) return;
 
     const processedIds: number[] = [];
@@ -108,7 +108,7 @@ class SyncManager {
     for (const record of unsynced) {
       try {
         // Fetch the full record from its store
-        const data = await offlineDB.getById(record.storeName, record.recordId);
+        const data = await getOfflineDB().getById(record.storeName, record.recordId);
         if (!data) {
           // Record was deleted locally — skip
           processedIds.push(record.id!);
@@ -137,7 +137,7 @@ class SyncManager {
           if (method !== 'DELETE') {
             const serverData = await response.json();
             if (serverData && typeof serverData === 'object') {
-              await offlineDB.update(record.storeName, serverData);
+              await getOfflineDB().update(record.storeName, serverData);
             }
           }
         } else {
@@ -158,7 +158,7 @@ class SyncManager {
 
     // Mark processed records as synced
     if (processedIds.length > 0) {
-      await offlineDB.markSynced(processedIds);
+      await getOfflineDB().markSynced(processedIds);
     }
   }
 
@@ -189,10 +189,10 @@ class SyncManager {
         if (!Array.isArray(data)) continue;
 
         // Clear local store and repopulate from server
-        await offlineDB.clear(store);
+        await getOfflineDB().clear(store);
 
         for (const item of data) {
-          await offlineDB.add(store, item);
+          await getOfflineDB().add(store, item);
         }
       } catch {
         // If one store fails, continue with the rest

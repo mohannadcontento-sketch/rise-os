@@ -1,45 +1,66 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Zap, Download, Bluetooth, Wifi, WifiOff, Share2, CheckCircle2, X } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Zap, Download, Bluetooth, Wifi, WifiOff, Share2, CheckCircle2, X, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { bluetoothShare, type BluetoothShareData } from '@/lib/bluetooth-share'
+import { getBluetoothShare, type BluetoothShareData } from '@/lib/bluetooth-share'
 
-// Register service worker
-export function registerServiceWorker() {
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {
-        // SW registration failed - app still works without it
-      })
-    })
-  }
+// ─── Standalone Detection ────────────────────────────────────────────────
+
+/**
+ * Returns true only when the app is running as an installed PWA.
+ * In browser mode, returns false.
+ */
+export function isStandaloneMode(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as any).standalone === true
 }
 
-// PWA Install Prompt
+/**
+ * Hook that returns whether the app is in standalone (PWA) mode.
+ */
+export function useIsStandalone() {
+  const [standalone, setStandalone] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as any).standalone === true
+  })
+
+  useEffect(() => {
+    const mq = window.matchMedia('(display-mode: standalone)')
+    const handler = (e: MediaQueryListEvent) => setStandalone(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  return standalone
+}
+
+// ─── PWA Install Prompt ─────────────────────────────────────────────────
+
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [showPrompt, setShowPrompt] = useState(false)
 
-  const isInstalledStandalone = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches
+  const isInstalled = typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone)
   const wasDismissedRecently = typeof window !== 'undefined' && (() => {
     const t = localStorage.getItem('rise-pwa-dismissed')
     return t ? (Date.now() - parseInt(t)) < 24 * 60 * 60 * 1000 : false
   })()
 
   useEffect(() => {
-    if (isInstalledStandalone || wasDismissedRecently) return
+    if (isInstalled || wasDismissedRecently) return
 
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e)
-      // Auto-show after 3 seconds
       setTimeout(() => setShowPrompt(true), 3000)
     }
 
     window.addEventListener('beforeinstallprompt', handler)
-
     window.addEventListener('appinstalled', () => {
       setShowPrompt(false)
       setDeferredPrompt(null)
@@ -52,9 +73,6 @@ export function PWAInstallPrompt() {
     if (!deferredPrompt) return
     deferredPrompt.prompt()
     const { outcome } = await deferredPrompt.userChoice
-    if (outcome === 'accepted') {
-      // App installed
-    }
     setDeferredPrompt(null)
     setShowPrompt(false)
   }
@@ -64,7 +82,7 @@ export function PWAInstallPrompt() {
     localStorage.setItem('rise-pwa-dismissed', Date.now().toString())
   }
 
-  if (isInstalledStandalone || wasDismissedRecently || !showPrompt) return null
+  if (isInstalled || wasDismissedRecently || !showPrompt) return null
 
   return (
     <div className="fixed bottom-20 right-4 left-4 sm:left-auto sm:w-80 z-50 animate-in slide-in-from-bottom-4">
@@ -83,7 +101,7 @@ export function PWAInstallPrompt() {
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-bold text-foreground">ثبّت RiseOS على جهازك</h3>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              شغّل التطبيق بدون إنترنت واصله بالأجهزة الأخرى عبر البلوتوث
+              ثبّت التطبيق عشان يشتغل بدون إنترنت ويتزامن مع السحابة
             </p>
             <Button
               onClick={handleInstall}
@@ -100,9 +118,11 @@ export function PWAInstallPrompt() {
   )
 }
 
-// Connection Status Indicator
+// ─── Connection Status Indicator ────────────────────────────────────────
+
 export function ConnectionStatus() {
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const standalone = useIsStandalone()
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -116,6 +136,9 @@ export function ConnectionStatus() {
       window.removeEventListener('offline', handleOffline)
     }
   }, [])
+
+  // Don't show in browser mode — not relevant
+  if (!standalone) return null
 
   return (
     <div
@@ -141,34 +164,37 @@ export function ConnectionStatus() {
   )
 }
 
-// Bluetooth Share Panel
+// ─── Bluetooth Share Panel (standalone only) ─────────────────────────────
+
 export function BluetoothSharePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [sharing, setSharing] = useState(false)
   const [receiving, setReceiving] = useState(false)
   const [lastShare, setLastShare] = useState<string | null>(null)
   const [receivedItems, setReceivedItems] = useState<BluetoothShareData[]>([])
   const [isSupported, setIsSupported] = useState(false)
+  const standalone = useIsStandalone()
 
   useEffect(() => {
-    setIsSupported(bluetoothShare.isSupported())
-    // Load received items from localStorage (simple approach)
+    if (!standalone) return
     try {
+      const bt = getBluetoothShare()
+      setIsSupported(bt.isSupported())
       const stored = localStorage.getItem('rise-bt-shares')
       if (stored) setReceivedItems(JSON.parse(stored))
     } catch { /* ignore */ }
-  }, [])
+  }, [standalone])
 
   const handleShare = async () => {
     setSharing(true)
     try {
-      // Share current app state summary
+      const bt = getBluetoothShare()
       const shareData = {
         type: 'riseos-state',
         sender: 'RiseOS',
         timestamp: new Date().toISOString(),
         message: 'مشاركة من RiseOS',
       }
-      await bluetoothShare.shareData(shareData, 'state')
+      await bt.shareData(shareData, 'state')
       setLastShare('تمت المشاركة بنجاح')
     } catch (err: any) {
       setLastShare(err.message || 'فشلت المشاركة')
@@ -180,9 +206,10 @@ export function BluetoothSharePanel({ isOpen, onClose }: { isOpen: boolean; onCl
   const handleReceive = async () => {
     setReceiving(true)
     try {
-      const data = await bluetoothShare.receiveData()
+      const bt = getBluetoothShare()
+      const data = await bt.receiveData()
       if (data) {
-        const newItems = [data, ...receivedItems]
+        const newItems = [data, ...receivedItems] as any
         setReceivedItems(newItems)
         localStorage.setItem('rise-bt-shares', JSON.stringify(newItems))
         setLastShare('تم استلام البيانات بنجاح')
@@ -229,11 +256,31 @@ export function BluetoothSharePanel({ isOpen, onClose }: { isOpen: boolean; onCl
           </div>
         </div>
 
+        {/* Not standalone notice */}
+        {!standalone && (
+          <div className="mb-4 p-3 rounded-xl bg-muted/50 text-xs text-muted-foreground text-center">
+            <p>ميزة البلوتوث متاحة فقط عند تثبيت التطبيق</p>
+            <Button
+              onClick={() => {
+                onClose()
+                // Trigger install prompt if available
+                window.dispatchEvent(new Event('beforeinstallprompt'))
+              }}
+              variant="outline"
+              size="sm"
+              className="mt-2 h-8 text-xs rounded-lg"
+            >
+              <Download className="w-3.5 h-3.5 ml-1.5" />
+              ثبّت التطبيق أولاً
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-3">
           {/* Bluetooth Share */}
           <Button
             onClick={handleShare}
-            disabled={sharing || !isSupported}
+            disabled={sharing || !isSupported || !standalone}
             variant="outline"
             className="w-full h-12 rounded-xl justify-start gap-3 text-right"
           >
@@ -241,7 +288,7 @@ export function BluetoothSharePanel({ isOpen, onClose }: { isOpen: boolean; onCl
             <div className="flex-1 text-right">
               <p className="text-sm font-medium">إرسال عبر البلوتوث</p>
               <p className="text-[10px] text-muted-foreground">
-                {isSupported ? 'أرسل بياناتك لجهاز قريب' : 'البلوتوث غير مدعوم في هذا المتصفح'}
+                {!standalone ? 'ثبّت التطبيق أولاً' : isSupported ? 'أرسل بياناتك لجهاز قريب' : 'البلوتوث غير مدعوم في هذا المتصفح'}
               </p>
             </div>
             {sharing && <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />}
@@ -250,7 +297,7 @@ export function BluetoothSharePanel({ isOpen, onClose }: { isOpen: boolean; onCl
           {/* Bluetooth Receive */}
           <Button
             onClick={handleReceive}
-            disabled={receiving || !isSupported}
+            disabled={receiving || !isSupported || !standalone}
             variant="outline"
             className="w-full h-12 rounded-xl justify-start gap-3 text-right"
           >
@@ -312,4 +359,39 @@ export function BluetoothSharePanel({ isOpen, onClose }: { isOpen: boolean; onCl
       </div>
     </div>
   )
+}
+
+// ─── Offline Banner (standalone only) ────────────────────────────────────
+
+export function OfflineBanner() {
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const standalone = useIsStandalone()
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
+  if (standalone && !isOnline) {
+    return (
+      <div className="fixed top-0 left-0 right-0 z-[60] bg-orange-500 text-white text-center py-2 text-xs font-medium flex items-center justify-center gap-2">
+        <WifiOff className="w-3.5 h-3.5" />
+        <span>غير متصل بالإنترنت — البيانات محفوظة محلياً</span>
+        <button
+          onClick={() => window.location.reload()}
+          className="mr-2 p-1 rounded hover:bg-white/20"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </button>
+      </div>
+    )
+  }
+
+  return null
 }

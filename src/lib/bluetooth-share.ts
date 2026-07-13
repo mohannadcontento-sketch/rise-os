@@ -2,7 +2,7 @@
 // Shares data with nearby RiseOS devices via Web Bluetooth API.
 // Falls back to the Web Share API when Bluetooth is unavailable.
 
-import { offlineDB, type BluetoothShareRecord } from './offline-db';
+import { getOfflineDB, type BluetoothShareRecord } from './offline-db';
 
 // ─── BLE Protocol Constants ─────────────────────────────────────────────
 
@@ -126,10 +126,10 @@ class BluetoothShareService {
         receivedAt: Date.now(),
       };
 
-      await offlineDB.add('bluetoothShares', record);
+      await getOfflineDB().add('bluetoothShares', record);
 
       // Return all bluetooth shares
-      const allShares = await offlineDB.getAll<BluetoothShareRecord>(
+      const allShares = await getOfflineDB().getAll<BluetoothShareRecord>(
         'bluetoothShares'
       );
       return allShares;

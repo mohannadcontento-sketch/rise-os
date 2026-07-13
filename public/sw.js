@@ -1,40 +1,19 @@
-// RiseOS Service Worker — v1
-// Caches static assets (Cache-First) and API responses (Network-First)
+// RiseOS Service Worker — v2
+// IMPORTANT: Only caches in PWA standalone mode (installed app).
+// In browser mode, this SW does nothing — all requests pass through normally.
 
-const CACHE_VERSION = 'v1';
-const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const API_CACHE = `${CACHE_VERSION}-api`;
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = `${CACHE_VERSION}-standalone`;
 
-// Static assets to pre-cache (shell)
-const STATIC_ASSETS = [
-  '/',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-];
-
-// File extensions that should use Cache-First
-const CACHE_FIRST_EXTENSIONS = [
-  '.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico',
-  '.woff', '.woff2', '.ttf', '.otf', '.eot',
-];
-
-// API / Supabase patterns that should use Network-First
-const isApiOrAuthRequest = (url) => {
-  const u = new URL(url);
-  return (
-    u.pathname.startsWith('/api/') ||
-    u.hostname.includes('supabase')
-  );
-};
+// Check if we're running in standalone (installed PWA) mode
+function isStandalone() {
+  return self.matchMedia?.('(display-mode: standalone)')?.matches ||
+    self.navigator?.standalone === true;
+}
 
 // ─── Install ────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+  // Always install but don't pre-cache anything yet
   self.skipWaiting();
 });
 
@@ -44,16 +23,24 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== STATIC_CACHE && key !== API_CACHE)
+          .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
     )
   );
   self.clients.claim();
+
+  // Notify all clients about the update
+  self.clients.matchAll().then((clients) => {
+    clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' }));
+  });
 });
 
 // ─── Fetch ──────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
+  // In browser mode — do nothing, let browser handle everything
+  if (!isStandalone()) return;
+
   const { request } = event;
 
   // Only handle GET requests
@@ -64,51 +51,44 @@ self.addEventListener('fetch', (event) => {
   // Skip chrome-extension and other non-http(s) requests
   if (!url.protocol.startsWith('http')) return;
 
-  // Route to the appropriate strategy
-  if (isApiOrAuthRequest(request.url)) {
-    // Network-First for API / Supabase
-    event.respondWith(networkFirst(request, API_CACHE));
-  } else if (isStaticAsset(url.pathname)) {
-    // Cache-First for static assets
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
-  } else if (event.request.mode === 'navigate') {
-    // Navigation fallback — try network, then serve cached shell
-    event.respondWith(networkFirst(request, STATIC_CACHE));
+  // Skip Supabase requests — always go to network
+  if (url.hostname.includes('supabase')) return;
+
+  // API requests: Network-First (try server, fallback to cache)
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // Static assets: Cache-First
+  if (isStaticAsset(url.pathname)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+
+  // Navigation (HTML pages): Network-First with offline shell fallback
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirst(request, true));
+    return;
   }
 });
 
-// ─── Cache-First Strategy ───────────────────────────────────────────────
-async function cacheFirst(request, cacheName) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
+// ─── Network-First ─────────────────────────────────────────────────────
+async function networkFirst(request, isNavigation = false) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(cacheName);
+      const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
     return response;
   } catch {
-    return new Response('Offline', { status: 503, statusText: 'Offline' });
-  }
-}
-
-// ─── Network-First Strategy ─────────────────────────────────────────────
-async function networkFirst(request, cacheName) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
+    // Network failed — try cache
     const cached = await caches.match(request);
     if (cached) return cached;
 
-    // For navigation requests, serve the cached shell (index.html)
-    if (request.mode === 'navigate') {
+    // For navigation, try serving the cached root page
+    if (isNavigation) {
       const shell = await caches.match('/');
       if (shell) return shell;
     }
@@ -117,7 +97,40 @@ async function networkFirst(request, cacheName) {
   }
 }
 
+// ─── Cache-First ───────────────────────────────────────────────────────
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return new Response('Offline', { status: 503, statusText: 'Offline' });
+  }
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────
 function isStaticAsset(pathname) {
-  return CACHE_FIRST_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+  return /\.(js|css|png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|otf|eot)$/i.test(pathname);
 }
+
+// ─── Listen for display-mode changes ────────────────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'CHECK_STANDALONE') {
+    // Re-check standalone status
+    const clients = self.clients.matchAll();
+    clients.then((list) => {
+      list.forEach((client) => {
+        client.postMessage({
+          type: 'STANDALONE_STATUS',
+          isStandalone: isStandalone(),
+        });
+      });
+    });
+  }
+});

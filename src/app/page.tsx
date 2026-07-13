@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
-import { PWAInstallPrompt, ConnectionStatus, BluetoothSharePanel } from '@/lib/pwa'
+import { PWAInstallPrompt, ConnectionStatus, BluetoothSharePanel, OfflineBanner } from '@/lib/pwa'
 import { LogOut, Bluetooth } from 'lucide-react'
 
 // Lazy load all modules
@@ -674,8 +674,9 @@ export default function RiseOSApp() {
         )}
       </AnimatePresence>
 
-      {/* PWA Install Prompt */}
+      {/* PWA: install prompt, connection status, offline banner */}
       <PWAInstallPrompt />
+      <OfflineBanner />
 
       {/* Bluetooth Share Panel */}
       <BluetoothSharePanel isOpen={btPanelOpen} onClose={() => setBtPanelOpen(false)} />
