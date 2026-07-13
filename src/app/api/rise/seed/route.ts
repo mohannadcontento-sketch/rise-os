@@ -69,7 +69,7 @@ export async function POST() {
         { name: 'تعلم مهارة جديدة', icon: '🎯', color: '#F97316', frequency: 'daily', targetCount: 1, xpReward: 20 },
         { name: 'لا ساعة لمدة ساعة', icon: '📵', color: '#6366F1', frequency: 'daily', targetCount: 1, xpReward: 10 },
       ]
-      const createdHabits = []
+      const createdHabits: Array<Awaited<ReturnType<typeof db.habit.create>>> = []
       for (const h of habits) {
         const habit = await db.habit.create({ data: { userId: DEFAULT_USER_ID, ...h } })
         createdHabits.push(habit)

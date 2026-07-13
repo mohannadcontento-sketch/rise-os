@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   TrendingUp,
   CheckCircle2,
@@ -108,6 +108,21 @@ export default function WeeklyReview() {
     return []
   })
   const [isAutoFilling, setIsAutoFilling] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(false)
+
+  // Week date range
+  const weekRange = (() => {
+    const now = new Date()
+    const dayOfWeek = now.getDay()
+    const start = new Date(now)
+    start.setDate(now.getDate() - dayOfWeek)
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6)
+    return {
+      start: start.toLocaleDateString('ar', { day: 'numeric', month: 'long' }),
+      end: end.toLocaleDateString('ar', { day: 'numeric', month: 'long' }),
+    }
+  })()
 
   const save = () => {
     const updated = allReviews.some((r) => r.id === review.id)
@@ -115,6 +130,8 @@ export default function WeeklyReview() {
       : [review, ...allReviews]
     setAllReviews(updated)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    setShowConfetti(true)
+    setTimeout(() => setShowConfetti(false), 2500)
     toast.success('تم حفظ المراجعة الأسبوعية')
   }
 
@@ -224,27 +241,68 @@ export default function WeeklyReview() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-emerald-accent" />
-            المراجعة الأسبوعية
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">تأمّل أسبوعك وخطط للأفضل</p>
+    <div className="space-y-6 max-w-3xl mx-auto relative">
+      {/* Confetti Animation */}
+      <AnimatePresence>
+        {showConfetti && (
+          <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+            {Array.from({ length: 30 }).map((_, i) => (
+              <motion.div
+                key={i}
+                initial={{ x: '50%', y: '-10%', opacity: 1, scale: 1 }}
+                animate={{
+                  x: `${Math.random() * 100}%`,
+                  y: `${60 + Math.random() * 40}%`,
+                  opacity: 0,
+                  scale: 0.3,
+                  rotate: Math.random() * 720,
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.5 + Math.random(), ease: 'easeOut' }}
+                className="absolute w-2 h-2 rounded-full"
+                style={{
+                  backgroundColor: ['oklch(0.55 0.14 163)', 'oklch(0.78 0.12 85)', 'oklch(0.65 0.20 30)', 'oklch(0.65 0.15 300)', 'oklch(0.60 0.18 15)'][i % 5],
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Header with week date range */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="rounded-2xl overflow-hidden relative"
+      >
+        <div className="absolute inset-0 bg-gradient-to-bl from-emerald-accent/10 via-forest/5 to-gold/10 dark:from-emerald-accent/15 dark:via-forest/10 dark:to-gold/10" />
+        <div className="absolute inset-0 noise-bg opacity-15" />
+        <div className="relative glass p-5 border-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-5 h-5 text-emerald-accent" />
+                <h2 className="text-xl font-bold text-foreground">المراجعة الأسبوعية</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {weekRange.start} — {weekRange.end}
+              </p>
+              <p className="text-xs text-emerald-accent/70 mt-1">{motivational.text}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
+                <RotateCcw className="w-3.5 h-3.5" />
+                إعادة
+              </Button>
+              <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+                <Save className="w-3.5 h-3.5" />
+                حفظ
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
-            <RotateCcw className="w-3.5 h-3.5" />
-            إعادة
-          </Button>
-          <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white">
-            <Save className="w-3.5 h-3.5" />
-            حفظ
-          </Button>
-        </div>
-      </div>
+      </motion.div>
 
       {/* Score Card with Visual Slider */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -312,7 +370,7 @@ export default function WeeklyReview() {
 
       {/* Section 1: Review - with emerald accent border */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="glass">
+        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
               <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
@@ -363,9 +421,9 @@ export default function WeeklyReview() {
         </Card>
       </motion.div>
 
-      {/* Section 2: Numbers - with Auto-Fill and emerald accent border */}
+      {/* Section 2: Numbers - with animated bars */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="glass">
+        <Card className="glass premium-card border-r-gold/50 border-r-3">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-gold">
@@ -392,61 +450,52 @@ export default function WeeklyReview() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3" />
-                  المهام المكتملة
-                </Label>
-                <Input
-                  type="number"
-                  value={review.numbers.tasksCompleted}
-                  onChange={(e) => updateNumber('tasksCompleted', parseInt(e.target.value) || 0)}
-                  className="text-center text-lg font-bold h-12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Clock className="w-3 h-3" />
-                  ساعات التركيز
-                </Label>
-                <Input
-                  type="number"
-                  value={review.numbers.focusHours}
-                  onChange={(e) => updateNumber('focusHours', parseInt(e.target.value) || 0)}
-                  className="text-center text-lg font-bold h-12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <BookOpen className="w-3 h-3" />
-                  الصفحات المقروءة
-                </Label>
-                <Input
-                  type="number"
-                  value={review.numbers.pagesRead}
-                  onChange={(e) => updateNumber('pagesRead', parseInt(e.target.value) || 0)}
-                  className="text-center text-lg font-bold h-12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Flame className="w-3 h-3" />
-                  نسبة إكمال العادات
-                </Label>
-                <div className="pt-2">
-                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
-                    <span>النسبة</span>
-                    <span className="font-semibold text-foreground">{review.numbers.habitsRate}%</span>
-                  </div>
-                  <Slider
-                    value={[review.numbers.habitsRate]}
-                    onValueChange={([v]) => updateNumber('habitsRate', v)}
-                    max={100}
-                    step={5}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
+              {[
+                { label: 'المهام المكتملة', value: review.numbers.tasksCompleted, max: 20, icon: CheckCircle2, color: 'text-emerald-accent', barColor: 'from-emerald-accent to-forest' },
+                { label: 'ساعات التركيز', value: review.numbers.focusHours, max: 10, icon: Clock, color: 'text-blue-500', barColor: 'from-blue-500 to-indigo-500' },
+                { label: 'الصفحات المقروءة', value: review.numbers.pagesRead, max: 200, icon: BookOpen, color: 'text-gold', barColor: 'from-gold to-amber-500' },
+                { label: 'نسبة إكمال العادات', value: review.numbers.habitsRate, max: 100, icon: Flame, color: 'text-orange-500', barColor: 'from-orange-500 to-rose-500', isPercent: true },
+              ].map((metric, i) => {
+                const percent = Math.min(100, Math.round((metric.value / metric.max) * 100))
+                return (
+                  <motion.div
+                    key={metric.label}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.05 }}
+                    className="space-y-2.5 p-3 rounded-xl bg-muted/20"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <metric.icon className={cn('w-3.5 h-3.5', metric.color)} />
+                        <span className="text-xs text-muted-foreground">{metric.label}</span>
+                      </div>
+                      <span className={cn('text-sm font-bold', metric.color)}>
+                        {metric.value}{metric.isPercent ? '%' : ''}
+                      </span>
+                    </div>
+                    {/* Animated Progress Bar */}
+                    <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
+                      <motion.div
+                        className={cn('h-full rounded-full bg-gradient-to-l', metric.barColor)}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percent}%` }}
+                        transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 + i * 0.05 }}
+                      />
+                    </div>
+                    {/* Keep input for editing */}
+                    <Input
+                      type="number"
+                      value={metric.value}
+                      onChange={(e) => updateNumber(
+                        metric.isPercent ? 'habitsRate' : metric.label === 'المهام المكتملة' ? 'tasksCompleted' : metric.label === 'ساعات التركيز' ? 'focusHours' : 'pagesRead',
+                        parseInt(e.target.value) || 0
+                      )}
+                      className="text-center text-sm font-semibold h-8 bg-transparent border-dashed"
+                    />
+                  </motion.div>
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -454,7 +503,7 @@ export default function WeeklyReview() {
 
       {/* Section 3: Goals - with emerald accent border */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="glass">
+        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
@@ -502,7 +551,7 @@ export default function WeeklyReview() {
 
       {/* Section 4: Next Week - with emerald accent border */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass">
+        <Card className="glass premium-card border-r-forest/50 border-r-3">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-forest">
               <ArrowLeft className="w-4 h-4 text-forest" />
@@ -541,6 +590,83 @@ export default function WeeklyReview() {
                 rows={4}
                 className="text-sm resize-none"
               />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Weekly Highlights - SVG Radar */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
+        <Card className="glass premium-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-purple-500">
+              <Sparkles className="w-4 h-4 text-purple-500" />
+              أبرز لحظات الأسبوع
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-6">
+              {/* Simple SVG Radar */}
+              <div className="shrink-0 flex items-center justify-center">
+                <svg viewBox="0 0 200 200" className="w-40 h-40 sm:w-48 sm:h-48">
+                  <defs>
+                    <linearGradient id="wradar-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="oklch(0.78 0.12 85)" stopOpacity="0.1" />
+                    </linearGradient>
+                  </defs>
+                  {/* Grid pentagons */}
+                  {[20, 40, 60, 80, 100].map((r, i) => {
+                    const points = [0, 1, 2, 3, 4].map(j => {
+                      const angle = (j * 2 * Math.PI / 5) - Math.PI / 2
+                      return `${100 + r * 0.8 * Math.cos(angle)},${100 + r * 0.8 * Math.sin(angle)}`
+                    }).join(' ')
+                    return <polygon key={i} points={points} fill="none" stroke="oklch(0.7 0.01 160)" strokeWidth="0.5" opacity="0.3" />
+                  })}
+                  {/* Data polygon */}
+                  <motion.polygon
+                    points={[
+                      { val: review.numbers.tasksCompleted, max: 20 },
+                      { val: review.numbers.focusHours, max: 10 },
+                      { val: review.numbers.pagesRead, max: 200 },
+                      { val: review.numbers.habitsRate, max: 100 },
+                      { val: review.goals.score, max: 10 },
+                    ].map((d, j) => {
+                      const r = Math.min(1, d.val / d.max) * 80
+                      const angle = (j * 2 * Math.PI / 5) - Math.PI / 2
+                      return `${100 + r * Math.cos(angle)},${100 + r * Math.sin(angle)}`
+                    }).join(' ')}
+                    fill="url(#wradar-fill)"
+                    stroke="oklch(0.55 0.14 163)"
+                    strokeWidth="2"
+                    initial={{ opacity: 0, scale: 0.5, transformOrigin: '100px 100px' }}
+                    animate={{ opacity: 1, scale: 1, transformOrigin: '100px 100px' }}
+                    transition={{ delay: 0.4, duration: 0.6 }}
+                  />
+                  {/* Labels */}
+                  {['مهام', 'تركيز', 'قراءة', 'عادات', 'أهداف'].map((label, j) => {
+                    const r = 95
+                    const angle = (j * 2 * Math.PI / 5) - Math.PI / 2
+                    return (
+                      <text key={label} x={100 + r * Math.cos(angle)} y={100 + r * Math.sin(angle)} textAnchor="middle" dominantBaseline="central" fill="oklch(0.45 0.01 160)" fontSize="9" fontWeight="500">{label}</text>
+                    )
+                  })}
+                </svg>
+              </div>
+              {/* Highlights list */}
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-gold" />
+                  <span className="text-xs font-semibold text-muted-foreground">أضف أبرز لحظات أسبوعك</span>
+                </div>
+                <Textarea
+                  placeholder="✨ ما هي أبرز إنجازاتك ومفاجآتك هذا الأسبوع؟"
+                  value={review.review.lessons}
+                  onChange={(e) => updateReview('lessons', e.target.value)}
+                  rows={4}
+                  className="text-sm resize-none border-purple-200/30 dark:border-purple-800/20 focus-visible:ring-purple-500/30"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

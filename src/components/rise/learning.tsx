@@ -19,6 +19,7 @@ import {
   Check,
   X,
   TrendingUp,
+  Flame,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -125,6 +126,35 @@ function EmptyState({ icon: Icon, title, desc }: { icon: React.ElementType; titl
       <p className="text-lg font-semibold text-muted-foreground">{title}</p>
       <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">{desc}</p>
     </motion.div>
+  )
+}
+
+/* ────────────── Progress Ring ────────────── */
+
+function ProgressRing({ level, color, size = 48, strokeWidth = 3 }: { level: number; color: string; size?: number; strokeWidth?: number }) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const progress = (level / 5) * circumference
+  const gradId = `rg-${color.replace(/[^a-z0-9]/g, '')}-${size}`
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      <defs>
+        <linearGradient id={gradId}>
+          <stop offset="0%" stopColor={color} stopOpacity="0.5" />
+          <stop offset="100%" stopColor={color} stopOpacity="1" />
+        </linearGradient>
+      </defs>
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-muted/30" />
+      <motion.circle
+        cx={size / 2} cy={size / 2} r={radius} fill="none"
+        stroke={`url(#${gradId})`} strokeWidth={strokeWidth}
+        strokeDasharray={circumference} strokeLinecap="round"
+        initial={{ strokeDashoffset: circumference }}
+        animate={{ strokeDashoffset: circumference - progress }}
+        transition={{ duration: 0.8, ease: 'easeOut' }}
+      />
+      <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" className="fill-foreground text-xs font-bold" style={{ transform: 'rotate(90deg)', transformOrigin: 'center' }}>{level}</text>
+    </svg>
   )
 }
 
@@ -321,6 +351,19 @@ export default function Learning() {
   const activeGoals = data.goals.filter((g) => g.status === 'active').length
   const completedCourses = data.courses.filter((c) => c.status === 'completed').length
 
+  // Learning streak
+  const learningStreak = (() => {
+    if (data.logs.length === 0) return 0
+    const dates = [...new Set(data.logs.map(l => l.date))].sort((a, b) => b.localeCompare(a))
+    let streak = 1
+    for (let i = 1; i < dates.length; i++) {
+      const diff = Math.round((new Date(dates[i - 1]).getTime() - new Date(dates[i]).getTime()) / (1000 * 60 * 60 * 24))
+      if (diff <= 1) streak++
+      else break
+    }
+    return streak
+  })()
+
   // Skill radar data
   const radarData = data.skills.map((s, i) => ({
     skill: s.name,
@@ -340,6 +383,23 @@ export default function Learning() {
           </h2>
           <p className="text-sm text-muted-foreground mt-1">تتبع أهدافك التعليمية ومهاراتك ودوراتك</p>
         </div>
+        {learningStreak > 0 && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', damping: 12 }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-500/15 to-amber-500/15 border border-orange-400/20"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.15, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              <Flame className="w-4 h-4 text-orange-500" />
+            </motion.div>
+            <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{learningStreak}</span>
+            <span className="text-xs text-orange-500/80">يوم تعلّم</span>
+          </motion.div>
+        )}
       </div>
 
       {/* Stats */}
@@ -429,7 +489,12 @@ export default function Learning() {
               <div className="grid sm:grid-cols-2 gap-4">
                 {data.goals.map((goal, i) => (
                   <motion.div key={goal.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                    <Card className="glass">
+                    <Card className={cn(
+                      'glass premium-card',
+                      goal.status === 'completed' && 'border-r-emerald-accent/50 border-r-3',
+                      goal.status === 'active' && 'border-r-gold/50 border-r-3',
+                      goal.status === 'paused' && 'border-r-muted-foreground/30 border-r-3',
+                    )}>
                       <CardContent className="p-5">
                         <div className="flex items-start justify-between gap-2 mb-3">
                           <div className="flex-1 min-w-0">
@@ -665,6 +730,72 @@ export default function Learning() {
                   </motion.div>
                 )}
 
+                {/* Skill Tree Visual */}
+                {data.skills.length >= 2 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                  >
+                    <Card className="glass">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-purple-500" />
+                          شجرة المهارات
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto pb-2">
+                          <svg viewBox="0 0 600 120" className="w-full min-w-[400px] h-28">
+                            <defs>
+                              <linearGradient id="tree-line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity="0.3" />
+                                <stop offset="100%" stopColor="oklch(0.78 0.12 85)" stopOpacity="0.3" />
+                              </linearGradient>
+                            </defs>
+                            {/* Connecting lines */}
+                            {data.skills.map((skill, i) => {
+                              if (i === 0) return null
+                              const prevX = 60 + (i - 1) * (480 / Math.max(data.skills.length - 1, 1))
+                              const currX = 60 + i * (480 / Math.max(data.skills.length - 1, 1))
+                              return (
+                                <motion.line
+                                  key={`line-${i}`}
+                                  x1={prevX} y1={60} x2={currX} y2={60}
+                                  stroke="url(#tree-line-grad)" strokeWidth="2" strokeDasharray="6 4"
+                                  initial={{ pathLength: 0, opacity: 0 }}
+                                  animate={{ pathLength: 1, opacity: 1 }}
+                                  transition={{ delay: 0.2 + i * 0.1, duration: 0.6 }}
+                                />
+                              )
+                            })}
+                            {/* Skill nodes */}
+                            {data.skills.map((skill, i) => {
+                              const x = 60 + i * (480 / Math.max(data.skills.length - 1, 1))
+                              const nodeColor = skillDotColors[i % skillDotColors.length]
+                              const radius = 12 + skill.level * 3
+                              return (
+                                <motion.g
+                                  key={skill.id}
+                                  initial={{ scale: 0, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  transition={{ delay: 0.3 + i * 0.1, type: 'spring', damping: 12 }}
+                                >
+                                  <circle cx={x} cy={60} r={radius + 4} fill={nodeColor} opacity="0.1" />
+                                  <circle cx={x} cy={60} r={radius} fill={nodeColor} opacity="0.8" />
+                                  <circle cx={x} cy={60} r={radius - 3} fill={nodeColor} />
+                                  <text x={x} y={60} textAnchor="middle" dominantBaseline="central" fill="white" fontSize="11" fontWeight="bold">{skill.level}</text>
+                                  <text x={x} y={95} textAnchor="middle" fill="oklch(0.45 0.01 160)" fontSize="10" fontWeight="500">{skill.name.length > 10 ? skill.name.slice(0, 10) + '…' : skill.name}</text>
+                                </motion.g>
+                              )
+                            })}
+                          </svg>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
                 {/* Skill Tags with Gradient Backgrounds */}
                 <div className="flex flex-wrap gap-3">
                   {data.skills.map((skill, i) => (
@@ -694,24 +825,10 @@ export default function Learning() {
                       ) : (
                         <Card className={cn('glass overflow-hidden border', skill.color, 'bg-gradient-to-l')}>
                           <CardContent className="p-3">
-                            <div className="flex items-center gap-2">
-                              <div className="flex gap-0.5">
-                                {[1, 2, 3, 4, 5].map((level) => (
-                                  <motion.button
-                                    key={level}
-                                    whileTap={{ scale: 0.8 }}
-                                    onClick={() => updateSkillLevel(skill.id, level)}
-                                    className="w-3 h-3 rounded-full border-2 transition-all"
-                                    style={{
-                                      backgroundColor: level <= skill.level ? 'currentColor' : 'transparent',
-                                      borderColor: 'currentColor',
-                                      opacity: level <= skill.level ? 1 : 0.2,
-                                    }}
-                                  />
-                                ))}
-                              </div>
+                            <div className="flex items-center gap-2.5">
+                              <ProgressRing level={skill.level} color={skillDotColors[i % skillDotColors.length]} size={36} strokeWidth={2.5} />
                               <span className="text-sm font-medium">{skill.name}</span>
-                              <span className="text-[10px] text-muted-foreground/60">({skill.level}/5)</span>
+                              <span className="text-[10px] text-muted-foreground/60">({skill.level}/٥)</span>
                               <button
                                 onClick={() => { setEditingSkill(skill.id); setEditSkillName(skill.name) }}
                                 className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all"
@@ -806,7 +923,7 @@ export default function Learning() {
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {data.logs.map((log, i) => (
-                  <motion.div key={log.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                  <motion.div key={log.id} initial={{ opacity: 0, x: 20, scale: 0.95 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ delay: i * 0.05, type: 'spring', damping: 18 }}>
                     <Card className="glass">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-3">

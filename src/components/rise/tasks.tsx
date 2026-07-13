@@ -23,6 +23,8 @@ import {
   Loader2,
   Inbox,
   Sparkles,
+  Lock,
+  Link2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -59,6 +61,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
+import { toast } from 'sonner'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
 import { ar } from 'date-fns/locale'
 
@@ -84,6 +87,7 @@ interface Task {
   completedAt?: string | null
   subtasks: SubTask[]
   order: number
+  dependsOn?: string | null
 }
 
 interface Project {
@@ -108,11 +112,11 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 12, scale: 0.98 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] } },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] as const } },
   exit: { opacity: 0, x: -20, scale: 0.95, transition: { duration: 0.2 } },
 }
 
-const cardHover = { scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }
+const cardHover = { scale: 1.01, transition: { type: 'spring' as const, stiffness: 400, damping: 25 } }
 
 /* Priority left border colors */
 const priorityBorderColors: Record<string, string> = {
@@ -189,6 +193,7 @@ export function Tasks() {
   const [formPriority, setFormPriority] = useState('medium')
   const [formProject, setFormProject] = useState<string>('none')
   const [formDueDate, setFormDueDate] = useState('')
+  const [formDependsOn, setFormDependsOn] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   // Calendar state
@@ -212,15 +217,25 @@ export function Tasks() {
   }, [fetchData])
 
   /* ── Filtering ── */
+  const isTaskBlocked = useCallback((task: Task): boolean => {
+    if (!task.dependsOn) return false
+    const deps = task.dependsOn.split(',').filter(Boolean)
+    return deps.some((depId) => {
+      const depTask = tasks.find((t) => t.id === depId)
+      return depTask && depTask.status !== 'done'
+    })
+  }, [tasks])
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (filterPriority !== 'all' && t.priority !== filterPriority) return false
       if (filterProject !== 'all' && t.projectId !== filterProject) return false
       if (filterStatus !== 'all' && t.status !== filterStatus) return false
+      if (filterStatus === 'blocked' && !isTaskBlocked(t)) return false
       if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
       return true
     })
-  }, [tasks, filterPriority, filterProject, filterStatus, searchQuery])
+  }, [tasks, filterPriority, filterProject, filterStatus, filterStatus, searchQuery, isTaskBlocked])
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
@@ -245,6 +260,8 @@ export function Tasks() {
       if (!isDone) {
         notifyTaskComplete(task.title, task.xpReward)
         fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+        // Check if completing this task unblocks dependent tasks
+        checkUnblockedTasks(task.id)
       }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
@@ -262,6 +279,8 @@ export function Tasks() {
       })
       if (newStatus === 'done') {
         fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+        // Check if completing this task unblocks dependent tasks
+        checkUnblockedTasks(task.id)
       }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
@@ -308,6 +327,7 @@ export function Tasks() {
         dueDate: formDueDate || null,
       }
       if (formProject !== 'none') body.projectId = formProject
+      if (formDependsOn.length > 0) body.dependsOn = formDependsOn.join(',')
       await fetch('/api/rise/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -318,12 +338,35 @@ export function Tasks() {
       setFormPriority('medium')
       setFormProject('none')
       setFormDueDate('')
+      setFormDependsOn([])
       setAddOpen(false)
       fetchData()
     } catch {
       /* ignore */
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  /* ── Check unblocked tasks ── */
+  const checkUnblockedTasks = (completedTaskId: string) => {
+    const unblocked = tasks.filter((t) => {
+      if (!t.dependsOn || t.status === 'done') return false
+      const deps = t.dependsOn.split(',').filter(Boolean)
+      // This task was blocked by the completed task
+      if (!deps.includes(completedTaskId)) return false
+      // Now check if ALL dependencies are done
+      const allDepsDone = deps.every((depId) => {
+        const dep = tasks.find((tt) => tt.id === depId)
+        return dep && dep.status === 'done'
+      })
+      return allDepsDone
+    })
+    if (unblocked.length > 0) {
+      toast.success('🔓 تم فتح مهام محظورة', {
+        description: unblocked.map((t) => t.title).join('، '),
+        duration: 4000,
+      })
     }
   }
 
@@ -357,6 +400,10 @@ export function Tasks() {
     const isExpanded = expandedId === task.id
     const isDone = task.status === 'done'
     const completedSubs = task.subtasks.filter((s) => s.completed).length
+    const blocked = isTaskBlocked(task)
+    const depNames = task.dependsOn
+      ? task.dependsOn.split(',').filter(Boolean).map((id) => tasks.find((t) => t.id === id)?.title).filter(Boolean)
+      : []
 
     return (
       <motion.div
@@ -370,7 +417,8 @@ export function Tasks() {
             'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300',
             'hover:shadow-lg hover:shadow-emerald-accent/8',
             priorityBorderColors[task.priority] || 'border-r-border',
-            isDone && 'opacity-60'
+            isDone && 'opacity-60',
+            blocked && !isDone && 'opacity-60'
           )}
           whileHover={{ scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
         >
@@ -381,13 +429,20 @@ export function Tasks() {
                 whileTap={{ scale: 0.8 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
               >
-                <Checkbox
-                  checked={isDone}
-                  onCheckedChange={() => toggleTask(task)}
-                  className={cn(
-                    'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
-                  )}
-                />
+                {blocked && !isDone ? (
+                  <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+                    <Lock className="w-3 h-3 text-muted-foreground/50" />
+                  </div>
+                ) : (
+                  <Checkbox
+                    checked={isDone}
+                    onCheckedChange={() => toggleTask(task)}
+                    disabled={blocked && !isDone}
+                    className={cn(
+                      'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+                    )}
+                  />
+                )}
               </motion.div>
             </div>
 
@@ -428,6 +483,22 @@ export function Tasks() {
                     {task.xpReward}
                   </span>
                 )}
+
+                {/* Blocked badge */}
+                {blocked && !isDone && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium rounded-full bg-muted text-muted-foreground">
+                    <Lock className="w-3 h-3 ml-1" />
+                    محظورة
+                  </Badge>
+                )}
+
+                {/* Dependency chain badge */}
+                {depNames.length > 0 && !blocked && !isDone && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium rounded-full bg-gold/10 text-gold">
+                    <Link2 className="w-3 h-3 ml-1" />
+                    {depNames.length} تبعية
+                  </Badge>
+                )}
               </div>
 
               {/* Meta row */}
@@ -458,6 +529,13 @@ export function Tasks() {
                   >
                     {task.description && (
                       <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{task.description}</p>
+                    )}
+                    {/* Dependency info */}
+                    {depNames.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Link2 className="w-3 h-3" />
+                        <span>يعتمد على: {depNames.join('، ')}</span>
+                      </div>
                     )}
                     {task.subtasks.length > 0 && (
                       <div className="mt-3 space-y-1.5">
@@ -499,7 +577,7 @@ export function Tasks() {
                     <MoreHorizontal className="w-4 h-4" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" dir="rtl">
+                <DropdownMenuContent align="end">
                   <DropdownMenuItem
                     onClick={() => {
                       const nextIdx = (STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length
@@ -566,7 +644,7 @@ export function Tasks() {
                   <MoreHorizontal className="w-3.5 h-3.5" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" dir="rtl">
+              <DropdownMenuContent align="end">
                 {statusColumns
                   .filter((c) => c.key !== task.status)
                   .map((col) => (
@@ -635,8 +713,7 @@ export function Tasks() {
             </span>
             <Checkbox
               checked={isDone}
-              onCheckedChange={(e) => {
-                e.stopPropagation()
+              onCheckedChange={() => {
                 toggleTask(task)
               }}
               className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
@@ -694,7 +771,7 @@ export function Tasks() {
                 تصفية
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" dir="rtl" className="w-56">
+            <DropdownMenuContent align="end" className="w-56">
               <div className="p-2 space-y-3">
                 <div>
                   <Label className="text-[11px] text-muted-foreground mb-1 block">الأولوية</Label>
@@ -865,6 +942,38 @@ export function Tasks() {
                     className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
                   />
                 </div>
+                {/* Dependencies */}
+                {tasks.length > 0 && (
+                  <div>
+                    <Label className="text-xs font-medium mb-1.5 block flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5" />
+                      يعتمد على (اختياري)
+                    </Label>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto rounded-xl border border-border/60 p-2">
+                      {tasks
+                        .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
+                        .map((t) => (
+                          <label key={t.id} className="flex items-center gap-2 cursor-pointer group/dep hover:bg-muted/40 rounded-lg px-2 py-1.5 transition-colors">
+                            <Checkbox
+                              checked={formDependsOn.includes(t.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setFormDependsOn((prev) => [...prev, t.id])
+                                } else {
+                                  setFormDependsOn((prev) => prev.filter((id) => id !== t.id))
+                                }
+                              }}
+                              className="w-4 h-4 rounded-md data-[state=checked]:bg-gold data-[state=checked]:border-gold"
+                            />
+                            <span className="text-xs text-foreground truncate">{t.title}</span>
+                            <span className="text-[10px] text-muted-foreground mr-auto">
+                              {statusLabels[t.status] || t.status}
+                            </span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter className="gap-2 mt-4">
                 <DialogClose asChild>
@@ -893,9 +1002,9 @@ export function Tasks() {
         transition={{ delay: 0.1 }}
         className="glass rounded-2xl p-2.5 flex flex-wrap items-center gap-1.5"
       >
-        {['all', 'todo', 'in_progress', 'done'].map((status) => {
+        {['all', 'todo', 'in_progress', 'done', 'blocked'].map((status) => {
           const isActive = filterStatus === status
-          const label = status === 'all' ? 'الكل' : status === 'todo' ? 'للتنفيذ' : status === 'in_progress' ? 'قيد التنفيذ' : 'مكتمل'
+          const label = status === 'all' ? 'الكل' : status === 'todo' ? 'للتنفيذ' : status === 'in_progress' ? 'قيد التنفيذ' : status === 'blocked' ? 'محظورة' : 'مكتمل'
           return (
             <motion.button
               key={status}
@@ -903,11 +1012,14 @@ export function Tasks() {
               onClick={() => setFilterStatus(status)}
               className={cn(
                 'px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
-                isActive
+                isActive && status !== 'blocked'
                   ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  : isActive && status === 'blocked'
+                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/25'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
             >
+              {status === 'blocked' && <Lock className="w-3 h-3 ml-1 inline" />}
               {label}
             </motion.button>
           )

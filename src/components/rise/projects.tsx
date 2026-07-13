@@ -105,7 +105,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16, scale: 0.97 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] as const } },
   exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
 }
 
@@ -472,7 +472,7 @@ export function Projects() {
                       <MoreHorizontal className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" dir="rtl">
+                  <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => openEditDialog(selectedProject)}>
                       <Pencil className="w-4 h-4 ml-2" />
                       تعديل
@@ -628,7 +628,7 @@ export function Projects() {
                                     <MoreHorizontal className="w-4 h-4" />
                                   </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" dir="rtl">
+                                <DropdownMenuContent align="end">
                                   {STATUSES.filter((s) => s !== task.status).map((s) => (
                                     <DropdownMenuItem key={s} onClick={() => moveTask(task, s)}>
                                       نقل إلى: {statusLabels[s]}
@@ -861,7 +861,7 @@ export function Projects() {
                                 <MoreHorizontal className="w-4 h-4" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" dir="rtl">
+                            <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project) }}>
                                 <Pencil className="w-4 h-4 ml-2" />
                                 تعديل

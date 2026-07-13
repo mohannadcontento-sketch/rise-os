@@ -107,6 +107,7 @@ model Task {
   updatedAt   DateTime @updatedAt
 
   subtasks    SubTask[]
+  dependsOn   String?   // comma-separated task IDs
   order       Int      @default(0)
 }
 
@@ -177,6 +178,7 @@ model Habit {
   color       String   @default("#059669")
   frequency   String   @default("daily") // daily, weekly, monthly, custom
   targetCount Int      @default(1)
+  reminderTime String?   // HH:MM format
   xpReward    Int      @default(15)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -239,6 +241,7 @@ model FocusSession {
   actualMin   Int      @default(0)
   type        String   @default("pomodoro") // pomodoro, deep50, deep90, deep120
   notes       String?
+  taskId      String?
   completed   Boolean  @default(false)
   startedAt   DateTime
   completedAt DateTime?

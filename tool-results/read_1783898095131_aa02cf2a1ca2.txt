@@ -1,0 +1,865 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  GraduationCap,
+     7→  Plus,
+     8→  Target,
+     9→  Award,
+    10→  BookOpen,
+    11→  Trash2,
+    12→  ChevronDown,
+    13→  ChevronUp,
+    14→  Lightbulb,
+    15→  Brain,
+    16→  Sparkles,
+    17→  CalendarDays,
+    18→  Edit3,
+    19→  Check,
+    20→  X,
+    21→  TrendingUp,
+    22→} from 'lucide-react'
+    23→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    24→import { Button } from '@/components/ui/button'
+    25→import { Badge } from '@/components/ui/badge'
+    26→import { Input } from '@/components/ui/input'
+    27→import { Textarea } from '@/components/ui/textarea'
+    28→import { Progress } from '@/components/ui/progress'
+    29→import {
+    30→  Dialog,
+    31→  DialogContent,
+    32→  DialogHeader,
+    33→  DialogTitle,
+    34→  DialogTrigger,
+    35→} from '@/components/ui/dialog'
+    36→import { cn } from '@/lib/utils'
+    37→import { toast } from 'sonner'
+    38→import {
+    39→  RadarChart,
+    40→  Radar,
+    41→  PolarGrid,
+    42→  PolarAngleAxis,
+    43→  PolarRadiusAxis,
+    44→  ResponsiveContainer,
+    45→} from 'recharts'
+    46→
+    47→/* ────────────── Types ────────────── */
+    48→
+    49→interface LearningGoal {
+    50→  id: string
+    51→  title: string
+    52→  description: string
+    53→  progress: number
+    54→  status: 'active' | 'completed' | 'paused'
+    55→  createdAt: string
+    56→}
+    57→
+    58→interface Course {
+    59→  id: string
+    60→  name: string
+    61→  platform: string
+    62→  progress: number
+    63→  status: 'in_progress' | 'completed' | 'not_started'
+    64→  certificate: boolean
+    65→}
+    66→
+    67→interface Skill {
+    68→  id: string
+    69→  name: string
+    70→  level: number // 1-5
+    71→  color: string
+    72→}
+    73→
+    74→interface LearningLog {
+    75→  id: string
+    76→  date: string
+    77→  content: string
+    78→  minutesSpent: number
+    79→}
+    80→
+    81→interface LearningData {
+    82→  goals: LearningGoal[]
+    83→  courses: Course[]
+    84→  skills: Skill[]
+    85→  logs: LearningLog[]
+    86→}
+    87→
+    88→const STORAGE_KEY = 'rise-learning'
+    89→
+    90→const defaultData: LearningData = {
+    91→  goals: [],
+    92→  courses: [],
+    93→  skills: [],
+    94→  logs: [],
+    95→}
+    96→
+    97→const skillGradientColors = [
+    98→  'from-emerald-accent/20 to-emerald-accent/5 text-emerald-accent border-emerald-accent/20',
+    99→  'from-forest/20 to-forest/5 text-forest border-forest/20',
+   100→  'from-gold/20 to-gold/5 text-gold border-gold/20',
+   101→  'from-purple-500/20 to-purple-500/5 text-purple-500 border-purple-500/20',
+   102→  'from-orange-500/20 to-orange-500/5 text-orange-500 border-orange-500/20',
+   103→  'from-rose-500/20 to-rose-500/5 text-rose-500 border-rose-500/20',
+   104→  'from-cyan-500/20 to-cyan-500/5 text-cyan-500 border-cyan-500/20',
+   105→  'from-amber-500/20 to-amber-500/5 text-amber-500 border-amber-500/20',
+   106→]
+   107→
+   108→const skillDotColors = [
+   109→  'oklch(0.55 0.14 163)',
+   110→  'oklch(0.45 0.08 160)',
+   111→  'oklch(0.78 0.12 85)',
+   112→  'oklch(0.65 0.15 300)',
+   113→  'oklch(0.65 0.20 30)',
+   114→  'oklch(0.60 0.18 15)',
+   115→  'oklch(0.65 0.12 210)',
+   116→  'oklch(0.72 0.15 75)',
+   117→]
+   118→
+   119→function EmptyState({ icon: Icon, title, desc }: { icon: React.ElementType; title: string; desc: string }) {
+   120→  return (
+   121→    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16 text-center">
+   122→      <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+   123→        <Icon className="w-8 h-8 text-muted-foreground/50" />
+   124→      </div>
+   125→      <p className="text-lg font-semibold text-muted-foreground">{title}</p>
+   126→      <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">{desc}</p>
+   127→    </motion.div>
+   128→  )
+   129→}
+   130→
+   131→/* ────────────── Component ────────────── */
+   132→
+   133→export default function Learning() {
+   134→  const [data, setData] = useState<LearningData>(() => {
+   135→    if (typeof window === 'undefined') return defaultData
+   136→    try {
+   137→      const stored = localStorage.getItem(STORAGE_KEY)
+   138→      if (stored) return JSON.parse(stored)
+   139→    } catch { /* ignore */ }
+   140→    return defaultData
+   141→  })
+   142→  const [activeSection, setActiveSection] = useState<'goals' | 'courses' | 'skills' | 'logs'>('goals')
+   143→
+   144→  // Add goal dialog
+   145→  const [goalDialogOpen, setGoalDialogOpen] = useState(false)
+   146→  const [newGoalTitle, setNewGoalTitle] = useState('')
+   147→  const [newGoalDesc, setNewGoalDesc] = useState('')
+   148→
+   149→  // Add course dialog
+   150→  const [courseDialogOpen, setCourseDialogOpen] = useState(false)
+   151→  const [newCourseName, setNewCourseName] = useState('')
+   152→  const [newCoursePlatform, setNewCoursePlatform] = useState('')
+   153→
+   154→  // Add skill dialog
+   155→  const [skillDialogOpen, setSkillDialogOpen] = useState(false)
+   156→  const [newSkillName, setNewSkillName] = useState('')
+   157→  const [newSkillLevel, setNewSkillLevel] = useState(1)
+   158→
+   159→  // Log dialog
+   160→  const [logDialogOpen, setLogDialogOpen] = useState(false)
+   161→  const [newLogContent, setNewLogContent] = useState('')
+   162→  const [newLogMinutes, setNewLogMinutes] = useState('')
+   163→
+   164→  // Editing
+   165→  const [editingLog, setEditingLog] = useState<string | null>(null)
+   166→  const [editLogContent, setEditLogContent] = useState('')
+   167→
+   168→  // Edit skill
+   169→  const [editingSkill, setEditingSkill] = useState<string | null>(null)
+   170→  const [editSkillName, setEditSkillName] = useState('')
+   171→
+   172→  useEffect(() => {
+   173→    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+   174→  }, [data])
+   175→
+   176→  const addGoal = () => {
+   177→    if (!newGoalTitle.trim()) return
+   178→    const goal: LearningGoal = {
+   179→      id: crypto.randomUUID(),
+   180→      title: newGoalTitle,
+   181→      description: newGoalDesc,
+   182→      progress: 0,
+   183→      status: 'active',
+   184→      createdAt: new Date().toISOString(),
+   185→    }
+   186→    setData((prev) => ({ ...prev, goals: [goal, ...prev.goals] }))
+   187→    setNewGoalTitle('')
+   188→    setNewGoalDesc('')
+   189→    setGoalDialogOpen(false)
+   190→    toast.success('تمت إضافة الهدف')
+   191→  }
+   192→
+   193→  const updateGoalProgress = (id: string, progress: number) => {
+   194→    setData((prev) => ({
+   195→      ...prev,
+   196→      goals: prev.goals.map((g) => {
+   197→        if (g.id !== id) return g
+   198→        const status = progress >= 100 ? 'completed' : progress > 0 ? 'active' : 'active'
+   199→        return { ...g, progress: Math.min(100, progress), status }
+   200→      }),
+   201→    }))
+   202→  }
+   203→
+   204→  const deleteGoal = (id: string) => {
+   205→    setData((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== id) }))
+   206→    toast.success('تم حذف الهدف')
+   207→  }
+   208→
+   209→  const addCourse = () => {
+   210→    if (!newCourseName.trim()) return
+   211→    const course: Course = {
+   212→      id: crypto.randomUUID(),
+   213→      name: newCourseName,
+   214→      platform: newCoursePlatform,
+   215→      progress: 0,
+   216→      status: 'not_started',
+   217→      certificate: false,
+   218→    }
+   219→    setData((prev) => ({ ...prev, courses: [course, ...prev.courses] }))
+   220→    setNewCourseName('')
+   221→    setNewCoursePlatform('')
+   222→    setCourseDialogOpen(false)
+   223→    toast.success('تمت إضافة الدورة')
+   224→  }
+   225→
+   226→  const updateCourseProgress = (id: string, progress: number) => {
+   227→    setData((prev) => ({
+   228→      ...prev,
+   229→      courses: prev.courses.map((c) => {
+   230→        if (c.id !== id) return c
+   231→        return {
+   232→          ...c,
+   233→          progress: Math.min(100, progress),
+   234→          status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started',
+   235→        }
+   236→      }),
+   237→    }))
+   238→  }
+   239→
+   240→  const toggleCertificate = (id: string) => {
+   241→    setData((prev) => ({
+   242→      ...prev,
+   243→      courses: prev.courses.map((c) => (c.id === id ? { ...c, certificate: !c.certificate } : c)),
+   244→    }))
+   245→  }
+   246→
+   247→  const deleteCourse = (id: string) => {
+   248→    setData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== id) }))
+   249→    toast.success('تم حذف الدورة')
+   250→  }
+   251→
+   252→  const addSkill = () => {
+   253→    if (!newSkillName.trim()) return
+   254→    const skill: Skill = {
+   255→      id: crypto.randomUUID(),
+   256→      name: newSkillName,
+   257→      level: newSkillLevel,
+   258→      color: skillGradientColors[data.skills.length % skillGradientColors.length],
+   259→    }
+   260→    setData((prev) => ({ ...prev, skills: [...prev.skills, skill] }))
+   261→    setNewSkillName('')
+   262→    setNewSkillLevel(1)
+   263→    setSkillDialogOpen(false)
+   264→    toast.success('تمت إضافة المهارة')
+   265→  }
+   266→
+   267→  const updateSkillLevel = (id: string, level: number) => {
+   268→    setData((prev) => ({
+   269→      ...prev,
+   270→      skills: prev.skills.map((s) => (s.id === id ? { ...s, level: Math.min(5, Math.max(1, level)) } : s)),
+   271→    }))
+   272→  }
+   273→
+   274→  const saveSkillEdit = () => {
+   275→    if (!editingSkill || !editSkillName.trim()) return
+   276→    setData((prev) => ({
+   277→      ...prev,
+   278→      skills: prev.skills.map((s) => s.id === editingSkill ? { ...s, name: editSkillName.trim() } : s),
+   279→    }))
+   280→    setEditingSkill(null)
+   281→    setEditSkillName('')
+   282→    toast.success('تم تحديث المهارة')
+   283→  }
+   284→
+   285→  const deleteSkill = (id: string) => {
+   286→    setData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s.id !== id) }))
+   287→    toast.success('تم حذف المهارة')
+   288→  }
+   289→
+   290→  const addLog = () => {
+   291→    if (!newLogContent.trim()) return
+   292→    const log: LearningLog = {
+   293→      id: crypto.randomUUID(),
+   294→      date: new Date().toISOString().split('T')[0],
+   295→      content: newLogContent,
+   296→      minutesSpent: parseInt(newLogMinutes) || 0,
+   297→    }
+   298→    setData((prev) => ({ ...prev, logs: [log, ...prev.logs] }))
+   299→    setNewLogContent('')
+   300→    setNewLogMinutes('')
+   301→    setLogDialogOpen(false)
+   302→    toast.success('تمت إضافة السجل')
+   303→  }
+   304→
+   305→  const saveLogEdit = (id: string) => {
+   306→    setData((prev) => ({
+   307→      ...prev,
+   308→      logs: prev.logs.map((l) => (l.id === id ? { ...l, content: editLogContent } : l)),
+   309→    }))
+   310→    setEditingLog(null)
+   311→    toast.success('تم تحديث السجل')
+   312→  }
+   313→
+   314→  const deleteLog = (id: string) => {
+   315→    setData((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== id) }))
+   316→    toast.success('تم حذف السجل')
+   317→  }
+   318→
+   319→  const totalMinutes = data.logs.reduce((sum, l) => sum + l.minutesSpent, 0)
+   320→  const totalHours = Math.round(totalMinutes / 60)
+   321→  const activeGoals = data.goals.filter((g) => g.status === 'active').length
+   322→  const completedCourses = data.courses.filter((c) => c.status === 'completed').length
+   323→
+   324→  // Skill radar data
+   325→  const radarData = data.skills.map((s, i) => ({
+   326→    skill: s.name,
+   327→    level: s.level,
+   328→    fullMark: 5,
+   329→    fill: skillDotColors[i % skillDotColors.length],
+   330→  }))
+   331→
+   332→  return (
+   333→    <div dir="rtl" className="space-y-6">
+   334→      {/* Header */}
+   335→      <div className="flex items-center justify-between">
+   336→        <div>
+   337→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   338→            <GraduationCap className="w-6 h-6 text-emerald-accent" />
+   339→            التعلم
+   340→          </h2>
+   341→          <p className="text-sm text-muted-foreground mt-1">تتبع أهدافك التعليمية ومهاراتك ودوراتك</p>
+   342→        </div>
+   343→      </div>
+   344→
+   345→      {/* Stats */}
+   346→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   347→        {[
+   348→          { label: 'أهداف نشطة', value: activeGoals, icon: Target, color: 'text-emerald-accent' },
+   349→          { label: 'دورات مكتملة', value: completedCourses, icon: Award, color: 'text-gold' },
+   350→          { label: 'مهارات', value: data.skills.length, icon: Brain, color: 'text-forest' },
+   351→          { label: 'ساعات تعلم', value: totalHours, icon: TrendingUp, color: 'text-emerald-accent' },
+   352→        ].map((stat, i) => (
+   353→          <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
+   354→            <Card className="glass">
+   355→              <CardContent className="p-4">
+   356→                <div className="flex items-center gap-3">
+   357→                  <div className={cn('p-2 rounded-xl bg-background/80', stat.color)}>
+   358→                    <stat.icon className="w-4 h-4" />
+   359→                  </div>
+   360→                  <div>
+   361→                    <p className="text-2xl font-bold">{stat.value}</p>
+   362→                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+   363→                  </div>
+   364→                </div>
+   365→              </CardContent>
+   366→            </Card>
+   367→          </motion.div>
+   368→        ))}
+   369→      </div>
+   370→
+   371→      {/* Section Tabs */}
+   372→      <div className="flex gap-2 flex-wrap">
+   373→        {[
+   374→          { id: 'goals' as const, label: 'الأهداف', icon: Target },
+   375→          { id: 'courses' as const, label: 'الدورات', icon: GraduationCap },
+   376→          { id: 'skills' as const, label: 'المهارات', icon: Brain },
+   377→          { id: 'logs' as const, label: 'سجل التعلم', icon: CalendarDays },
+   378→        ].map((tab) => (
+   379→          <Button
+   380→            key={tab.id}
+   381→            variant={activeSection === tab.id ? 'default' : 'outline'}
+   382→            size="sm"
+   383→            onClick={() => setActiveSection(tab.id)}
+   384→            className={cn(
+   385→              'gap-2 rounded-xl',
+   386→              activeSection === tab.id && 'bg-emerald-accent hover:bg-emerald-accent/90 text-white'
+   387→            )}
+   388→          >
+   389→            <tab.icon className="w-3.5 h-3.5" />
+   390→            {tab.label}
+   391→          </Button>
+   392→        ))}
+   393→      </div>
+   394→
+   395→      {/* GOALS SECTION */}
+   396→      <AnimatePresence mode="wait">
+   397→        {activeSection === 'goals' && (
+   398→          <motion.div key="goals" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+   399→            <div className="flex justify-end">
+   400→              <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>
+   401→                <DialogTrigger asChild>
+   402→                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+   403→                    <Plus className="w-4 h-4" />
+   404→                    هدف جديد
+   405→                  </Button>
+   406→                </DialogTrigger>
+   407→                <DialogContent className="sm:max-w-md" dir="rtl">
+   408→                  <DialogHeader><DialogTitle>إضافة هدف تعليمي</DialogTitle></DialogHeader>
+   409→                  <div className="space-y-4 mt-4">
+   410→                    <div className="space-y-2">
+   411→                      <label className="text-sm font-medium">عنوان الهدف</label>
+   412→                      <Input placeholder="مثال: تعلم TypeScript" value={newGoalTitle} onChange={(e) => setNewGoalTitle(e.target.value)} />
+   413→                    </div>
+   414→                    <div className="space-y-2">
+   415→                      <label className="text-sm font-medium">الوصف</label>
+   416→                      <Textarea placeholder="ماذا تريد أن تتعلم؟ ولماذا؟" value={newGoalDesc} onChange={(e) => setNewGoalDesc(e.target.value)} rows={3} />
+   417→                    </div>
+   418→                    <Button onClick={addGoal} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newGoalTitle.trim()}>
+   419→                      إضافة الهدف
+   420→                    </Button>
+   421→                  </div>
+   422→                </DialogContent>
+   423→              </Dialog>
+   424→            </div>
+   425→
+   426→            {data.goals.length === 0 ? (
+   427→              <EmptyState icon={Target} title="لا توجد أهداف" desc="أضف أهدافك التعليمية وتابع تقدمك" />
+   428→            ) : (
+   429→              <div className="grid sm:grid-cols-2 gap-4">
+   430→                {data.goals.map((goal, i) => (
+   431→                  <motion.div key={goal.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+   432→                    <Card className="glass">
+   433→                      <CardContent className="p-5">
+   434→                        <div className="flex items-start justify-between gap-2 mb-3">
+   435→                          <div className="flex-1 min-w-0">
+   436→                            <h3 className="font-semibold text-sm">{goal.title}</h3>
+   437→                            {goal.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{goal.description}</p>}
+   438→                          </div>
+   439→                          <div className="flex items-center gap-1">
+   440→                            <Badge variant="secondary" className={cn('text-[10px]', goal.status === 'completed' ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-gold/10 text-gold')}>
+   441→                              {goal.status === 'completed' ? 'مكتمل' : goal.status === 'paused' ? 'متوقف' : 'نشط'}
+   442→                            </Badge>
+   443→                            <button onClick={() => deleteGoal(goal.id)} className="p-1 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+   444→                              <Trash2 className="w-3.5 h-3.5" />
+   445→                            </button>
+   446→                          </div>
+   447→                        </div>
+   448→                        <div className="space-y-2">
+   449→                          <div className="flex justify-between text-[11px] text-muted-foreground">
+   450→                            <span>التقدم</span>
+   451→                            <span className="font-semibold text-foreground">{goal.progress}%</span>
+   452→                          </div>
+   453→                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+   454→                            <motion.div
+   455→                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+   456→                              initial={{ width: 0 }}
+   457→                              animate={{ width: `${goal.progress}%` }}
+   458→                              transition={{ duration: 0.8, ease: 'easeOut' }}
+   459→                            />
+   460→                          </div>
+   461→                          <div className="flex gap-1">
+   462→                            {[0, 25, 50, 75, 100].map((val) => (
+   463→                              <button
+   464→                                key={val}
+   465→                                onClick={() => updateGoalProgress(goal.id, val)}
+   466→                                className={cn(
+   467→                                  'flex-1 h-6 rounded text-[10px] font-medium transition-colors',
+   468→                                  goal.progress >= val ? 'bg-emerald-accent/15 text-emerald-accent' : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+   469→                                )}
+   470→                              >
+   471→                                {val}%
+   472→                              </button>
+   473→                            ))}
+   474→                          </div>
+   475→                        </div>
+   476→                      </CardContent>
+   477→                    </Card>
+   478→                  </motion.div>
+   479→                ))}
+   480→              </div>
+   481→            )}
+   482→          </motion.div>
+   483→        )}
+   484→
+   485→        {/* COURSES SECTION */}
+   486→        {activeSection === 'courses' && (
+   487→          <motion.div key="courses" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+   488→            <div className="flex justify-end">
+   489→              <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
+   490→                <DialogTrigger asChild>
+   491→                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+   492→                    <Plus className="w-4 h-4" />
+   493→                    دورة جديدة
+   494→                  </Button>
+   495→                </DialogTrigger>
+   496→                <DialogContent className="sm:max-w-md" dir="rtl">
+   497→                  <DialogHeader><DialogTitle>إضافة دورة</DialogTitle></DialogHeader>
+   498→                  <div className="space-y-4 mt-4">
+   499→                    <div className="space-y-2">
+   500→                      <label className="text-sm font-medium">اسم الدورة</label>
+   501→                      <Input placeholder="مثال: React Advanced" value={newCourseName} onChange={(e) => setNewCourseName(e.target.value)} />
+   502→                    </div>
+   503→                    <div className="space-y-2">
+   504→                      <label className="text-sm font-medium">المنصة</label>
+   505→                      <Input placeholder="مثال: Udemy, Coursera..." value={newCoursePlatform} onChange={(e) => setNewCoursePlatform(e.target.value)} />
+   506→                    </div>
+   507→                    <Button onClick={addCourse} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newCourseName.trim()}>
+   508→                      إضافة الدورة
+   509→                    </Button>
+   510→                  </div>
+   511→                </DialogContent>
+   512→              </Dialog>
+   513→            </div>
+   514→
+   515→            {data.courses.length === 0 ? (
+   516→              <EmptyState icon={GraduationCap} title="لا توجد دورات" desc="أضف دوراتك التعليمية وتابع تقدمك" />
+   517→            ) : (
+   518→              <div className="grid sm:grid-cols-2 gap-4">
+   519→                {data.courses.map((course, i) => (
+   520→                  <motion.div key={course.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+   521→                    <Card className="glass">
+   522→                      <CardContent className="p-5">
+   523→                        <div className="flex items-start justify-between gap-2 mb-3">
+   524→                          <div className="flex-1 min-w-0">
+   525→                            <h3 className="font-semibold text-sm">{course.name}</h3>
+   526→                            {course.platform && <p className="text-xs text-muted-foreground mt-0.5">{course.platform}</p>}
+   527→                          </div>
+   528→                          <div className="flex items-center gap-1.5">
+   529→                            {course.certificate && (
+   530→                              <div className="p-1 rounded-lg bg-gold/10">
+   531→                                <Award className="w-3.5 h-3.5 text-gold" />
+   532→                              </div>
+   533→                            )}
+   534→                            <button onClick={() => toggleCertificate(course.id)} className={cn('p-1 rounded-lg transition-colors', course.certificate ? 'bg-gold/10 text-gold' : 'hover:bg-muted text-muted-foreground')}>
+   535→                              <Award className="w-3.5 h-3.5" />
+   536→                            </button>
+   537→                            <button onClick={() => deleteCourse(course.id)} className="p-1 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+   538→                              <Trash2 className="w-3.5 h-3.5" />
+   539→                            </button>
+   540→                          </div>
+   541→                        </div>
+   542→                        <div className="space-y-2">
+   543→                          <div className="flex justify-between text-[11px] text-muted-foreground">
+   544→                            <span>{course.status === 'completed' ? 'مكتملة' : course.status === 'in_progress' ? 'قيد التعلم' : 'لم تبدأ'}</span>
+   545→                            <span className="font-semibold text-foreground">{course.progress}%</span>
+   546→                          </div>
+   547→                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+   548→                            <motion.div
+   549→                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-gold"
+   550→                              initial={{ width: 0 }}
+   551→                              animate={{ width: `${course.progress}%` }}
+   552→                              transition={{ duration: 0.8, ease: 'easeOut' }}
+   553→                            />
+   554→                          </div>
+   555→                          <Input
+   556→                            type="range"
+   557→                            min={0}
+   558→                            max={100}
+   559→                            value={course.progress}
+   560→                            onChange={(e) => updateCourseProgress(course.id, parseInt(e.target.value))}
+   561→                            className="h-2 cursor-pointer accent-emerald-accent"
+   562→                          />
+   563→                        </div>
+   564→                      </CardContent>
+   565→                    </Card>
+   566→                  </motion.div>
+   567→                ))}
+   568→              </div>
+   569→            )}
+   570→          </motion.div>
+   571→        )}
+   572→
+   573→        {/* SKILLS SECTION */}
+   574→        {activeSection === 'skills' && (
+   575→          <motion.div key="skills" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+   576→            <div className="flex justify-end gap-2">
+   577→              <Dialog open={skillDialogOpen} onOpenChange={setSkillDialogOpen}>
+   578→                <DialogTrigger asChild>
+   579→                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+   580→                    <Plus className="w-4 h-4" />
+   581→                    مهارة جديدة
+   582→                  </Button>
+   583→                </DialogTrigger>
+   584→                <DialogContent className="sm:max-w-md" dir="rtl">
+   585→                  <DialogHeader><DialogTitle>إضافة مهارة</DialogTitle></DialogHeader>
+   586→                  <div className="space-y-4 mt-4">
+   587→                    <div className="space-y-2">
+   588→                      <label className="text-sm font-medium">اسم المهارة</label>
+   589→                      <Input placeholder="مثال: البرمجة، التصميم..." value={newSkillName} onChange={(e) => setNewSkillName(e.target.value)} />
+   590→                    </div>
+   591→                    <div className="space-y-2">
+   592→                      <label className="text-sm font-medium">المستوى المبدئي</label>
+   593→                      <div className="flex gap-2">
+   594→                        {[1, 2, 3, 4, 5].map((level) => (
+   595→                          <button
+   596→                            key={level}
+   597→                            type="button"
+   598→                            onClick={() => setNewSkillLevel(level)}
+   599→                            className={cn(
+   600→                              'flex-1 h-10 rounded-xl text-sm font-bold transition-all',
+   601→                              newSkillLevel >= level
+   602→                                ? 'bg-emerald-accent text-white'
+   603→                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+   604→                            )}
+   605→                          >
+   606→                            {level}
+   607→                          </button>
+   608→                        ))}
+   609→                      </div>
+   610→                    </div>
+   611→                    <Button onClick={addSkill} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newSkillName.trim()}>
+   612→                      إضافة المهارة
+   613→                    </Button>
+   614→                  </div>
+   615→                </DialogContent>
+   616→              </Dialog>
+   617→            </div>
+   618→
+   619→            {data.skills.length === 0 ? (
+   620→              <EmptyState icon={Brain} title="لا توجد مهارات" desc="أضف المهارات التي تطورها" />
+   621→            ) : (
+   622→              <>
+   623→                {/* Skill Radar Chart */}
+   624→                {data.skills.length >= 3 && (
+   625→                  <motion.div
+   626→                    initial={{ opacity: 0, y: 20 }}
+   627→                    animate={{ opacity: 1, y: 0 }}
+   628→                    transition={{ delay: 0.1 }}
+   629→                  >
+   630→                    <Card className="glass">
+   631→                      <CardHeader className="pb-3">
+   632→                        <CardTitle className="text-sm flex items-center gap-2">
+   633→                          <Sparkles className="w-4 h-4 text-gold" />
+   634→                          رادار المهارات
+   635→                        </CardTitle>
+   636→                      </CardHeader>
+   637→                      <CardContent>
+   638→                        <div className="h-64 sm:h-80">
+   639→                          <ResponsiveContainer width="100%" height="100%">
+   640→                            <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+   641→                              <PolarGrid stroke="oklch(0.85 0.005 160)" />
+   642→                              <PolarAngleAxis
+   643→                                dataKey="skill"
+   644→                                tick={{ fontSize: 11, fill: 'oklch(0.4 0.01 160)' }}
+   645→                              />
+   646→                              <PolarRadiusAxis
+   647→                                angle={90}
+   648→                                domain={[0, 5]}
+   649→                                tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }}
+   650→                              />
+   651→                              <Radar
+   652→                                name="المستوى"
+   653→                                dataKey="level"
+   654→                                stroke="oklch(0.55 0.14 163)"
+   655→                                fill="oklch(0.55 0.14 163)"
+   656→                                fillOpacity={0.2}
+   657→                                strokeWidth={2}
+   658→                                dot={{ r: 4, fill: 'oklch(0.55 0.14 163)' }}
+   659→                              />
+   660→                            </RadarChart>
+   661→                          </ResponsiveContainer>
+   662→                        </div>
+   663→                      </CardContent>
+   664→                    </Card>
+   665→                  </motion.div>
+   666→                )}
+   667→
+   668→                {/* Skill Tags with Gradient Backgrounds */}
+   669→                <div className="flex flex-wrap gap-3">
+   670→                  {data.skills.map((skill, i) => (
+   671→                    <motion.div
+   672→                      key={skill.id}
+   673→                      initial={{ opacity: 0, scale: 0.9 }}
+   674→                      animate={{ opacity: 1, scale: 1 }}
+   675→                      transition={{ delay: i * 0.05 }}
+   676→                      className="group relative"
+   677→                    >
+   678→                      {editingSkill === skill.id ? (
+   679→                        <div className={cn('flex items-center gap-2 p-2 rounded-xl border bg-gradient-to-l border shadow-sm', skill.color)}>
+   680→                          <Input
+   681→                            value={editSkillName}
+   682→                            onChange={(e) => setEditSkillName(e.target.value)}
+   683→                            className="h-7 text-sm w-28"
+   684→                            onKeyDown={(e) => e.key === 'Enter' && saveSkillEdit()}
+   685→                            autoFocus
+   686→                          />
+   687→                          <button onClick={saveSkillEdit} className="p-1 rounded-md bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20">
+   688→                            <Check className="w-3 h-3" />
+   689→                          </button>
+   690→                          <button onClick={() => setEditingSkill(null)} className="p-1 rounded-md hover:bg-muted text-muted-foreground">
+   691→                            <X className="w-3 h-3" />
+   692→                          </button>
+   693→                        </div>
+   694→                      ) : (
+   695→                        <Card className={cn('glass overflow-hidden border', skill.color, 'bg-gradient-to-l')}>
+   696→                          <CardContent className="p-3">
+   697→                            <div className="flex items-center gap-2">
+   698→                              <div className="flex gap-0.5">
+   699→                                {[1, 2, 3, 4, 5].map((level) => (
+   700→                                  <motion.button
+   701→                                    key={level}
+   702→                                    whileTap={{ scale: 0.8 }}
+   703→                                    onClick={() => updateSkillLevel(skill.id, level)}
+   704→                                    className="w-3 h-3 rounded-full border-2 transition-all"
+   705→                                    style={{
+   706→                                      backgroundColor: level <= skill.level ? 'currentColor' : 'transparent',
+   707→                                      borderColor: 'currentColor',
+   708→                                      opacity: level <= skill.level ? 1 : 0.2,
+   709→                                    }}
+   710→                                  />
+   711→                                ))}
+   712→                              </div>
+   713→                              <span className="text-sm font-medium">{skill.name}</span>
+   714→                              <span className="text-[10px] text-muted-foreground/60">({skill.level}/5)</span>
+   715→                              <button
+   716→                                onClick={() => { setEditingSkill(skill.id); setEditSkillName(skill.name) }}
+   717→                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all"
+   718→                              >
+   719→                                <Edit3 className="w-3 h-3" />
+   720→                              </button>
+   721→                              <button
+   722→                                onClick={() => deleteSkill(skill.id)}
+   723→                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+   724→                              >
+   725→                                <X className="w-3 h-3" />
+   726→                              </button>
+   727→                            </div>
+   728→                          </CardContent>
+   729→                        </Card>
+   730→                      )}
+   731→                    </motion.div>
+   732→                  ))}
+   733→                </div>
+   734→
+   735→                {/* Skill Bars Visual */}
+   736→                {data.skills.length > 0 && (
+   737→                  <Card className="glass">
+   738→                    <CardHeader className="pb-3">
+   739→                      <CardTitle className="text-sm flex items-center gap-2">
+   740→                        <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   741→                        خريطة المهارات
+   742→                      </CardTitle>
+   743→                    </CardHeader>
+   744→                    <CardContent>
+   745→                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   746→                        {data.skills.map((skill, i) => (
+   747→                          <div key={skill.id} className="flex items-center gap-3">
+   748→                            <div className="flex-1">
+   749→                              <div className="flex justify-between text-xs mb-1">
+   750→                                <span className="font-medium">{skill.name}</span>
+   751→                                <span className="text-muted-foreground">{skill.level}/5</span>
+   752→                              </div>
+   753→                              <div className="h-2.5 rounded-full bg-muted/50 overflow-hidden">
+   754→                                <motion.div
+   755→                                  className="h-full rounded-full"
+   756→                                  style={{ backgroundColor: skillDotColors[i % skillDotColors.length] }}
+   757→                                  initial={{ width: 0 }}
+   758→                                  animate={{ width: `${(skill.level / 5) * 100}%` }}
+   759→                                  transition={{ duration: 0.8, ease: 'easeOut' }}
+   760→                                />
+   761→                              </div>
+   762→                            </div>
+   763→                          </div>
+   764→                        ))}
+   765→                      </div>
+   766→                    </CardContent>
+   767→                  </Card>
+   768→                )}
+   769→              </>
+   770→            )}
+   771→          </motion.div>
+   772→        )}
+   773→
+   774→        {/* LOGS SECTION */}
+   775→        {activeSection === 'logs' && (
+   776→          <motion.div key="logs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+   777→            <div className="flex justify-end">
+   778→              <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
+   779→                <DialogTrigger asChild>
+   780→                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+   781→                    <Plus className="w-4 h-4" />
+   782→                    سجل جديد
+   783→                  </Button>
+   784→                </DialogTrigger>
+   785→                <DialogContent className="sm:max-w-md" dir="rtl">
+   786→                  <DialogHeader><DialogTitle>إضافة سجل تعلم</DialogTitle></DialogHeader>
+   787→                  <div className="space-y-4 mt-4">
+   788→                    <div className="space-y-2">
+   789→                      <label className="text-sm font-medium">ماذا تعلمت اليوم؟</label>
+   790→                      <Textarea placeholder="اكتب ما تعلمته..." value={newLogContent} onChange={(e) => setNewLogContent(e.target.value)} rows={4} />
+   791→                    </div>
+   792→                    <div className="space-y-2">
+   793→                      <label className="text-sm font-medium">الوقت (دقائق)</label>
+   794→                      <Input type="number" placeholder="30" value={newLogMinutes} onChange={(e) => setNewLogMinutes(e.target.value)} />
+   795→                    </div>
+   796→                    <Button onClick={addLog} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newLogContent.trim()}>
+   797→                      إضافة السجل
+   798→                    </Button>
+   799→                  </div>
+   800→                </DialogContent>
+   801→              </Dialog>
+   802→            </div>
+   803→
+   804→            {data.logs.length === 0 ? (
+   805→              <EmptyState icon={Lightbulb} title="لا توجد سجلات" desc="سجّل ما تعلمته كل يوم لتتبع تقدمك" />
+   806→            ) : (
+   807→              <div className="space-y-3 max-h-96 overflow-y-auto">
+   808→                {data.logs.map((log, i) => (
+   809→                  <motion.div key={log.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+   810→                    <Card className="glass">
+   811→                      <CardContent className="p-4">
+   812→                        <div className="flex items-start justify-between gap-3">
+   813→                          <div className="flex-1 min-w-0">
+   814→                            <div className="flex items-center gap-2 mb-2">
+   815→                              <BookOpen className="w-3.5 h-3.5 text-emerald-accent" />
+   816→                              <span className="text-[11px] text-muted-foreground">{new Date(log.date).toLocaleDateString('ar', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+   817→                              {log.minutesSpent > 0 && (
+   818→                                <Badge variant="secondary" className="text-[10px] bg-emerald-accent/10 text-emerald-accent">
+   819→                                  {log.minutesSpent} دقيقة
+   820→                                </Badge>
+   821→                              )}
+   822→                            </div>
+   823→                            {editingLog === log.id ? (
+   824→                              <div className="flex gap-2">
+   825→                                <Textarea value={editLogContent} onChange={(e) => setEditLogContent(e.target.value)} rows={2} className="text-sm" />
+   826→                                <div className="flex flex-col gap-1">
+   827→                                  <button onClick={() => saveLogEdit(log.id)} className="p-1.5 rounded-lg bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20">
+   828→                                    <Check className="w-3.5 h-3.5" />
+   829→                                  </button>
+   830→                                  <button onClick={() => setEditingLog(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+   831→                                    <X className="w-3.5 h-3.5" />
+   832→                                  </button>
+   833→                                </div>
+   834→                              </div>
+   835→                            ) : (
+   836→                              <p className="text-sm leading-relaxed">{log.content}</p>
+   837→                            )}
+   838→                          </div>
+   839→                          <div className="flex items-center gap-1">
+   840→                            <button
+   841→                              onClick={() => { setEditingLog(log.id); setEditLogContent(log.content) }}
+   842→                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+   843→                            >
+   844→                              <Edit3 className="w-3.5 h-3.5" />
+   845→                            </button>
+   846→                            <button
+   847→                              onClick={() => deleteLog(log.id)}
+   848→                              className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+   849→                            >
+   850→                              <Trash2 className="w-3.5 h-3.5" />
+   851→                            </button>
+   852→                          </div>
+   853→                        </div>
+   854→                      </CardContent>
+   855→                    </Card>
+   856→                  </motion.div>
+   857→                ))}
+   858→              </div>
+   859→            )}
+   860→          </motion.div>
+   861→        )}
+   862→      </AnimatePresence>
+   863→    </div>
+   864→  )
+   865→}

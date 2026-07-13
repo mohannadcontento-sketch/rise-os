@@ -27,6 +27,8 @@ import {
   TrendingUp,
   Clock,
   PartyPopper,
+  Eye,
+  Moon,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -135,6 +137,15 @@ const MOTIVATIONAL_MESSAGES = [
 ]
 
 /* ────────────── Helpers ────────────── */
+
+function getMorningGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour >= 3 && hour < 7) return 'صباح النور والبركة ✨'
+  if (hour >= 7 && hour < 10) return 'صباح الخير والسعادة 🌤'
+  if (hour >= 10 && hour < 12) return 'صباح مشرق ومثمر ☀️'
+  if (hour >= 12 && hour < 15) return 'وقت الظهر — لا زال في أوان البدء 🌅'
+  return 'كل وقت مناسب لبداية جديدة 🌟'
+}
 
 function getTodayStr() {
   return new Date().toISOString().split('T')[0]
@@ -310,6 +321,85 @@ function HistoryChart({ logs }: { logs: MorningLog[] }) {
   )
 }
 
+/* ────────────── 20/20/20 Timeline ────────────── */
+
+function RoutineTimeline() {
+  const steps = [
+    { icon: Eye, label: 'عيون', desc: '٢٠ قدم', color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/30' },
+    { icon: Dumbbell, label: 'حركة', desc: '٢٠ تمرين', color: 'text-emerald-accent', bg: 'bg-emerald-accent/10', border: 'border-emerald-accent/30' },
+    { icon: BookOpen, label: 'قراءة', desc: '٢٠ صفحة', color: 'text-gold', bg: 'bg-gold/10', border: 'border-gold/30' },
+  ]
+
+  return (
+    <div className="flex items-center justify-center gap-0 py-2">
+      {steps.map((step, i) => {
+        const Icon = step.icon
+        return (
+          <div key={step.label} className="flex items-center">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.15 }}
+              className={cn('flex flex-col items-center gap-1.5 px-4 py-3 rounded-2xl border', step.border, step.bg)}
+            >
+              <motion.div
+                animate={{ y: [0, -3, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.4, ease: 'easeInOut' }}
+              >
+                <Icon className={cn('w-5 h-5', step.color)} />
+              </motion.div>
+              <span className={cn('text-xs font-bold', step.color)}>{step.label}</span>
+              <span className="text-[10px] text-muted-foreground">{step.desc}</span>
+            </motion.div>
+            {i < steps.length - 1 && (
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: i * 0.15 + 0.1, duration: 0.4 }}
+                className="w-8 h-[2px] bg-gradient-to-l from-transparent via-border to-transparent mx-1"
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ────────────── Progress Ring ────────────── */
+
+function CompletionRing({ score }: { score: number }) {
+  const size = 64
+  const strokeWidth = 5
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (score / 100) * circumference
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg className="w-full h-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-muted/30" />
+        <motion.circle
+          cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="url(#ringGrad)" strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+          style={{ filter: 'drop-shadow(0 0 4px var(--color-emerald-accent))' }}
+        />
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="var(--color-emerald-accent)" />
+            <stop offset="100%" stopColor="var(--color-forest)" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-sm font-bold text-foreground">{arabicNum(score)}٪</span>
+      </div>
+    </div>
+  )
+}
+
 /* ────────────── Routine Item Row ────────────── */
 
 function RoutineItemRow({
@@ -329,51 +419,56 @@ function RoutineItemRow({
     <motion.div
       layout
       className={cn(
-        'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer group',
+        'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 cursor-pointer group',
         'hover:bg-muted/50',
-        checked && 'bg-emerald-accent/5'
+        checked && 'bg-emerald-accent/8'
       )}
       onClick={() => onToggle(item.id)}
+      whileTap={{ scale: 0.99 }}
     >
       <motion.div
         initial={false}
-        animate={checked ? { scale: 1 } : { scale: 1 }}
-        whileTap={{ scale: 0.9 }}
+        animate={checked ? { scale: [1, 1.25, 1] } : { scale: 1 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        whileTap={{ scale: 0.85 }}
       >
         <Checkbox
           checked={checked}
           onCheckedChange={() => onToggle(item.id)}
           className={cn(
-            'w-5 h-5 rounded-md border-2',
+            'w-5 h-5 rounded-lg border-2 transition-all duration-300',
             checked
-              ? 'border-emerald-accent bg-emerald-accent text-white data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
-              : 'border-muted-foreground/30'
+              ? 'border-emerald-accent bg-emerald-accent text-white data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent shadow-sm shadow-emerald-accent/30'
+              : 'border-muted-foreground/30 hover:border-muted-foreground/50'
           )}
         />
       </motion.div>
-      <div
+      <motion.div
+        animate={checked ? { scale: 1, backgroundColor: 'var(--color-emerald-accent)', color: 'white' } : { scale: 1 }}
+        transition={{ duration: 0.3 }}
         className={cn(
           'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300',
           checked ? 'bg-emerald-accent/15 text-emerald-accent' : `bg-muted/60 ${sectionColor} opacity-60`
         )}
       >
         <Icon className="w-4 h-4" />
-      </div>
-      <span
+      </motion.div>
+      <motion.span
+        animate={checked ? { opacity: 0.5 } : { opacity: 1 }}
         className={cn(
           'flex-1 text-sm font-medium transition-all duration-300',
           checked ? 'line-through text-muted-foreground' : 'text-foreground'
         )}
       >
         {item.name}
-      </span>
+      </motion.span>
       <AnimatePresence>
         {checked && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.5, x: 10 }}
+            initial={{ opacity: 0, scale: 0.3, x: 10 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.5, x: 10 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.3, x: 10 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
           >
             <Badge className="text-[10px] px-1.5 py-0 bg-gold/15 text-gold border-gold/20 hover:bg-gold/20">
               <Zap className="w-2.5 h-2.5 ml-0.5" />
@@ -586,46 +681,74 @@ export default function MorningRoutine() {
 
   return (
     <div dir="rtl" className="space-y-6">
-      {/* ── Start Morning Button + Session Timer ── */}
+      {/* ── Sunrise Gradient Header ── */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        className="relative overflow-hidden rounded-3xl p-6 md:p-8"
       >
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Sunrise className="w-6 h-6 text-emerald-accent" />
-            الروتين الصباحي
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">ابدأ يومك بطاقة وإيجابية</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {sessionActive && sessionStartTime && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 glass rounded-xl px-4 py-2.5"
-            >
-              <Clock className="w-4 h-4 text-emerald-accent" />
-              <span className="text-sm font-mono font-semibold text-foreground tabular-nums">
-                {formatElapsed(elapsedMs)}
-              </span>
-            </motion.div>
-          )}
-          {!sessionActive && (
-            <Button
-              onClick={handleStartMorning}
-              className="gap-2 bg-gradient-to-l from-emerald-accent to-forest hover:from-emerald-accent/90 hover:to-forest/90 text-white shadow-lg shadow-emerald-accent/20"
-              size="lg"
-            >
-              <Play className="w-4 h-4" />
-              ابدأ الصباح
-            </Button>
-          )}
+        <motion.div
+          className="absolute inset-0 bg-gradient-to-bl from-gold/20 via-emerald-accent/10 to-forest/15"
+          animate={{
+            background: [
+              'linear-gradient(135deg, oklch(0.85 0.12 85) 0%, oklch(0.75 0.1 160) 50%, oklch(0.5 0.12 155) 100%)',
+              'linear-gradient(135deg, oklch(0.5 0.12 155) 0%, oklch(0.75 0.1 160) 50%, oklch(0.85 0.12 85) 100%)',
+            ],
+          }}
+          transition={{ duration: 8, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+          style={{ backgroundSize: '200% 200%' }}
+        />
+        <div className="absolute inset-0 noise-bg opacity-40" />
+        <div className="relative z-10">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                <motion.div
+                  animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
+                  transition={{ duration: 3, repeat: Infinity, repeatDelay: 3 }}
+                >
+                  <Sunrise className="w-6 h-6 text-gold" />
+                </motion.div>
+                <span className="text-gradient-gold">الروتين الصباحي</span>
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">{getMorningGreeting()}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {sessionActive && sessionStartTime && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center gap-2 glass rounded-xl px-4 py-2.5"
+                >
+                  <Clock className="w-4 h-4 text-emerald-accent" />
+                  <span className="text-sm font-mono font-semibold text-foreground tabular-nums">
+                    {formatElapsed(elapsedMs)}
+                  </span>
+                </motion.div>
+              )}
+              {!sessionActive && (
+                <motion.button
+                  onClick={handleStartMorning}
+                  animate={{ scale: [1, 1.04, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="flex items-center gap-2 bg-gradient-to-l from-emerald-accent to-forest hover:from-emerald-accent/90 hover:to-forest/90 text-white shadow-lg shadow-emerald-accent/20 rounded-xl h-12 px-6 text-sm font-semibold"
+                >
+                  <Play className="w-4 h-4" />
+                  ابدأ الصباح
+                </motion.button>
+              )}
+            </div>
+          </div>
+          {/* 20/20/20 Timeline */}
+          <div className="mt-5">
+            <RoutineTimeline />
+          </div>
         </div>
       </motion.div>
 
-      {/* ── Overall Progress Bar (top) ── */}
+      {/* ── Overall Progress with Ring ── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -637,7 +760,10 @@ export default function MorningRoutine() {
               <Zap className="w-4 h-4 text-emerald-accent" />
               <span className="text-sm font-semibold text-foreground">التقدم الكلي للروتين</span>
             </div>
-            <span className="text-xs text-muted-foreground font-medium">{arabicNum(completedCount)} من {arabicNum(totalCount)}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground font-medium">{arabicNum(completedCount)} من {arabicNum(totalCount)}</span>
+              <CompletionRing score={score} />
+            </div>
           </div>
           <div className="h-3 rounded-full bg-muted overflow-hidden">
             <motion.div

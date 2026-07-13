@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { notifyHabitComplete } from '@/lib/notifications'
+import { HabitReminders, ReminderBell } from './habit-reminders'
 
 /* ────────────── Types ────────────── */
 
@@ -58,6 +59,7 @@ interface Habit {
   frequency: 'daily' | 'weekdays' | 'weekends' | 'custom'
   targetCount: number
   xpReward: number
+  reminderTime?: string | null
 }
 
 interface HabitLog {
@@ -347,8 +349,29 @@ export function HabitsView() {
     setFormTarget('1')
   }
 
+  /* ---- Toggle reminder time ---- */
+  const handleToggleReminder = useCallback(async (habitId: string, time: string | null) => {
+    try {
+      await fetch('/api/rise/habits', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: habitId, reminderTime: time }),
+      })
+      setHabits((prev) =>
+        prev.map((h) => (h.id === habitId ? { ...h, reminderTime: time } : h))
+      )
+      if (time) {
+        toast.success('تم تعيين التذكير', { description: `الساعة ${time}` })
+      } else {
+        toast('تم إزالة التذكير')
+      }
+    } catch {
+      // silently fail
+    }
+  }, [])
+
   /* ---- Stats ---- */
-  const stats = useMemo(() => {
+  const stats = useMemo((): { total: number; todayRate: number; longestStreak: number; currentStreak: number; bestHabit: Habit | null; bestRate: number } => {
     const total = habits.length
     const todayLogs = logs.filter((l) => l.date === todayStr)
     const todayCompleted = todayLogs.filter((l) => l.completed).length
@@ -416,7 +439,7 @@ export function HabitsView() {
     <TooltipProvider delayDuration={300}>
       <div className="space-y-6 p-4 md:p-6">
         {/* ── Header ── */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg">
               <Flame className="w-5 h-5 text-forest-dark" />
@@ -545,6 +568,9 @@ export function HabitsView() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* ── Reminders Banner ── */}
+        <HabitReminders habits={habits} onToggleReminder={handleToggleReminder} />
 
         {/* ── Statistics ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -711,6 +737,11 @@ export function HabitsView() {
                           >
                             <span className="text-[10px]">✕</span>
                           </button>
+
+                          {/* Reminder Bell */}
+                          <div className="absolute top-2 left-9">
+                            <ReminderBell habit={habit} onToggle={handleToggleReminder} />
+                          </div>
 
                           {/* Icon and name */}
                           <div className="text-center mb-3">

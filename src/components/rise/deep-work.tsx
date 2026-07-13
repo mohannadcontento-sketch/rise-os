@@ -35,6 +35,11 @@ import {
   Sparkles,
   Star,
   CheckCircle2,
+  Maximize2,
+  Minimize2,
+  Quote,
+  Link2,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -44,6 +49,21 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { notifyFocusComplete } from '@/lib/notifications'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 /* ────────────── Types ────────────── */
 
@@ -60,6 +80,12 @@ interface FocusSession {
 
 interface FocusData {
   sessions: FocusSession[]
+}
+
+interface TaskOption {
+  id: string
+  title: string
+  priority: string
 }
 
 /* ────────────── Constants ────────────── */
@@ -93,7 +119,23 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 }
 
+const FOCUS_QUOTES = [
+  '« التركيز هو القدرة على قول «لا» لمئات الأفكار الجيدة. » — ستيف جوبز',
+  '« العمق هو الشيء النادر والقيم في عالمنا السطحي. » — كال نيوبورت',
+  '« أنت لا تحتاج وقتاً أكثر، بل تركيزاً أعمق. »',
+  '« ساعة من التركيز العميق تساوي أربع ساعات من العمل المشتت. »',
+  '« النجاح المتسارع يأتي من التركيز المكثف على مهمة واحدة. »',
+  '« عقلك أقوى مما تعتقد — استثمره بالتركيز. »',
+  '« كل جلسة تركيز تبني مساراً أعصبياً أقوى نحو التميز. »',
+  '« الأشخاص الناجحون لا يفعلون أشياء مختلفة — إنهم يفعلون الأشياء بشكل مختلف. »',
+]
+
 /* ────────────── Helper ────────────── */
+
+function getSessionQuote(): string {
+  const sessionCount = parseInt(localStorage.getItem('rise-focus-session-count') || '0')
+  return FOCUS_QUOTES[sessionCount % FOCUS_QUOTES.length]
+}
 
 function formatTime(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
@@ -124,6 +166,19 @@ export default function DeepWork() {
 
   // Ambient sounds (visual only)
   const [activeSounds, setActiveSounds] = useState<Set<string>>(new Set())
+  // Focus zone mode
+  const [focusZone, setFocusZone] = useState(false)
+  // Motivational quote
+  const [sessionQuote] = useState(getSessionQuote)
+
+  // Task linking after session
+  const [linkTaskOpen, setLinkTaskOpen] = useState(false)
+  const [taskOptions, setTaskOptions] = useState<TaskOption[]>([])
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('none')
+  const [lastSessionXp, setLastSessionXp] = useState(0)
+  const [lastSessionMin, setLastSessionMin] = useState(0)
+  const [linkingTask, setLinkingTask] = useState(false)
+  const [lastSessionId, setLastSessionId] = useState<string | null>(null)
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -188,10 +243,16 @@ export default function DeepWork() {
         }),
       })
       if (res.ok) {
+        const sessionData = await res.json()
         if (completed) {
           const xp = Math.round(elapsedMin * 2)
           notifyFocusComplete(elapsedMin, xp)
           fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }) }).catch(() => {})
+          // Open task linking dialog
+          setLastSessionXp(xp)
+          setLastSessionMin(elapsedMin)
+          setLastSessionId(sessionData.id)
+          fetchTasksForLinking()
         } else {
           toast.success('تم حفظ الجلسة')
         }
@@ -201,6 +262,48 @@ export default function DeepWork() {
       toast.error('فشل في حفظ الجلسة')
     } finally {
       setSaving(false)
+    }
+  }
+
+  /* ─── Task Linking ─── */
+  const fetchTasksForLinking = async () => {
+    try {
+      const res = await fetch('/api/rise/tasks')
+      if (res.ok) {
+        const data = await res.json()
+        const eligible = (data.tasks || []).filter(
+          (t: { status: string }) => t.status === 'in_progress' || t.status === 'todo'
+        )
+        if (eligible.length > 0) {
+          setTaskOptions(eligible.map((t: TaskOption) => ({ id: t.id, title: t.title, priority: t.priority })))
+          setLinkTaskOpen(true)
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleLinkTask = async () => {
+    if (selectedTaskId === 'none' || !lastSessionId) {
+      setLinkTaskOpen(false)
+      return
+    }
+    setLinkingTask(true)
+    try {
+      await fetch('/api/rise/focus', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lastSessionId, taskId: selectedTaskId }),
+      })
+      const taskName = taskOptions.find((t) => t.id === selectedTaskId)?.title
+      toast.success('تم ربط الجلسة بالمهمة', { description: taskName })
+    } catch {
+      toast.error('فشل في ربط الجلسة')
+    } finally {
+      setLinkingTask(false)
+      setLinkTaskOpen(false)
+      setSelectedTaskId('none')
     }
   }
 
@@ -316,14 +419,14 @@ export default function DeepWork() {
     )
   }
 
-  return (
+  const mainContent = (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="show"
-      className="space-y-6 p-4 md:p-6"
+      className={cn('space-y-6 p-4 md:p-6 relative', focusZone && 'max-w-2xl mx-auto')}
     >
-      {/* Header */}
+      {/* Header with Focus Zone toggle */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
@@ -334,6 +437,28 @@ export default function DeepWork() {
             <p className="text-xs text-muted-foreground">ركّز وحقق أقصى إنتاجية</p>
           </div>
         </div>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setFocusZone(!focusZone)}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all',
+            focusZone
+              ? 'bg-forest/20 text-forest border border-forest/30 shadow-sm shadow-forest/10'
+              : 'glass hover:bg-muted/30 text-muted-foreground'
+          )}
+        >
+          {focusZone ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          {focusZone ? 'خروج من المنطقة' : 'منطقة التركيز'}
+        </motion.button>
+      </motion.div>
+
+      {/* Motivational Quote */}
+      <motion.div
+        variants={itemVariants}
+        className="flex items-start gap-3 p-4 rounded-2xl bg-gradient-to-l from-forest/5 via-transparent to-gold/5 border border-forest/10"
+      >
+        <Quote className="w-4 h-4 text-forest/50 mt-0.5 shrink-0" />
+        <p className="text-xs text-muted-foreground leading-relaxed italic">{sessionQuote}</p>
       </motion.div>
 
       {/* Duration Selector with glow */}
@@ -377,9 +502,21 @@ export default function DeepWork() {
         })}
       </motion.div>
 
-      {/* Timer with breathing glow */}
+      {/* Timer with dramatic pulsing outer ring */}
       <motion.div variants={itemVariants} className="flex justify-center">
         <div className="relative">
+          {/* Pulsing outer ring that changes color */}
+          {isRunning && !isPaused && (
+            <motion.div
+              className="absolute rounded-full"
+              style={{ inset: -16 }}
+              animate={{
+                scale: [1, 1.03, 1],
+                opacity: [0.3, 0.6, 0.3],
+              }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          )}
           <AnimatePresence>
             {sessionCompleted && (
               <motion.div
@@ -432,19 +569,19 @@ export default function DeepWork() {
             )}
           </AnimatePresence>
 
-          {/* Breathing glow wrapper */}
+          {/* Pulsing outer ring + breathing glow wrapper with color shift */}
           <motion.div
             animate={isRunning && !isPaused ? {
               boxShadow: [
-                '0 0 20px rgba(16,185,129,0.15)',
-                '0 0 40px rgba(16,185,129,0.25)',
-                '0 0 20px rgba(16,185,129,0.15)',
+                '0 0 20px oklch(0.72 0.19 162 / 0.15)',
+                '0 0 40px oklch(0.72 0.19 162 / 0.25)',
+                '0 0 20px oklch(0.72 0.19 162 / 0.15)',
               ],
             } : isPaused ? {
               boxShadow: [
-                '0 0 15px rgba(234,179,8,0.1)',
-                '0 0 25px rgba(234,179,8,0.18)',
-                '0 0 15px rgba(234,179,8,0.1)',
+                '0 0 15px oklch(0.85 0.14 85 / 0.1)',
+                '0 0 25px oklch(0.85 0.14 85 / 0.18)',
+                '0 0 15px oklch(0.85 0.14 85 / 0.1)',
               ],
             } : {}}
             transition={{
@@ -465,7 +602,24 @@ export default function DeepWork() {
                 strokeWidth="8"
                 className="text-muted/50"
               />
-              {/* Progress circle with gradient stroke */}
+              {/* Outer pulsing ring */}
+              {isRunning && !isPaused && (
+                <motion.circle
+                  cx="140" cy="140" r="128"
+                  fill="none" strokeWidth="2"
+                  animate={{ opacity: [0.1, 0.4, 0.1], r: [128, 131, 128] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ stroke: progress > 80 ? 'oklch(0.65 0.25 25)' : progress > 50 ? 'oklch(0.85 0.14 85)' : 'oklch(0.72 0.19 162)' }}
+                />
+              )}
+              {/* Dynamic gradient */}
+              <defs>
+                <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={progress > 80 ? 'oklch(0.65 0.25 25)' : progress > 50 ? 'oklch(0.85 0.14 85)' : 'var(--color-emerald-accent)'} />
+                  <stop offset="100%" stopColor={progress > 80 ? 'oklch(0.55 0.25 30)' : progress > 50 ? 'oklch(0.75 0.14 85)' : 'var(--color-forest)'} />
+                </linearGradient>
+              </defs>
+              {/* Progress circle */}
               <motion.circle
                 cx="140"
                 cy="140"
@@ -479,19 +633,12 @@ export default function DeepWork() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 style={{
                   filter: isRunning && !isPaused
-                    ? 'drop-shadow(0 0 6px var(--color-emerald-accent))'
+                    ? `drop-shadow(0 0 8px ${progress > 80 ? 'oklch(0.65 0.25 25)' : 'var(--color-emerald-accent)'})`
                     : isPaused
                       ? 'drop-shadow(0 0 4px var(--color-gold))'
                       : 'none',
                 }}
               />
-              {/* Gradient def: emerald → gold */}
-              <defs>
-                <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="var(--color-emerald-accent)" />
-                  <stop offset="100%" stopColor="var(--color-gold)" />
-                </linearGradient>
-              </defs>
             </svg>
           </motion.div>
 
@@ -797,7 +944,7 @@ export default function DeepWork() {
         </Card>
       </motion.div>
 
-      {/* Session History */}
+      {/* Session History with duration color coding */}
       <motion.div variants={itemVariants}>
         <Card className="glass border-0 shadow-sm">
           <CardHeader className="pb-3">
@@ -811,70 +958,158 @@ export default function DeepWork() {
                   <p className="text-sm text-muted-foreground">لا توجد جلسات سابقة</p>
                 </div>
               ) : (
-                data.sessions.slice(0, 20).map((session, index) => (
-                  <motion.div
-                    key={session.id}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors"
-                  >
-                    <div
-                      className={cn(
-                        'w-9 h-9 rounded-lg flex items-center justify-center',
-                        session.completed
-                          ? 'bg-emerald-accent/10 text-emerald-accent'
-                          : 'bg-gold/10 text-gold'
-                      )}
+                data.sessions.slice(0, 20).map((session, index) => {
+                  const durationColor = session.actualMin >= 45
+                    ? 'border-r-emerald-accent bg-emerald-accent/3'
+                    : session.actualMin >= 20
+                      ? 'border-r-gold bg-gold/3'
+                      : 'border-r-muted-foreground/30 bg-muted/10'
+                  const iconColor = session.actualMin >= 45
+                    ? 'bg-emerald-accent/15 text-emerald-accent'
+                    : session.actualMin >= 20
+                      ? 'bg-gold/15 text-gold'
+                      : 'bg-muted/30 text-muted-foreground'
+
+                  return (
+                    <motion.div
+                      key={session.id}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.03 }}
+                      className={cn('flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors border-r-3', durationColor)}
                     >
-                      {session.completed ? (
-                        <Trophy className="w-4 h-4" />
-                      ) : (
-                        <Clock className="w-4 h-4" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">
-                          {session.type}
-                        </span>
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            'text-[10px] rounded-full border-0',
-                            session.completed
-                              ? 'bg-emerald-accent/10 text-emerald-accent'
-                              : 'bg-gold/10 text-gold'
-                          )}
-                        >
-                          {session.completed ? 'مكتمل' : 'غير مكتمل'}
-                        </Badge>
+                      <div
+                        className={cn('w-9 h-9 rounded-lg flex items-center justify-center', iconColor)}
+                      >
+                        {session.completed ? (
+                          <Trophy className="w-4 h-4" />
+                        ) : (
+                          <Clock className="w-4 h-4" />
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        <span>{session.actualMin} دقيقة</span>
-                        <span>•</span>
-                        <span>
-                          {new Date(session.startedAt).toLocaleDateString('ar-SA', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">
+                            {session.type}
+                          </span>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              'text-[10px] rounded-full border-0',
+                              session.completed
+                                ? 'bg-emerald-accent/10 text-emerald-accent'
+                                : 'bg-gold/10 text-gold'
+                            )}
+                          >
+                            {session.completed ? 'مكتمل' : 'غير مكتمل'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          <span className={cn('font-semibold', session.actualMin >= 45 ? 'text-emerald-accent' : session.actualMin >= 20 ? 'text-gold' : '')}>{session.actualMin} دقيقة</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(session.startedAt).toLocaleDateString('ar-SA', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        {session.notes && (
+                          <p className="text-xs text-muted-foreground/70 mt-1 truncate">
+                            {session.notes}
+                          </p>
+                        )}
                       </div>
-                      {session.notes && (
-                        <p className="text-xs text-muted-foreground/70 mt-1 truncate">
-                          {session.notes}
-                        </p>
-                      )}
-                    </div>
-                  </motion.div>
-                ))
+                    </motion.div>
+                  )
+                })
               )}
             </div>
           </CardContent>
         </Card>
       </motion.div>
+      {/* Task Linking Dialog */}
+      <Dialog open={linkTaskOpen} onOpenChange={(open) => { if (!open) { setLinkTaskOpen(false); setSelectedTaskId('none') } }}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-emerald-accent" />
+              هل تريد ربط هذه الجلسة بمهمة؟
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              اختر مهمة لربط جلسة التركيز بها
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Session Summary */}
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-l from-emerald-accent/10 via-gold/5 to-transparent border border-emerald-accent/20">
+              <div className="w-10 h-10 rounded-xl bg-emerald-accent/15 flex items-center justify-center">
+                <Trophy className="w-5 h-5 text-emerald-accent" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold">{lastSessionMin} دقيقة من التركيز</p>
+                <p className="text-xs text-gold font-medium">+{lastSessionXp} خبرة</p>
+              </div>
+            </div>
+
+            {/* Task Select */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">اختر مهمة (اختياري)</label>
+              <Select value={selectedTaskId} onValueChange={setSelectedTaskId}>
+                <SelectTrigger className="rounded-xl text-right">
+                  <SelectValue placeholder="اختر مهمة..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون ربط</SelectItem>
+                  {taskOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      <span className="flex items-center gap-2">
+                        <span className={cn(
+                          'w-2 h-2 rounded-full',
+                          t.priority === 'urgent' ? 'bg-red-500' : t.priority === 'high' ? 'bg-orange-500' : t.priority === 'medium' ? 'bg-gold' : 'bg-blue-500'
+                        )} />
+                        {t.title}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => { setLinkTaskOpen(false); setSelectedTaskId('none') }}
+              className="rounded-xl"
+            >
+              تخطي
+            </Button>
+            <Button
+              onClick={handleLinkTask}
+              disabled={selectedTaskId === 'none' || linkingTask}
+              className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+            >
+              {linkingTask && <Loader2 className="w-4 h-4 ml-1.5 animate-spin" />}
+              ربط الجلسة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
+
+  // Focus zone wrapper
+  if (focusZone && isRunning) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8">
+        <div className="w-full max-w-2xl">
+          {mainContent}
+        </div>
+      </div>
+    )
+  }
+
+  return mainContent
 }

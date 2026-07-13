@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   AreaChart,
@@ -33,6 +33,10 @@ import {
   Quote,
   FolderKanban,
   Brain,
+  Eye,
+  ArrowUpRight,
+  ArrowDownRight,
+  CalendarClock,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -252,18 +256,32 @@ function getEnergyEmoji(energy: string): string {
   }
 }
 
-const QUOTES = [
+const MOTIVATIONAL_QUOTES = [
   'النجاح ليس نهائياً والفشل ليس قاتلاً، بل الشجاعة للاستمرار هي ما يهم.',
   'الطريقة الوحيدة لعمل عمل عظيم هي أن تحب ما تفعله.',
   'ابدأ من حيث أنت. استخدم ما لديك. افعل ما يمكنك.',
   'لا تنتظر الفرصة، بل اصنعها.',
+  'الصبر مفتاح الفرج، والمثابرة سلم النجاح.',
+  'من جدّ وجد، ومن زرع حصد.',
+  'لا تقارن نفسك بالآخرين، قارن نفسك بنفسك بالأمس.',
+  'كل يوم هو فرصة جديدة لتكون نسخة أفضل من نفسك.',
+  'الاستثمار في المعرفة يدفع أفضل فائدة.',
+  'العلم نور والجهل ظلام، والعلم يهدي إلى الجنة.',
+  'لا يهم كم مرة سقطت، المهم كم مرة نهضت.',
+  'النجاح يبدأ من اللحظة التي تقرر فيها المحاولة.',
+  'أنت أقوى مما تظن وأجمل مما تتخيل.',
+  'الطريق إلى الألف ميل يبدأ بخطوة واحدة.',
+  'لا تكن مشغولاً دائماً، كن منتجاً دائماً.',
+  'التحديات هي فرص مقنّعة.',
+  'التفاؤل هو الإيمان بالإنجاز، لا يدرك ما هو ممكن إلا من يراه.',
+  'اجعل حياتك تستحق التذكر، لا أن تُنسى.',
+  'النجاح ليس مقياساً لمدى ارتفاعك، بل لعدد المرات التي نهضت فيها.',
+  'اقرأ كثيراً، تعلّم دائماً، وكن فضولياً.',
+  'الصباح هو هدية جديدة، اغتنمها.',
+  'النظام هو الجسر بين الأهداف والإنجازات.',
+  'ما لا يقتلك يقويك، وما يوقفك يعلّمك.',
+  'لا تستسلم، فالبداية دائماً أصعب مرحلة.',
 ]
-
-function getQuoteOfTheDay(): string {
-  const today = new Date()
-  const index = (today.getFullYear() * 366 + today.getMonth() * 31 + today.getDate()) % QUOTES.length
-  return QUOTES[index]
-}
 
 /* ────────────── Mini Sparkline ────────────── */
 
@@ -652,6 +670,319 @@ function ProductivityScoreCard() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   MOTIVATIONAL WALL
+   ══════════════════════════════════════════════════════════════════════ */
+
+function MotivationalWall() {
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('rise-favorite-quotes')
+      if (stored) return new Set(JSON.parse(stored) as string[])
+    } catch { /* ignore */ }
+    return new Set()
+  })
+  const [seenToday, setSeenToday] = useState<Set<number>>(() => {
+    try {
+      const todayKey = new Date().toISOString().split('T')[0]
+      const stored = localStorage.getItem('rise-seen-quotes-today')
+      if (stored) {
+        const parsed = JSON.parse(stored) as { date: string; indices: number[] }
+        if (parsed.date === todayKey) {
+          const s = new Set(parsed.indices)
+          s.add(0)
+          return s
+        }
+      }
+    } catch { /* ignore */ }
+    const s = new Set<number>()
+    s.add(0)
+    return s
+  })
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [parallax, setParallax] = useState({ x: 0, y: 0 })
+
+  // Save favorites
+  useEffect(() => {
+    localStorage.setItem('rise-favorite-quotes', JSON.stringify([...favorites]))
+  }, [favorites])
+
+  // Save seen today
+  useEffect(() => {
+    const todayKey = new Date().toISOString().split('T')[0]
+    localStorage.setItem('rise-seen-quotes-today', JSON.stringify({
+      date: todayKey,
+      indices: [...seenToday],
+    }))
+  }, [seenToday])
+
+  // Auto-rotate every 15 seconds
+  const advanceQuote = useCallback(() => {
+    setCurrentIndex(prev => {
+      const next = (prev + 1) % MOTIVATIONAL_QUOTES.length
+      // Track seen
+      setSeenToday(s => {
+        const n = new Set(s)
+        n.add(next)
+        return n
+      })
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      advanceQuote()
+    }, 15000)
+    return () => clearInterval(timer)
+  }, [advanceQuote])
+
+  const toggleFavorite = (quote: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev)
+      if (next.has(quote)) {
+        next.delete(quote)
+      } else {
+        next.add(quote)
+      }
+      return next
+    })
+  }
+
+  // Parallax on mouse move
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 12
+    const y = ((e.clientY - rect.top) / rect.height - 0.5) * 8
+    setParallax({ x, y })
+  }
+
+  const handleMouseLeave = () => {
+    setParallax({ x: 0, y: 0 })
+  }
+
+  const currentQuote = MOTIVATIONAL_QUOTES[currentIndex]
+  const isFav = favorites.has(currentQuote)
+
+  return (
+    <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+      <CardHeader className="pb-3 pt-0">
+        <SectionHeader icon={Quote} iconColor="text-gold">
+          جدار التحفيز
+        </SectionHeader>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <motion.div
+          ref={cardRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          onClick={advanceQuote}
+          className="premium-card rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center text-center min-h-[220px] relative overflow-hidden cursor-pointer select-none"
+          animate={{
+            x: parallax.x,
+            y: parallax.y,
+            rotateX: parallax.y * -0.3,
+            rotateY: parallax.x * 0.3,
+          }}
+          transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+          style={{ perspective: 1000 }}
+        >
+          {/* Background glow */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-forest/[0.06] dark:bg-forest/[0.1] blur-3xl pointer-events-none" />
+
+          {/* Decorative watermark */}
+          <span
+            className="absolute top-1 right-6 text-[140px] font-serif leading-none opacity-[0.03] dark:opacity-[0.05] text-foreground select-none pointer-events-none"
+            aria-hidden="true"
+          >
+            &ldquo;
+          </span>
+
+          {/* Quote with fade animation */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              className="relative flex flex-col items-center"
+            >
+              {/* Favorite Heart */}
+              <motion.button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleFavorite(currentQuote)
+                }}
+                whileTap={{ scale: 0.8 }}
+                className="absolute -top-1 left-0 z-10 p-1.5 rounded-full bg-primary/5 hover:bg-primary/10 transition-colors"
+              >
+                <motion.div
+                  animate={isFav ? { scale: [1, 1.3, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Heart
+                    className={cn(
+                      'w-4 h-4 transition-colors',
+                      isFav ? 'fill-red-500 text-red-500' : 'text-muted-foreground/40'
+                    )}
+                  />
+                </motion.div>
+              </motion.button>
+
+              {/* Decorative icon */}
+              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-gold/20 to-gold-light/20 flex items-center justify-center mb-4 shadow-[0_0_20px_oklch(0.78_0.12_85/0.1)]">
+                <Star className="w-5 h-5 text-gold" />
+              </div>
+
+              {/* Quote text with gradient */}
+              <blockquote className="text-base lg:text-xl font-bold leading-relaxed text-gradient-forest mb-4 max-w-sm px-2">
+                {currentQuote}
+              </blockquote>
+
+              {/* Seen counter */}
+              <div className="flex items-center gap-1.5 text-muted-foreground/50">
+                <Eye className="w-3 h-3" />
+                <span className="text-[10px] font-medium">{toArabicNum(seenToday.size)}</span>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Progress dots */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1">
+            {MOTIVATIONAL_QUOTES.slice(0, Math.min(MOTIVATIONAL_QUOTES.length, 8)).map((_, i) => (
+              <motion.div
+                key={i}
+                className={cn(
+                  'w-1 h-1 rounded-full transition-all duration-300',
+                  i === currentIndex % 8
+                    ? 'bg-gold w-3'
+                    : 'bg-muted-foreground/20'
+                )}
+              />
+            ))}
+          </div>
+        </motion.div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ────────────── On This Day Widget ────────────── */
+
+function OnThisDayWidget() {
+  const [data, setData] = useState<{ lastWeek: number | null; lastMonth: number | null } | null>(null)
+
+  useEffect(() => {
+    async function fetchOnThisDay() {
+      try {
+        const today = new Date()
+        const dayOfMonth = today.getDate()
+        const lastWeek = new Date(today)
+        lastWeek.setDate(today.getDate() - 7)
+        const lastMonth = new Date(today)
+        lastMonth.setMonth(today.getMonth() - 1)
+
+        const lastWeekStr = `${lastWeek.getFullYear()}-${String(lastWeek.getMonth() + 1).padStart(2, '0')}-${String(lastWeek.getDate()).padStart(2, '0')}`
+        const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-${String(lastMonth.getDate()).padStart(2, '0')}`
+
+        const res = await fetch(`/api/rise/productivity-score?dates=${lastWeekStr},${lastMonthStr}`)
+        if (res.ok) {
+          const json = await res.json()
+          setData({
+            lastWeek: json.scores?.[0]?.score ?? null,
+            lastMonth: json.scores?.[1]?.score ?? null,
+          })
+        }
+      } catch {
+        setData({ lastWeek: null, lastMonth: null })
+      }
+    }
+    fetchOnThisDay()
+  }, [])
+
+  const hasData = data && (data.lastWeek !== null || data.lastMonth !== null)
+  const improvement = (data?.lastWeek && data?.lastMonth) ? data.lastWeek - data.lastMonth : null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+    >
+      <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+        <CardHeader className="pb-3 pt-0">
+          <SectionHeader icon={CalendarClock} iconColor="text-gold">
+            في مثل هذا اليوم
+          </SectionHeader>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <PremiumGlass className="p-4 lg:p-5">
+            {!hasData ? (
+              <div className="text-center py-4">
+                <CalendarClock className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">لا توجد بيانات سابقة</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-[11px] text-muted-foreground mb-1">الأسبوع الماضي</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold text-foreground">
+                        {data.lastWeek !== null ? toArabicNum(data.lastWeek) : '—'}
+                      </span>
+                      {data.lastWeek !== null && (
+                        <span className="text-xs text-muted-foreground">/ ١٠٠</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="w-px h-10 bg-border/40" />
+                  <div className="flex-1">
+                    <p className="text-[11px] text-muted-foreground mb-1">الشهر الماضي</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold text-foreground">
+                        {data.lastMonth !== null ? toArabicNum(data.lastMonth) : '—'}
+                      </span>
+                      {data.lastMonth !== null && (
+                        <span className="text-xs text-muted-foreground">/ ١٠٠</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {improvement !== null && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3, duration: 0.4 }}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold',
+                      improvement >= 0
+                        ? 'bg-emerald-accent/10 text-emerald-accent'
+                        : 'bg-red-500/10 text-red-500'
+                    )}
+                  >
+                    {improvement >= 0 ? (
+                      <ArrowUpRight className="w-4 h-4" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4" />
+                    )}
+                    <span>
+                      {improvement >= 0 ? '+' : ''}{toArabicNum(improvement)} نقطة مقارنة بالشهر الماضي
+                    </span>
+                  </motion.div>
+                )}
+              </div>
+            )}
+          </PremiumGlass>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    MAIN DASHBOARD COMPONENT
    ══════════════════════════════════════════════════════════════════════ */
 
@@ -702,7 +1033,6 @@ export default function Dashboard() {
 
   const { user, today, tasks, habits, health, achievements, dailyScores, goals, books } = data
   const greeting = getGreeting()
-  const quote = getQuoteOfTheDay()
 
   const levelInfo = calculateLevel(user.xp)
   const badgeStats: BadgeStats = {
@@ -808,6 +1138,11 @@ export default function Dashboard() {
       {/* ══════════ 2. Productivity Score (Full Width) ══════════ */}
       <motion.div variants={itemVariants}>
         <ProductivityScoreCard />
+      </motion.div>
+
+      {/* ══════════ 2b. On This Day ══════════ */}
+      <motion.div variants={itemVariants}>
+        <OnThisDayWidget />
       </motion.div>
 
       {/* ══════════ 3. Score Cards Row ══════════ */}
@@ -1297,33 +1632,8 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Quote of the Day */}
-        <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
-          <CardHeader className="pb-3 pt-0">
-            <SectionHeader icon={Quote} iconColor="text-gold">
-              اقتباس اليوم
-            </SectionHeader>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="shine glass rounded-2xl p-5 lg:p-6 flex flex-col items-center justify-center text-center min-h-[200px] border border-white/10 dark:border-white/5 relative overflow-hidden">
-              {/* Decorative watermark quotation mark */}
-              <span className="absolute top-2 right-4 text-[120px] font-serif leading-none opacity-[0.04] dark:opacity-[0.06] text-foreground select-none pointer-events-none" aria-hidden="true">
-                "
-              </span>
-              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-gold/20 to-gold-light/20 flex items-center justify-center mb-4 shadow-[0_0_20px_oklch(0.78_0.12_85/0.1)]">
-                <Star className="w-5 h-5 text-gold" />
-              </div>
-              <blockquote className="relative text-base lg:text-lg font-semibold leading-relaxed text-foreground/90 mb-3 max-w-xs">
-                {quote}
-              </blockquote>
-              <div className="relative flex items-center gap-1.5">
-                <div className="w-6 h-px bg-gold/40" />
-                <Sparkles className="w-3 h-3 text-gold/60" />
-                <div className="w-6 h-px bg-gold/40" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Motivational Wall */}
+        <MotivationalWall />
       </motion.div>
 
       {/* ══════════ Recent Focus Sessions ══════════ */}

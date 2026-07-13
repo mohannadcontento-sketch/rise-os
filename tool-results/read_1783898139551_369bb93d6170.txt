@@ -1,0 +1,880 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  BarChart,
+     7→     7→  Bar,
+     8→     8→  XAxis,
+     9→     9→  YAxis,
+    10→    10→  Tooltip,
+    11→    11→  ResponsiveContainer,
+    12→    12→  CartesianGrid,
+    13→    13→  Cell,
+    14→    14→} from 'recharts'
+    15→    15→import {
+    16→    16→  Brain,
+    17→    17→  Play,
+    18→    18→  Pause,
+    19→    19→  RotateCcw,
+    20→    20→  Square,
+    21→    21→  CloudRain,
+    22→    22→  TreePine,
+    23→    23→  Coffee,
+    24→    24→  Waves,
+    25→    25→  Flame,
+    26→    26→  Wind,
+    27→    27→  Clock,
+    28→    28→  Trophy,
+    29→    29→  Zap,
+    30→    30→  StickyNote,
+    31→    31→  PartyPopper,
+    32→    32→  Timer,
+    33→    33→  TrendingUp,
+    34→    34→  Target,
+    35→    35→  Sparkles,
+    36→    36→  Star,
+    37→    37→  CheckCircle2,
+    38→    38→} from 'lucide-react'
+    39→    39→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    40→    40→import { Button } from '@/components/ui/button'
+    41→    41→import { Textarea } from '@/components/ui/textarea'
+    42→    42→import { Badge } from '@/components/ui/badge'
+    43→    43→import { Skeleton } from '@/components/ui/skeleton'
+    44→    44→import { cn } from '@/lib/utils'
+    45→    45→import { toast } from 'sonner'
+    46→    46→import { notifyFocusComplete } from '@/lib/notifications'
+    47→    47→
+    48→    48→/* ────────────── Types ────────────── */
+    49→    49→
+    50→    50→interface FocusSession {
+    51→    51→  id: string
+    52→    52→  duration: number
+    53→    53→  actualMin: number
+    54→    54→  type: string
+    55→    55→  completed: boolean
+    56→    56→  startedAt: string
+    57→    57→  completedAt: string | null
+    58→    58→  notes: string
+    59→    59→}
+    60→    60→
+    61→    61→interface FocusData {
+    62→    62→  sessions: FocusSession[]
+    63→    63→}
+    64→    64→
+    65→    65→/* ────────────── Constants ────────────── */
+    66→    66→
+    67→    67→const DURATION_OPTIONS = [
+    68→    68→  { label: 'بومودورو', value: 25, icon: Timer, color: 'text-rose-400', bgAccent: 'bg-rose-400/5' },
+    69→    69→  { label: 'عميق ٥٠', value: 50, icon: Brain, color: 'text-emerald-accent', bgAccent: 'bg-emerald-accent/5' },
+    70→    70→  { label: 'عميق ٩٠', value: 90, icon: Target, color: 'text-forest', bgAccent: 'bg-forest/5' },
+    71→    71→  { label: 'عميق ١٢٠', value: 120, icon: Zap, color: 'text-gold', bgAccent: 'bg-gold/5' },
+    72→    72→]
+    73→    73→
+    74→    74→const AMBIENT_SOUNDS = [
+    75→    75→  { label: 'مطر', icon: CloudRain, color: 'bg-blue-400/10 text-blue-400', waveColor: 'rgba(96, 165, 250, 0.08)' },
+    76→    76→  { label: 'غابة', icon: TreePine, color: 'bg-emerald-accent/10 text-emerald-accent', waveColor: 'rgba(16, 185, 129, 0.08)' },
+    77→    77→  { label: 'قهوة', icon: Coffee, color: 'bg-amber-600/10 text-amber-600', waveColor: 'rgba(217, 119, 6, 0.08)' },
+    78→    78→  { label: 'محيط', icon: Waves, color: 'bg-cyan-500/10 text-cyan-500', waveColor: 'rgba(6, 182, 212, 0.08)' },
+    79→    79→  { label: 'نار', icon: Flame, color: 'bg-orange-500/10 text-orange-500', waveColor: 'rgba(249, 115, 22, 0.08)' },
+    80→    80→  { label: 'رياح', icon: Wind, color: 'bg-teal-400/10 text-teal-400', waveColor: 'rgba(45, 212, 191, 0.08)' },
+    81→    81→]
+    82→    82→
+    83→    83→const containerVariants = {
+    84→    84→  hidden: { opacity: 0 },
+    85→    85→  show: {
+    86→    86→    opacity: 1,
+    87→    87→    transition: { staggerChildren: 0.06 },
+    88→    88→  },
+    89→    89→}
+    90→    90→
+    91→    91→const itemVariants = {
+    92→    92→  hidden: { opacity: 0, y: 16 },
+    93→    93→  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+    94→    94→}
+    95→    95→
+    96→    96→/* ────────────── Helper ────────────── */
+    97→    97→
+    98→    98→function formatTime(totalSeconds: number): string {
+    99→    99→  const m = Math.floor(totalSeconds / 60)
+   100→   100→  const s = totalSeconds % 60
+   101→   101→  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+   102→   102→}
+   103→   103→
+   104→   104→function getDurationLabel(min: number): string {
+   105→   105→  return DURATION_OPTIONS.find((d) => d.value === min)?.label || `${min} دقيقة`
+   106→   106→}
+   107→   107→
+   108→   108→/* ────────────── Component ────────────── */
+   109→   109→
+   110→   110→export default function DeepWork() {
+   111→   111→  const [data, setData] = useState<FocusData | null>(null)
+   112→   112→  const [loading, setLoading] = useState(true)
+   113→   113→  const [saving, setSaving] = useState(false)
+   114→   114→
+   115→   115→  // Timer state
+   116→   116→  const [selectedDuration, setSelectedDuration] = useState(25)
+   117→   117→  const [timeRemaining, setTimeRemaining] = useState(25 * 60)
+   118→   118→  const [isRunning, setIsRunning] = useState(false)
+   119→   119→  const [isPaused, setIsPaused] = useState(false)
+   120→   120→  const [sessionCompleted, setSessionCompleted] = useState(false)
+   121→   121→  const [sessionStartTime, setSessionStartTime] = useState<string | null>(null)
+   122→   122→  const [sessionNotes, setSessionNotes] = useState('')
+   123→   123→  const [celebrateKey, setCelebrateKey] = useState(0)
+   124→   124→
+   125→   125→  // Ambient sounds (visual only)
+   126→   126→  const [activeSounds, setActiveSounds] = useState<Set<string>>(new Set())
+   127→   127→
+   128→   128→  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   129→   129→
+   130→   130→  /* ─── Fetch ─── */
+   131→   131→  const fetchSessions = useCallback(async () => {
+   132→   132→    try {
+   133→   133→      const res = await fetch('/api/rise/focus')
+   134→   134→      if (res.ok) {
+   135→   135→        const json = await res.json()
+   136→   136→        setData(json)
+   137→   137→      }
+   138→   138→    } catch {
+   139→   139→      toast.error('فشل في تحميل جلسات العمل')
+   140→   140→    } finally {
+   141→   141→      setLoading(false)
+   142→   142→    }
+   143→   143→  }, [])
+   144→   144→
+   145→   145→  useEffect(() => {
+   146→   146→    fetchSessions()
+   147→   147→  }, [fetchSessions])
+   148→   148→
+   149→   149→  /* ─── Timer Logic ─── */
+   150→   150→  useEffect(() => {
+   151→   151→    if (isRunning && !isPaused) {
+   152→   152→      intervalRef.current = setInterval(() => {
+   153→   153→        setTimeRemaining((prev) => {
+   154→   154→          if (prev <= 1) {
+   155→   155→            clearInterval(intervalRef.current!)
+   156→   156→            setIsRunning(false)
+   157→   157→            setIsPaused(false)
+   158→   158→            setSessionCompleted(true)
+   159→   159→            setCelebrateKey((k) => k + 1)
+   160→   160→            return 0
+   161→   161→          }
+   162→   162→          return prev - 1
+   163→   163→        })
+   164→   164→      }, 1000)
+   165→   165→    }
+   166→   166→    return () => {
+   167→   167→      if (intervalRef.current) clearInterval(intervalRef.current)
+   168→   168→    }
+   169→   169→  }, [isRunning, isPaused])
+   170→   170→
+   171→   171→  /* ─── Save Session ─── */
+   172→   172→  const saveSession = async (completed: boolean) => {
+   173→   173→    if (!sessionStartTime) return
+   174→   174→    setSaving(true)
+   175→   175→    try {
+   176→   176→      const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
+   177→   177→      const res = await fetch('/api/rise/focus', {
+   178→   178→        method: 'POST',
+   179→   179→        headers: { 'Content-Type': 'application/json' },
+   180→   180→        body: JSON.stringify({
+   181→   181→          duration: selectedDuration,
+   182→   182→          actualMin: elapsedMin,
+   183→   183→          type: getDurationLabel(selectedDuration),
+   184→   184→          completed,
+   185→   185→          startedAt: sessionStartTime,
+   186→   186→          completedAt: completed ? new Date().toISOString() : null,
+   187→   187→          notes: sessionNotes,
+   188→   188→        }),
+   189→   189→      })
+   190→   190→      if (res.ok) {
+   191→   191→        if (completed) {
+   192→   192→          const xp = Math.round(elapsedMin * 2)
+   193→   193→          notifyFocusComplete(elapsedMin, xp)
+   194→   194→          fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }) }).catch(() => {})
+   195→   195→        } else {
+   196→   196→          toast.success('تم حفظ الجلسة')
+   197→   197→        }
+   198→   198→        fetchSessions()
+   199→   199→      }
+   200→   200→    } catch {
+   201→   201→      toast.error('فشل في حفظ الجلسة')
+   202→   202→    } finally {
+   203→   203→      setSaving(false)
+   204→   204→    }
+   205→   205→  }
+   206→   206→
+   207→   207→  /* ─── Controls ─── */
+   208→   208→  const handleStart = () => {
+   209→   209→    if (!sessionStartTime) {
+   210→   210→      setSessionStartTime(new Date().toISOString())
+   211→   211→    }
+   212→   212→    setIsRunning(true)
+   213→   213→    setIsPaused(false)
+   214→   214→    setSessionCompleted(false)
+   215→   215→  }
+   216→   216→
+   217→   217→  const handlePause = () => {
+   218→   218→    setIsPaused(true)
+   219→   219→  }
+   220→   220→
+   221→   221→  const handleResume = () => {
+   222→   222→    setIsPaused(false)
+   223→   223→  }
+   224→   224→
+   225→   225→  const handleReset = () => {
+   226→   226→    setIsRunning(false)
+   227→   227→    setIsPaused(false)
+   228→   228→    setSessionCompleted(false)
+   229→   229→    setTimeRemaining(selectedDuration * 60)
+   230→   230→    setSessionStartTime(null)
+   231→   231→  }
+   232→   232→
+   233→   233→  const handleStop = () => {
+   234→   234→    setIsRunning(false)
+   235→   235→    setIsPaused(false)
+   236→   236→    const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
+   237→   237→    if (elapsedMin > 0) {
+   238→   238→      saveSession(false)
+   239→   239→    }
+   240→   240→    setTimeRemaining(selectedDuration * 60)
+   241→   241→    setSessionStartTime(null)
+   242→   242→  }
+   243→   243→
+   244→   244→  const handleDurationSelect = (min: number) => {
+   245→   245→    if (isRunning) return
+   246→   246→    setSelectedDuration(min)
+   247→   247→    setTimeRemaining(min * 60)
+   248→   248→    setSessionCompleted(false)
+   249→   249→    setSessionStartTime(null)
+   250→   250→  }
+   251→   251→
+   252→   252→  const toggleSound = (label: string) => {
+   253→   253→    setActiveSounds((prev) => {
+   254→   254→      const next = new Set(prev)
+   255→   255→      if (next.has(label)) next.delete(label)
+   256→   256→      else next.add(label)
+   257→   257→      return next
+   258→   258→    })
+   259→   259→  }
+   260→   260→
+   261→   261→  /* ─── Computed ─── */
+   262→   262→  const totalSeconds = selectedDuration * 60
+   263→   263→  const progress = totalSeconds > 0 ? ((totalSeconds - timeRemaining) / totalSeconds) * 100 : 0
+   264→   264→
+   265→   265→  const circumference = 2 * Math.PI * 120
+   266→   266→  const strokeDashoffset = circumference - (progress / 100) * circumference
+   267→   267→
+   268→   268→  const stats = useMemo(() => {
+   269→   269→    const sessions = data?.sessions || []
+   270→   270→    const totalMin = sessions.reduce((sum, s) => sum + (s.actualMin || 0), 0)
+   271→   271→    const todayStr = new Date().toISOString().split('T')[0]
+   272→   272→    const todaySessions = sessions.filter((s) => s.startedAt?.startsWith(todayStr))
+   273→   273→    const todayMin = todaySessions.reduce((sum, s) => sum + (s.actualMin || 0), 0)
+   274→   274→    const avgMin = sessions.length
+   275→   275→      ? Math.round(totalMin / sessions.length)
+   276→   276→      : 0
+   277→   277→    return { totalMin, todaySessions: todaySessions.length, todayMin, avgMin }
+   278→   278→  }, [data])
+   279→   279→
+   280→   280→  /* ─── Chart Data ─── */
+   281→   281→  const chartData = useMemo(() => {
+   282→   282→    const sessions = data?.sessions || []
+   283→   283→    const days: Record<string, number> = {}
+   284→   284→    for (let i = 13; i >= 0; i--) {
+   285→   285→      const d = new Date()
+   286→   286→      d.setDate(d.getDate() - i)
+   287→   287→      const key = d.toISOString().split('T')[0]
+   288→   288→      days[key] = 0
+   289→   289→    }
+   290→   290→    sessions.forEach((s) => {
+   291→   291→      const day = s.startedAt?.split('T')[0]
+   292→   292→      if (day && days[day] !== undefined) {
+   293→   293→        days[day] += s.actualMin || 0
+   294→   294→      }
+   295→   295→    })
+   296→   296→    return Object.entries(days).map(([date, min]) => ({
+   297→   297→      day: new Date(date).toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric' }),
+   298→   298→      دقائق: min,
+   299→   299→    }))
+   300→   300→  }, [data])
+   301→   301→
+   302→   302→  /* ─── Loading ─── */
+   303→   303→  if (loading) {
+   304→   304→    return (
+   305→   305→      <div className="space-y-4 p-4">
+   306→   306→        <Skeleton className="h-8 w-48" />
+   307→   307→        <div className="flex justify-center">
+   308→   308→          <Skeleton className="h-72 w-72 rounded-full" />
+   309→   309→        </div>
+   310→   310→        <div className="grid grid-cols-3 gap-4">
+   311→   311→          {[1, 2, 3].map((i) => (
+   312→   312→            <Skeleton key={i} className="h-24 rounded-2xl" />
+   313→   313→          ))}
+   314→   314→        </div>
+   315→   315→      </div>
+   316→   316→    )
+   317→   317→  }
+   318→   318→
+   319→   319→  return (
+   320→   320→    <motion.div
+   321→   321→      variants={containerVariants}
+   322→   322→      initial="hidden"
+   323→   323→      animate="show"
+   324→   324→      className="space-y-6 p-4 md:p-6"
+   325→   325→    >
+   326→   326→      {/* Header */}
+   327→   327→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   328→   328→        <div className="flex items-center gap-3">
+   329→   329→          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
+   330→   330→            <Brain className="w-5 h-5 text-white" />
+   331→   331→          </div>
+   332→   332→          <div>
+   333→   333→            <h2 className="text-xl font-bold text-foreground">العمل العميق</h2>
+   334→   334→            <p className="text-xs text-muted-foreground">ركّز وحقق أقصى إنتاجية</p>
+   335→   335→          </div>
+   336→   336→        </div>
+   337→   337→      </motion.div>
+   338→   338→
+   339→   339→      {/* Duration Selector with glow */}
+   340→   340→      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   341→   341→        {DURATION_OPTIONS.map((opt) => {
+   342→   342→          const Icon = opt.icon
+   343→   343→          const isActive = selectedDuration === opt.value && !isRunning
+   344→   344→          return (
+   345→   345→            <motion.button
+   346→   346→              key={opt.value}
+   347→   347→              whileHover={{ scale: 1.02 }}
+   348→   348→              whileTap={{ scale: 0.97 }}
+   349→   349→              onClick={() => handleDurationSelect(opt.value)}
+   350→   350→              disabled={isRunning}
+   351→   351→              className={cn(
+   352→   352→                'glass rounded-2xl p-4 text-center transition-all duration-200 relative overflow-hidden',
+   353→   353→                isActive
+   354→   354→                  ? 'ring-2 ring-emerald-accent/60 bg-emerald-accent/5 shadow-lg shadow-emerald-accent/10'
+   355→   355→                  : 'hover:bg-muted/30',
+   356→   356→                isRunning && 'opacity-50 cursor-not-allowed'
+   357→   357→              )}
+   358→   358→            >
+   359→   359→              {isActive && (
+   360→   360→                <motion.div
+   361→   361→                  className="absolute inset-0 pointer-events-none"
+   362→   362→                  animate={{
+   363→   363→                    boxShadow: [
+   364→   364→                      'inset 0 0 15px rgba(16,185,129,0.05)',
+   365→   365→                      'inset 0 0 25px rgba(16,185,129,0.1)',
+   366→   366→                      'inset 0 0 15px rgba(16,185,129,0.05)',
+   367→   367→                    ],
+   368→   368→                  }}
+   369→   369→                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   370→   370→                />
+   371→   371→              )}
+   372→   372→              <Icon className={cn('w-5 h-5 mx-auto mb-1.5', opt.color)} />
+   373→   373→              <span className="text-sm font-bold text-foreground block">{opt.value} دقيقة</span>
+   374→   374→              <span className="text-[11px] text-muted-foreground">{opt.label}</span>
+   375→   375→            </motion.button>
+   376→   376→          )
+   377→   377→        })}
+   378→   378→      </motion.div>
+   379→   379→
+   380→   380→      {/* Timer with breathing glow */}
+   381→   381→      <motion.div variants={itemVariants} className="flex justify-center">
+   382→   382→        <div className="relative">
+   383→   383→          <AnimatePresence>
+   384→   384→            {sessionCompleted && (
+   385→   385→              <motion.div
+   386→   386→                key={celebrateKey}
+   387→   387→                initial={{ opacity: 0, scale: 0.3 }}
+   388→   388→                animate={{ opacity: 1, scale: 1 }}
+   389→   389→                exit={{ opacity: 0, scale: 0.5 }}
+   390→   390→                className="absolute inset-0 flex flex-col items-center justify-center z-10"
+   391→   391→              >
+   392→   392→                {/* Celebration burst particles */}
+   393→   393→                {[...Array(8)].map((_, i) => (
+   394→   394→                  <motion.div
+   395→   395→                    key={i}
+   396→   396→                    className="absolute w-2 h-2 rounded-full"
+   397→   397→                    style={{
+   398→   398→                      backgroundColor: i % 2 === 0 ? 'var(--color-gold)' : 'var(--color-emerald-accent)',
+   399→   399→                    }}
+   400→   400→                    initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
+   401→   401→                    animate={{
+   402→   402→                      x: Math.cos((i / 8) * Math.PI * 2) * 100,
+   403→   403→                      y: Math.sin((i / 8) * Math.PI * 2) * 100,
+   404→   404→                      opacity: 0,
+   405→   405→                      scale: [0, 1.5, 0.5],
+   406→   406→                    }}
+   407→   407→                    transition={{ duration: 1.2, ease: 'easeOut' }}
+   408→   408→                  />
+   409→   409→                ))}
+   410→   410→                <motion.div
+   411→   411→                  animate={{ rotate: [0, -10, 10, -10, 0], scale: [1, 1.2, 1] }}
+   412→   412→                  transition={{ duration: 0.5, repeat: 3 }}
+   413→   413→                >
+   414→   414→                  <PartyPopper className="w-12 h-12 text-gold mb-2" />
+   415→   415→                </motion.div>
+   416→   416→                <p className="text-lg font-bold text-foreground">أحسنت! 🎉</p>
+   417→   417→                <p className="text-sm text-muted-foreground">أكملت جلسة العمل</p>
+   418→   418→                <Button
+   419→   419→                  onClick={() => {
+   420→   420→                    setSessionCompleted(false)
+   421→   421→                    saveSession(true)
+   422→   422→                    setTimeRemaining(selectedDuration * 60)
+   423→   423→                    setSessionStartTime(null)
+   424→   424→                  }}
+   425→   425→                  className="mt-4 bg-emerald-accent hover:bg-emerald-accent/90 text-white rounded-xl"
+   426→   426→                  size="sm"
+   427→   427→                >
+   428→   428→                  <Trophy className="w-4 h-4 ml-1" />
+   429→   429→                  حفظ الجلسة
+   430→   430→                </Button>
+   431→   431→              </motion.div>
+   432→   432→            )}
+   433→   433→          </AnimatePresence>
+   434→   434→
+   435→   435→          {/* Breathing glow wrapper */}
+   436→   436→          <motion.div
+   437→   437→            animate={isRunning && !isPaused ? {
+   438→   438→              boxShadow: [
+   439→   439→                '0 0 20px rgba(16,185,129,0.15)',
+   440→   440→                '0 0 40px rgba(16,185,129,0.25)',
+   441→   441→                '0 0 20px rgba(16,185,129,0.15)',
+   442→   442→              ],
+   443→   443→            } : isPaused ? {
+   444→   444→              boxShadow: [
+   445→   445→                '0 0 15px rgba(234,179,8,0.1)',
+   446→   446→                '0 0 25px rgba(234,179,8,0.18)',
+   447→   447→                '0 0 15px rgba(234,179,8,0.1)',
+   448→   448→              ],
+   449→   449→            } : {}}
+   450→   450→            transition={{
+   451→   451→              duration: isPaused ? 3 : 2,
+   452→   452→              repeat: Infinity,
+   453→   453→              ease: 'easeInOut',
+   454→   454→            }}
+   455→   455→            className="rounded-full"
+   456→   456→          >
+   457→   457→            <svg width="280" height="280" viewBox="0 0 280 280" className="transform -rotate-90">
+   458→   458→              {/* Background circle */}
+   459→   459→              <circle
+   460→   460→                cx="140"
+   461→   461→                cy="140"
+   462→   462→                r="120"
+   463→   463→                fill="none"
+   464→   464→                stroke="currentColor"
+   465→   465→                strokeWidth="8"
+   466→   466→                className="text-muted/50"
+   467→   467→              />
+   468→   468→              {/* Progress circle with gradient stroke */}
+   469→   469→              <motion.circle
+   470→   470→                cx="140"
+   471→   471→                cy="140"
+   472→   472→                r="120"
+   473→   473→                fill="none"
+   474→   474→                stroke="url(#timerGradient)"
+   475→   475→                strokeWidth="8"
+   476→   476→                strokeLinecap="round"
+   477→   477→                strokeDasharray={circumference}
+   478→   478→                strokeDashoffset={strokeDashoffset}
+   479→   479→                transition={{ duration: 0.5, ease: 'easeOut' }}
+   480→   480→                style={{
+   481→   481→                  filter: isRunning && !isPaused
+   482→   482→                    ? 'drop-shadow(0 0 6px var(--color-emerald-accent))'
+   483→   483→                    : isPaused
+   484→   484→                      ? 'drop-shadow(0 0 4px var(--color-gold))'
+   485→   485→                      : 'none',
+   486→   486→                }}
+   487→   487→              />
+   488→   488→              {/* Gradient def: emerald → gold */}
+   489→   489→              <defs>
+   490→   490→                <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+   491→   491→                  <stop offset="0%" stopColor="var(--color-emerald-accent)" />
+   492→   492→                  <stop offset="100%" stopColor="var(--color-gold)" />
+   493→   493→                </linearGradient>
+   494→   494→              </defs>
+   495→   495→            </svg>
+   496→   496→          </motion.div>
+   497→   497→
+   498→   498→          {/* Timer text overlay */}
+   499→   499→          <div className="absolute inset-0 flex flex-col items-center justify-center">
+   500→   500→            <motion.span
+   501→   501→              key={timeRemaining}
+   502→   502→              initial={{ scale: 1.02 }}
+   503→   503→              animate={{ scale: 1 }}
+   504→   504→              className="text-5xl font-bold text-foreground tracking-tight tabular-nums"
+   505→   505→              style={{ direction: 'ltr' }}
+   506→   506→            >
+   507→   507→              {formatTime(timeRemaining)}
+   508→   508→            </motion.span>
+   509→   509→            <span className="text-xs text-muted-foreground mt-1">
+   510→   510→              {isRunning && !isPaused && 'جاري التركيز...'}
+   511→   511→              {isPaused && 'متوقف مؤقتاً'}
+   512→   512→              {!isRunning && !isPaused && !sessionCompleted && 'جاهز للبدء'}
+   513→   513→            </span>
+   514→   514→            {isRunning && !isPaused && (
+   515→   515→              <motion.div
+   516→   516→                className="w-2 h-2 rounded-full bg-emerald-accent mt-2"
+   517→   517→                animate={{ opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
+   518→   518→                transition={{ duration: 1.5, repeat: Infinity }}
+   519→   519→              />
+   520→   520→            )}
+   521→   521→          </div>
+   522→   522→        </div>
+   523→   523→      </motion.div>
+   524→   524→
+   525→   525→      {/* Controls */}
+   526→   526→      <motion.div variants={itemVariants} className="flex items-center justify-center gap-3">
+   527→   527→        {!isRunning && !sessionCompleted && (
+   528→   528→          <motion.div whileTap={{ scale: 0.95 }} className="flex gap-3">
+   529→   529→            <Button
+   530→   530→              onClick={handleStart}
+   531→   531→              className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 px-8"
+   532→   532→            >
+   533→   533→              <Play className="w-5 h-5 ml-2" />
+   534→   534→              ابدأ
+   535→   535→            </Button>
+   536→   536→            <Button
+   537→   537→              onClick={handleReset}
+   538→   538→              variant="outline"
+   539→   539→              className="rounded-xl h-12 px-6"
+   540→   540→            >
+   541→   541→              <RotateCcw className="w-4 h-4 ml-1" />
+   542→   542→              إعادة
+   543→   543→            </Button>
+   544→   544→          </motion.div>
+   545→   545→        )}
+   546→   546→
+   547→   547→        {isRunning && !isPaused && (
+   548→   548→          <motion.div whileTap={{ scale: 0.95 }} className="flex gap-3">
+   549→   549→            <Button
+   550→   550→              onClick={handlePause}
+   551→   551→              variant="outline"
+   552→   552→              className="rounded-xl h-12 px-8 border-gold/30 text-gold hover:bg-gold/10"
+   553→   553→            >
+   554→   554→              <Pause className="w-5 h-5 ml-2" />
+   555→   555→              استراحة
+   556→   556→            </Button>
+   557→   557→            <Button
+   558→   558→              onClick={handleStop}
+   559→   559→              variant="outline"
+   560→   560→              className="rounded-xl h-12 px-6 border-destructive/30 text-destructive hover:bg-destructive/10"
+   561→   561→            >
+   562→   562→              <Square className="w-4 h-4 ml-1" />
+   563→   563→              إنهاء
+   564→   564→            </Button>
+   565→   565→          </motion.div>
+   566→   566→        )}
+   567→   567→
+   568→   568→        {isPaused && (
+   569→   569→          <motion.div whileTap={{ scale: 0.95 }} className="flex gap-3">
+   570→   570→            <Button
+   571→   571→              onClick={handleResume}
+   572→   572→              className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 px-8"
+   573→   573→            >
+   574→   574→              <Play className="w-5 h-5 ml-2" />
+   575→   575→              استئناف
+   576→   576→            </Button>
+   577→   577→            <Button
+   578→   578→              onClick={handleStop}
+   579→   579→              variant="outline"
+   580→   580→              className="rounded-xl h-12 px-6 border-destructive/30 text-destructive hover:bg-destructive/10"
+   581→   581→            >
+   582→   582→              <Square className="w-4 h-4 ml-1" />
+   583→   583→              إنهاء
+   584→   584→            </Button>
+   585→   585→            <Button
+   586→   586→              onClick={handleReset}
+   587→   587→              variant="outline"
+   588→   588→              className="rounded-xl h-12 px-6"
+   589→   589→            >
+   590→   590→              <RotateCcw className="w-4 h-4 ml-1" />
+   591→   591→              إعادة
+   592→   592→            </Button>
+   593→   593→          </motion.div>
+   594→   594→        )}
+   595→   595→      </motion.div>
+   596→   596→
+   597→   597→      {/* Session Notes */}
+   598→   598→      {(isRunning || sessionCompleted) && (
+   599→   599→        <motion.div
+   600→   600→          initial={{ opacity: 0, y: 10 }}
+   601→   601→          animate={{ opacity: 1, y: 0 }}
+   602→   602→          className="max-w-md mx-auto"
+   603→   603→        >
+   604→   604→          <Card className="glass border-0 shadow-sm">
+   605→   605→            <CardContent className="p-4">
+   606→   606→              <label className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+   607→   607→                <StickyNote className="w-4 h-4 text-gold" />
+   608→   608→                ملاحظات الجلسة
+   609→   609→              </label>
+   610→   610→              <Textarea
+   611→   611→                value={sessionNotes}
+   612→   612→                onChange={(e) => setSessionNotes(e.target.value)}
+   613→   613→                placeholder="اكتب ملاحظاتك عن الجلسة..."
+   614→   614→                className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
+   615→   615→                dir="rtl"
+   616→   616→              />
+   617→   617→            </CardContent>
+   618→   618→          </Card>
+   619→   619→        </motion.div>
+   620→   620→      )}
+   621→   621→
+   622→   622→      {/* Ambient Sounds with unique colors and wave animation */}
+   623→   623→      <motion.div variants={itemVariants}>
+   624→   624→        <Card className="glass border-0 shadow-sm">
+   625→   625→          <CardHeader className="pb-3">
+   626→   626→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   627→   627→              <Waves className="w-4 h-4 text-emerald-accent" />
+   628→   628→              أصوات محيطية
+   629→   629→            </CardTitle>
+   630→   630→          </CardHeader>
+   631→   631→          <CardContent>
+   632→   632→            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+   633→   633→              {AMBIENT_SOUNDS.map((sound) => {
+   634→   634→                const Icon = sound.icon
+   635→   635→                const isActive = activeSounds.has(sound.label)
+   636→   636→                return (
+   637→   637→                  <motion.button
+   638→   638→                    key={sound.label}
+   639→   639→                    whileHover={{ scale: 1.05 }}
+   640→   640→                    whileTap={{ scale: 0.95 }}
+   641→   641→                    onClick={() => toggleSound(sound.label)}
+   642→   642→                    className={cn(
+   643→   643→                      'rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all duration-200 border relative overflow-hidden',
+   644→   644→                      isActive
+   645→   645→                        ? 'border-emerald-accent/40 shadow-sm'
+   646→   646→                        : 'border-transparent hover:bg-muted/30'
+   647→   647→                    )}
+   648→   648→                  >
+   649→   649→                    {/* Wave animation background for active sounds */}
+   650→   650→                    {isActive && (
+   651→   651→                      <div className="absolute inset-0 overflow-hidden rounded-2xl">
+   652→   652→                        <motion.div
+   653→   653→                          className="absolute bottom-0 left-0 right-0 h-full"
+   654→   654→                          style={{ backgroundColor: sound.waveColor }}
+   655→   655→                          animate={{
+   656→   656→                            backgroundPosition: ['0% 100%', '100% 0%', '0% 100%'],
+   657→   657→                          }}
+   658→   658→                          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+   659→   659→                        />
+   660→   660→                        {[...Array(3)].map((_, waveIdx) => (
+   661→   661→                          <motion.div
+   662→   662→                            key={waveIdx}
+   663→   663→                            className="absolute bottom-0 left-0 right-0 rounded-full"
+   664→   664→                            style={{
+   665→   665→                              backgroundColor: sound.waveColor,
+   666→   666→                              height: '40%',
+   667→   667→                              transformOrigin: 'bottom',
+   668→   668→                            }}
+   669→   669→                            animate={{
+   670→   670→                              scaleX: [0.3, 0.7, 0.3],
+   671→   671→                              opacity: [0.3, 0.7, 0.3],
+   672→   672→                              y: [0, -5, 0],
+   673→   673→                            }}
+   674→   674→                            transition={{
+   675→   675→                              duration: 2,
+   676→   676→                              repeat: Infinity,
+   677→   677→                              ease: 'easeInOut',
+   678→   678→                              delay: waveIdx * 0.4,
+   679→   679→                            }}
+   680→   680→                          />
+   681→   681→                        ))}
+   682→   682→                      </div>
+   683→   683→                    )}
+   684→   684→
+   685→   685→                    <div
+   686→   686→                      className={cn(
+   687→   687→                        'w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 relative z-10',
+   688→   688→                        isActive ? sound.color : 'bg-muted text-muted-foreground'
+   689→   689→                      )}
+   690→   690→                    >
+   691→   691→                      <Icon className="w-5 h-5" />
+   692→   692→                    </div>
+   693→   693→                    <span
+   694→   694→                      className={cn(
+   695→   695→                        'text-xs font-medium relative z-10',
+   696→   696→                        isActive ? 'text-foreground' : 'text-muted-foreground'
+   697→   697→                      )}
+   698→   698→                    >
+   699→   699→                      {sound.label}
+   700→   700→                    </span>
+   701→   701→                    {isActive && (
+   702→   702→                      <motion.div
+   703→   703→                        animate={{ scale: [1, 1.5, 1], opacity: [1, 0.3, 1] }}
+   704→   704→                        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+   705→   705→                        className="w-1.5 h-1.5 rounded-full bg-emerald-accent relative z-10"
+   706→   706→                      />
+   707→   707→                    )}
+   708→   708→                  </motion.button>
+   709→   709→                )
+   710→   710→              })}
+   711→   711→            </div>
+   712→   712→          </CardContent>
+   713→   713→        </Card>
+   714→   714→      </motion.div>
+   715→   715→
+   716→   716→      {/* Statistics with glass gradient borders */}
+   717→   717→      <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 md:gap-4">
+   718→   718→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   719→   719→          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
+   720→   720→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   721→   721→            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   722→   722→              <Clock className="w-4 h-4 text-emerald-accent" />
+   723→   723→            </div>
+   724→   724→            <span className="text-2xl font-bold text-foreground count-up">{stats.totalMin}</span>
+   725→   725→            <span className="text-[11px] text-muted-foreground">إجمالي الدقائق</span>
+   726→   726→          </CardContent>
+   727→   727→        </Card>
+   728→   728→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   729→   729→          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
+   730→   730→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   731→   731→            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+   732→   732→              <Zap className="w-4 h-4 text-gold" />
+   733→   733→            </div>
+   734→   734→            <span className="text-2xl font-bold text-foreground count-up">{stats.todaySessions}</span>
+   735→   735→            <span className="text-[11px] text-muted-foreground">جلسات اليوم</span>
+   736→   736→          </CardContent>
+   737→   737→        </Card>
+   738→   738→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   739→   739→          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
+   740→   740→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   741→   741→            <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+   742→   742→              <TrendingUp className="w-4 h-4 text-forest" />
+   743→   743→            </div>
+   744→   744→            <span className="text-2xl font-bold text-foreground count-up">{stats.avgMin}</span>
+   745→   745→            <span className="text-[11px] text-muted-foreground">متوسط الجلسة</span>
+   746→   746→          </CardContent>
+   747→   747→        </Card>
+   748→   748→      </motion.div>
+   749→   749→
+   750→   750→      {/* Focus Chart */}
+   751→   751→      <motion.div variants={itemVariants}>
+   752→   752→        <Card className="glass border-0 shadow-sm">
+   753→   753→          <CardHeader className="pb-2">
+   754→   754→            <CardTitle className="text-sm font-bold">التركيز اليومي (آخر ١٤ يوم)</CardTitle>
+   755→   755→          </CardHeader>
+   756→   756→          <CardContent>
+   757→   757→            <div className="h-52">
+   758→   758→              <ResponsiveContainer width="100%" height="100%">
+   759→   759→                <BarChart data={chartData} barCategoryGap="20%">
+   760→   760→                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   761→   761→                  <XAxis
+   762→   762→                    dataKey="day"
+   763→   763→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   764→   764→                    axisLine={false}
+   765→   765→                    tickLine={false}
+   766→   766→                  />
+   767→   767→                  <YAxis
+   768→   768→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   769→   769→                    axisLine={false}
+   770→   770→                    tickLine={false}
+   771→   771→                    width={30}
+   772→   772→                  />
+   773→   773→                  <Tooltip
+   774→   774→                    contentStyle={{
+   775→   775→                      backgroundColor: 'var(--color-popover)',
+   776→   776→                      border: '1px solid var(--color-border)',
+   777→   777→                      borderRadius: '12px',
+   778→   778→                      fontSize: '12px',
+   779→   779→                      direction: 'rtl',
+   780→   780→                    }}
+   781→   781→                    labelStyle={{ color: 'var(--color-foreground)', fontWeight: 'bold' }}
+   782→   782→                    formatter={(value: number) => [`${value} دقيقة`, 'التركيز']}
+   783→   783→                  />
+   784→   784→                  <Bar dataKey="دقائق" radius={[6, 6, 0, 0]}>
+   785→   785→                    {chartData.map((entry, index) => (
+   786→   786→                      <Cell
+   787→   787→                        key={index}
+   788→   788→                        fill={entry['دقائق'] > 0 ? 'var(--color-emerald-accent)' : 'var(--color-muted)'}
+   789→   789→                        fillOpacity={entry['دقائق'] > 0 ? 0.8 : 0.3}
+   790→   790→                      />
+   791→   791→                    ))}
+   792→   792→                  </Bar>
+   793→   793→                </BarChart>
+   794→   794→              </ResponsiveContainer>
+   795→   795→            </div>
+   796→   796→          </CardContent>
+   797→   797→        </Card>
+   798→   798→      </motion.div>
+   799→   799→
+   800→   800→      {/* Session History */}
+   801→   801→      <motion.div variants={itemVariants}>
+   802→   802→        <Card className="glass border-0 shadow-sm">
+   803→   803→          <CardHeader className="pb-3">
+   804→   804→            <CardTitle className="text-sm font-bold">سجل الجلسات</CardTitle>
+   805→   805→          </CardHeader>
+   806→   806→          <CardContent>
+   807→   807→            <div className="space-y-2 max-h-80 overflow-y-auto">
+   808→   808→              {(!data?.sessions || data.sessions.length === 0) ? (
+   809→   809→                <div className="text-center py-10">
+   810→   810→                  <Brain className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   811→   811→                  <p className="text-sm text-muted-foreground">لا توجد جلسات سابقة</p>
+   812→   812→                </div>
+   813→   813→              ) : (
+   814→   814→                data.sessions.slice(0, 20).map((session, index) => (
+   815→   815→                  <motion.div
+   816→   816→                    key={session.id}
+   817→   817→                    initial={{ opacity: 0, x: 10 }}
+   818→   818→                    animate={{ opacity: 1, x: 0 }}
+   819→   819→                    transition={{ delay: index * 0.03 }}
+   820→   820→                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors"
+   821→   821→                  >
+   822→   822→                    <div
+   823→   823→                      className={cn(
+   824→   824→                        'w-9 h-9 rounded-lg flex items-center justify-center',
+   825→   825→                        session.completed
+   826→   826→                          ? 'bg-emerald-accent/10 text-emerald-accent'
+   827→   827→                          : 'bg-gold/10 text-gold'
+   828→   828→                      )}
+   829→   829→                    >
+   830→   830→                      {session.completed ? (
+   831→   831→                        <Trophy className="w-4 h-4" />
+   832→   832→                      ) : (
+   833→   833→                        <Clock className="w-4 h-4" />
+   834→   834→                      )}
+   835→   835→                    </div>
+   836→   836→                    <div className="flex-1 min-w-0">
+   837→   837→                      <div className="flex items-center gap-2">
+   838→   838→                        <span className="text-sm font-medium text-foreground">
+   839→   839→                          {session.type}
+   840→   840→                        </span>
+   841→   841→                        <Badge
+   842→   842→                          variant="secondary"
+   843→   843→                          className={cn(
+   844→   844→                            'text-[10px] rounded-full border-0',
+   845→   845→                            session.completed
+   846→   846→                              ? 'bg-emerald-accent/10 text-emerald-accent'
+   847→   847→                              : 'bg-gold/10 text-gold'
+   848→   848→                          )}
+   849→   849→                        >
+   850→   850→                          {session.completed ? 'مكتمل' : 'غير مكتمل'}
+   851→   851→                        </Badge>
+   852→   852→                      </div>
+   853→   853→                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+   854→   854→                        <span>{session.actualMin} دقيقة</span>
+   855→   855→                        <span>•</span>
+   856→   856→                        <span>
+   857→   857→                          {new Date(session.startedAt).toLocaleDateString('ar-SA', {
+   858→   858→                            month: 'short',
+   859→   859→                            day: 'numeric',
+   860→   860→                            hour: '2-digit',
+   861→   861→                            minute: '2-digit',
+   862→   862→                          })}
+   863→   863→                        </span>
+   864→   864→                      </div>
+   865→   865→                      {session.notes && (
+   866→   866→                        <p className="text-xs text-muted-foreground/70 mt-1 truncate">
+   867→   867→                          {session.notes}
+   868→   868→                        </p>
+   869→   869→                      )}
+   870→   870→                    </div>
+   871→   871→                  </motion.div>
+   872→   872→                ))
+   873→   873→              )}
+   874→   874→            </div>
+   875→   875→          </CardContent>
+   876→   876→        </Card>
+   877→   877→      </motion.div>
+   878→   878→    </motion.div>
+   879→   879→  )
+   880→   880→}

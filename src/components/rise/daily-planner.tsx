@@ -27,6 +27,7 @@ import {
   ListTodo,
   Highlighter,
   StickyNote,
+  Timer,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -300,10 +301,9 @@ function PlannerItemRow({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
       className={cn(
-        'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
-        index % 2 === 0 ? 'bg-muted/20' : 'bg-transparent',
-        'hover:bg-muted/40',
-        item.done && 'opacity-60'
+        'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
+        'hover:bg-background/80 hover:shadow-md hover:scale-[1.005] backdrop-blur-sm',
+        item.done && 'opacity-50'
       )}
     >
       {/* Time indicator */}
@@ -685,6 +685,12 @@ export default function DailyPlanner() {
   const [data, setData] = useState<PlannerData>(() => loadPlannerData())
   const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
   const isFirstRender = useRef(true)
+  const [currentTime, setCurrentTime] = useState(new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Quick Notes
   const [notes, setNotes] = useState<QuickNote[]>(() => loadNotes())
@@ -692,6 +698,10 @@ export default function DailyPlanner() {
   const [newNoteText, setNewNoteText] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editNoteText, setEditNoteText] = useState('')
+  const [quickNoteText, setQuickNoteText] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    try { return localStorage.getItem('rise-planner-quick-note') || '' } catch { return '' }
+  })
 
   // Save to localStorage on changes (skip first render)
   useEffect(() => {
@@ -701,6 +711,11 @@ export default function DailyPlanner() {
     }
     savePlannerData(data)
   }, [data])
+
+  // Auto-save quick note
+  useEffect(() => {
+    try { localStorage.setItem('rise-planner-quick-note', quickNoteText) } catch { /* ignore */ }
+  }, [quickNoteText])
 
   // Derive section items from flat list using createdAt hour
   const sectionItems = useMemo(() => {
@@ -817,72 +832,89 @@ export default function DailyPlanner() {
   const completedItems = data.items.filter((i) => i.done).length
   const overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
 
+  // Arabic clock time
+  const toArabicDigits = (n: number) => String(n).padStart(2, '0').replace(/[0-9]/g, (d) => ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'][parseInt(d)])
+  const arabicClock = toArabicDigits(currentTime.getHours()) + ':' + toArabicDigits(currentTime.getMinutes())
+  const currentHour = getCurrentHour()
+  const periodLabel = currentHour < 12 ? 'صباحاً' : currentHour < 17 ? 'ظهراً' : 'مساءً'
+
   return (
     <div dir="rtl" className="space-y-6">
-      {/* ── Date Header ── */}
+      {/* ── Premium Gradient Header with Live Clock ── */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="glass rounded-2xl p-5"
+        className="rounded-2xl overflow-hidden relative"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg">
-              <CalendarDays className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-foreground">{getArabicDate()}</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {totalItems === 0
-                  ? 'ابدأ بخطة يومك وأنجز أهدافك'
-                  : `${arabicNum(completedItems)} من ${arabicNum(totalItems)} مهمة مكتملة`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* View toggle */}
-            <div className="flex items-center bg-muted/60 rounded-xl p-1">
-              <button
-                onClick={() => setActiveView('sections')}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
-                  activeView === 'sections'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                الأقسام
-              </button>
-              <button
-                onClick={() => setActiveView('timeline')}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
-                  activeView === 'timeline'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                الجدول الزمني
-              </button>
-            </div>
-
-            {/* Overall progress indicator */}
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="w-24 h-2 rounded-full bg-muted/60 overflow-hidden">
-                <motion.div
-                  className={cn(
-                    'h-full rounded-full transition-colors',
-                    overallProgress === 100 ? 'bg-emerald-accent' : 'bg-gradient-to-l from-emerald-accent to-forest-light'
-                  )}
-                  animate={{ width: `${overallProgress}%` }}
-                  transition={{ duration: 0.5, ease: 'easeOut' }}
-                />
+        <div className="absolute inset-0 bg-gradient-to-bl from-forest/20 via-emerald-accent/10 to-gold/10 dark:from-forest/30 dark:via-emerald-accent/15 dark:to-gold/10" />
+        <div className="absolute inset-0 noise-bg opacity-20" />
+        <div className="relative glass p-5 border-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {/* Live Clock */}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-accent to-forest flex flex-col items-center justify-center shadow-lg glow-emerald">
+                <Timer className="w-4 h-4 text-white/80 mb-0.5" />
+                <span className="text-white text-base font-bold font-mono tabular-nums leading-none">
+                  {arabicClock}
+                </span>
               </div>
-              <span className="text-xs font-semibold text-muted-foreground tabular-nums min-w-[3rem] text-left">
-                {arabicNum(overallProgress)}٪
-              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-emerald-accent" />
+                  <h3 className="text-xl font-bold text-foreground">{getArabicDate()}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {totalItems === 0
+                    ? `${periodLabel} — ابدأ بخطة يومك وأنجز أهدافك`
+                    : `${arabicNum(completedItems)} من ${arabicNum(totalItems)} مهمة مكتملة`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* View toggle */}
+              <div className="flex items-center bg-muted/60 rounded-xl p-1 backdrop-blur-sm">
+                <button
+                  onClick={() => setActiveView('sections')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
+                    activeView === 'sections'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  الأقسام
+                </button>
+                <button
+                  onClick={() => setActiveView('timeline')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
+                    activeView === 'timeline'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  الجدول الزمني
+                </button>
+              </div>
+
+              {/* Overall progress indicator */}
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="w-24 h-2 rounded-full bg-muted/60 overflow-hidden">
+                  <motion.div
+                    className={cn(
+                      'h-full rounded-full transition-colors',
+                      overallProgress === 100 ? 'bg-emerald-accent' : 'bg-gradient-to-l from-emerald-accent to-forest'
+                    )}
+                    animate={{ width: `${overallProgress}%` }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-muted-foreground tabular-nums min-w-[3rem] text-left">
+                  {arabicNum(overallProgress)}٪
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -942,25 +974,30 @@ export default function DailyPlanner() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-5"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 relative"
           >
             {SECTIONS.map((section, index) => (
-              <SectionCard
-                key={section.id}
-                section={section}
-                items={sectionItems[section.id]}
-                suggestions={QUICK_SUGGESTIONS[section.id]}
-                onAddItem={addItem}
-                onToggleItem={toggleItem}
-                onDeleteItem={deleteItem}
-                onTogglePriority={togglePriority}
-                isCurrentSection={
-                  (section.id === 'morning' && getCurrentHour() >= 6 && getCurrentHour() < 12) ||
-                  (section.id === 'noon' && getCurrentHour() >= 12 && getCurrentHour() < 17) ||
-                  (section.id === 'evening' && getCurrentHour() >= 17 && getCurrentHour() <= 22)
-                }
-                index={index}
-              />
+              <div key={section.id} className="relative">
+                {/* Gradient divider line between sections (desktop) */}
+                {index > 0 && (
+                  <div className="hidden lg:block absolute top-6 bottom-6 right-0 w-px bg-gradient-to-b from-transparent via-emerald-accent/20 to-transparent" />
+                )}
+                <SectionCard
+                  section={section}
+                  items={sectionItems[section.id]}
+                  suggestions={QUICK_SUGGESTIONS[section.id]}
+                  onAddItem={addItem}
+                  onToggleItem={toggleItem}
+                  onDeleteItem={deleteItem}
+                  onTogglePriority={togglePriority}
+                  isCurrentSection={
+                    (section.id === 'morning' && currentHour >= 6 && currentHour < 12) ||
+                    (section.id === 'noon' && currentHour >= 12 && currentHour < 17) ||
+                    (section.id === 'evening' && currentHour >= 17 && currentHour <= 22)
+                  }
+                  index={index}
+                />
+              </div>
             ))}
           </motion.div>
         ) : (
@@ -1042,6 +1079,39 @@ export default function DailyPlanner() {
             </div>
           </motion.div>
         ))}
+      </motion.div>
+
+      {/* ── Premium Quick Notes Textarea ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.35 }}
+      >
+        <div className="relative rounded-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-amber-500/5 dark:from-amber-500/8 dark:to-amber-500/3" />
+          <div className="absolute inset-0 noise-bg opacity-15" />
+          <div className="relative glass border border-amber-200/30 dark:border-amber-700/20 p-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 flex items-center justify-center shadow-sm">
+                <StickyNote className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">ملاحظات سريعة</h3>
+                <p className="text-[10px] text-muted-foreground">أفكار وملاحظات تذكيرية لليوم</p>
+              </div>
+              <div className="mr-auto">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400/50" />
+              </div>
+            </div>
+            <Textarea
+              placeholder="اكتب ملاحظاتك السريعة هنا... (تُحفظ تلقائياً)"
+              value={quickNoteText}
+              onChange={(e) => setQuickNoteText(e.target.value)}
+              rows={3}
+              className="text-sm resize-none bg-background/40 backdrop-blur-sm border-amber-200/20 dark:border-amber-800/20 focus-visible:ring-amber-400/30 focus-visible:border-amber-300/40 placeholder:text-muted-foreground/40"
+            />
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Quick Notes Section ── */}

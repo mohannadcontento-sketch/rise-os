@@ -1,0 +1,854 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  PieChart,
+     7→     7→  Pie,
+     8→     8→  Cell,
+     9→     9→  BarChart,
+    10→    10→  Bar,
+    11→    11→  XAxis,
+    12→    12→  YAxis,
+    13→    13→  Tooltip,
+    14→    14→  ResponsiveContainer,
+    15→    15→  CartesianGrid,
+    16→    16→} from 'recharts'
+    17→    17→import {
+    18→    18→  Wallet,
+    19→    19→  TrendingUp,
+    20→    20→  TrendingDown,
+    21→    21→  PiggyBank,
+    22→    22→  Landmark,
+    23→    23→  Plus,
+    24→    24→  Trash2,
+    25→    25→  ArrowUpRight,
+    26→    26→  ArrowDownRight,
+    27→    27→  Repeat,
+    28→    28→  CreditCard,
+    29→    29→  Receipt,
+    30→    30→  ShoppingBag,
+    31→    31→  Utensils,
+    32→    32→  Car,
+    33→    33→  Home,
+    34→    34→  Zap,
+    35→    35→  Gift,
+    36→    36→  GraduationCap,
+    37→    37→  Briefcase,
+    38→    38→  Heart,
+    39→    39→  Sparkles,
+    40→    40→} from 'lucide-react'
+    41→    41→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    42→    42→import { Button } from '@/components/ui/button'
+    43→    43→import { Input } from '@/components/ui/input'
+    44→    44→import {
+    45→    45→  Dialog,
+    46→    46→  DialogContent,
+    47→    47→  DialogHeader,
+    48→    48→  DialogTitle,
+    49→    49→  DialogTrigger,
+    50→    50→} from '@/components/ui/dialog'
+    51→    51→import { Badge } from '@/components/ui/badge'
+    52→    52→import { Separator } from '@/components/ui/separator'
+    53→    53→import { Skeleton } from '@/components/ui/skeleton'
+    54→    54→import { cn } from '@/lib/utils'
+    55→    55→import { toast } from 'sonner'
+    56→    56→
+    57→    57→/* ────────────── Types ────────────── */
+    58→    58→
+    59→    59→interface FinanceRecord {
+    60→    60→  id: string
+    61→    61→  type: string
+    62→    62→  category: string
+    63→    63→  description: string
+    64→    64→  amount: number
+    65→    65→  date: string
+    66→    66→  recurring: boolean
+    67→    67→}
+    68→    68→
+    69→    69→interface FinanceData {
+    70→    70→  records: FinanceRecord[]
+    71→    71→}
+    72→    72→
+    73→    73→/* ────────────── Constants ────────────── */
+    74→    74→
+    75→    75→const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string; borderColor: string; dotColor: string; trendValue?: number }> = {
+    76→    76→  دخل: { label: 'الدخل', color: 'bg-emerald-accent/10 text-emerald-accent', icon: TrendingUp, amountColor: 'text-emerald-accent', borderColor: 'border-r-emerald-accent', dotColor: 'bg-emerald-accent', trendValue: 12 },
+    77→    77→  مصروف: { label: 'المصروفات', color: 'bg-orange-500/10 text-orange-500', icon: TrendingDown, amountColor: 'text-orange-500', borderColor: 'border-r-orange-500', dotColor: 'bg-orange-500', trendValue: -5 },
+    78→    78→  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest', borderColor: 'border-r-forest', dotColor: 'bg-forest', trendValue: 8 },
+    79→    79→  استثمار: { label: 'الاستثمار', color: 'bg-sky-500/10 text-sky-500', icon: Landmark, amountColor: 'text-sky-500', borderColor: 'border-r-sky-500', dotColor: 'bg-sky-500', trendValue: 15 },
+    80→    80→  اشتراك: { label: 'الاشتراكات', color: 'bg-purple-500/10 text-purple-500', icon: CreditCard, amountColor: 'text-purple-500', borderColor: 'border-r-purple-500', dotColor: 'bg-purple-500', trendValue: -3 },
+    81→    81→}
+    82→    82→
+    83→    83→const TYPE_CARD_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; borderColor: string; activeBg: string }> = {
+    84→    84→  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-emerald-accent/5', borderColor: 'border-emerald-accent/30', activeBg: 'bg-emerald-accent/15 ring-emerald-accent/40' },
+    85→    85→  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-orange-500/5', borderColor: 'border-orange-500/30', activeBg: 'bg-orange-500/15 ring-orange-500/40' },
+    86→    86→  ادخار: { label: 'الادخار', icon: PiggyBank, bg: 'bg-forest/5', borderColor: 'border-forest/30', activeBg: 'bg-forest/15 ring-forest/40' },
+    87→    87→  استثمار: { label: 'الاستثمار', icon: Landmark, bg: 'bg-sky-500/5', borderColor: 'border-sky-500/30', activeBg: 'bg-sky-500/15 ring-sky-500/40' },
+    88→    88→  اشتراك: { label: 'الاشتراكات', icon: CreditCard, bg: 'bg-purple-500/5', borderColor: 'border-purple-500/30', activeBg: 'bg-purple-500/15 ring-purple-500/40' },
+    89→    89→}
+    90→    90→
+    91→    91→const CATEGORY_ICONS: Record<string, React.ElementType> = {
+    92→    92→  راتب: Briefcase,
+    93→    93→  حر: Sparkles,
+    94→    94→  طعام: Utensils,
+    95→    95→  مواصلات: Car,
+    96→    96→  سكن: Home,
+    97→    97→  فواتير: Zap,
+    98→    98→  تسوق: ShoppingBag,
+    99→    99→  هدايا: Gift,
+   100→   100→  تعليم: GraduationCap,
+   101→   101→  صحة: Heart,
+   102→   102→  ترفيه: Gift,
+   103→   103→  أخرى: Receipt,
+   104→   104→}
+   105→   105→
+   106→   106→const PIE_COLORS = [
+   107→   107→  'var(--color-emerald-accent)',
+   108→   108→  'var(--color-gold)',
+   109→   109→  'var(--color-forest)',
+   110→   110→  'var(--color-forest-light)',
+   111→   111→  'var(--color-chart-5)',
+   112→   112→  'var(--color-chart-3)',
+   113→   113→  'var(--color-chart-4)',
+   114→   114→  'var(--color-chart-1)',
+   115→   115→  'var(--color-chart-2)',
+   116→   116→]
+   117→   117→
+   118→   118→const containerVariants = {
+   119→   119→  hidden: { opacity: 0 },
+   120→   120→  show: {
+   121→   121→    opacity: 1,
+   122→   122→    transition: { staggerChildren: 0.06 },
+   123→   123→  },
+   124→   124→}
+   125→   125→
+   126→   126→const itemVariants = {
+   127→   127→  hidden: { opacity: 0, y: 16 },
+   128→   128→  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+   129→   129→}
+   130→   130→
+   131→   131→const EMPTY_FORM = {
+   132→   132→  type: 'مصروف',
+   133→   133→  category: '',
+   134→   134→  description: '',
+   135→   135→  amount: 0,
+   136→   136→  date: new Date().toISOString().split('T')[0],
+   137→   137→  recurring: false,
+   138→   138→}
+   139→   139→
+   140→   140→/* ────────────── Component ────────────── */
+   141→   141→
+   142→   142→export default function Finance() {
+   143→   143→  const [data, setData] = useState<FinanceData | null>(null)
+   144→   144→  const [loading, setLoading] = useState(true)
+   145→   145→  const [dialogOpen, setDialogOpen] = useState(false)
+   146→   146→  const [saving, setSaving] = useState(false)
+   147→   147→  const [deleting, setDeleting] = useState<string | null>(null)
+   148→   148→
+   149→   149→  const [form, setForm] = useState({ ...EMPTY_FORM })
+   150→   150→
+   151→   151→  /* ─── Fetch ─── */
+   152→   152→  const fetchFinance = useCallback(async () => {
+   153→   153→    try {
+   154→   154→      const res = await fetch('/api/rise/finance')
+   155→   155→      if (res.ok) {
+   156→   156→        const json = await res.json()
+   157→   157→        setData(json)
+   158→   158→      }
+   159→   159→    } catch {
+   160→   160→      toast.error('فشل في تحميل البيانات المالية')
+   161→   161→    } finally {
+   162→   162→      setLoading(false)
+   163→   163→    }
+   164→   164→  }, [])
+   165→   165→
+   166→   166→  useEffect(() => {
+   167→   167→    fetchFinance()
+   168→   168→  }, [fetchFinance])
+   169→   169→
+   170→   170→  /* ─── Save Record ─── */
+   171→   171→  const handleSave = async () => {
+   172→   172→    if (!form.category || !form.amount) {
+   173→   173→      toast.error('يرجى ملء الفئة والمبلغ')
+   174→   174→      return
+   175→   175→    }
+   176→   176→    setSaving(true)
+   177→   177→    try {
+   178→   178→      const res = await fetch('/api/rise/finance', {
+   179→   179→        method: 'POST',
+   180→   180→        headers: { 'Content-Type': 'application/json' },
+   181→   181→        body: JSON.stringify(form),
+   182→   182→      })
+   183→   183→      if (res.ok) {
+   184→   184→        toast.success('تم إضافة السجل بنجاح ✨')
+   185→   185→        setDialogOpen(false)
+   186→   186→        setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
+   187→   187→        fetchFinance()
+   188→   188→      } else {
+   189→   189→        toast.error('فشل في إضافة السجل')
+   190→   190→      }
+   191→   191→    } catch {
+   192→   192→      toast.error('حدث خطأ أثناء الحفظ')
+   193→   193→    } finally {
+   194→   194→      setSaving(false)
+   195→   195→    }
+   196→   196→  }
+   197→   197→
+   198→   198→  /* ─── Delete Record ─── */
+   199→   199→  const handleDelete = async (id: string) => {
+   200→   200→    setDeleting(id)
+   201→   201→    try {
+   202→   202→      const res = await fetch(`/api/rise/finance?id=${id}`, { method: 'DELETE' })
+   203→   203→      if (res.ok) {
+   204→   204→        toast.success('تم حذف السجل')
+   205→   205→        fetchFinance()
+   206→   206→      }
+   207→   207→    } catch {
+   208→   208→      toast.error('فشل في حذف السجل')
+   209→   209→    } finally {
+   210→   210→      setDeleting(null)
+   211→   211→    }
+   212→   212→  }
+   213→   213→
+   214→   214→  const updateForm = (field: string, value: string | number | boolean) => {
+   215→   215→    setForm((prev) => ({ ...prev, [field]: value }))
+   216→   216→  }
+   217→   217→
+   218→   218→  /* ─── Computed Stats ─── */
+   219→   219→  const stats = useMemo(() => {
+   220→   220→    const records = data?.records || []
+   221→   221→    const income = records.filter((r) => r.type === 'دخل').reduce((sum, r) => sum + r.amount, 0)
+   222→   222→    const expenses = records.filter((r) => r.type === 'مصروف').reduce((sum, r) => sum + r.amount, 0)
+   223→   223→    const savings = records.filter((r) => r.type === 'ادخار').reduce((sum, r) => sum + r.amount, 0)
+   224→   224→    const investment = records.filter((r) => r.type === 'استثمار').reduce((sum, r) => sum + r.amount, 0)
+   225→   225→    return { income, expenses, savings, investment }
+   226→   226→  }, [data])
+   227→   227→
+   228→   228→  /* ─── Grouped Records ─── */
+   229→   229→  const groupedRecords = useMemo(() => {
+   230→   230→    const records = data?.records || []
+   231→   231→    const groups: Record<string, FinanceRecord[]> = {}
+   232→   232→    records.forEach((r) => {
+   233→   233→      if (!groups[r.type]) groups[r.type] = []
+   234→   234→      groups[r.type].push(r)
+   235→   235→    })
+   236→   236→    // Sort each group by date desc
+   237→   237→    Object.values(groups).forEach((g) => g.sort((a, b) => b.date.localeCompare(a.date)))
+   238→   238→    return groups
+   239→   239→  }, [data])
+   240→   240→
+   241→   241→  /* ─── Expense by Category (for pie chart) ─── */
+   242→   242→  const expenseByCategory = useMemo(() => {
+   243→   243→    const expenses = (data?.records || []).filter((r) => r.type === 'مصروف')
+   244→   244→    const map: Record<string, number> = {}
+   245→   245→    expenses.forEach((r) => {
+   246→   246→      map[r.category] = (map[r.category] || 0) + r.amount
+   247→   247→    })
+   248→   248→    return Object.entries(map)
+   249→   249→      .map(([name, value]) => ({ name, قيمة: value }))
+   250→   250→      .sort((a, b) => b.قيمة - a.قيمة)
+   251→   251→  }, [data])
+   252→   252→
+   253→   253→  /* ─── Monthly Income vs Expenses ─── */
+   254→   254→  const monthlyChartData = useMemo(() => {
+   255→   255→    const records = data?.records || []
+   256→   256→    const months: Record<string, { month: string; دخل: number; مصروفات: number }> = {}
+   257→   257→    
+   258→   258→    // Last 6 months
+   259→   259→    for (let i = 5; i >= 0; i--) {
+   260→   260→      const d = new Date()
+   261→   261→      d.setMonth(d.getMonth() - i)
+   262→   262→      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+   263→   263→      months[key] = {
+   264→   264→        month: d.toLocaleDateString('ar-SA', { month: 'short' }),
+   265→   265→        دخل: 0,
+   266→   266→        مصروفات: 0,
+   267→   267→      }
+   268→   268→    }
+   269→   269→
+   270→   270→    records.forEach((r) => {
+   271→   271→      const key = r.date.substring(0, 7)
+   272→   272→      if (months[key]) {
+   273→   273→        if (r.type === 'دخل') months[key].دخل += r.amount
+   274→   274→        if (r.type === 'مصروف') months[key].مصروفات += r.amount
+   275→   275→      }
+   276→   276→    })
+   277→   277→
+   278→   278→    return Object.values(months)
+   279→   279→  }, [data])
+   280→   280→
+   281→   281→  const tooltipStyle = {
+   282→   282→    backgroundColor: 'var(--color-popover)',
+   283→   283→    border: '1px solid var(--color-border)',
+   284→   284→    borderRadius: '12px',
+   285→   285→    fontSize: '12px',
+   286→   286→    direction: 'rtl' as const,
+   287→   287→  }
+   288→   288→
+   289→   289→  const formatAmount = (amount: number) => {
+   290→   290→    return amount.toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+   291→   291→  }
+   292→   292→
+   293→   293→  /* ─── Loading ─── */
+   294→   294→  if (loading) {
+   295→   295→    return (
+   296→   296→      <div className="space-y-4 p-4">
+   297→   297→        <Skeleton className="h-8 w-48" />
+   298→   298→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   299→   299→          {[1, 2, 3, 4].map((i) => (
+   300→   300→            <Skeleton key={i} className="h-28 rounded-2xl" />
+   301→   301→          ))}
+   302→   302→        </div>
+   303→   303→        <Skeleton className="h-64 rounded-2xl" />
+   304→   304→      </div>
+   305→   305→    )
+   306→   306→  }
+   307→   307→
+   308→   308→  return (
+   309→   309→    <motion.div
+   310→   310→      variants={containerVariants}
+   311→   311→      initial="hidden"
+   312→   312→      animate="show"
+   313→   313→      className="space-y-6 p-4 md:p-6"
+   314→   314→    >
+   315→   315→      {/* Header */}
+   316→   316→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   317→   317→        <div className="flex items-center gap-3">
+   318→   318→          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
+   319→   319→            <Wallet className="w-5 h-5 text-white" />
+   320→   320→          </div>
+   321→   321→          <div>
+   322→   322→            <h2 className="text-xl font-bold text-foreground">المالية</h2>
+   323→   323→            <p className="text-xs text-muted-foreground">تتبع دخلك ومصروفاتك واستثماراتك</p>
+   324→   324→          </div>
+   325→   325→        </div>
+   326→   326→
+   327→   327→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   328→   328→          <DialogTrigger asChild>
+   329→   329→            <motion.div whileTap={{ scale: 0.95 }}>
+   330→   330→              <Button className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-10 text-sm font-semibold">
+   331→   331→                <Plus className="w-4 h-4 ml-1" />
+   332→   332→                إضافة سجل
+   333→   333→              </Button>
+   334→   334→            </motion.div>
+   335→   335→          </DialogTrigger>
+   336→   336→          <DialogContent className="max-w-md glass border-0">
+   337→   337→            <DialogHeader>
+   338→   338→              <DialogTitle className="text-right flex items-center gap-2">
+   339→   339→                <Plus className="w-5 h-5 text-emerald-accent" />
+   340→   340→                سجل مالي جديد
+   341→   341→              </DialogTitle>
+   342→   342→            </DialogHeader>
+   343→   343→            <div className="space-y-4 pt-2">
+   344→   344→              {/* Type - Visual Cards instead of dropdown */}
+   345→   345→              <div className="space-y-1.5">
+   346→   346→                <label className="text-sm font-semibold text-foreground">النوع</label>
+   347→   347→                <div className="grid grid-cols-5 gap-2">
+   348→   348→                  {Object.entries(TYPE_CARD_CONFIG).map(([key, cfg]) => {
+   349→   349→                    const Icon = cfg.icon
+   350→   350→                    const isActive = form.type === key
+   351→   351→                    return (
+   352→   352→                      <motion.button
+   353→   353→                        key={key}
+   354→   354→                        type="button"
+   355→   355→                        whileHover={{ scale: 1.05 }}
+   356→   356→                        whileTap={{ scale: 0.95 }}
+   357→   357→                        onClick={() => updateForm('type', key)}
+   358→   358→                        className={cn(
+   359→   359→                          'rounded-xl p-2.5 flex flex-col items-center gap-1 border transition-all duration-200',
+   360→   360→                          isActive
+   361→   361→                            ? `${cfg.activeBg} ring-1 shadow-sm`
+   362→   362→                            : `${cfg.bg} ${cfg.borderColor} hover:shadow-sm`
+   363→   363→                        )}
+   364→   364→                      >
+   365→   365→                        <Icon className={cn(
+   366→   366→                          'w-4 h-4 transition-colors',
+   367→   367→                          isActive ? cfg.activeBg.split(' ')[0].replace('bg-', 'text-').split('/')[0] : 'text-muted-foreground'
+   368→   368→                        )} style={isActive ? { color: `var(--color-${key === 'دخل' ? 'emerald-accent' : key === 'مصروف' ? 'orange-500' : key === 'ادخار' ? 'forest' : key === 'استثمار' ? 'sky-500' : 'purple-500'})` } : undefined} />
+   369→   369→                        <span className={cn(
+   370→   370→                          'text-[10px] font-medium leading-tight text-center',
+   371→   371→                          isActive ? 'text-foreground' : 'text-muted-foreground'
+   372→   372→                        )}>
+   373→   373→                          {cfg.label}
+   374→   374→                        </span>
+   375→   375→                      </motion.button>
+   376→   376→                    )
+   377→   377→                  })}
+   378→   378→                </div>
+   379→   379→              </div>
+   380→   380→
+   381→   381→              {/* Category */}
+   382→   382→              <div className="space-y-1.5">
+   383→   383→                <label className="text-sm font-semibold text-foreground">الفئة</label>
+   384→   384→                <Input
+   385→   385→                  value={form.category}
+   386→   386→                  onChange={(e) => updateForm('category', e.target.value)}
+   387→   387→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   388→   388→                  placeholder="مثال: طعام، مواصلات..."
+   389→   389→                  dir="rtl"
+   390→   390→                />
+   391→   391→              </div>
+   392→   392→
+   393→   393→              {/* Description */}
+   394→   394→              <div className="space-y-1.5">
+   395→   395→                <label className="text-sm font-semibold text-foreground">الوصف</label>
+   396→   396→                <Input
+   397→   397→                  value={form.description}
+   398→   398→                  onChange={(e) => updateForm('description', e.target.value)}
+   399→   399→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   400→   400→                  placeholder="وصف اختياري..."
+   401→   401→                  dir="rtl"
+   402→   402→                />
+   403→   403→              </div>
+   404→   404→
+   405→   405→              {/* Amount & Date */}
+   406→   406→              <div className="grid grid-cols-2 gap-3">
+   407→   407→                <div className="space-y-1.5">
+   408→   408→                  <label className="text-sm font-semibold text-foreground">المبلغ</label>
+   409→   409→                  <Input
+   410→   410→                    type="number"
+   411→   411→                    value={form.amount || ''}
+   412→   412→                    onChange={(e) => updateForm('amount', parseFloat(e.target.value) || 0)}
+   413→   413→                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   414→   414→                    placeholder="٠"
+   415→   415→                    min={0}
+   416→   416→                  />
+   417→   417→                </div>
+   418→   418→                <div className="space-y-1.5">
+   419→   419→                  <label className="text-sm font-semibold text-foreground">التاريخ</label>
+   420→   420→                  <Input
+   421→   421→                    type="date"
+   422→   422→                    value={form.date}
+   423→   423→                    onChange={(e) => updateForm('date', e.target.value)}
+   424→   424→                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   425→   425→                  />
+   426→   426→                </div>
+   427→   427→              </div>
+   428→   428→
+   429→   429→              {/* Recurring toggle */}
+   430→   430→              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+   431→   431→                <input
+   432→   432→                  type="checkbox"
+   433→   433→                  checked={form.recurring}
+   434→   434→                  onChange={(e) => updateForm('recurring', e.target.checked)}
+   435→   435→                  className="w-4 h-4 rounded accent-emerald-accent"
+   436→   436→                />
+   437→   437→                <Repeat className="w-4 h-4 text-muted-foreground" />
+   438→   438→                <span className="text-sm text-foreground">مكرر شهرياً</span>
+   439→   439→              </label>
+   440→   440→
+   441→   441→              {/* Save */}
+   442→   442→              <motion.div whileTap={{ scale: 0.98 }}>
+   443→   443→                <Button
+   444→   444→                  onClick={handleSave}
+   445→   445→                  disabled={saving}
+   446→   446→                  className="w-full bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 text-sm font-semibold"
+   447→   447→                >
+   448→   448→                  {saving ? 'جاري الحفظ...' : 'حفظ السجل'}
+   449→   449→                </Button>
+   450→   450→              </motion.div>
+   451→   451→            </div>
+   452→   452→          </DialogContent>
+   453→   453→        </Dialog>
+   454→   454→      </motion.div>
+   455→   455→
+   456→   456→      {/* Summary Cards with colored left borders and trend arrows */}
+   457→   457→      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+   458→   458→        {/* Income */}
+   459→   459→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   460→   460→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-emerald-accent rounded-r-2xl" />
+   461→   461→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   462→   462→            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   463→   463→              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   464→   464→            </div>
+   465→   465→            <div className="flex items-center gap-1">
+   466→   466→              <span className="text-xl font-bold text-emerald-accent count-up">
+   467→   467→                {formatAmount(stats.income)}
+   468→   468→              </span>
+   469→   469→              {stats.income > 0 && (
+   470→   470→                <motion.div
+   471→   471→                  initial={{ opacity: 0, y: 5 }}
+   472→   472→                  animate={{ opacity: 1, y: 0 }}
+   473→   473→                  className="flex items-center"
+   474→   474→                >
+   475→   475→                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   476→   476→                </motion.div>
+   477→   477→              )}
+   478→   478→            </div>
+   479→   479→            <span className="text-[11px] text-muted-foreground">الدخل</span>
+   480→   480→          </CardContent>
+   481→   481→        </Card>
+   482→   482→
+   483→   483→        {/* Expenses */}
+   484→   484→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   485→   485→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-orange-500 rounded-r-2xl" />
+   486→   486→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   487→   487→            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+   488→   488→              <TrendingDown className="w-4 h-4 text-orange-500" />
+   489→   489→            </div>
+   490→   490→            <div className="flex items-center gap-1">
+   491→   491→              <span className="text-xl font-bold text-orange-500 count-up">
+   492→   492→                {formatAmount(stats.expenses)}
+   493→   493→              </span>
+   494→   494→              {stats.expenses > 0 && (
+   495→   495→                <motion.div
+   496→   496→                  initial={{ opacity: 0, y: 5 }}
+   497→   497→                  animate={{ opacity: 1, y: 0 }}
+   498→   498→                  className="flex items-center"
+   499→   499→                >
+   500→   500→                  <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+   501→   501→                </motion.div>
+   502→   502→              )}
+   503→   503→            </div>
+   504→   504→            <span className="text-[11px] text-muted-foreground">المصروفات</span>
+   505→   505→          </CardContent>
+   506→   506→        </Card>
+   507→   507→
+   508→   508→        {/* Savings */}
+   509→   509→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   510→   510→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-forest rounded-r-2xl" />
+   511→   511→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   512→   512→            <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+   513→   513→              <PiggyBank className="w-4 h-4 text-forest" />
+   514→   514→            </div>
+   515→   515→            <div className="flex items-center gap-1">
+   516→   516→              <span className="text-xl font-bold text-forest count-up">
+   517→   517→                {formatAmount(stats.savings)}
+   518→   518→              </span>
+   519→   519→              {stats.savings > 0 && (
+   520→   520→                <motion.div
+   521→   521→                  initial={{ opacity: 0, y: 5 }}
+   522→   522→                  animate={{ opacity: 1, y: 0 }}
+   523→   523→                  className="flex items-center"
+   524→   524→                >
+   525→   525→                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   526→   526→                </motion.div>
+   527→   527→              )}
+   528→   528→            </div>
+   529→   529→            <span className="text-[11px] text-muted-foreground">الادخار</span>
+   530→   530→          </CardContent>
+   531→   531→        </Card>
+   532→   532→
+   533→   533→        {/* Investment */}
+   534→   534→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   535→   535→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-sky-500 rounded-r-2xl" />
+   536→   536→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   537→   537→            <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
+   538→   538→              <Landmark className="w-4 h-4 text-sky-500" />
+   539→   539→            </div>
+   540→   540→            <div className="flex items-center gap-1">
+   541→   541→              <span className="text-xl font-bold text-sky-500 count-up">
+   542→   542→                {formatAmount(stats.investment)}
+   543→   543→              </span>
+   544→   544→              {stats.investment > 0 && (
+   545→   545→                <motion.div
+   546→   546→                  initial={{ opacity: 0, y: 5 }}
+   547→   547→                  animate={{ opacity: 1, y: 0 }}
+   548→   548→                  className="flex items-center"
+   549→   549→                >
+   550→   550→                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   551→   551→                </motion.div>
+   552→   552→              )}
+   553→   553→            </div>
+   554→   554→            <span className="text-[11px] text-muted-foreground">الاستثمار</span>
+   555→   555→          </CardContent>
+   556→   556→        </Card>
+   557→   557→      </motion.div>
+   558→   558→
+   559→   559→      {/* Charts Row */}
+   560→   560→      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   561→   561→        {/* Expense Pie Chart with labels and legend */}
+   562→   562→        <Card className="glass border-0 shadow-sm">
+   563→   563→          <CardHeader className="pb-2">
+   564→   564→            <CardTitle className="text-sm font-bold">توزيع المصروفات حسب الفئة</CardTitle>
+   565→   565→          </CardHeader>
+   566→   566→          <CardContent>
+   567→   567→            {expenseByCategory.length === 0 ? (
+   568→   568→              <div className="text-center py-10">
+   569→   569→                <Receipt className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   570→   570→                <p className="text-sm text-muted-foreground">لا توجد مصروفات بعد</p>
+   571→   571→              </div>
+   572→   572→            ) : (
+   573→   573→              <div className="flex flex-col items-center">
+   574→   574→                <div className="h-52 w-full relative">
+   575→   575→                  <ResponsiveContainer width="100%" height="100%">
+   576→   576→                    <PieChart>
+   577→   577→                      <Pie
+   578→   578→                        data={expenseByCategory}
+   579→   579→                        cx="50%"
+   580→   580→                        cy="50%"
+   581→   581→                        innerRadius={50}
+   582→   582→                        outerRadius={85}
+   583→   583→                        paddingAngle={3}
+   584→   584→                        dataKey="قيمة"
+   585→   585→                        strokeWidth={0}
+   586→   586→                      >
+   587→   587→                        {expenseByCategory.map((_, index) => (
+   588→   588→                          <Cell
+   589→   589→                            key={index}
+   590→   590→                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+   591→   591→                            stroke="var(--color-card)"
+   592→   592→                            strokeWidth={2}
+   593→   593→                          />
+   594→   594→                        ))}
+   595→   595→                      </Pie>
+   596→   596→                      <Tooltip
+   597→   597→                        contentStyle={tooltipStyle}
+   598→   598→                        formatter={(value: number) => [`${formatAmount(value)} ر.س`, 'المبلغ']}
+   599→   599→                      />
+   600→   600→                    </PieChart>
+   601→   601→                  </ResponsiveContainer>
+   602→   602→                  {/* Center label */}
+   603→   603→                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+   604→   604→                    <span className="text-xs text-muted-foreground">المجموع</span>
+   605→   605→                    <span className="text-sm font-bold text-foreground">
+   606→   606→                      {formatAmount(expenseByCategory.reduce((s, e) => s + e.قيمة, 0))}
+   607→   607→                    </span>
+   608→   608→                  </div>
+   609→   609→                </div>
+   610→   610→                {/* Legend with labels and percentages */}
+   611→   611→                <div className="flex flex-wrap items-start gap-x-4 gap-y-2 justify-center mt-3 px-2">
+   612→   612→                  {expenseByCategory.map((entry, index) => {
+   613→   613→                    const total = expenseByCategory.reduce((s, e) => s + e.قيمة, 0)
+   614→   614→                    const pct = total > 0 ? Math.round((entry.قيمة / total) * 100) : 0
+   615→   615→                    return (
+   616→   616→                      <div key={entry.name} className="flex items-center gap-1.5">
+   617→   617→                        <div
+   618→   618→                          className="w-2.5 h-2.5 rounded-sm"
+   619→   619→                          style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+   620→   620→                        />
+   621→   621→                        <span className="text-[10px] text-muted-foreground">
+   622→   622→                          {entry.name} ({pct}%)
+   623→   623→                        </span>
+   624→   624→                      </div>
+   625→   625→                    )
+   626→   626→                  })}
+   627→   627→                </div>
+   628→   628→              </div>
+   629→   629→            )}
+   630→   630→          </CardContent>
+   631→   631→        </Card>
+   632→   632→
+   633→   633→        {/* Income vs Expenses Bar Chart */}
+   634→   634→        <Card className="glass border-0 shadow-sm">
+   635→   635→          <CardHeader className="pb-2">
+   636→   636→            <CardTitle className="text-sm font-bold">الدخل مقابل المصروفات</CardTitle>
+   637→   637→          </CardHeader>
+   638→   638→          <CardContent>
+   639→   639→            <div className="h-64">
+   640→   640→              <ResponsiveContainer width="100%" height="100%">
+   641→   641→                <BarChart data={monthlyChartData} barCategoryGap="15%">
+   642→   642→                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   643→   643→                  <XAxis
+   644→   644→                    dataKey="month"
+   645→   645→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   646→   646→                    axisLine={false}
+   647→   647→                    tickLine={false}
+   648→   648→                  />
+   649→   649→                  <YAxis
+   650→   650→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   651→   651→                    axisLine={false}
+   652→   652→                    tickLine={false}
+   653→   653→                    width={45}
+   654→   654→                    tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+   655→   655→                  />
+   656→   656→                  <Tooltip
+   657→   657→                    contentStyle={tooltipStyle}
+   658→   658→                    formatter={(value: number, name: string) => [
+   659→   659→                      `${formatAmount(value)} ر.س`,
+   660→   660→                      name,
+   661→   661→                    ]}
+   662→   662→                  />
+   663→   663→                  <Bar dataKey="دخل" fill="var(--color-emerald-accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
+   664→   664→                  <Bar dataKey="مصروفات" fill="var(--color-orange-500)" radius={[4, 4, 0, 0]} opacity={0.85} />
+   665→   665→                </BarChart>
+   666→   666→              </ResponsiveContainer>
+   667→   667→            </div>
+   668→   668→          </CardContent>
+   669→   669→        </Card>
+   670→   670→      </motion.div>
+   671→   671→
+   672→   672→      {/* Monthly Summary */}
+   673→   673→      <motion.div variants={itemVariants}>
+   674→   674→        <Card className="glass border-0 shadow-sm">
+   675→   675→          <CardHeader className="pb-3">
+   676→   676→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   677→   677→              <Receipt className="w-4 h-4 text-gold" />
+   678→   678→              ملخص الشهر الحالي
+   679→   679→            </CardTitle>
+   680→   680→          </CardHeader>
+   681→   681→          <CardContent>
+   682→   682→            {(() => {
+   683→   683→              const now = new Date()
+   684→   684→              const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+   685→   685→              const monthRecords = (data?.records || []).filter((r) => r.date.startsWith(currentMonth))
+   686→   686→              const mIncome = monthRecords.filter((r) => r.type === 'دخل').reduce((s, r) => s + r.amount, 0)
+   687→   687→              const mExpenses = monthRecords.filter((r) => r.type === 'مصروف').reduce((s, r) => s + r.amount, 0)
+   688→   688→              const mSavings = monthRecords.filter((r) => r.type === 'ادخار').reduce((s, r) => s + r.amount, 0)
+   689→   689→              const mInvestment = monthRecords.filter((r) => r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
+   690→   690→              const mSubscriptions = monthRecords.filter((r) => r.type === 'اشتراك').reduce((s, r) => s + r.amount, 0)
+   691→   691→              const net = mIncome - mExpenses - mSavings - mInvestment - mSubscriptions
+   692→   692→              const savingsRate = mIncome > 0 ? Math.round(((mSavings + mInvestment) / mIncome) * 100) : 0
+   693→   693→
+   694→   694→              return (
+   695→   695→                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   696→   696→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   697→   697→                    <p className="text-[11px] text-muted-foreground mb-1">صافي الرصيد</p>
+   698→   698→                    <div className="flex items-center justify-center gap-1">
+   699→   699→                      <span className={cn('text-lg font-bold', net >= 0 ? 'text-emerald-accent' : 'text-orange-500')}>
+   700→   700→                        {net >= 0 ? '+' : ''}{formatAmount(net)}
+   701→   701→                      </span>
+   702→   702→                      {net >= 0 ? (
+   703→   703→                        <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   704→   704→                      ) : (
+   705→   705→                        <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+   706→   706→                      )}
+   707→   707→                    </div>
+   708→   708→                  </div>
+   709→   709→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   710→   710→                    <p className="text-[11px] text-muted-foreground mb-1">الاشتراكات</p>
+   711→   711→                    <span className="text-lg font-bold text-purple-500">{formatAmount(mSubscriptions)}</span>
+   712→   712→                  </div>
+   713→   713→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   714→   714→                    <p className="text-[11px] text-muted-foreground mb-1">نسبة الادخار</p>
+   715→   715→                    <span className="text-lg font-bold text-forest">{savingsRate}%</span>
+   716→   716→                  </div>
+   717→   717→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   718→   718→                    <p className="text-[11px] text-muted-foreground mb-1">عدد العمليات</p>
+   719→   719→                    <span className="text-lg font-bold text-foreground">{monthRecords.length}</span>
+   720→   720→                  </div>
+   721→   721→                </div>
+   722→   722→              )
+   723→   723→            })()}
+   724→   724→          </CardContent>
+   725→   725→        </Card>
+   726→   726→      </motion.div>
+   727→   727→
+   728→   728→      {/* Transaction List with alternating rows, colored dots, smooth delete animation */}
+   729→   729→      <motion.div variants={itemVariants}>
+   730→   730→        <Card className="glass border-0 shadow-sm">
+   731→   731→          <CardHeader className="pb-3">
+   732→   732→            <CardTitle className="text-sm font-bold">سجل المعاملات</CardTitle>
+   733→   733→          </CardHeader>
+   734→   734→          <CardContent>
+   735→   735→            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+   736→   736→              {Object.keys(groupedRecords).length === 0 ? (
+   737→   737→                <div className="text-center py-10">
+   738→   738→                  <Wallet className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   739→   739→                  <p className="text-sm text-muted-foreground">لا توجد معاملات بعد</p>
+   740→   740→                  <p className="text-xs text-muted-foreground/60 mt-1">اضغط &quot;إضافة سجل&quot; للبدء</p>
+   741→   741→                </div>
+   742→   742→              ) : (
+   743→   743→                Object.entries(groupedRecords).map(([type, records]) => {
+   744→   744→                  const config = TYPE_CONFIG[type]
+   745→   745→                  if (!config) return null
+   746→   746→                  const Icon = config.icon
+   747→   747→                  const total = records.reduce((s, r) => s + r.amount, 0)
+   748→   748→
+   749→   749→                  return (
+   750→   750→                    <div key={type}>
+   751→   751→                      {/* Group header */}
+   752→   752→                      <div className="flex items-center gap-2 mb-2 px-1">
+   753→   753→                        <div className={cn('w-6 h-6 rounded-md flex items-center justify-center', config.color)}>
+   754→   754→                          <Icon className="w-3.5 h-3.5" />
+   755→   755→                        </div>
+   756→   756→                        <span className="text-sm font-semibold text-foreground">{config.label}</span>
+   757→   757→                        <Badge variant="secondary" className="text-[10px] rounded-full bg-muted text-muted-foreground border-0">
+   758→   758→                          {records.length}
+   759→   759→                        </Badge>
+   760→   760→                        <span className="text-xs text-muted-foreground mr-auto">
+   761→   761→                          {formatAmount(total)} ر.س
+   762→   762→                        </span>
+   763→   763→                      </div>
+   764→   764→
+   765→   765→                      {/* Records with alternating backgrounds and colored dots */}
+   766→   766→                      <div className="space-y-1.5 mb-4">
+   767→   767→                        <AnimatePresence mode="popLayout">
+   768→   768→                          {records.map((record, index) => {
+   769→   769→                            const CatIcon = CATEGORY_ICONS[record.category] || Receipt
+   770→   770→                            const isPositive = record.type === 'دخل'
+   771→   771→                            return (
+   772→   772→                              <motion.div
+   773→   773→                                key={record.id}
+   774→   774→                                layout
+   775→   775→                                initial={{ opacity: 0, x: 10, scale: 0.97 }}
+   776→   776→                                animate={{ opacity: 1, x: 0, scale: 1 }}
+   777→   777→                                exit={{ opacity: 0, x: -30, scale: 0.9, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.3, ease: 'easeIn' as const } }}
+   778→   778→                                transition={{
+   779→   779→                                  layout: { duration: 0.3 },
+   780→   780→                                }}
+   781→   781→                                className={cn(
+   782→   782→                                  'flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden',
+   783→   783→                                  index % 2 === 0 ? 'bg-muted/20' : 'bg-transparent',
+   784→   784→                                  'hover:shadow-sm hover:bg-muted/30'
+   785→   785→                                )}
+   786→   786→                              >
+   787→   787→                                {/* Colored type dot */}
+   788→   788→                                <div className={cn('w-2 h-2 rounded-full shrink-0', config.dotColor)} />
+   789→   789→
+   790→   790→                                <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', config.color)}>
+   791→   791→                                  <CatIcon className="w-4 h-4" />
+   792→   792→                                </div>
+   793→   793→                                <div className="flex-1 min-w-0">
+   794→   794→                                  <div className="flex items-center gap-2">
+   795→   795→                                    <span className="text-sm font-medium text-foreground truncate">
+   796→   796→                                      {record.description || record.category}
+   797→   797→                                    </span>
+   798→   798→                                    {record.recurring && (
+   799→   799→                                      <Repeat className="w-3 h-3 text-muted-foreground shrink-0" />
+   800→   800→                                    )}
+   801→   801→                                  </div>
+   802→   802→                                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+   803→   803→                                    <span>{record.category}</span>
+   804→   804→                                    <span>•</span>
+   805→   805→                                    <span>
+   806→   806→                                      {new Date(record.date).toLocaleDateString('ar-SA', {
+   807→   807→                                        month: 'short',
+   808→   808→                                        day: 'numeric',
+   809→   809→                                      })}
+   810→   810→                                    </span>
+   811→   811→                                  </div>
+   812→   812→                                </div>
+   813→   813→                                <div className="flex items-center gap-2 shrink-0">
+   814→   814→                                  <div className="text-left">
+   815→   815→                                    <span className={cn('text-sm font-bold', config.amountColor)}>
+   816→   816→                                      {isPositive ? '+' : '-'}{formatAmount(record.amount)}
+   817→   817→                                    </span>
+   818→   818→                                  </div>
+   819→   819→                                  <motion.button
+   820→   820→                                    whileHover={{ scale: 1.1 }}
+   821→   821→                                    whileTap={{ scale: 0.85 }}
+   822→   822→                                    onClick={() => handleDelete(record.id)}
+   823→   823→                                    disabled={deleting === record.id}
+   824→   824→                                    className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+   825→   825→                                  >
+   826→   826→                                    {deleting === record.id ? (
+   827→   827→                                      <motion.div
+   828→   828→                                        animate={{ rotate: 360 }}
+   829→   829→                                        transition={{ duration: 0.5, repeat: Infinity, ease: 'linear' }}
+   830→   830→                                        className="w-3.5 h-3.5 border-2 border-destructive/30 border-t-destructive rounded-full"
+   831→   831→                                      />
+   832→   832→                                    ) : (
+   833→   833→                                      <Trash2 className="w-3.5 h-3.5" />
+   834→   834→                                    )}
+   835→   835→                                  </motion.button>
+   836→   836→                                </div>
+   837→   837→                              </motion.div>
+   838→   838→                            )
+   839→   839→                          })}
+   840→   840→                        </AnimatePresence>
+   841→   841→                      </div>
+   842→   842→
+   843→   843→                      <Separator className="my-2" />
+   844→   844→                    </div>
+   845→   845→                  )
+   846→   846→                })
+   847→   847→              )}
+   848→   848→            </div>
+   849→   849→          </CardContent>
+   850→   850→        </Card>
+   851→   851→      </motion.div>
+   852→   852→    </motion.div>
+   853→   853→  )
+   854→   854→}

@@ -11,6 +11,11 @@ import {
   Lightbulb,
   Trash2,
   User,
+  Brain,
+  Heart,
+  Moon,
+  MessageCircle,
+  Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -138,6 +143,55 @@ const quickActions = [
   },
 ]
 
+/* ────────────── AI Avatar with Orbits ────────────── */
+
+function AIAvatar({ size = 40 }: { size?: number }) {
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      {/* Orbiting ring 1 */}
+      <motion.div
+        className="absolute inset-[-6px] rounded-full border border-dashed border-emerald-accent/30"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+      />
+      {/* Orbiting ring 2 */}
+      <motion.div
+        className="absolute inset-[-10px] rounded-full border border-dashed border-gold/20"
+        animate={{ rotate: -360 }}
+        transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+      />
+      {/* Orbiting dot */}
+      <motion.div
+        className="absolute w-2 h-2 rounded-full bg-emerald-accent"
+        style={{ top: -6, left: '50%', marginLeft: -4 }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+      >
+        <motion.div
+          className="w-2 h-2 rounded-full bg-gold"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      </motion.div>
+      {/* Main avatar */}
+      <div className={cn(
+        'relative z-10 rounded-full flex items-center justify-center',
+        'bg-gradient-to-br from-emerald-accent via-forest to-emerald-accent',
+        'shadow-lg shadow-emerald-accent/20'
+      )} style={{ width: size, height: size }}>
+        <Brain className={cn('text-white', size > 35 ? 'w-5 h-5' : 'w-3.5 h-3.5')} />
+      </div>
+    </div>
+  )
+}
+
+const suggestedPrompts = [
+  { icon: Brain, text: 'كيف أبني تركيزاً أعمق؟', color: 'text-emerald-accent' },
+  { icon: Target, text: 'ساعدني في تحديد أهدافي', color: 'text-forest' },
+  { icon: Heart, text: 'نصيحة للصحة النفسية', color: 'text-rose-400' },
+  { icon: Moon, text: 'روتين مسائي مثالي', color: 'text-purple-400' },
+]
+
 /* ────────────── Component ────────────── */
 
 export default function AICoach() {
@@ -232,15 +286,30 @@ export default function AICoach() {
   const hasMessages = messages.length > 0
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)]">
+    <div className="space-y-6 max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative overflow-hidden rounded-3xl">
+      {/* Shifting gradient background */}
+      <motion.div
+        className="absolute inset-0 -z-10 rounded-3xl"
+        animate={{
+          background: [
+            'linear-gradient(135deg, oklch(0.97 0.01 160 / 0.5), oklch(0.98 0.01 155 / 0.3))',
+            'linear-gradient(135deg, oklch(0.96 0.02 85 / 0.4), oklch(0.97 0.01 160 / 0.3))',
+            'linear-gradient(135deg, oklch(0.97 0.01 160 / 0.5), oklch(0.98 0.01 155 / 0.3))',
+          ],
+        }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+        style={{ backgroundSize: '300% 300%' }}
+      />
+      <div className="absolute inset-0 -z-10 noise-bg opacity-30 rounded-3xl" />
+
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-emerald-accent" />
-            المدرب الذكي
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">مساعدك الشخصي للنمو والتطوير</p>
+      <div className="flex items-center justify-between shrink-0 relative z-10">
+        <div className="flex items-center gap-3">
+          <AIAvatar size={44} />
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">المدرب الذكي</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">مساعدك الشخصي للنمو والتطوير</p>
+          </div>
         </div>
         {hasMessages && (
           <Button variant="ghost" size="sm" onClick={clearChat} className="gap-1.5 text-xs text-muted-foreground hover:text-destructive">
@@ -250,12 +319,12 @@ export default function AICoach() {
         )}
       </div>
 
-      {/* Quick Actions (show when no messages or at top) */}
+      {/* Quick Actions with gradient borders */}
       {!hasMessages && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="shrink-0"
+          className="shrink-0 relative z-10"
         >
           <div className="grid grid-cols-2 gap-3">
             {quickActions.map((action, i) => {
@@ -268,8 +337,10 @@ export default function AICoach() {
                   transition={{ delay: i * 0.1 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => handleQuickAction(action.id)}
-                  className={cn('flex items-center gap-3 p-4 rounded-2xl glass transition-all hover:shadow-lg', action.color)}
+                  className="flex items-center gap-3 p-4 rounded-2xl glass transition-all hover:shadow-lg relative overflow-hidden group"
                 >
+                  {/* Gradient border effect */}
+                  <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   <div className="p-2 rounded-xl bg-background/60">
                     <Icon className="w-5 h-5" />
                   </div>
@@ -277,6 +348,38 @@ export default function AICoach() {
                 </motion.button>
               )
             })}
+          </div>
+
+          {/* Suggested Prompts */}
+          <div className="mt-6">
+            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+              <MessageCircle className="w-3.5 h-3.5" />
+              جرّب هذه الأسئلة
+            </p>
+            <div className="space-y-2">
+              {suggestedPrompts.map((prompt, i) => {
+                const Icon = prompt.icon
+                return (
+                  <motion.button
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + i * 0.1 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: prompt.text, timestamp: Date.now() }])
+                      addAIMessage(generateResponse(prompt.text))
+                    }}
+                    className="flex items-center gap-3 w-full p-3 rounded-xl glass hover:bg-muted/30 transition-all text-right group"
+                  >
+                    <div className="p-1.5 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors">
+                      <Icon className={cn('w-4 h-4', prompt.color)} />
+                    </div>
+                    <span className="text-sm text-foreground">{prompt.text}</span>
+                  </motion.button>
+                )
+              })}
+            </div>
           </div>
         </motion.div>
       )}
@@ -291,26 +394,18 @@ export default function AICoach() {
               animate={{ opacity: 1, y: 0 }}
               className={cn('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}
             >
-              {/* Avatar */}
-              <div className={cn(
-                'w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1',
-                msg.role === 'ai'
-                  ? 'bg-gradient-to-br from-emerald-accent to-forest text-white'
-                  : 'bg-muted/50'
-              )}>
-                {msg.role === 'ai' ? (
-                  <Sparkles className="w-4 h-4" />
-                ) : (
+              {msg.role === 'ai' ? <AIAvatar size={32} /> : (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 bg-muted/50">
                   <User className="w-4 h-4 text-muted-foreground" />
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Message Bubble */}
+              {/* Message Bubble with glass effect */}
               <div className={cn(
-                'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed backdrop-blur-sm',
                 msg.role === 'ai'
-                  ? 'glass rounded-tl-sm'
-                  : 'bg-emerald-accent text-white rounded-tr-sm'
+                  ? 'glass rounded-tr-sm shadow-sm'
+                  : 'bg-gradient-to-br from-emerald-accent to-forest text-white rounded-tl-sm shadow-md shadow-emerald-accent/10'
               )}>
                 <p className="whitespace-pre-wrap">{msg.content}</p>
                 <p className={cn(
@@ -332,20 +427,19 @@ export default function AICoach() {
             exit={{ opacity: 0, y: 0 }}
             className="flex gap-3"
           >
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 bg-gradient-to-br from-emerald-accent to-forest text-white">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="glass rounded-2xl rounded-tl-sm px-4 py-3">
-              <div className="flex gap-1">
+            <AIAvatar size={32} />
+            <div className="glass rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+              <div className="flex gap-1.5">
                 {[0, 1, 2].map((i) => (
                   <motion.div
                     key={i}
                     className="w-2 h-2 rounded-full bg-emerald-accent"
-                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    animate={{ opacity: [0.3, 1, 0.3], y: [0, -6, 0] }}
                     transition={{
-                      duration: 1.2,
+                      duration: 0.8,
                       repeat: Infinity,
-                      delay: i * 0.2,
+                      delay: i * 0.15,
+                      ease: 'easeInOut',
                     }}
                   />
                 ))}

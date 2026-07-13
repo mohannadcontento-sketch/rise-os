@@ -1,0 +1,655 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useMemo, useCallback } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  ChevronRight,
+     7→  ChevronLeft,
+     8→  CalendarDays,
+     9→  CheckCircle2,
+    10→  Circle,
+    11→  Clock,
+    12→  X,
+    13→  Flame,
+    14→  BookOpen,
+    15→  Target,
+    16→  Sparkles,
+    17→} from 'lucide-react'
+    18→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    19→import { Badge } from '@/components/ui/badge'
+    20→import { cn } from '@/lib/utils'
+    21→import {
+    22→  format,
+    23→  startOfMonth,
+    24→  endOfMonth,
+    25→  startOfWeek,
+    26→  endOfWeek,
+    27→  addDays,
+    28→  addMonths,
+    29→  subMonths,
+    30→  isSameMonth,
+    31→  isSameDay,
+    32→  isToday,
+    33→  parseISO,
+    34→  isBefore,
+    35→  startOfDay,
+    36→  endOfDay,
+    37→} from 'date-fns'
+    38→import { ar } from 'date-fns/locale/ar'
+    39→
+    40→/* ────────────── Types ────────────── */
+    41→
+    42→interface Task {
+    43→  id: string
+    44→  title: string
+    45→  status: string
+    46→  priority: string
+    47→  dueDate: string | null
+    48→  dueTime: string | null
+    49→  projectName?: string
+    50→  projectColor?: string
+    51→}
+    52→
+    53→interface HabitLog {
+    54→  habitId: string
+    55→  date: string
+    56→  completed: boolean
+    57→}
+    58→
+    59→interface Habit {
+    60→  id: string
+    61→  name: string
+    62→}
+    63→
+    64→interface JournalEntry {
+    65→  id: string
+    66→  date: string
+    67→  content: string
+    68→  mood: number | null
+    69→  gratitude?: string | null
+    70→}
+    71→
+    72→interface FocusSession {
+    73→  id: string
+    74→  startedAt: string
+    75→  completed: boolean
+    76→  actualMin: number
+    77→}
+    78→
+    79→/* ────────────── Helpers ────────────── */
+    80→
+    81→const priorityColors: Record<string, string> = {
+    82→  low: 'bg-emerald-500',
+    83→  medium: 'bg-amber-500',
+    84→  high: 'bg-orange-500',
+    85→  urgent: 'bg-rose-500',
+    86→}
+    87→
+    88→const priorityLabels: Record<string, string> = {
+    89→  low: 'منخفض',
+    90→  medium: 'متوسط',
+    91→  high: 'عالي',
+    92→  urgent: 'عاجل',
+    93→}
+    94→
+    95→const weekDays = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+    96→
+    97→const moodEmojis: Record<number, string> = {
+    98→  1: '😞',
+    99→  2: '😔',
+   100→  3: '😐',
+   101→  4: '😊',
+   102→  5: '🤩',
+   103→}
+   104→
+   105→/* ────────────── Component ────────────── */
+   106→
+   107→export default function CalendarView() {
+   108→  const [currentMonth, setCurrentMonth] = useState(new Date())
+   109→  const [tasks, setTasks] = useState<Task[]>([])
+   110→  const [habits, setHabits] = useState<Habit[]>([])
+   111→  const [habitLogs, setHabitLogs] = useState<HabitLog[]>([])
+   112→  const [journals, setJournals] = useState<JournalEntry[]>([])
+   113→  const [focusSessions, setFocusSessions] = useState<FocusSession[]>([])
+   114→  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+   115→  const [loading, setLoading] = useState(true)
+   116→  const [slideDirection, setSlideDirection] = useState<1 | -1>(1)
+   117→
+   118→  const fetchAllData = useCallback(async () => {
+   119→    try {
+   120→      const [tasksRes, habitsRes, journalRes, focusRes] = await Promise.all([
+   121→        fetch('/api/rise/tasks'),
+   122→        fetch('/api/rise/habits'),
+   123→        fetch('/api/rise/journal'),
+   124→        fetch('/api/rise/focus'),
+   125→      ])
+   126→      const [tasksData, habitsData, journalData, focusData] = await Promise.all([
+   127→        tasksRes.json(),
+   128→        habitsRes.json(),
+   129→        journalRes.json(),
+   130→        focusRes.json(),
+   131→      ])
+   132→      setTasks(tasksData.tasks || [])
+   133→      setHabits(habitsData.habits || [])
+   134→      setHabitLogs(habitsData.logs || [])
+   135→      setJournals(journalData.recentJournals || [])
+   136→      setFocusSessions(focusData.sessions || [])
+   137→    } catch {
+   138→      // ignore
+   139→    } finally {
+   140→      setLoading(false)
+   141→    }
+   142→  }, [])
+   143→
+   144→  useEffect(() => {
+   145→    fetchAllData()
+   146→  }, [fetchAllData])
+   147→
+   148→  // Calendar grid
+   149→  const calendarDays = useMemo(() => {
+   150→    const monthStart = startOfMonth(currentMonth)
+   151→    const monthEnd = endOfMonth(monthStart)
+   152→    const calStart = startOfWeek(monthStart, { weekStartsOn: 0 })
+   153→    const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 })
+   154→
+   155→    const days: Date[] = []
+   156→    let day = calStart
+   157→    while (day <= calEnd) {
+   158→      days.push(day)
+   159→      day = addDays(day, 1)
+   160→    }
+   161→    return days
+   162→  }, [currentMonth])
+   163→
+   164→  // Month stats
+   165→  const monthStats = useMemo(() => {
+   166→    const monthStr = format(currentMonth, 'yyyy-MM')
+   167→    const monthTasks = tasks.filter((t) => t.dueDate?.startsWith(monthStr))
+   168→    const completedMonthTasks = monthTasks.filter((t) => t.status === 'done')
+   169→    const monthFocus = focusSessions.filter(
+   170→      (s) => s.startedAt.startsWith(monthStr) && s.completed
+   171→    )
+   172→    const focusMin = monthFocus.reduce((sum, s) => sum + (s.actualMin || 0), 0)
+   173→    const monthJournals = journals.filter((j) => j.date?.startsWith(monthStr))
+   174→    return {
+   175→      tasksCount: monthTasks.length,
+   176→      focusSessions: monthFocus.length,
+   177→      journalDays: monthJournals.length,
+   178→    }
+   179→  }, [tasks, focusSessions, journals, currentMonth])
+   180→
+   181→  // Build day indicators map
+   182→  const dayIndicators = useMemo(() => {
+   183→    const map: Record<string, { hasCompletedTasks: boolean; hasGoals: boolean; hasJournal: boolean }> = {}
+   184→    // Tasks: green dot = has completed tasks
+   185→    tasks.forEach((task) => {
+   186→      if (task.dueDate && task.status === 'done') {
+   187→        if (!map[task.dueDate]) map[task.dueDate] = { hasCompletedTasks: false, hasGoals: false, hasJournal: false }
+   188→        map[task.dueDate].hasCompletedTasks = true
+   189→      }
+   190→    })
+   191→    // Goals with deadlines: gold dot
+   192→    // We check tasks with high/urgent priority as a proxy for "goals due"
+   193→    tasks.forEach((task) => {
+   194→      if (task.dueDate && (task.priority === 'high' || task.priority === 'urgent')) {
+   195→        if (!map[task.dueDate]) map[task.dueDate] = { hasCompletedTasks: false, hasGoals: false, hasJournal: false }
+   196→        map[task.dueDate].hasGoals = true
+   197→      }
+   198→    })
+   199→    // Journal: blue dot
+   200→    journals.forEach((j) => {
+   201→      if (j.date) {
+   202→        if (!map[j.date]) map[j.date] = { hasCompletedTasks: false, hasGoals: false, hasJournal: false }
+   203→        map[j.date].hasJournal = true
+   204→      }
+   205→    })
+   206→    return map
+   207→  }, [tasks, journals])
+   208→
+   209→  // Tasks grouped by date
+   210→  const tasksByDate = useMemo(() => {
+   211→    const map: Record<string, Task[]> = {}
+   212→    tasks.forEach((task) => {
+   213→      if (task.dueDate) {
+   214→        if (!map[task.dueDate]) map[task.dueDate] = []
+   215→        map[task.dueDate].push(task)
+   216→      }
+   217→    })
+   218→    return map
+   219→  }, [tasks])
+   220→
+   221→  const getTasksForDate = (date: Date) => {
+   222→    const key = format(date, 'yyyy-MM-dd')
+   223→    return tasksByDate[key] || []
+   224→  }
+   225→
+   226→  const getHabitStatusForDate = (date: Date) => {
+   227→    const key = format(date, 'yyyy-MM-dd')
+   228→    const dayLogs = habitLogs.filter((l) => l.date === key && l.completed)
+   229→    return {
+   230→      completed: dayLogs.length,
+   231→      total: habits.length,
+   232→      items: dayLogs.map((log) => {
+   233→        const habit = habits.find((h) => h.id === log.habitId)
+   234→        return { name: habit?.name || '', completed: log.completed }
+   235→      }),
+   236→    }
+   237→  }
+   238→
+   239→  const getJournalForDate = (date: Date) => {
+   240→    const key = format(date, 'yyyy-MM-dd')
+   241→    return journals.find((j) => j.date === key) || null
+   242→  }
+   243→
+   244→  const selectedTasks = selectedDate ? getTasksForDate(selectedDate) : []
+   245→  const selectedHabitStatus = selectedDate ? getHabitStatusForDate(selectedDate) : null
+   246→  const selectedJournal = selectedDate ? getJournalForDate(selectedDate) : null
+   247→
+   248→  const todayTasks = getTasksForDate(new Date())
+   249→  const upcomingTasks = tasks
+   250→    .filter((t) => t.dueDate && !isBefore(parseISO(t.dueDate), new Date()) && t.status !== 'done')
+   251→    .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+   252→    .slice(0, 5)
+   253→
+   254→  const goToToday = () => {
+   255→    setSlideDirection(new Date() < currentMonth ? -1 : 1)
+   256→    setCurrentMonth(new Date())
+   257→  }
+   258→
+   259→  const goToPrevMonth = () => {
+   260→    setSlideDirection(-1)
+   261→    setCurrentMonth((prev) => subMonths(prev, 1))
+   262→  }
+   263→
+   264→  const goToNextMonth = () => {
+   265→    setSlideDirection(1)
+   266→    setCurrentMonth((prev) => addMonths(prev, 1))
+   267→  }
+   268→
+   269→  return (
+   270→    <div className="space-y-5">
+   271→      {/* Header */}
+   272→      <div className="flex items-center justify-between flex-wrap gap-3">
+   273→        <div>
+   274→          <h2 className="text-2xl font-bold tracking-tight">التقويم</h2>
+   275→          <p className="text-sm text-muted-foreground mt-1">عرض مهامك وأحداثك على التقويم</p>
+   276→        </div>
+   277→      </div>
+   278→
+   279→      {/* Mini Stats Bar */}
+   280→      <motion.div
+   281→        initial={{ opacity: 0, y: -10 }}
+   282→        animate={{ opacity: 1, y: 0 }}
+   283→        className="flex items-center gap-4 sm:gap-6 flex-wrap text-sm"
+   284→      >
+   285→        <div className="flex items-center gap-2">
+   286→          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+   287→          <span className="text-muted-foreground">
+   288→            <span className="font-bold text-foreground">{monthStats.tasksCount}</span> مهام هذا الشهر
+   289→          </span>
+   290→        </div>
+   291→        <div className="flex items-center gap-2">
+   292→          <div className="w-2 h-2 rounded-full bg-emerald-accent" />
+   293→          <span className="text-muted-foreground">
+   294→            <span className="font-bold text-foreground">{monthStats.focusSessions}</span> جلسات تركيز
+   295→          </span>
+   296→        </div>
+   297→        <div className="flex items-center gap-2">
+   298→          <div className="w-2 h-2 rounded-full bg-blue-500" />
+   299→          <span className="text-muted-foreground">
+   300→            <span className="font-bold text-foreground">{monthStats.journalDays}</span> يوم يوميات
+   301→          </span>
+   302→        </div>
+   303→      </motion.div>
+   304→
+   305→      <div className="flex gap-4 flex-col lg:flex-row">
+   306→        {/* Calendar Grid */}
+   307→        <div className="flex-1 min-w-0">
+   308→          <Card className="glass">
+   309→            <CardContent className="p-4 sm:p-5">
+   310→              {/* Month Navigation */}
+   311→              <div className="flex items-center justify-between mb-6">
+   312→                <motion.button
+   313→                  whileTap={{ scale: 0.9 }}
+   314→                  onClick={goToPrevMonth}
+   315→                  className="p-2 rounded-xl hover:bg-muted/50 transition-colors"
+   316→                >
+   317→                  <ChevronRight className="w-5 h-5" />
+   318→                </motion.button>
+   319→                <div className="flex items-center gap-3">
+   320→                  <h3 className="text-lg font-bold">
+   321→                    {format(currentMonth, 'MMMM yyyy', { locale: ar })}
+   322→                  </h3>
+   323→                  <motion.button
+   324→                    whileHover={{ scale: 1.05 }}
+   325→                    whileTap={{ scale: 0.95 }}
+   326→                    onClick={goToToday}
+   327→                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20 transition-colors"
+   328→                  >
+   329→                    اليوم
+   330→                  </motion.button>
+   331→                </div>
+   332→                <motion.button
+   333→                  whileTap={{ scale: 0.9 }}
+   334→                  onClick={goToNextMonth}
+   335→                  className="p-2 rounded-xl hover:bg-muted/50 transition-colors"
+   336→                >
+   337→                  <ChevronLeft className="w-5 h-5" />
+   338→                </motion.button>
+   339→              </div>
+   340→
+   341→              {/* Weekday Headers */}
+   342→              <div className="grid grid-cols-7 gap-1 mb-2">
+   343→                {weekDays.map((day) => (
+   344→                  <div key={day} className="text-center text-[11px] font-semibold text-muted-foreground py-2">
+   345→                    {day}
+   346→                  </div>
+   347→                ))}
+   348→              </div>
+   349→
+   350→              {/* Day Cells with slide animation */}
+   351→              <AnimatePresence mode="wait" initial={false}>
+   352→                <motion.div
+   353→                  key={currentMonth.toISOString().slice(0, 7)}
+   354→                  initial={{ opacity: 0, x: slideDirection * 30 }}
+   355→                  animate={{ opacity: 1, x: 0 }}
+   356→                  exit={{ opacity: 0, x: slideDirection * -30 }}
+   357→                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+   358→                  className="grid grid-cols-7 gap-1"
+   359→                >
+   360→                  {calendarDays.map((day, i) => {
+   361→                    const dayKey = format(day, 'yyyy-MM-dd')
+   362→                    const dayTasks = getTasksForDate(day)
+   363→                    const isSelected = selectedDate && isSameDay(day, selectedDate)
+   364→                    const inMonth = isSameMonth(day, currentMonth)
+   365→                    const isTodayDate = isToday(day)
+   366→                    const indicators = dayIndicators[dayKey]
+   367→
+   368→                    return (
+   369→                      <motion.button
+   370→                        key={i}
+   371→                        whileTap={{ scale: 0.92 }}
+   372→                        onClick={() => setSelectedDate(isSelected ? null : day)}
+   373→                        className={cn(
+   374→                          'relative aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all text-sm font-medium',
+   375→                          !inMonth && 'text-muted-foreground/25',
+   376→                          inMonth && !isTodayDate && !isSelected && 'text-foreground hover:bg-muted/40',
+   377→                          isTodayDate && !isSelected && 'ring-2 ring-emerald-accent/50 bg-emerald-accent/5 text-emerald-accent font-bold',
+   378→                          isSelected && 'bg-emerald-accent text-white shadow-lg shadow-emerald-accent/25',
+   379→                        )}
+   380→                      >
+   381→                        <span
+   382→                          className={cn(
+   383→                            'text-xs sm:text-sm leading-none',
+   384→                            isTodayDate && !isSelected && 'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-emerald-accent/15',
+   385→                          )}
+   386→                        >
+   387→                          {format(day, 'd')}
+   388→                        </span>
+   389→                        {/* Colored dots */}
+   390→                        {inMonth && indicators && (
+   391→                          <div className="flex gap-0.5 h-1.5 items-center">
+   392→                            {indicators.hasCompletedTasks && (
+   393→                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-white/90' : 'bg-emerald-500')} />
+   394→                            )}
+   395→                            {indicators.hasGoals && (
+   396→                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-white/90' : 'bg-amber-500')} />
+   397→                            )}
+   398→                            {indicators.hasJournal && (
+   399→                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-white/90' : 'bg-blue-500')} />
+   400→                            )}
+   401→                          </div>
+   402→                        )}
+   403→                        {/* Task count badge for days with many tasks */}
+   404→                        {inMonth && dayTasks.length > 2 && (
+   405→                          <span className={cn(
+   406→                            'absolute -top-0.5 -left-0.5 text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center',
+   407→                            isSelected ? 'bg-white/30 text-white' : 'bg-emerald-accent/15 text-emerald-accent'
+   408→                          )}>
+   409→                            {dayTasks.length}
+   410→                          </span>
+   411→                        )}
+   412→                      </motion.button>
+   413→                    )
+   414→                  })}
+   415→                </motion.div>
+   416→              </AnimatePresence>
+   417→
+   418→              {/* Legend */}
+   419→              <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t border-border/30">
+   420→                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+   421→                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+   422→                  مهام مكتملة
+   423→                </div>
+   424→                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+   425→                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+   426→                  أهداف مستحقة
+   427→                </div>
+   428→                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+   429→                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+   430→                  يوميات
+   431→                </div>
+   432→              </div>
+   433→            </CardContent>
+   434→          </Card>
+   435→        </div>
+   436→
+   437→        {/* Slide-in Panel (Desktop) / Below Calendar (Mobile) */}
+   438→        <div className="lg:w-80 shrink-0 space-y-4">
+   439→          <AnimatePresence mode="wait">
+   440→            {selectedDate && (
+   441→              <motion.div
+   442→                key="selected-panel"
+   443→                initial={{ opacity: 0, x: 40 }}
+   444→                animate={{ opacity: 1, x: 0 }}
+   445→                exit={{ opacity: 0, x: 40 }}
+   446→                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+   447→              >
+   448→                <Card className="glass border-r-4 border-r-emerald-accent overflow-hidden">
+   449→                  {/* Date Header */}
+   450→                  <div className="bg-gradient-to-l from-emerald-accent/8 to-transparent px-4 pt-4 pb-3">
+   451→                    <div className="flex items-center justify-between mb-2">
+   452→                      <div>
+   453→                        <p className="text-2xl font-bold">{format(selectedDate, 'd', { locale: ar })}</p>
+   454→                        <p className="text-xs text-muted-foreground">
+   455→                          {format(selectedDate, 'EEEE d MMMM yyyy', { locale: ar })}
+   456→                        </p>
+   457→                      </div>
+   458→                      <div className="flex items-center gap-1.5">
+   459→                        {isToday(selectedDate) && (
+   460→                          <Badge className="bg-emerald-accent/15 text-emerald-accent border-0 text-[10px]">اليوم</Badge>
+   461→                        )}
+   462→                        <motion.button
+   463→                          whileTap={{ scale: 0.9 }}
+   464→                          onClick={() => setSelectedDate(null)}
+   465→                          className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
+   466→                        >
+   467→                          <X className="w-4 h-4" />
+   468→                        </motion.button>
+   469→                      </div>
+   470→                    </div>
+   471→                  </div>
+   472→
+   473→                  <CardContent className="p-4 space-y-4">
+   474→                    {/* Tasks Section */}
+   475→                    <div>
+   476→                      <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+   477→                        <Target className="w-3 h-3 text-emerald-accent" />
+   478→                        المهام ({selectedTasks.length})
+   479→                      </h4>
+   480→                      {selectedTasks.length === 0 ? (
+   481→                        <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">لا توجد مهام</p>
+   482→                      ) : (
+   483→                        <div className="space-y-1.5 max-h-36 overflow-y-auto">
+   484→                          {selectedTasks.map((task) => (
+   485→                            <div key={task.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+   486→                              {task.status === 'done' ? (
+   487→                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+   488→                              ) : (
+   489→                                <Circle className="w-3.5 h-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
+   490→                              )}
+   491→                              <div className="flex-1 min-w-0">
+   492→                                <p className={cn('text-xs font-medium', task.status === 'done' && 'line-through text-muted-foreground')}>
+   493→                                  {task.title}
+   494→                                </p>
+   495→                                <div className="flex items-center gap-2 mt-0.5">
+   496→                                  {task.dueTime && (
+   497→                                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+   498→                                      <Clock className="w-2.5 h-2.5" />
+   499→                                      {task.dueTime}
+   500→                                    </span>
+   501→                                  )}
+   502→                                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
+   503→                                    {priorityLabels[task.priority] || task.priority}
+   504→                                  </Badge>
+   505→                                </div>
+   506→                              </div>
+   507→                            </div>
+   508→                          ))}
+   509→                        </div>
+   510→                      )}
+   511→                    </div>
+   512→
+   513→                    {/* Habits Section */}
+   514→                    {selectedHabitStatus && selectedHabitStatus.total > 0 && (
+   515→                      <div>
+   516→                        <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+   517→                          <Flame className="w-3 h-3 text-orange-500" />
+   518→                          العادات ({selectedHabitStatus.completed}/{selectedHabitStatus.total})
+   519→                        </h4>
+   520→                        <div className="grid grid-cols-2 gap-1.5">
+   521→                          {selectedHabitStatus.items.slice(0, 6).map((h, idx) => (
+   522→                            <div
+   523→                              key={idx}
+   524→                              className={cn(
+   525→                                'flex items-center gap-1.5 text-[11px] px-2 py-1.5 rounded-lg',
+   526→                                h.completed ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted/20 text-muted-foreground'
+   527→                              )}
+   528→                            >
+   529→                              {h.completed ? (
+   530→                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+   531→                              ) : (
+   532→                                <Circle className="w-3 h-3 shrink-0 opacity-40" />
+   533→                              )}
+   534→                              <span className="truncate">{h.name}</span>
+   535→                            </div>
+   536→                          ))}
+   537→                        </div>
+   538→                      </div>
+   539→                    )}
+   540→
+   541→                    {/* Journal Snippet */}
+   542→                    {selectedJournal && (
+   543→                      <div>
+   544→                        <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+   545→                          <BookOpen className="w-3 h-3 text-blue-500" />
+   546→                          اليوميات
+   547→                        </h4>
+   548→                        <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 space-y-2">
+   549→                          <div className="flex items-center gap-2">
+   550→                            {selectedJournal.mood && (
+   551→                              <span className="text-lg">{moodEmojis[selectedJournal.mood] || '😐'}</span>
+   552→                            )}
+   553→                            <span className="text-[10px] text-muted-foreground">
+   554→                              {selectedJournal.gratitude || selectedJournal.content?.slice(0, 50) || 'يوميات'}
+   555→                            </span>
+   556→                          </div>
+   557→                          {selectedJournal.content && (
+   558→                            <p className="text-[11px] text-muted-foreground line-clamp-3 leading-relaxed">
+   559→                              {selectedJournal.content}
+   560→                            </p>
+   561→                          )}
+   562→                        </div>
+   563→                      </div>
+   564→                    )}
+   565→                  </CardContent>
+   566→                </Card>
+   567→              </motion.div>
+   568→            )}
+   569→          </AnimatePresence>
+   570→
+   571→          {/* Today's Tasks (when no date selected) */}
+   572→          {!selectedDate && (
+   573→            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   574→              <Card className="glass">
+   575→                <CardHeader className="pb-3">
+   576→                  <CardTitle className="text-sm flex items-center gap-2">
+   577→                    <CalendarDays className="w-4 h-4 text-emerald-accent" />
+   578→                    مهام اليوم
+   579→                  </CardTitle>
+   580→                </CardHeader>
+   581→                <CardContent>
+   582→                  {todayTasks.length === 0 ? (
+   583→                    <p className="text-sm text-muted-foreground text-center py-6">لا توجد مهام لهذا اليوم</p>
+   584→                  ) : (
+   585→                    <div className="space-y-2 max-h-48 overflow-y-auto">
+   586→                      {todayTasks.map((task) => (
+   587→                        <div key={task.id} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+   588→                          {task.status === 'done' ? (
+   589→                            <CheckCircle2 className="w-4 h-4 text-emerald-accent mt-0.5 shrink-0" />
+   590→                          ) : (
+   591→                            <Circle className="w-4 h-4 text-muted-foreground/40 mt-0.5 shrink-0" />
+   592→                          )}
+   593→                          <div className="flex-1 min-w-0">
+   594→                            <p className={cn('text-xs font-medium', task.status === 'done' && 'line-through text-muted-foreground')}>
+   595→                              {task.title}
+   596→                            </p>
+   597→                            <div className="flex items-center gap-2 mt-1">
+   598→                              {task.dueTime && (
+   599→                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+   600→                                  <Clock className="w-2.5 h-2.5" />
+   601→                                  {task.dueTime}
+   602→                                </span>
+   603→                              )}
+   604→                              <div className={cn('w-2 h-2 rounded-full', priorityColors[task.priority] || 'bg-muted')} />
+   605→                            </div>
+   606→                          </div>
+   607→                        </div>
+   608→                      ))}
+   609→                    </div>
+   610→                  )}
+   611→                </CardContent>
+   612→              </Card>
+   613→            </motion.div>
+   614→          )}
+   615→
+   616→          {/* Upcoming Tasks */}
+   617→          <Card className="glass">
+   618→            <CardHeader className="pb-3">
+   619→              <CardTitle className="text-sm flex items-center gap-2">
+   620→                <Sparkles className="w-4 h-4 text-amber-500" />
+   621→                المهام القادمة
+   622→              </CardTitle>
+   623→            </CardHeader>
+   624→            <CardContent>
+   625→              {upcomingTasks.length === 0 ? (
+   626→                <p className="text-sm text-muted-foreground text-center py-6">لا توجد مهام قادمة</p>
+   627→              ) : (
+   628→                <div className="space-y-2 max-h-64 overflow-y-auto">
+   629→                  {upcomingTasks.map((task) => (
+   630→                    <motion.div
+   631→                      key={task.id}
+   632→                      initial={{ opacity: 0, x: -10 }}
+   633→                      animate={{ opacity: 1, x: 0 }}
+   634→                      className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-muted/30 transition-colors"
+   635→                    >
+   636→                      <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', priorityColors[task.priority] || 'bg-muted')} />
+   637→                      <div className="flex-1 min-w-0">
+   638→                        <p className="text-xs font-medium truncate">{task.title}</p>
+   639→                        {task.dueDate && (
+   640→                          <p className="text-[10px] text-muted-foreground mt-0.5">
+   641→                            {format(parseISO(task.dueDate), 'd MMMM', { locale: ar })}
+   642→                          </p>
+   643→                        )}
+   644→                      </div>
+   645→                    </motion.div>
+   646→                  ))}
+   647→                </div>
+   648→              )}
+   649→            </CardContent>
+   650→          </Card>
+   651→        </div>
+   652→      </div>
+   653→    </div>
+   654→  )
+   655→}

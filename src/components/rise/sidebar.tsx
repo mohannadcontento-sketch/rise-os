@@ -24,10 +24,12 @@ import {
   Settings,
   X,
   ChevronLeft,
+  ChevronDown,
   Zap,
   TrendingUp,
+  Pencil,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 interface NavItem {
   id: ModuleId
@@ -106,6 +108,10 @@ function toArabicNum(n: number): string {
 export function Sidebar() {
   const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser } = useRiseStore()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [notesExpanded, setNotesExpanded] = useState(false)
+  const [quickNotes, setQuickNotes] = useState('')
+  const notesRef = useRef<HTMLTextAreaElement>(null)
+  const [notesLoaded, setNotesLoaded] = useState(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -114,6 +120,24 @@ export function Sidebar() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [setSidebarOpen])
+
+  // Load quick notes from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rise-quick-notes')
+      if (stored) setQuickNotes(stored)
+    } catch { /* ignore */ }
+    setNotesLoaded(true)
+  }, [])
+
+  // Auto-save quick notes
+  useEffect(() => {
+    if (!notesLoaded) return
+    const timer = setTimeout(() => {
+      localStorage.setItem('rise-quick-notes', quickNotes)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [quickNotes, notesLoaded])
 
   // Fetch user data for XP display
   useEffect(() => {
@@ -254,6 +278,83 @@ export function Sidebar() {
             </div>
           ))}
         </nav>
+
+        {/* Quick Notes Section */}
+        <div className="px-3 pb-2">
+          <div className="rounded-xl border border-gradient p-0.5">
+            <div className="glass rounded-[10px] overflow-hidden">
+              {/* Collapsed Header */}
+              <button
+                onClick={() => setNotesExpanded(!notesExpanded)}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-primary/[0.02] transition-colors"
+              >
+                <div className="w-7 h-7 rounded-lg bg-gold/10 flex items-center justify-center shrink-0">
+                  <Pencil className="w-3.5 h-3.5 text-gold" />
+                </div>
+                {!notesExpanded && (
+                  <span className="text-xs text-muted-foreground truncate flex-1 text-right">
+                    {quickNotes ? quickNotes.slice(0, 20) + (quickNotes.length > 20 ? '...' : '') : 'ملاحظات سريعة'}
+                  </span>
+                )}
+                {notesExpanded && (
+                  <span className="text-xs font-medium text-foreground flex-1 text-right">ملاحظات سريعة</span>
+                )}
+                <motion.div
+                  animate={{ rotate: notesExpanded ? 180 : 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/50" />
+                </motion.div>
+              </button>
+
+              {/* Expanded Textarea */}
+              <AnimatePresence>
+                {notesExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-3 pb-3 pt-1">
+                      <textarea
+                        ref={notesRef}
+                        value={quickNotes}
+                        onChange={(e) => setQuickNotes(e.target.value)}
+                        placeholder="اكتب ملاحظتك هنا..."
+                        rows={3}
+                        dir="rtl"
+                        className={cn(
+                          'w-full bg-white/5 dark:bg-white/[0.03] backdrop-blur-sm',
+                          'border border-white/10 dark:border-white/5',
+                          'rounded-lg px-3 py-2 text-xs text-foreground leading-relaxed',
+                          'resize-none focus:outline-none focus:ring-1 focus:ring-emerald-accent/30 focus:border-emerald-accent/20',
+                          'placeholder:text-muted-foreground/40',
+                          'max-h-[72px] overflow-y-auto'
+                        )}
+                        style={{ scrollbarWidth: 'thin' }}
+                      />
+                      <div className="flex items-center justify-between mt-1.5 px-0.5">
+                        <span className="text-[9px] text-muted-foreground/40">
+                          {quickNotes.length > 0 ? `${toArabicNum(quickNotes.length)} حرف` : 'يحفظ تلقائياً'}
+                        </span>
+                        {quickNotes.length > 0 && (
+                          <button
+                            onClick={() => setQuickNotes('')}
+                            className="text-[9px] text-muted-foreground/40 hover:text-destructive transition-colors"
+                          >
+                            مسح
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
 
         {/* Footer - User Card */}
         <div className="p-4 border-t border-sidebar-border relative">

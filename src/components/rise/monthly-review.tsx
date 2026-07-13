@@ -109,6 +109,24 @@ const getMotivationalMessage = (score: number): { text: string; icon: React.Elem
   return { text: 'ابدأ من جديد! كل يوم فرصة لتغيير حياتك ✨', icon: Flame, color: 'text-rose-500' }
 }
 
+/* ────────────── Animated Counter ────────────── */
+
+function AnimatedCounter({ value, duration = 1200 }: { value: number; duration?: number }) {
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    const start = Date.now()
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - start
+      const progress = Math.min(elapsed / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplay(Math.round(value * eased))
+      if (progress >= 1) clearInterval(timer)
+    }, 16)
+    return () => clearInterval(timer)
+  }, [value, duration])
+  return <>{display}</>
+}
+
 /* ────────────── Component ────────────── */
 
 export default function MonthlyReview() {
@@ -238,68 +256,68 @@ export default function MonthlyReview() {
 
   const avgScore = Math.round(review.categories.reduce((s, c) => s + c.score, 0) / review.categories.length)
   const motivation = getMotivationalMessage(avgScore)
+  const monthName = new Date().toLocaleDateString('ar', { month: 'long', year: 'numeric' })
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-emerald-accent" />
-            المراجعة الشهرية
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">تأمّل شهرك وخطط للتقدم</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
-            <RotateCcw className="w-3.5 h-3.5" />
-            إعادة
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAutoFill}
-            disabled={autoFilling}
-            className="gap-1.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+      {/* Cinematic Month Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="rounded-2xl overflow-hidden relative"
+      >
+        <div className="absolute inset-0 bg-gradient-to-bl from-forest/25 via-emerald-accent/10 to-gold/15 dark:from-forest/35 dark:via-emerald-accent/15 dark:to-gold/15" />
+        <div className="absolute inset-0 noise-bg opacity-20" />
+        <div className="relative glass p-6 border-0 text-center sm:text-right">
+          <motion.h2
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', damping: 15 }}
+            className="text-3xl sm:text-4xl font-black text-gradient-forest mb-2 leading-tight"
           >
-            {autoFilling ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Wand2 className="w-3.5 h-3.5" />
-            )}
-            ملء تلقائي
-          </Button>
-          <motion.div whileTap={{ scale: 0.95 }}>
-            <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white min-w-[100px] relative overflow-hidden">
-              <AnimatePresence mode="wait">
-                {showSaveSuccess ? (
-                  <motion.span
-                    key="success"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    className="flex items-center gap-1.5"
-                  >
-                    <Check className="w-4 h-4" />
-                    تم الحفظ!
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="save"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    className="flex items-center gap-1.5"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    حفظ وإغلاق
-                  </motion.span>
-                )}
-              </AnimatePresence>
+            {monthName}
+          </motion.h2>
+          <p className="text-sm text-muted-foreground">المراجعة الشهرية — {motivation.text}</p>
+          <div className="flex justify-center sm:justify-end gap-2 mt-4">
+            <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
+              <RotateCcw className="w-3.5 h-3.5" />
+              إعادة
             </Button>
-          </motion.div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAutoFill}
+              disabled={autoFilling}
+              className="gap-1.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+            >
+              {autoFilling ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Wand2 className="w-3.5 h-3.5" />
+              )}
+              ملء تلقائي
+            </Button>
+            <motion.div whileTap={{ scale: 0.95 }}>
+              <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white min-w-[100px] relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                  {showSaveSuccess ? (
+                    <motion.span key="success" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="flex items-center gap-1.5">
+                      <Check className="w-4 h-4" />
+                      تم الحفظ!
+                    </motion.span>
+                  ) : (
+                    <motion.span key="save" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="flex items-center gap-1.5">
+                      <Save className="w-3.5 h-3.5" />
+                      حفظ
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </Button>
+            </motion.div>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Auto-fill stats chips */}
       {autoFillData && (
@@ -333,6 +351,42 @@ export default function MonthlyReview() {
         </motion.div>
       )}
 
+      {/* Month in Numbers — Animated Stats Row */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+      >
+        {[
+          { label: 'المهام المكتملة', value: autoFillData?.completedTasks || 0, icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/10' },
+          { label: 'ساعات التركيز', value: autoFillData ? Math.round(autoFillData.focusMinutes / 60) : 0, icon: Timer, color: 'text-blue-500 dark:text-blue-400', bg: 'bg-blue-500/10' },
+          { label: 'نسبة العادات', value: autoFillData?.habitRate || 0, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10', suffix: '٪' },
+          { label: 'اليوميات', value: autoFillData?.journalCount || 0, icon: BookOpen, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+        ].map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 + i * 0.06 }}
+            className="glass premium-card p-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn('p-2 rounded-xl', stat.bg)}>
+                <stat.icon className={cn('w-4 h-4', stat.color)} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">
+                  <AnimatedCounter value={stat.value} />
+                  {stat.suffix}
+                </p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+
       {/* Motivational Message */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -352,7 +406,7 @@ export default function MonthlyReview() {
       <div className="grid sm:grid-cols-2 gap-4">
         {/* Score Card */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="glass overflow-hidden h-full border-r-4 border-r-emerald-accent">
+          <Card className="glass premium-card overflow-hidden h-full border-r-emerald-accent/50 border-r-3">
             <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-5 h-full flex flex-col justify-center">
               <p className="text-sm text-muted-foreground mb-1">درجة الشهر</p>
               <div className="flex items-center gap-3 mb-4">
@@ -381,7 +435,7 @@ export default function MonthlyReview() {
 
         {/* Radar Chart */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="glass h-full border-r-4 border-r-amber-500">
+          <Card className="glass premium-card h-full border-r-amber-500/50 border-r-3">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Target className="w-4 h-4 text-emerald-accent" />
@@ -408,8 +462,8 @@ export default function MonthlyReview() {
                       dataKey="score"
                       stroke="oklch(0.55 0.14 163)"
                       fill="oklch(0.55 0.14 163)"
-                      fillOpacity={0.2}
-                      strokeWidth={2}
+                      fillOpacity={0.25}
+                      strokeWidth={2.5}
                       label={{
                         position: 'top',
                         fill: 'oklch(0.45 0.01 160)',
@@ -425,9 +479,9 @@ export default function MonthlyReview() {
         </motion.div>
       </div>
 
-      {/* Monthly Highlights */}
+      {/* Monthly Highlights — with gold best moment card */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-        <Card className="glass border-r-4 border-r-purple-500">
+        <Card className="glass premium-card">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-500" />
@@ -436,9 +490,10 @@ export default function MonthlyReview() {
           </CardHeader>
           <CardContent>
             <div className="grid sm:grid-cols-3 gap-4">
-              {/* Best Achievement */}
-              <div className="space-y-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10">
-                <div className="flex items-center gap-2 mb-1">
+              {/* Best Achievement — with gold gradient border */}
+              <div className="space-y-2 p-4 rounded-xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/30 dark:border-amber-600/30 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-20 h-20 bg-gradient-to-br from-amber-400/20 to-transparent rounded-full -translate-x-1/2 -translate-y-1/2" />
+                <div className="relative flex items-center gap-2 mb-1">
                   <div className="p-1.5 rounded-lg bg-amber-500/15">
                     <Trophy className="w-3.5 h-3.5 text-amber-500" />
                   </div>
@@ -554,12 +609,12 @@ export default function MonthlyReview() {
         </Card>
       </motion.div>
 
-      {/* Goal Progress */}
+      {/* Goal Progress — with emerald accent */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass border-r-4 border-r-emerald-700 dark:border-r-emerald-400">
+        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <Award className="w-4 h-4 text-emerald-accent" />
               تقدم الأهداف الشهرية
             </CardTitle>
           </CardHeader>
@@ -577,7 +632,7 @@ export default function MonthlyReview() {
 
       {/* Next Month Planning */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <Card className="glass border-r-4 border-r-emerald-accent">
+        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <ArrowLeft className="w-4 h-4 text-emerald-accent" />

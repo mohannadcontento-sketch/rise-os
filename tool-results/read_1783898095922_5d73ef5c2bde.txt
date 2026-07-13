@@ -1,0 +1,657 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  BarChart3,
+     7→  Save,
+     8→  RotateCcw,
+     9→  Heart,
+    10→  Wallet,
+    11→  GraduationCap,
+    12→  Users,
+    13→  Briefcase,
+    14→  Star,
+    15→  Trophy,
+    16→  TrendingUp,
+    17→  ArrowLeft,
+    18→  Target,
+    19→  Award,
+    20→  Calendar,
+    21→  Sparkles,
+    22→  Check,
+    23→  CheckCircle2,
+    24→  Timer,
+    25→  Flame,
+    26→  BookOpen,
+    27→  Wand2,
+    28→  Loader2,
+    29→} from 'lucide-react'
+    30→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    31→import { Button } from '@/components/ui/button'
+    32→import { Input } from '@/components/ui/input'
+    33→import { Textarea } from '@/components/ui/textarea'
+    34→import { Label } from '@/components/ui/label'
+    35→import { Slider } from '@/components/ui/slider'
+    36→import { cn } from '@/lib/utils'
+    37→import { toast } from 'sonner'
+    38→import {
+    39→  RadarChart,
+    40→  PolarGrid,
+    41→  PolarAngleAxis,
+    42→  PolarRadiusAxis,
+    43→  Radar,
+    44→  ResponsiveContainer,
+    45→} from 'recharts'
+    46→
+    47→/* ────────────── Types ────────────── */
+    48→
+    49→interface CategoryReview {
+    50→  id: string
+    51→  name: string
+    52→  icon: React.ElementType
+    53→  color: string
+    54→  score: number
+    55→  notes: string
+    56→}
+    57→
+    58→interface MonthlyReview {
+    59→  id: string
+    60→  month: string
+    61→  score: number
+    62→  wins: string
+    63→  categories: CategoryReview[]
+    64→  goalProgress: string
+    65→  nextPriorities: string
+    66→  nextGoals: string
+    67→  bestAchievement: string
+    68→  biggestChallenge: string
+    69→  keyLesson: string
+    70→}
+    71→
+    72→interface AutoFillData {
+    73→  completedTasks: number
+    74→  focusMinutes: number
+    75→  habitRate: number
+    76→  journalCount: number
+    77→  avgMood: number
+    78→}
+    79→
+    80→const STORAGE_KEY = 'rise-monthly-review'
+    81→
+    82→const defaultCategories: CategoryReview[] = [
+    83→  { id: 'health', name: 'الصحة', icon: Heart, color: 'text-rose-500', score: 5, notes: '' },
+    84→  { id: 'finance', name: 'المالية', icon: Wallet, color: 'text-amber-500', score: 5, notes: '' },
+    85→  { id: 'learning', name: 'التعلم', icon: GraduationCap, color: 'text-emerald-700 dark:text-emerald-400', score: 5, notes: '' },
+    86→  { id: 'relationships', name: 'العلاقات', icon: Users, color: 'text-purple-500', score: 5, notes: '' },
+    87→  { id: 'career', name: 'المهنة', icon: Briefcase, color: 'text-emerald-accent', score: 5, notes: '' },
+    88→]
+    89→
+    90→const emptyReview = (): MonthlyReview => ({
+    91→  id: crypto.randomUUID(),
+    92→  month: new Date().toISOString().slice(0, 7),
+    93→  score: 5,
+    94→  wins: '',
+    95→  categories: defaultCategories.map((c) => ({ ...c })),
+    96→  goalProgress: '',
+    97→  nextPriorities: '',
+    98→  nextGoals: '',
+    99→  bestAchievement: '',
+   100→  biggestChallenge: '',
+   101→  keyLesson: '',
+   102→})
+   103→
+   104→const getMotivationalMessage = (score: number): { text: string; icon: React.ElementType; color: string } => {
+   105→  if (score >= 9) return { text: 'أداء استثنائي! أنت في أفضل حالاتك 🌟', icon: Trophy, color: 'text-amber-500' }
+   106→  if (score >= 7) return { text: 'شهر رائع! استمر بهذا النهج المتميز 💪', icon: TrendingUp, color: 'text-emerald-accent' }
+   107→  if (score >= 5) return { text: 'تقدم جيد! هناك مساحة للتحسن والنمو 🌱', icon: Sparkles, color: 'text-blue-500' }
+   108→  if (score >= 3) return { text: 'لا بأس، كل بداية صعبة. الشهر القادم سيكون أفضل 🚀', icon: Target, color: 'text-orange-500' }
+   109→  return { text: 'ابدأ من جديد! كل يوم فرصة لتغيير حياتك ✨', icon: Flame, color: 'text-rose-500' }
+   110→}
+   111→
+   112→/* ────────────── Component ────────────── */
+   113→
+   114→export default function MonthlyReview() {
+   115→  const [allReviews, setAllReviews] = useState<MonthlyReview[]>(() => {
+   116→    if (typeof window === 'undefined') return []
+   117→    try {
+   118→      const stored = localStorage.getItem(STORAGE_KEY)
+   119→      if (stored) return JSON.parse(stored) as MonthlyReview[]
+   120→    } catch { /* ignore */ }
+   121→    return []
+   122→  })
+   123→  const [review, setReview] = useState<MonthlyReview>(() => {
+   124→    if (typeof window === 'undefined') return emptyReview()
+   125→    try {
+   126→      const stored = localStorage.getItem(STORAGE_KEY)
+   127→      if (stored) {
+   128→        const parsed: MonthlyReview[] = JSON.parse(stored)
+   129→        const thisMonth = parsed.find((r) => r.month === new Date().toISOString().slice(0, 7))
+   130→        if (thisMonth) return thisMonth
+   131→      }
+   132→    } catch { /* ignore */ }
+   133→    return emptyReview()
+   134→  })
+   135→
+   136→  const [autoFilling, setAutoFilling] = useState(false)
+   137→  const [autoFillData, setAutoFillData] = useState<AutoFillData | null>(null)
+   138→  const [showSaveSuccess, setShowSaveSuccess] = useState(false)
+   139→
+   140→  const save = () => {
+   141→    const updated = allReviews.some((r) => r.id === review.id)
+   142→      ? allReviews.map((r) => (r.id === review.id ? review : r))
+   143→      : [review, ...allReviews]
+   144→    setAllReviews(updated)
+   145→    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+   146→    setShowSaveSuccess(true)
+   147→    setTimeout(() => setShowSaveSuccess(false), 2000)
+   148→    toast.success('تم حفظ المراجعة الشهرية')
+   149→  }
+   150→
+   151→  const reset = () => {
+   152→    setReview(emptyReview())
+   153→    setAutoFillData(null)
+   154→    toast.success('تم إعادة التعيين')
+   155→  }
+   156→
+   157→  const updateCategory = (id: string, field: 'score' | 'notes', value: number | string) => {
+   158→    setReview((prev) => ({
+   159→      ...prev,
+   160→      categories: prev.categories.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
+   161→    }))
+   162→  }
+   163→
+   164→  const handleAutoFill = useCallback(async () => {
+   165→    setAutoFilling(true)
+   166→    try {
+   167→      const [tasksRes, focusRes, habitsRes, journalRes] = await Promise.all([
+   168→        fetch('/api/rise/tasks'),
+   169→        fetch('/api/rise/focus'),
+   170→        fetch('/api/rise/habits'),
+   171→        fetch('/api/rise/journal'),
+   172→      ])
+   173→      const [tasksData, focusData, habitsData, journalData] = await Promise.all([
+   174→        tasksRes.json(),
+   175→        focusRes.json(),
+   176→        habitsRes.json(),
+   177→        journalRes.json(),
+   178→      ])
+   179→
+   180→      const now = new Date()
+   181→      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+   182→
+   183→      // Count completed tasks this month
+   184→      const allTasks = tasksData.tasks || []
+   185→      const completedTasks = allTasks.filter(
+   186→        (t: { status: string; dueDate: string | null }) => t.status === 'done' && t.dueDate?.startsWith(monthStart)
+   187→      ).length
+   188→
+   189→      // Sum focus minutes this month
+   190→      const sessions = focusData.sessions || []
+   191→      const focusMinutes = sessions
+   192→        .filter((s: { startedAt: string; completed: boolean }) => s.startedAt.startsWith(monthStart) && s.completed)
+   193→        .reduce((sum: number, s: { actualMin: number }) => sum + (s.actualMin || 0), 0)
+   194→
+   195→      // Calculate average habit completion rate this month
+   196→      const logs = habitsData.logs || []
+   197→      const habitCount = (habitsData.habits || []).length
+   198→      const monthLogs = logs.filter((l: { date: string }) => l.date?.startsWith(monthStart))
+   199→      const completedLogs = monthLogs.filter((l: { completed: boolean }) => l.completed).length
+   200→      const habitRate = monthLogs.length > 0 ? Math.round((completedLogs / monthLogs.length) * 100) : 0
+   201→
+   202→      // Count journal entries and average mood
+   203→      const journals = journalData.recentJournals || []
+   204→      const monthJournals = journals.filter((j: { date: string }) => j.date?.startsWith(monthStart))
+   205→      const journalCount = monthJournals.length
+   206→      const moods = monthJournals.map((j: { mood: number | null }) => j.mood).filter((m: number | null): m is number => m !== null && m > 0)
+   207→      const avgMood = moods.length > 0 ? Math.round((moods.reduce((a: number, b: number) => a + b, 0) / moods.length) * 10) / 10 : 0
+   208→
+   209→      const data: AutoFillData = { completedTasks, focusMinutes, habitRate, journalCount, avgMood }
+   210→      setAutoFillData(data)
+   211→
+   212→      // Auto-fill the wins field
+   213→      const winsParts: string[] = []
+   214→      if (completedTasks > 0) winsParts.push(`أنجزت ${completedTasks} مهمة`)
+   215→      if (focusMinutes > 0) winsParts.push(`ركّزت ${Math.round(focusMinutes / 60)} ساعة`)
+   216→      if (journalCount > 0) winsParts.push(`كتبت ${journalCount} يوميات`)
+   217→      setReview((prev) => ({ ...prev, wins: winsParts.join(' | ') }))
+   218→
+   219→      // Auto-fill goal progress
+   220→      setReview((prev) => ({
+   221→        ...prev,
+   222→        goalProgress: `أنجزت ${completedTasks} مهمة من إجمالي ${allTasks.length} (نسبة الإنجاز: ${allTasks.length > 0 ? Math.round((completedTasks / allTasks.length) * 100) : 0}%). تركيز إجمالي: ${Math.round(focusMinutes / 60)} ساعة. نسبة إكمال العادات: ${habitRate}%.`,
+   223→      }))
+   224→
+   225→      toast.success('تم ملء البيانات تلقائياً')
+   226→    } catch {
+   227→      toast.error('فشل في جلب البيانات')
+   228→    } finally {
+   229→      setAutoFilling(false)
+   230→    }
+   231→  }, [])
+   232→
+   233→  const radarData = review.categories.map((c) => ({
+   234→    category: c.name,
+   235→    score: c.score,
+   236→    fullMark: 10,
+   237→  }))
+   238→
+   239→  const avgScore = Math.round(review.categories.reduce((s, c) => s + c.score, 0) / review.categories.length)
+   240→  const motivation = getMotivationalMessage(avgScore)
+   241→
+   242→  return (
+   243→    <div className="space-y-6 max-w-4xl mx-auto">
+   244→      {/* Header */}
+   245→      <div className="flex items-center justify-between flex-wrap gap-3">
+   246→        <div>
+   247→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   248→            <BarChart3 className="w-6 h-6 text-emerald-accent" />
+   249→            المراجعة الشهرية
+   250→          </h2>
+   251→          <p className="text-sm text-muted-foreground mt-1">تأمّل شهرك وخطط للتقدم</p>
+   252→        </div>
+   253→        <div className="flex gap-2">
+   254→          <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
+   255→            <RotateCcw className="w-3.5 h-3.5" />
+   256→            إعادة
+   257→          </Button>
+   258→          <Button
+   259→            variant="outline"
+   260→            size="sm"
+   261→            onClick={handleAutoFill}
+   262→            disabled={autoFilling}
+   263→            className="gap-1.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+   264→          >
+   265→            {autoFilling ? (
+   266→              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+   267→            ) : (
+   268→              <Wand2 className="w-3.5 h-3.5" />
+   269→            )}
+   270→            ملء تلقائي
+   271→          </Button>
+   272→          <motion.div whileTap={{ scale: 0.95 }}>
+   273→            <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white min-w-[100px] relative overflow-hidden">
+   274→              <AnimatePresence mode="wait">
+   275→                {showSaveSuccess ? (
+   276→                  <motion.span
+   277→                    key="success"
+   278→                    initial={{ scale: 0, opacity: 0 }}
+   279→                    animate={{ scale: 1, opacity: 1 }}
+   280→                    exit={{ scale: 0, opacity: 0 }}
+   281→                    className="flex items-center gap-1.5"
+   282→                  >
+   283→                    <Check className="w-4 h-4" />
+   284→                    تم الحفظ!
+   285→                  </motion.span>
+   286→                ) : (
+   287→                  <motion.span
+   288→                    key="save"
+   289→                    initial={{ scale: 0, opacity: 0 }}
+   290→                    animate={{ scale: 1, opacity: 1 }}
+   291→                    exit={{ scale: 0, opacity: 0 }}
+   292→                    className="flex items-center gap-1.5"
+   293→                  >
+   294→                    <Save className="w-3.5 h-3.5" />
+   295→                    حفظ وإغلاق
+   296→                  </motion.span>
+   297→                )}
+   298→              </AnimatePresence>
+   299→            </Button>
+   300→          </motion.div>
+   301→        </div>
+   302→      </div>
+   303→
+   304→      {/* Auto-fill stats chips */}
+   305→      {autoFillData && (
+   306→        <motion.div
+   307→          initial={{ opacity: 0, y: -10 }}
+   308→          animate={{ opacity: 1, y: 0 }}
+   309→          className="flex items-center gap-3 flex-wrap"
+   310→        >
+   311→          <div className="flex items-center gap-1.5 bg-emerald-accent/10 text-emerald-accent px-3 py-1.5 rounded-full text-xs font-medium">
+   312→            <CheckCircle2 className="w-3.5 h-3.5" />
+   313→            {autoFillData.completedTasks} مهمة مكتملة
+   314→          </div>
+   315→          <div className="flex items-center gap-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium">
+   316→            <Timer className="w-3.5 h-3.5" />
+   317→            {Math.round(autoFillData.focusMinutes / 60)} ساعة تركيز
+   318→          </div>
+   319→          <div className="flex items-center gap-1.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs font-medium">
+   320→            <Flame className="w-3.5 h-3.5" />
+   321→            {autoFillData.habitRate}% عادات
+   322→          </div>
+   323→          <div className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-full text-xs font-medium">
+   324→            <BookOpen className="w-3.5 h-3.5" />
+   325→            {autoFillData.journalCount} يوميات
+   326→          </div>
+   327→          {autoFillData.avgMood > 0 && (
+   328→            <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium">
+   329→              <Star className="w-3.5 h-3.5" />
+   330→              متوسط المزاج: {autoFillData.avgMood}
+   331→            </div>
+   332→          )}
+   333→        </motion.div>
+   334→      )}
+   335→
+   336→      {/* Motivational Message */}
+   337→      <motion.div
+   338→        initial={{ opacity: 0 }}
+   339→        animate={{ opacity: 1 }}
+   340→        className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-l from-emerald-accent/5 via-transparent to-amber-500/5 border border-border/30"
+   341→      >
+   342→        <div className={cn('p-2.5 rounded-xl bg-background shadow-sm', motivation.color)}>
+   343→          <motivation.icon className="w-5 h-5" />
+   344→        </div>
+   345→        <div>
+   346→          <p className="text-sm font-semibold">المتوسط الحالي: {avgScore}/10</p>
+   347→          <p className="text-xs text-muted-foreground mt-0.5">{motivation.text}</p>
+   348→        </div>
+   349→      </motion.div>
+   350→
+   351→      {/* Score + Radar */}
+   352→      <div className="grid sm:grid-cols-2 gap-4">
+   353→        {/* Score Card */}
+   354→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+   355→          <Card className="glass overflow-hidden h-full border-r-4 border-r-emerald-accent">
+   356→            <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-5 h-full flex flex-col justify-center">
+   357→              <p className="text-sm text-muted-foreground mb-1">درجة الشهر</p>
+   358→              <div className="flex items-center gap-3 mb-4">
+   359→                <span className="text-5xl font-bold text-emerald-accent">{review.score}</span>
+   360→                <span className="text-xl text-muted-foreground">/ 10</span>
+   361→              </div>
+   362→              <div className="flex items-center gap-1">
+   363→                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
+   364→                  <button
+   365→                    key={s}
+   366→                    onClick={() => setReview((prev) => ({ ...prev, score: s }))}
+   367→                    className={cn(
+   368→                      'flex-1 h-2 rounded-full transition-all',
+   369→                      s <= review.score ? 'bg-emerald-accent' : 'bg-muted/50'
+   370→                    )}
+   371→                  />
+   372→                ))}
+   373→              </div>
+   374→              <div className="mt-4 flex items-center gap-2">
+   375→                <Trophy className="w-4 h-4 text-amber-500" />
+   376→                <span className="text-xs text-muted-foreground">متوسط الفئات: {avgScore}/10</span>
+   377→              </div>
+   378→            </div>
+   379→          </Card>
+   380→        </motion.div>
+   381→
+   382→        {/* Radar Chart */}
+   383→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+   384→          <Card className="glass h-full border-r-4 border-r-amber-500">
+   385→            <CardHeader className="pb-2">
+   386→              <CardTitle className="text-sm flex items-center gap-2">
+   387→                <Target className="w-4 h-4 text-emerald-accent" />
+   388→                خريطة الفئات
+   389→              </CardTitle>
+   390→            </CardHeader>
+   391→            <CardContent className="pb-4">
+   392→              <div className="h-56">
+   393→                <ResponsiveContainer width="100%" height="100%">
+   394→                  <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+   395→                    <PolarGrid stroke="oklch(0.7 0.01 160 / 0.2)" />
+   396→                    <PolarAngleAxis
+   397→                      dataKey="category"
+   398→                      tick={{ fontSize: 11, fill: 'oklch(0.45 0.01 160)' }}
+   399→                    />
+   400→                    <PolarRadiusAxis
+   401→                      angle={90}
+   402→                      domain={[0, 10]}
+   403→                      tick={{ fontSize: 9, fill: 'oklch(0.55 0.01 160)' }}
+   404→                      tickCount={6}
+   405→                    />
+   406→                    <Radar
+   407→                      name="الدرجة"
+   408→                      dataKey="score"
+   409→                      stroke="oklch(0.55 0.14 163)"
+   410→                      fill="oklch(0.55 0.14 163)"
+   411→                      fillOpacity={0.2}
+   412→                      strokeWidth={2}
+   413→                      label={{
+   414→                        position: 'top',
+   415→                        fill: 'oklch(0.45 0.01 160)',
+   416→                        fontSize: 10,
+   417→                        formatter: (value: number) => `${value}`,
+   418→                      }}
+   419→                    />
+   420→                  </RadarChart>
+   421→                </ResponsiveContainer>
+   422→              </div>
+   423→            </CardContent>
+   424→          </Card>
+   425→        </motion.div>
+   426→      </div>
+   427→
+   428→      {/* Monthly Highlights */}
+   429→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+   430→        <Card className="glass border-r-4 border-r-purple-500">
+   431→          <CardHeader className="pb-4">
+   432→            <CardTitle className="text-base flex items-center gap-2">
+   433→              <Sparkles className="w-4 h-4 text-purple-500" />
+   434→              أبرز لحظات الشهر
+   435→            </CardTitle>
+   436→          </CardHeader>
+   437→          <CardContent>
+   438→            <div className="grid sm:grid-cols-3 gap-4">
+   439→              {/* Best Achievement */}
+   440→              <div className="space-y-2 p-4 rounded-xl bg-amber-500/5 border border-amber-500/10">
+   441→                <div className="flex items-center gap-2 mb-1">
+   442→                  <div className="p-1.5 rounded-lg bg-amber-500/15">
+   443→                    <Trophy className="w-3.5 h-3.5 text-amber-500" />
+   444→                  </div>
+   445→                  <Label className="text-xs font-semibold text-amber-600 dark:text-amber-400">أفضل إنجاز</Label>
+   446→                </div>
+   447→                <Input
+   448→                  placeholder="ما هو أفضل إنجاز؟"
+   449→                  value={review.bestAchievement || ''}
+   450→                  onChange={(e) => setReview((prev) => ({ ...prev, bestAchievement: e.target.value }))}
+   451→                  className="text-sm h-9 border-amber-500/20 focus-visible:ring-amber-500/30"
+   452→                />
+   453→              </div>
+   454→              {/* Biggest Challenge */}
+   455→              <div className="space-y-2 p-4 rounded-xl bg-rose-500/5 border border-rose-500/10">
+   456→                <div className="flex items-center gap-2 mb-1">
+   457→                  <div className="p-1.5 rounded-lg bg-rose-500/15">
+   458→                    <Target className="w-3.5 h-3.5 text-rose-500" />
+   459→                  </div>
+   460→                  <Label className="text-xs font-semibold text-rose-600 dark:text-rose-400">أكبر تحدّي</Label>
+   461→                </div>
+   462→                <Input
+   463→                  placeholder="ما هو أكبر تحدٍّ؟"
+   464→                  value={review.biggestChallenge || ''}
+   465→                  onChange={(e) => setReview((prev) => ({ ...prev, biggestChallenge: e.target.value }))}
+   466→                  className="text-sm h-9 border-rose-500/20 focus-visible:ring-rose-500/30"
+   467→                />
+   468→              </div>
+   469→              {/* Key Lesson */}
+   470→              <div className="space-y-2 p-4 rounded-xl bg-emerald-accent/5 border border-emerald-accent/10">
+   471→                <div className="flex items-center gap-2 mb-1">
+   472→                  <div className="p-1.5 rounded-lg bg-emerald-accent/15">
+   473→                    <GraduationCap className="w-3.5 h-3.5 text-emerald-accent" />
+   474→                  </div>
+   475→                  <Label className="text-xs font-semibold text-emerald-accent">أهم درس</Label>
+   476→                </div>
+   477→                <Input
+   478→                  placeholder="ماذا تعلّمت؟"
+   479→                  value={review.keyLesson || ''}
+   480→                  onChange={(e) => setReview((prev) => ({ ...prev, keyLesson: e.target.value }))}
+   481→                  className="text-sm h-9 border-emerald-accent/20 focus-visible:ring-emerald-accent/30"
+   482→                />
+   483→              </div>
+   484→            </div>
+   485→          </CardContent>
+   486→        </Card>
+   487→      </motion.div>
+   488→
+   489→      {/* Wins */}
+   490→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+   491→        <Card className="glass border-r-4 border-r-amber-500">
+   492→          <CardHeader className="pb-4">
+   493→            <CardTitle className="text-base flex items-center gap-2">
+   494→              <Trophy className="w-4 h-4 text-amber-500" />
+   495→              إنجازات وبطولات الشهر
+   496→            </CardTitle>
+   497→          </CardHeader>
+   498→          <CardContent>
+   499→            <Textarea
+   500→              placeholder="اكتب أهم إنجازاتك هذا الشهر..."
+   501→              value={review.wins}
+   502→              onChange={(e) => setReview((prev) => ({ ...prev, wins: e.target.value }))}
+   503→              rows={4}
+   504→              className="text-sm resize-none"
+   505→            />
+   506→          </CardContent>
+   507→        </Card>
+   508→      </motion.div>
+   509→
+   510→      {/* Categories */}
+   511→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+   512→        <Card className="glass border-r-4 border-r-emerald-accent">
+   513→          <CardHeader className="pb-4">
+   514→            <CardTitle className="text-base flex items-center gap-2">
+   515→              <Star className="w-4 h-4 text-emerald-accent" />
+   516→              مراجعة الفئات
+   517→            </CardTitle>
+   518→          </CardHeader>
+   519→          <CardContent className="space-y-6">
+   520→            {review.categories.map((cat) => {
+   521→              const Icon = cat.icon
+   522→              return (
+   523→                <div key={cat.id} className="space-y-3 p-4 rounded-xl bg-muted/20 border-r-3 border-r-border/30">
+   524→                  <div className="flex items-center justify-between">
+   525→                    <div className="flex items-center gap-2.5">
+   526→                      <div className={cn('p-2 rounded-lg bg-background', cat.color)}>
+   527→                        <Icon className="w-4 h-4" />
+   528→                      </div>
+   529→                      <span className="font-semibold text-sm">{cat.name}</span>
+   530→                    </div>
+   531→                    <div className="flex items-center gap-2">
+   532→                      <span className={cn('text-2xl font-bold', cat.color)}>{cat.score}</span>
+   533→                      <span className="text-sm text-muted-foreground">/ 10</span>
+   534→                    </div>
+   535→                  </div>
+   536→                  <Slider
+   537→                    value={[cat.score]}
+   538→                    onValueChange={([v]) => updateCategory(cat.id, 'score', v)}
+   539→                    max={10}
+   540→                    step={1}
+   541→                    className="mt-1"
+   542→                  />
+   543→                  <Textarea
+   544→                    placeholder={`ملاحظات عن ${cat.name}...`}
+   545→                    value={cat.notes}
+   546→                    onChange={(e) => updateCategory(cat.id, 'notes', e.target.value)}
+   547→                    rows={2}
+   548→                    className="text-sm resize-none"
+   549→                  />
+   550→                </div>
+   551→              )
+   552→            })}
+   553→          </CardContent>
+   554→        </Card>
+   555→      </motion.div>
+   556→
+   557→      {/* Goal Progress */}
+   558→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+   559→        <Card className="glass border-r-4 border-r-emerald-700 dark:border-r-emerald-400">
+   560→          <CardHeader className="pb-4">
+   561→            <CardTitle className="text-base flex items-center gap-2">
+   562→              <Award className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+   563→              تقدم الأهداف الشهرية
+   564→            </CardTitle>
+   565→          </CardHeader>
+   566→          <CardContent>
+   567→            <Textarea
+   568→              placeholder="كيف تقدمت في أهدافك الشهرية؟ ما الذي أنجزته؟"
+   569→              value={review.goalProgress}
+   570→              onChange={(e) => setReview((prev) => ({ ...prev, goalProgress: e.target.value }))}
+   571→              rows={4}
+   572→              className="text-sm resize-none"
+   573→            />
+   574→          </CardContent>
+   575→        </Card>
+   576→      </motion.div>
+   577→
+   578→      {/* Next Month Planning */}
+   579→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+   580→        <Card className="glass border-r-4 border-r-emerald-accent">
+   581→          <CardHeader className="pb-4">
+   582→            <CardTitle className="text-base flex items-center gap-2">
+   583→              <ArrowLeft className="w-4 h-4 text-emerald-accent" />
+   584→              تخطيط الشهر القادم
+   585→            </CardTitle>
+   586→          </CardHeader>
+   587→          <CardContent className="space-y-5">
+   588→            <div className="space-y-2">
+   589→              <Label className="text-sm font-medium flex items-center gap-1.5">
+   590→                <Target className="w-3.5 h-3.5 text-emerald-accent" />
+   591→                الأولويات القصوى
+   592→              </Label>
+   593→              <Textarea
+   594→                placeholder="ما هي أهم 3-5 أولويات للشهر القادم؟"
+   595→                value={review.nextPriorities}
+   596→                onChange={(e) => setReview((prev) => ({ ...prev, nextPriorities: e.target.value }))}
+   597→                rows={3}
+   598→                className="text-sm resize-none"
+   599→              />
+   600→            </div>
+   601→            <div className="space-y-2">
+   602→              <Label className="text-sm font-medium flex items-center gap-1.5">
+   603→                <Calendar className="w-3.5 h-3.5 text-amber-500" />
+   604→                أهداف الشهر القادم
+   605→              </Label>
+   606→              <Textarea
+   607→                placeholder="ماذا تريد أن تحقق الشهر القادم؟"
+   608→                value={review.nextGoals}
+   609→                onChange={(e) => setReview((prev) => ({ ...prev, nextGoals: e.target.value }))}
+   610→                rows={4}
+   611→                className="text-sm resize-none"
+   612→              />
+   613→            </div>
+   614→          </CardContent>
+   615→        </Card>
+   616→      </motion.div>
+   617→
+   618→      {/* Previous Reviews */}
+   619→      {allReviews.length > 1 && (
+   620→        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+   621→          <Card className="glass">
+   622→            <CardHeader className="pb-3">
+   623→              <CardTitle className="text-sm text-muted-foreground">المراجعات السابقة</CardTitle>
+   624→            </CardHeader>
+   625→            <CardContent>
+   626→              <div className="space-y-2 max-h-48 overflow-y-auto">
+   627→                {allReviews
+   628→                  .filter((r) => r.id !== review.id)
+   629→                  .slice(0, 5)
+   630→                  .map((r) => (
+   631→                    <div
+   632→                      key={r.id}
+   633→                      className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+   634→                      onClick={() => setReview(r)}
+   635→                    >
+   636→                      <div className="flex items-center gap-3">
+   637→                        <div className="w-10 h-10 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
+   638→                          <span className="text-lg font-bold text-emerald-accent">{r.score}</span>
+   639→                        </div>
+   640→                        <div>
+   641→                          <p className="text-xs font-medium">مراجعة الشهر</p>
+   642→                          <p className="text-[10px] text-muted-foreground">
+   643→                            {new Date(r.month + '-01').toLocaleDateString('ar', { year: 'numeric', month: 'long' })}
+   644→                          </p>
+   645→                        </div>
+   646→                      </div>
+   647→                      <ArrowLeft className="w-3.5 h-3.5 text-muted-foreground" />
+   648→                    </div>
+   649→                  ))}
+   650→              </div>
+   651→            </CardContent>
+   652→          </Card>
+   653→        </motion.div>
+   654→      )}
+   655→    </div>
+   656→  )
+   657→}

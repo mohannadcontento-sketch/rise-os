@@ -29,6 +29,9 @@ import {
   X,
   HardDrive,
   Heart,
+  Flame,
+  Trophy,
+  Star,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -138,6 +141,17 @@ export default function Settings() {
     return getLocalStorageSize()
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Fetch user stats
+  const [userStats, setUserStats] = useState<{ level: number; xp: number; xpToNext: number; streak: number } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/rise/dashboard')
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) setUserStats(data.user)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
@@ -293,20 +307,27 @@ export default function Settings() {
         <p className="text-sm text-muted-foreground mt-1">خصّص تجربتك في RiseOS</p>
       </div>
 
-      {/* Profile Section */}
+      {/* Profile Section with Stats */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent premium-card">
           <CardContent className="p-6">
-            <div className="flex items-center gap-5">
-              {/* Avatar with gradient */}
+            <div className="flex items-start gap-5">
+              {/* Avatar with gradient + animated glow */}
               <motion.div
-                className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-emerald-accent/25 relative"
+                className="relative"
                 whileHover={{ scale: 1.05, rotate: -3 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {settings.userName.charAt(0)}
-                <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
-                  <Check className="w-2.5 h-2.5 text-white" />
+                <motion.div
+                  className="absolute inset-[-4px] rounded-full bg-gradient-to-br from-emerald-accent via-forest to-gold"
+                  animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.05, 1] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-emerald-accent/25">
+                  {settings.userName.charAt(0)}
+                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-white" />
+                  </div>
                 </div>
               </motion.div>
               <div className="flex-1 space-y-3">
@@ -360,17 +381,44 @@ export default function Settings() {
                   <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">البريد</Label>
                   <p className="text-sm text-muted-foreground">user@riseos.app</p>
                 </div>
-              </div>
-              {/* Level Badge */}
-              <div className="text-center">
-                <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent text-xs px-3 py-1">
-                  المستوى ١
-                </Badge>
+                {/* Stats Row */}
+                <div className="flex items-center gap-3 pt-1">
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-accent/10 border border-emerald-accent/20"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-emerald-accent" />
+                    <span className="text-xs font-bold text-emerald-accent">المستوى {userStats?.level ?? 1}</span>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold/10 border border-gold/20"
+                  >
+                    <Star className="w-3.5 h-3.5 text-gold" />
+                    <span className="text-xs font-bold text-gold">{userStats?.xp ?? 0} XP</span>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20"
+                  >
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                    <span className="text-xs font-bold text-rose-500">{userStats?.streak ?? 0} يوم</span>
+                  </motion.div>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-amber-500/30 to-transparent" />
 
       {/* Appearance */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
@@ -436,6 +484,9 @@ export default function Settings() {
         </Card>
       </motion.div>
 
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-emerald-700/30 to-transparent" />
+
       {/* Notifications - Grouped */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-700 dark:border-r-emerald-400">
@@ -480,6 +531,9 @@ export default function Settings() {
         </Card>
       </motion.div>
 
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-emerald-accent/30 to-transparent" />
+
       {/* Morning Routine */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
@@ -519,6 +573,9 @@ export default function Settings() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-purple-500/30 to-transparent" />
 
       {/* Goals Settings */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -577,6 +634,9 @@ export default function Settings() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-blue-500/30 to-transparent" />
 
       {/* Data & Privacy */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
@@ -649,9 +709,18 @@ export default function Settings() {
         </Card>
       </motion.div>
 
-      {/* Danger Zone */}
+      {/* ── Gradient Divider (red) ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-destructive/30 to-transparent" />
+
+      {/* Danger Zone with red glow */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <div className="rounded-2xl border-2 border-dashed border-destructive/40 overflow-hidden hover:border-destructive/60 transition-colors group">
+        <div className="rounded-2xl border-2 border-dashed border-destructive/40 overflow-hidden hover:border-destructive/60 transition-colors group relative">
+          {/* Red glow effect */}
+          <motion.div
+            className="absolute inset-0 rounded-2xl pointer-events-none"
+            animate={{ boxShadow: ['inset 0 0 20px oklch(0.6 0.25 25 / 0.05)', 'inset 0 0 40px oklch(0.6 0.25 25 / 0.08)', 'inset 0 0 20px oklch(0.6 0.25 25 / 0.05)'] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          />
           <div className="bg-destructive/5 group-hover:bg-destructive/10 transition-colors p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2.5 rounded-xl bg-destructive/15">
@@ -723,9 +792,12 @@ export default function Settings() {
         </div>
       </motion.div>
 
-      {/* About RiseOS */}
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-muted-foreground/20 to-transparent" />
+
+      {/* About RiseOS with branding */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-muted-foreground/30">
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-muted-foreground/30 premium-card">
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2.5">
               <Info className="w-4 h-4 text-muted-foreground" />
@@ -762,6 +834,21 @@ export default function Settings() {
           </CardContent>
         </Card>
       </motion.div>
+      {/* Version Footer */}
+      <div className="text-center pt-4 pb-2">
+        <div className="h-[1px] bg-gradient-to-l from-transparent via-border to-transparent mb-4" />
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <motion.div
+            animate={{ rotate: [0, 360] }}
+            transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+          >
+            <Zap className="w-4 h-4 text-emerald-accent" />
+          </motion.div>
+          <span className="text-gradient-forest font-bold text-sm">RiseOS</span>
+        </div>
+        <p className="text-[10px] text-muted-foreground">نظام تشغيل الحياة — الإصدار ١.٠.٠</p>
+        <p className="text-[10px] text-muted-foreground/60 mt-1">صُنع بأيدٍ عربية 🇸🇦</p>
+      </div>
     </div>
   )
 }

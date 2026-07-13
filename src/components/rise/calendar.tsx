@@ -369,13 +369,14 @@ export default function CalendarView() {
                       <motion.button
                         key={i}
                         whileTap={{ scale: 0.92 }}
+                        whileHover={inMonth ? { scale: 1.08, zIndex: 10 } : {}}
                         onClick={() => setSelectedDate(isSelected ? null : day)}
                         className={cn(
                           'relative aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all text-sm font-medium',
                           !inMonth && 'text-muted-foreground/25',
-                          inMonth && !isTodayDate && !isSelected && 'text-foreground hover:bg-muted/40',
-                          isTodayDate && !isSelected && 'ring-2 ring-emerald-accent/50 bg-emerald-accent/5 text-emerald-accent font-bold',
-                          isSelected && 'bg-emerald-accent text-white shadow-lg shadow-emerald-accent/25',
+                          inMonth && !isTodayDate && !isSelected && 'text-foreground hover:glass hover:shadow-md',
+                          isTodayDate && !isSelected && 'ring-2 ring-emerald-accent/50 bg-emerald-accent/5 text-emerald-accent font-bold glow-emerald',
+                          isSelected && 'bg-gradient-to-br from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/30',
                         )}
                       >
                         <span
@@ -445,9 +446,9 @@ export default function CalendarView() {
                 exit={{ opacity: 0, x: 40 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               >
-                <Card className="glass border-r-4 border-r-emerald-accent overflow-hidden">
+                <Card className="glass border-r-4 border-r-emerald-accent overflow-hidden shadow-xl shadow-emerald-accent/10">
                   {/* Date Header */}
-                  <div className="bg-gradient-to-l from-emerald-accent/8 to-transparent px-4 pt-4 pb-3">
+                  <div className="bg-gradient-to-l from-emerald-accent/10 to-forest/5 px-4 pt-4 pb-3">
                     <div className="flex items-center justify-between mb-2">
                       <div>
                         <p className="text-2xl font-bold">{format(selectedDate, 'd', { locale: ar })}</p>
@@ -570,8 +571,8 @@ export default function CalendarView() {
 
           {/* Today's Tasks (when no date selected) */}
           {!selectedDate && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Card className="glass">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="glass premium-card">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <CalendarDays className="w-4 h-4 text-emerald-accent" />
@@ -580,11 +581,26 @@ export default function CalendarView() {
                 </CardHeader>
                 <CardContent>
                   {todayTasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">لا توجد مهام لهذا اليوم</p>
+                    <div className="text-center py-8">
+                      <motion.div
+                        animate={{ y: [0, -5, 0] }}
+                        transition={{ duration: 2.5, repeat: Infinity }}
+                      >
+                        <CalendarDays className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+                      </motion.div>
+                      <p className="text-sm text-muted-foreground">لا توجد مهام لهذا اليوم</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">استمتع بيومك الخالي من المهام! 🎉</p>
+                    </div>
                   ) : (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {todayTasks.map((task) => (
-                        <div key={task.id} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+                      {todayTasks.map((task, idx) => (
+                        <motion.div
+                          key={task.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-muted/30 transition-colors group"
+                        >
                           {task.status === 'done' ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-accent mt-0.5 shrink-0" />
                           ) : (
@@ -604,7 +620,7 @@ export default function CalendarView() {
                               <div className={cn('w-2 h-2 rounded-full', priorityColors[task.priority] || 'bg-muted')} />
                             </div>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   )}

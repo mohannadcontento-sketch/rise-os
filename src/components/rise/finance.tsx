@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PieChart,
@@ -37,6 +37,9 @@ import {
   Briefcase,
   Heart,
   Sparkles,
+  Shield,
+  AlertTriangle,
+  Target,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -125,7 +128,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 }
 
 const EMPTY_FORM = {
@@ -135,6 +138,29 @@ const EMPTY_FORM = {
   amount: 0,
   date: new Date().toISOString().split('T')[0],
   recurring: false,
+}
+
+/* ────────────── Budget System ────────────── */
+
+interface BudgetCategory {
+  name: string
+  limit: number
+  icon: React.ElementType
+}
+
+const DEFAULT_BUDGET_CATEGORIES: BudgetCategory[] = [
+  { name: 'سكن', limit: 2000, icon: Home },
+  { name: 'غذاء', limit: 1500, icon: Utensils },
+  { name: 'تنقل', limit: 800, icon: Car },
+  { name: 'اشتراكات', limit: 300, icon: CreditCard },
+  { name: 'صحة', limit: 500, icon: Heart },
+  { name: 'ترفيه', limit: 400, icon: Gift },
+  { name: 'تعليم', limit: 600, icon: GraduationCap },
+  { name: 'أخرى', limit: 500, icon: Receipt },
+]
+
+function toArabicNum(n: number): string {
+  return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
 }
 
 /* ────────────── Component ────────────── */
@@ -147,6 +173,35 @@ export default function Finance() {
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const [form, setForm] = useState({ ...EMPTY_FORM })
+
+  /* ─── Budget State ─── */
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(DEFAULT_BUDGET_CATEGORIES)
+  const [editingBudget, setEditingBudget] = useState<string | null>(null)
+  const budgetEditRef = useRef<HTMLInputElement>(null)
+  const [budgetImpact, setBudgetImpact] = useState<{ category: string; remaining: number; over: boolean } | null>(null)
+
+  // Load budgets from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rise-finance-budgets')
+      if (stored) {
+        const parsed = JSON.parse(stored) as Record<string, number>
+        setBudgetCategories(prev =>
+          prev.map(cat => ({
+            ...cat,
+            limit: parsed[cat.name] ?? cat.limit,
+          }))
+        )
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  // Save budgets to localStorage
+  const saveBudgets = useCallback((categories: BudgetCategory[]) => {
+    const map: Record<string, number> = {}
+    categories.forEach(cat => { map[cat.name] = cat.limit })
+    localStorage.setItem('rise-finance-budgets', JSON.stringify(map))
+  }, [])
 
   /* ─── Fetch ─── */
   const fetchFinance = useCallback(async () => {
@@ -182,6 +237,19 @@ export default function Finance() {
       })
       if (res.ok) {
         toast.success('تم إضافة السجل بنجاح ✨')
+        // Show budget impact
+        if (form.type === 'مصروف' && form.category && form.amount > 0) {
+          const budgetItem = budgetData.items.find(b => b.name === form.category)
+          if (budgetItem) {
+            const newRemaining = budgetItem.remaining - form.amount
+            setBudgetImpact({
+              category: form.category,
+              remaining: newRemaining,
+              over: newRemaining < 0,
+            })
+            setTimeout(() => setBudgetImpact(null), 4000)
+          }
+        }
         setDialogOpen(false)
         setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
         fetchFinance()
@@ -224,6 +292,51 @@ export default function Finance() {
     const investment = records.filter((r) => r.type === 'استثمار').reduce((sum, r) => sum + r.amount, 0)
     return { income, expenses, savings, investment }
   }, [data])
+
+  /* ─── Budget Computation ─── */
+  const budgetData = useMemo(() => {
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const monthExpenses = (data?.records || []).filter(
+      (r) => r.type === 'مصروف' && r.date.startsWith(currentMonth)
+    )
+
+    const categorySpending: Record<string, number> = {}
+    monthExpenses.forEach((r) => {
+      categorySpending[r.category] = (categorySpending[r.category] || 0) + r.amount
+    })
+
+    let totalBudget = 0
+    let totalSpent = 0
+    let totalRemaining = 0
+    let healthSum = 0
+    let categoriesWithBudget = 0
+
+    const items = budgetCategories.map((cat) => {
+      const spent = categorySpending[cat.name] || 0
+      const remaining = Math.max(cat.limit - spent, 0)
+      const percentage = cat.limit > 0 ? (spent / cat.limit) * 100 : 0
+
+      totalBudget += cat.limit
+      totalSpent += spent
+      totalRemaining += remaining
+      categoriesWithBudget++
+
+      // Health: 100 if 0% spent, 0 if >= 100% spent, linear in between
+      const health = Math.max(0, Math.min(100, 100 - percentage))
+      healthSum += health
+
+      let barColor = 'bg-emerald-accent'
+      if (percentage >= 100) barColor = 'bg-red-500'
+      else if (percentage >= 80) barColor = 'bg-gold'
+
+      return { ...cat, spent, remaining, percentage, health, barColor }
+    })
+
+    const overallHealth = categoriesWithBudget > 0 ? Math.round(healthSum / categoriesWithBudget) : 100
+
+    return { items, totalBudget, totalSpent, totalRemaining, overallHealth }
+  }, [data, budgetCategories])
 
   /* ─── Grouped Records ─── */
   const groupedRecords = useMemo(() => {
@@ -451,6 +564,183 @@ export default function Finance() {
             </div>
           </DialogContent>
         </Dialog>
+      </motion.div>
+
+      {/* ══════════ Budget Section ══════════ */}
+      <motion.div variants={itemVariants}>
+        <Card className="glass border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Target className="w-4 h-4 text-emerald-accent" />
+                الميزانية الشهرية
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                {/* Budget Health Indicator */}
+                <div className="flex items-center gap-2">
+                  <div className="relative w-8 h-8">
+                    <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+                      <circle cx="16" cy="16" r="13" fill="none" className="stroke-primary/10" strokeWidth="3" />
+                      <motion.circle
+                        cx="16"
+                        cy="16"
+                        r="13"
+                        fill="none"
+                        className={
+                          budgetData.overallHealth >= 60 ? 'stroke-emerald-accent' :
+                          budgetData.overallHealth >= 30 ? 'stroke-gold' : 'stroke-red-500'
+                        }
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeDasharray={13 * 2 * Math.PI}
+                        initial={{ strokeDashoffset: 13 * 2 * Math.PI }}
+                        animate={{ strokeDashoffset: 13 * 2 * Math.PI * (1 - budgetData.overallHealth / 100) }}
+                        transition={{ duration: 1, ease: 'easeOut' }}
+                      />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-foreground">
+                      {toArabicNum(budgetData.overallHealth)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-muted-foreground">صحة الميزانية</p>
+                    <p className={cn(
+                      'text-xs font-bold',
+                      budgetData.overallHealth >= 60 ? 'text-emerald-accent' :
+                      budgetData.overallHealth >= 30 ? 'text-gold' : 'text-red-500'
+                    )}>
+                      {budgetData.overallHealth >= 60 ? 'ممتازة' : budgetData.overallHealth >= 30 ? 'متوسطة' : 'حرجة'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Budget Impact Alert */}
+            <AnimatePresence>
+              {budgetImpact && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className={cn(
+                    'mb-4 p-3 rounded-xl flex items-center gap-2 text-sm font-medium',
+                    budgetImpact.over
+                      ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                      : 'bg-emerald-accent/10 text-emerald-accent border border-emerald-accent/20'
+                  )}
+                >
+                  {budgetImpact.over ? (
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <Shield className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>
+                    {budgetImpact.over
+                      ? `تجاوزت ميزانية "${budgetImpact.category}"! المتبقي: ${toArabicNum(Math.abs(budgetImpact.remaining))} ر.س`
+                      : `المتبقي من "${budgetImpact.category}": ${toArabicNum(budgetImpact.remaining)} ر.س`
+                    }
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Total Remaining */}
+            <div className="text-center mb-5">
+              <p className="text-[11px] text-muted-foreground mb-1">المتبقي من الميزانية هذا الشهر</p>
+              <p className={cn(
+                'text-3xl font-black tracking-tight',
+                budgetData.totalRemaining > budgetData.totalBudget * 0.3
+                  ? 'text-emerald-accent'
+                  : budgetData.totalRemaining > 0
+                    ? 'text-gold'
+                    : 'text-red-500'
+              )}>
+                {toArabicNum(budgetData.totalRemaining)}
+                <span className="text-sm font-normal text-muted-foreground mr-1">ر.س</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                أنفقت {toArabicNum(budgetData.totalSpent)} من {toArabicNum(budgetData.totalBudget)} ر.س
+              </p>
+            </div>
+
+            {/* Category Budget Bars */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {budgetData.items.map((item) => {
+                const Icon = item.icon
+                return (
+                  <div
+                    key={item.name}
+                    className="rounded-xl bg-muted/20 p-3 space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center">
+                          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {editingBudget === item.name ? (
+                          <input
+                            ref={budgetEditRef}
+                            type="number"
+                            defaultValue={item.limit}
+                            min={0}
+                            className="w-20 h-6 text-xs text-left rounded-md bg-muted border border-primary/20 px-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-accent/50"
+                            dir="ltr"
+                            onBlur={(e) => {
+                              const val = parseFloat(e.target.value) || 0
+                              const updated = budgetCategories.map(c =>
+                                c.name === item.name ? { ...c, limit: val } : c
+                              )
+                              setBudgetCategories(updated)
+                              saveBudgets(updated)
+                              setEditingBudget(null)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur()
+                              }
+                            }}
+                            autoFocus
+                          />
+                        ) : (
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setEditingBudget(item.name)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-1.5 py-0.5 rounded hover:bg-primary/5 transition-colors"
+                          >
+                            {toArabicNum(item.limit)} ر.س
+                          </motion.button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
+                      <motion.div
+                        className={cn('h-full rounded-full', item.barColor)}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(item.percentage, 100)}%` }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>أنفقت {toArabicNum(Math.round(item.spent))}</span>
+                      <span className={cn(
+                        item.percentage >= 100 ? 'text-red-500 font-semibold' :
+                        item.percentage >= 80 ? 'text-gold font-medium' : ''
+                      )}>
+                        {item.percentage >= 100 ? 'تجاوز!' : `${toArabicNum(Math.round(100 - item.percentage))}٪ متبقي`}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Summary Cards with colored left borders and trend arrows */}
@@ -774,10 +1064,9 @@ export default function Finance() {
                                 layout
                                 initial={{ opacity: 0, x: 10, scale: 0.97 }}
                                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                                exit={{ opacity: 0, x: -30, scale: 0.9, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
+                                exit={{ opacity: 0, x: -30, scale: 0.9, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.3, ease: 'easeIn' as const } }}
                                 transition={{
                                   layout: { duration: 0.3 },
-                                  exit: { duration: 0.3, ease: 'easeIn' },
                                 }}
                                 className={cn(
                                   'flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden',
