@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
 
+// Vercel: extend serverless function timeout to 30s for cold starts
+export const maxDuration = 30
+
 const USER_ID = 'rise-default-user'
 
 export async function GET() {
