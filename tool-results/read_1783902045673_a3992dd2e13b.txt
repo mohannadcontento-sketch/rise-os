@@ -1,0 +1,1246 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Sun,
+     7→     7→  CloudSun,
+     8→     8→  Moon,
+     9→     9→  Plus,
+    10→    10→  X,
+    11→    11→  Circle,
+    12→    12→  CheckCircle2,
+    13→    13→  Star,
+    14→    14→  Clock,
+    15→    15→  CalendarDays,
+    16→    16→  Sparkles,
+    17→    17→  Coffee,
+    18→    18→  BookOpen,
+    19→    19→  Briefcase,
+    20→    20→  Utensils,
+    21→    21→  Dumbbell,
+    22→    22→  Flag,
+    23→    23→  ChevronDown,
+    24→    24→  ChevronUp,
+    25→    25→  GripVertical,
+    26→    26→  Trash2,
+    27→    27→  ListTodo,
+    28→    28→  Highlighter,
+    29→    29→  StickyNote,
+    30→    30→  Timer,
+    31→    31→} from 'lucide-react'
+    32→    32→import { Card, CardContent } from '@/components/ui/card'
+    33→    33→import { Button } from '@/components/ui/button'
+    34→    34→import { Badge } from '@/components/ui/badge'
+    35→    35→import { Checkbox } from '@/components/ui/checkbox'
+    36→    36→import { Input } from '@/components/ui/input'
+    37→    37→import { Textarea } from '@/components/ui/textarea'
+    38→    38→import {
+    39→    39→  Dialog,
+    40→    40→  DialogContent,
+    41→    41→  DialogHeader,
+    42→    42→  DialogTitle,
+    43→    43→  DialogTrigger,
+    44→    44→} from '@/components/ui/dialog'
+    45→    45→import { cn } from '@/lib/utils'
+    46→    46→import { toast } from 'sonner'
+    47→    47→
+    48→    48→/* ────────────── Types ────────────── */
+    49→    49→
+    50→    50→interface PlannerItem {
+    51→    51→  id: string
+    52→    52→  text: string
+    53→    53→  done: boolean
+    54→    54→  isPriority: boolean
+    55→    55→  createdAt: string
+    56→    56→  timeLabel?: string
+    57→    57→}
+    58→    58→
+    59→    59→interface PlannerSection {
+    60→    60→  id: 'morning' | 'noon' | 'evening'
+    61→    61→  title: string
+    62→    62→  subtitle: string
+    63→    63→  timeRange: string
+    64→    64→  icon: React.ElementType
+    65→    65→  color: string
+    66→    66→  bgGradient: string
+    67→    67→  iconBg: string
+    68→    68→  accentColor: string
+    69→    69→  hours: number[]
+    70→    70→}
+    71→    71→
+    72→    72→interface PlannerData {
+    73→    73→  date: string
+    74→    74→  items: PlannerItem[]
+    75→    75→  priorities: string[]
+    76→    76→}
+    77→    77→
+    78→    78→interface QuickNote {
+    79→    79→  id: string
+    80→    80→  text: string
+    81→    81→  createdAt: string
+    82→    82→}
+    83→    83→
+    84→    84→/* ────────────── Constants ────────────── */
+    85→    85→
+    86→    86→const STORAGE_KEY = 'rise-daily-planner'
+    87→    87→const NOTES_STORAGE_KEY = 'rise-quick-notes'
+    88→    88→
+    89→    89→const SECTIONS: PlannerSection[] = [
+    90→    90→  {
+    91→    91→    id: 'morning',
+    92→    92→    title: 'الصباح',
+    93→    93→    subtitle: 'بداية يومك بإيجابية وتركيز',
+    94→    94→    timeRange: '٦:٠٠ – ١٢:٠٠',
+    95→    95→    icon: Sun,
+    96→    96→    color: 'text-amber-600 dark:text-amber-400',
+    97→    97→    bgGradient: 'from-amber-50/80 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10',
+    98→    98→    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+    99→    99→    accentColor: 'border-amber-200/60 dark:border-amber-800/40',
+   100→   100→    hours: [6, 7, 8, 9, 10, 11],
+   101→   101→  },
+   102→   102→  {
+   103→   103→    id: 'noon',
+   104→   104→    title: 'الظهر',
+   105→   105→    subtitle: 'استمر في الإنتاجية والإنجاز',
+   106→   106→    timeRange: '١٢:٠٠ – ١٧:٠٠',
+   107→   107→    icon: CloudSun,
+   108→   108→    color: 'text-emerald-accent',
+   109→   109→    bgGradient: 'from-emerald-50/80 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10',
+   110→   110→    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
+   111→   111→    accentColor: 'border-emerald-accent/20 dark:border-emerald-accent/15',
+   112→   112→    hours: [12, 13, 14, 15, 16],
+   113→   113→  },
+   114→   114→  {
+   115→   115→    id: 'evening',
+   116→   116→    title: 'المساء',
+   117→   117→    subtitle: 'اختم يومك بهدوء واستعداد',
+   118→   118→    timeRange: '١٧:٠٠ – ٢٢:٠٠',
+   119→   119→    icon: Moon,
+   120→   120→    color: 'text-forest',
+   121→   121→    bgGradient: 'from-sky-50/80 to-indigo-50/30 dark:from-sky-950/20 dark:to-indigo-950/10',
+   122→   122→    iconBg: 'bg-sky-100 dark:bg-sky-900/30',
+   123→   123→    accentColor: 'border-forest/15 dark:border-forest/10',
+   124→   124→    hours: [17, 18, 19, 20, 21, 22],
+   125→   125→  },
+   126→   126→]
+   127→   127→
+   128→   128→const QUICK_SUGGESTIONS: Record<string, { text: string; icon: React.ElementType }[]> = {
+   129→   129→  morning: [
+   130→   130→    { text: 'صلاة الفجر وأذكار الصباح', icon: Sparkles },
+   131→   131→    { text: 'روتين الرياضة والتمارين', icon: Dumbbell },
+   132→   132→    { text: 'قراءة ٣٠ دقيقة', icon: BookOpen },
+   133→   133→    { text: 'مراجعة أهداف اليوم', icon: Flag },
+   134→   134→    { text: 'فطور صحي', icon: Coffee },
+   135→   135→  ],
+   136→   136→  noon: [
+   137→   137→    { text: 'جلسة عمل عميق', icon: Briefcase },
+   138→   138→    { text: 'مراجعة المهام المعلقة', icon: ListTodo },
+   139→   139→    { text: 'غداء واستراحة قصيرة', icon: Utensils },
+   140→   140→    { text: 'متابعة المشروع الحالي', icon: Briefcase },
+   141→   141→    { text: 'تعلم شيء جديد', icon: BookOpen },
+   142→   142→  ],
+   143→   143→  evening: [
+   144→   144→    { text: 'مراجعة إنجازات اليوم', icon: CheckCircle2 },
+   145→   145→    { text: 'كتابة اليوميات', icon: Highlighter },
+   146→   146→    { text: 'وقت العائلة', icon: Sparkles },
+   147→   147→    { text: 'قراءة قبل النوم', icon: BookOpen },
+   148→   148→    { text: 'تخطيط الغد', icon: CalendarDays },
+   149→   149→  ],
+   150→   150→}
+   151→   151→
+   152→   152→function arabicNum(n: number): string {
+   153→   153→  const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩']
+   154→   154→  return String(n).replace(/[0-9]/g, (d) => digits[parseInt(d)])
+   155→   155→}
+   156→   156→
+   157→   157→function getTodayStr() {
+   158→   158→  return new Date().toISOString().split('T')[0]
+   159→   159→}
+   160→   160→
+   161→   161→function getArabicDate() {
+   162→   162→  const now = new Date()
+   163→   163→  const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+   164→   164→  const monthNames = [
+   165→   165→    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+   166→   166→    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+   167→   167→  ]
+   168→   168→  const day = dayNames[now.getDay()]
+   169→   169→  const date = arabicNum(now.getDate())
+   170→   170→  const month = monthNames[now.getMonth()]
+   171→   171→  const year = arabicNum(now.getFullYear())
+   172→   172→  return day + '\u060C ' + date + ' ' + month + ' ' + year
+   173→   173→}
+   174→   174→
+   175→   175→function formatHour(h: number): string {
+   176→   176→  const period = h < 12 ? 'ص' : 'م'
+   177→   177→  const displayHour = h > 12 ? h - 12 : h === 0 ? 12 : h
+   178→   178→  return `${arabicNum(displayHour)}:٠٠ ${period}`
+   179→   179→}
+   180→   180→
+   181→   181→function generateId() {
+   182→   182→  return Date.now().toString(36) + Math.random().toString(36).substring(2, 7)
+   183→   183→}
+   184→   184→
+   185→   185→function getCurrentHour() {
+   186→   186→  return new Date().getHours()
+   187→   187→}
+   188→   188→
+   189→   189→/* ────────────── Storage Helpers ────────────── */
+   190→   190→
+   191→   191→function loadPlannerData(): PlannerData {
+   192→   192→  if (typeof window === 'undefined') {
+   193→   193→    return { date: getTodayStr(), items: [], priorities: [] }
+   194→   194→  }
+   195→   195→  try {
+   196→   196→    const raw = localStorage.getItem(STORAGE_KEY)
+   197→   197→    if (raw) {
+   198→   198→      const parsed = JSON.parse(raw) as PlannerData
+   199→   199→      if (parsed.date === getTodayStr()) return parsed
+   200→   200→    }
+   201→   201→  } catch {
+   202→   202→    // ignore
+   203→   203→  }
+   204→   204→  return { date: getTodayStr(), items: [], priorities: [] }
+   205→   205→}
+   206→   206→
+   207→   207→function savePlannerData(data: PlannerData) {
+   208→   208→  try {
+   209→   209→    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+   210→   210→  } catch {
+   211→   211→    // ignore
+   212→   212→  }
+   213→   213→}
+   214→   214→
+   215→   215→function loadNotes(): QuickNote[] {
+   216→   216→  if (typeof window === 'undefined') return []
+   217→   217→  try {
+   218→   218→    const raw = localStorage.getItem(NOTES_STORAGE_KEY)
+   219→   219→    if (raw) return JSON.parse(raw)
+   220→   220→  } catch { /* ignore */ }
+   221→   221→  return []
+   222→   222→}
+   223→   223→
+   224→   224→function saveNotes(notes: QuickNote[]) {
+   225→   225→  try {
+   226→   226→    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes))
+   227→   227→  } catch { /* ignore */ }
+   228→   228→}
+   229→   229→
+   230→   230→/* ────────────── Quick Suggest Button ────────────── */
+   231→   231→
+   232→   232→function SuggestButton({
+   233→   233→  text,
+   234→   234→  icon: Icon,
+   235→   235→  onAdd,
+   236→   236→}: {
+   237→   237→  text: string
+   238→   238→  icon: React.ElementType
+   239→   239→  onAdd: (text: string) => void
+   240→   240→}) {
+   241→   241→  return (
+   242→   242→    <motion.button
+   243→   243→      whileHover={{ scale: 1.02 }}
+   244→   244→      whileTap={{ scale: 0.97 }}
+   245→   245→      onClick={() => onAdd(text)}
+   246→   246→      className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium
+   247→   247→        bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground
+   248→   248→        transition-all duration-200 border border-transparent hover:border-border/50"
+   249→   249→    >
+   250→   250→      <Icon className="w-3.5 h-3.5 shrink-0" />
+   251→   251→      <span className="truncate">{text}</span>
+   252→   252→    </motion.button>
+   253→   253→  )
+   254→   254→}
+   255→   255→
+   256→   256→/* ────────────── Empty State ────────────── */
+   257→   257→
+   258→   258→function EmptyState({ section }: { section: PlannerSection }) {
+   259→   259→  const Icon = section.icon
+   260→   260→  return (
+   261→   261→    <motion.div
+   262→   262→      initial={{ opacity: 0, y: 8 }}
+   263→   263→      animate={{ opacity: 1, y: 0 }}
+   264→   264→      className="flex flex-col items-center justify-center py-8 text-center"
+   265→   265→    >
+   266→   266→      <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center mb-3', section.iconBg)}>
+   267→   267→        <Icon className={cn('w-7 h-7', section.color, 'opacity-40')} />
+   268→   268→      </div>
+   269→   269→      <p className="text-sm font-medium text-muted-foreground mb-1">لا توجد مهام بعد</p>
+   270→   270→      <p className="text-xs text-muted-foreground/60">أضف مهامك أو اختر من الاقتراحات أدناه</p>
+   271→   271→    </motion.div>
+   272→   272→  )
+   273→   273→}
+   274→   274→
+   275→   275→/* ────────────── Planner Item ────────────── */
+   276→   276→
+   277→   277→function PlannerItemRow({
+   278→   278→  item,
+   279→   279→  section,
+   280→   280→  index,
+   281→   281→  onToggle,
+   282→   282→  onDelete,
+   283→   283→  onTogglePriority,
+   284→   284→}: {
+   285→   285→  item: PlannerItem
+   286→   286→  section: PlannerSection
+   287→   287→  index: number
+   288→   288→  onToggle: (id: string) => void
+   289→   289→  onDelete: (id: string) => void
+   290→   290→  onTogglePriority: (id: string) => void
+   291→   291→}) {
+   292→   292→  const createdHour = new Date(item.createdAt).getHours()
+   293→   293→  const period = createdHour < 12 ? 'ص' : 'م'
+   294→   294→  const displayHour = createdHour > 12 ? createdHour - 12 : createdHour === 0 ? 12 : createdHour
+   295→   295→  const timeStr = `${arabicNum(displayHour)}:${arabicNum(new Date(item.createdAt).getMinutes())} ${period}`
+   296→   296→
+   297→   297→  return (
+   298→   298→    <motion.div
+   299→   299→      layout
+   300→   300→      initial={{ opacity: 0, y: 8 }}
+   301→   301→      animate={{ opacity: 1, y: 0 }}
+   302→   302→      exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
+   303→   303→      className={cn(
+   304→   304→        'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
+   305→   305→        'hover:bg-background/80 hover:shadow-md hover:scale-[1.005] backdrop-blur-sm',
+   306→   306→        item.done && 'opacity-50'
+   307→   307→      )}
+   308→   308→    >
+   309→   309→      {/* Time indicator */}
+   310→   310→      <div className="flex items-center gap-1 shrink-0 w-12">
+   311→   311→        <Clock className="w-3 h-3 text-muted-foreground/40" />
+   312→   312→        <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">{timeStr}</span>
+   313→   313→      </div>
+   314→   314→
+   315→   315→      {/* Drag handle (visual only) */}
+   316→   316→      <div className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
+   317→   317→        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+   318→   318→      </div>
+   319→   319→
+   320→   320→      {/* Checkbox */}
+   321→   321→      <motion.div whileTap={{ scale: 0.9 }}>
+   322→   322→        <Checkbox
+   323→   323→          checked={item.done}
+   324→   324→          onCheckedChange={() => onToggle(item.id)}
+   325→   325→          className={cn(
+   326→   326→            'w-[18px] h-[18px] rounded-md border-2',
+   327→   327→            item.done
+   328→   328→              ? 'border-emerald-accent bg-emerald-accent text-white data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+   329→   329→              : 'border-muted-foreground/25'
+   330→   330→          )}
+   331→   331→        />
+   332→   332→      </motion.div>
+   333→   333→
+   334→   334→      {/* Text */}
+   335→   335→      <span
+   336→   336→        className={cn(
+   337→   337→          'flex-1 text-sm transition-all duration-300 leading-relaxed',
+   338→   338→          item.done ? 'line-through text-muted-foreground' : 'text-foreground'
+   339→   339→        )}
+   340→   340→      >
+   341→   341→        {item.text}
+   342→   342→      </span>
+   343→   343→
+   344→   344→      {/* Priority star */}
+   345→   345→      <motion.button
+   346→   346→        whileTap={{ scale: 0.85 }}
+   347→   347→        onClick={() => onTogglePriority(item.id)}
+   348→   348→        className={cn(
+   349→   349→          'p-1 rounded-lg transition-all duration-200',
+   350→   350→          item.isPriority
+   351→   351→            ? 'text-gold'
+   352→   352→            : 'text-muted-foreground/0 group-hover:text-muted-foreground/30 hover:!text-gold/60'
+   353→   353→        )}
+   354→   354→      >
+   355→   355→        {item.isPriority ? (
+   356→   356→          <Star className="w-3.5 h-3.5 fill-gold" />
+   357→   357→        ) : (
+   358→   358→          <Star className="w-3.5 h-3.5" />
+   359→   359→        )}
+   360→   360→      </motion.button>
+   361→   361→
+   362→   362→      {/* Delete button */}
+   363→   363→      <motion.button
+   364→   364→        whileTap={{ scale: 0.85 }}
+   365→   365→        onClick={() => onDelete(item.id)}
+   366→   366→        className="p-1 rounded-lg text-muted-foreground/0 group-hover:text-muted-foreground/40 hover:!text-destructive/70 hover:!bg-destructive/10 transition-all duration-200"
+   367→   367→      >
+   368→   368→        <X className="w-3.5 h-3.5" />
+   369→   369→      </motion.button>
+   370→   370→    </motion.div>
+   371→   371→  )
+   372→   372→}
+   373→   373→
+   374→   374→/* ────────────── Section Card ────────────── */
+   375→   375→
+   376→   376→function SectionCard({
+   377→   377→  section,
+   378→   378→  items,
+   379→   379→  suggestions,
+   380→   380→  onAddItem,
+   381→   381→  onToggleItem,
+   382→   382→  onDeleteItem,
+   383→   383→  onTogglePriority,
+   384→   384→  isCurrentSection,
+   385→   385→  index,
+   386→   386→}: {
+   387→   387→  section: PlannerSection
+   388→   388→  items: PlannerItem[]
+   389→   389→  suggestions: { text: string; icon: React.ElementType }[]
+   390→   390→  onAddItem: (sectionId: string, text: string) => void
+   391→   391→  onToggleItem: (id: string) => void
+   392→   392→  onDeleteItem: (id: string) => void
+   393→   393→  onTogglePriority: (id: string) => void
+   394→   394→  isCurrentSection: boolean
+   395→   395→  index: number
+   396→   396→}) {
+   397→   397→  const [inputValue, setInputValue] = useState('')
+   398→   398→  const [showSuggestions, setShowSuggestions] = useState(false)
+   399→   399→  const [isCollapsed, setIsCollapsed] = useState(false)
+   400→   400→  const inputRef = useRef<HTMLInputElement>(null)
+   401→   401→
+   402→   402→  const completedCount = items.filter((i) => i.done).length
+   403→   403→  const totalCount = items.length
+   404→   404→  const sectionProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+   405→   405→  const allDone = totalCount > 0 && completedCount === totalCount
+   406→   406→
+   407→   407→  const handleAdd = useCallback(() => {
+   408→   408→    const trimmed = inputValue.trim()
+   409→   409→    if (!trimmed) return
+   410→   410→    onAddItem(section.id, trimmed)
+   411→   411→    setInputValue('')
+   412→   412→    inputRef.current?.focus()
+   413→   413→  }, [inputValue, onAddItem, section.id])
+   414→   414→
+   415→   415→  const handleKeyDown = (e: React.KeyboardEvent) => {
+   416→   416→    if (e.key === 'Enter') handleAdd()
+   417→   417→  }
+   418→   418→
+   419→   419→  const handleSuggestion = (text: string) => {
+   420→   420→    onAddItem(section.id, text)
+   421→   421→    setShowSuggestions(false)
+   422→   422→  }
+   423→   423→
+   424→   424→  const Icon = section.icon
+   425→   425→
+   426→   426→  return (
+   427→   427→    <motion.div
+   428→   428→      initial={{ opacity: 0, y: 20 }}
+   429→   429→      animate={{ opacity: 1, y: 0 }}
+   430→   430→      transition={{ duration: 0.5, delay: 0.05 + index * 0.08 }}
+   431→   431→    >
+   432→   432→      <Card
+   433→   433→        className={cn(
+   434→   434→          'overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-md transition-shadow duration-300 gap-0',
+   435→   435→          isCurrentSection && 'ring-1 ring-emerald-accent/30'
+   436→   436→        )}
+   437→   437→      >
+   438→   438→        {/* Section Header */}
+   439→   439→        <div className={cn('px-5 pt-5 pb-3 bg-gradient-to-b', section.bgGradient)}>
+   440→   440→          <div className="flex items-center justify-between">
+   441→   441→            <div className="flex items-center gap-3">
+   442→   442→              <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', section.iconBg)}>
+   443→   443→                <Icon className={cn('w-5 h-5', section.color)} />
+   444→   444→              </div>
+   445→   445→              <div>
+   446→   446→                <div className="flex items-center gap-2">
+   447→   447→                  <h3 className={cn('text-lg font-bold', section.color)}>{section.title}</h3>
+   448→   448→                  {isCurrentSection && (
+   449→   449→                    <Badge className="text-[10px] px-1.5 py-0 bg-emerald-accent/15 text-emerald-accent border-emerald-accent/20">
+   450→   450→                      الآن
+   451→   451→                    </Badge>
+   452→   452→                  )}
+   453→   453→                  {allDone && (
+   454→   454→                    <motion.div
+   455→   455→                      initial={{ scale: 0 }}
+   456→   456→                      animate={{ scale: 1 }}
+   457→   457→                      transition={{ type: 'spring', damping: 12 }}
+   458→   458→                    >
+   459→   459→                      <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
+   460→   460→                    </motion.div>
+   461→   461→                  )}
+   462→   462→                </div>
+   463→   463→                <p className="text-[11px] text-muted-foreground">{section.timeRange} · {section.subtitle}</p>
+   464→   464→              </div>
+   465→   465→            </div>
+   466→   466→            <div className="flex items-center gap-2">
+   467→   467→              {totalCount > 0 && (
+   468→   468→                <span className={cn('text-sm font-semibold', allDone ? 'text-emerald-accent' : 'text-muted-foreground')}>
+   469→   469→                  {arabicNum(completedCount)}/{arabicNum(totalCount)}
+   470→   470→                </span>
+   471→   471→              )}
+   472→   472→              <motion.button
+   473→   473→                whileTap={{ scale: 0.9 }}
+   474→   474→                onClick={() => setIsCollapsed(!isCollapsed)}
+   475→   475→                className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
+   476→   476→              >
+   477→   477→                {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+   478→   478→              </motion.button>
+   479→   479→            </div>
+   480→   480→          </div>
+   481→   481→          {/* Mini progress */}
+   482→   482→          {totalCount > 0 && (
+   483→   483→            <div className="mt-3 h-1 rounded-full bg-muted/40 overflow-hidden">
+   484→   484→              <motion.div
+   485→   485→                className={cn('h-full rounded-full', allDone ? 'bg-emerald-accent' : section.color.replace('text-', 'bg-'))}
+   486→   486→                animate={{ width: `${sectionProgress}%` }}
+   487→   487→                transition={{ duration: 0.4, ease: 'easeOut' }}
+   488→   488→              />
+   489→   489→            </div>
+   490→   490→          )}
+   491→   491→        </div>
+   492→   492→
+   493→   493→        <AnimatePresence>
+   494→   494→          {!isCollapsed && (
+   495→   495→            <motion.div
+   496→   496→              initial={{ height: 0, opacity: 0 }}
+   497→   497→              animate={{ height: 'auto', opacity: 1 }}
+   498→   498→              exit={{ height: 0, opacity: 0 }}
+   499→   499→              transition={{ duration: 0.3, ease: 'easeInOut' }}
+   500→   500→            >
+   501→   501→              <CardContent className="p-3 space-y-0.5">
+   502→   502→                {/* Items list */}
+   503→   503→                <div className="min-h-[2rem]">
+   504→   504→                  {items.length === 0 ? (
+   505→   505→                    <EmptyState section={section} />
+   506→   506→                  ) : (
+   507→   507→                    <div className="space-y-0.5">
+   508→   508→                      <AnimatePresence mode="popLayout">
+   509→   509→                        {items.map((item, idx) => (
+   510→   510→                          <PlannerItemRow
+   511→   511→                            key={item.id}
+   512→   512→                            item={item}
+   513→   513→                            section={section}
+   514→   514→                            index={idx}
+   515→   515→                            onToggle={onToggleItem}
+   516→   516→                            onDelete={onDeleteItem}
+   517→   517→                            onTogglePriority={onTogglePriority}
+   518→   518→                          />
+   519→   519→                        ))}
+   520→   520→                      </AnimatePresence>
+   521→   521→                    </div>
+   522→   522→                  )}
+   523→   523→                </div>
+   524→   524→
+   525→   525→                {/* Add Item Input */}
+   526→   526→                <div className="mt-2 flex items-center gap-2">
+   527→   527→                  <div className="flex-1 relative">
+   528→   528→                    <Input
+   529→   529→                      ref={inputRef}
+   530→   530→                      dir="rtl"
+   531→   531→                      value={inputValue}
+   532→   532→                      onChange={(e) => setInputValue(e.target.value)}
+   533→   533→                      onKeyDown={handleKeyDown}
+   534→   534→                      placeholder={`أضف مهمة${totalCount > 0 ? ' أخرى' : ''}...`}
+   535→   535→                      className="h-9 text-sm pr-9 rounded-xl border-dashed bg-transparent
+   536→   536→                        focus:border-emerald-accent/50 focus:ring-emerald-accent/20
+   537→   537→                        placeholder:text-muted-foreground/40"
+   538→   538→                    />
+   539→   539→                    <Plus className={cn(
+   540→   540→                      'absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors',
+   541→   541→                      inputValue ? 'text-emerald-accent' : 'text-muted-foreground/30'
+   542→   542→                    )} />
+   543→   543→                  </div>
+   544→   544→                  {inputValue.trim() && (
+   545→   545→                    <motion.div
+   546→   546→                      initial={{ opacity: 0, scale: 0.8 }}
+   547→   547→                      animate={{ opacity: 1, scale: 1 }}
+   548→   548→                    >
+   549→   549→                      <Button
+   550→   550→                        onClick={handleAdd}
+   551→   551→                        size="sm"
+   552→   552→                        className="h-9 px-3 rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white"
+   553→   553→                      >
+   554→   554→                        إضافة
+   555→   555→                      </Button>
+   556→   556→                    </motion.div>
+   557→   557→                  )}
+   558→   558→                </div>
+   559→   559→
+   560→   560→                {/* Quick Suggestions */}
+   561→   561→                {!showSuggestions && items.length === 0 && (
+   562→   562→                  <motion.div
+   563→   563→                    initial={{ opacity: 0 }}
+   564→   564→                    animate={{ opacity: 1 }}
+   565→   565→                    transition={{ delay: 0.2 }}
+   566→   566→                    className="pt-2"
+   567→   567→                  >
+   568→   568→                    <button
+   569→   569→                      onClick={() => setShowSuggestions(true)}
+   570→   570→                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
+   571→   571→                    >
+   572→   572→                      <Sparkles className="w-3 h-3" />
+   573→   573→                      <span>اقتراحات سريعة</span>
+   574→   574→                    </button>
+   575→   575→                  </motion.div>
+   576→   576→                )}
+   577→   577→
+   578→   578→                <AnimatePresence>
+   579→   579→                  {showSuggestions && (
+   580→   580→                    <motion.div
+   581→   581→                      initial={{ opacity: 0, height: 0 }}
+   582→   582→                      animate={{ opacity: 1, height: 'auto' }}
+   583→   583→                      exit={{ opacity: 0, height: 0 }}
+   584→   584→                      transition={{ duration: 0.3 }}
+   585→   585→                    >
+   586→   586→                      <div className="pt-2 border-t border-border/30">
+   587→   587→                        <div className="flex items-center justify-between mb-2">
+   588→   588→                          <span className="text-[11px] font-medium text-muted-foreground">اقتراحات</span>
+   589→   589→                          <button
+   590→   590→                            onClick={() => setShowSuggestions(false)}
+   591→   591→                            className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+   592→   592→                          >
+   593→   593→                            إخفاء
+   594→   594→                          </button>
+   595→   595→                        </div>
+   596→   596→                        <div className="flex flex-wrap gap-1.5">
+   597→   597→                          {suggestions.map((s) => (
+   598→   598→                            <SuggestButton
+   599→   599→                              key={s.text}
+   600→   600→                              text={s.text}
+   601→   601→                              icon={s.icon}
+   602→   602→                              onAdd={handleSuggestion}
+   603→   603→                            />
+   604→   604→                          ))}
+   605→   605→                        </div>
+   606→   606→                      </div>
+   607→   607→                    </motion.div>
+   608→   608→                  )}
+   609→   609→                </AnimatePresence>
+   610→   610→              </CardContent>
+   611→   611→            </motion.div>
+   612→   612→          )}
+   613→   613→        </AnimatePresence>
+   614→   614→      </Card>
+   615→   615→    </motion.div>
+   616→   616→  )
+   617→   617→}
+   618→   618→
+   619→   619→/* ────────────── Timeline View ────────────── */
+   620→   620→
+   621→   621→function TimelineView({
+   622→   622→  items,
+   623→   623→  onToggleItem,
+   624→   624→}: {
+   625→   625→  items: PlannerItem[]
+   626→   626→  onToggleItem: (id: string) => void
+   627→   627→}) {
+   628→   628→  const currentHour = getCurrentHour()
+   629→   629→  const timelineHours = Array.from({ length: 17 }, (_, i) => i + 6)
+   630→   630→
+   631→   631→  return (
+   632→   632→    <div className="relative">
+   633→   633→      <div className="space-y-0">
+   634→   634→        {timelineHours.map((hour) => {
+   635→   635→          const isNow = hour === currentHour
+   636→   636→
+   637→   637→          return (
+   638→   638→            <div
+   639→   639→              key={hour}
+   640→   640→              className={cn(
+   641→   641→                'flex items-stretch gap-4 py-1.5 border-b border-border/20 last:border-0 relative',
+   642→   642→                isNow && 'bg-emerald-accent/5 -mx-3 px-3 rounded-lg'
+   643→   643→              )}
+   644→   644→            >
+   645→   645→              {/* Now line indicator */}
+   646→   646→              {isNow && (
+   647→   647→                <motion.div
+   648→   648→                  initial={{ opacity: 0 }}
+   649→   649→                  animate={{ opacity: 1 }}
+   650→   650→                  className="absolute right-0 top-0 bottom-0 w-0.5 bg-emerald-accent"
+   651→   651→                />
+   652→   652→              )}
+   653→   653→              <div className="w-14 shrink-0 text-left flex items-center gap-1">
+   654→   654→                <Clock className="w-3 h-3 text-muted-foreground/30" />
+   655→   655→                <span className={cn(
+   656→   656→                  'text-[11px] font-mono tabular-nums',
+   657→   657→                  isNow ? 'text-emerald-accent font-bold' : 'text-muted-foreground/50'
+   658→   658→                )}>
+   659→   659→                  {formatHour(hour)}
+   660→   660→                </span>
+   661→   661→              </div>
+   662→   662→              <div className="flex-1 min-h-[2rem] flex items-center">
+   663→   663→                {isNow && (
+   664→   664→                  <motion.div
+   665→   665→                    initial={{ opacity: 0, x: 8 }}
+   666→   666→                    animate={{ opacity: 1, x: 0 }}
+   667→   667→                    className="flex items-center gap-2"
+   668→   668→                  >
+   669→   669→                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-accent" />
+   670→   670→                    <span className="text-xs text-emerald-accent font-medium">الوقت الحالي</span>
+   671→   671→                  </motion.div>
+   672→   672→                )}
+   673→   673→              </div>
+   674→   674→            </div>
+   675→   675→          )
+   676→   676→        })}
+   677→   677→      </div>
+   678→   678→    </div>
+   679→   679→  )
+   680→   680→}
+   681→   681→
+   682→   682→/* ────────────── Main Component ────────────── */
+   683→   683→
+   684→   684→export default function DailyPlanner() {
+   685→   685→  const [data, setData] = useState<PlannerData>(() => loadPlannerData())
+   686→   686→  const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
+   687→   687→  const isFirstRender = useRef(true)
+   688→   688→  const [currentTime, setCurrentTime] = useState(new Date())
+   689→   689→
+   690→   690→  useEffect(() => {
+   691→   691→    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+   692→   692→    return () => clearInterval(timer)
+   693→   693→  }, [])
+   694→   694→
+   695→   695→  // Quick Notes
+   696→   696→  const [notes, setNotes] = useState<QuickNote[]>(() => loadNotes())
+   697→   697→  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+   698→   698→  const [newNoteText, setNewNoteText] = useState('')
+   699→   699→  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+   700→   700→  const [editNoteText, setEditNoteText] = useState('')
+   701→   701→  const [quickNoteText, setQuickNoteText] = useState(() => {
+   702→   702→    if (typeof window === 'undefined') return ''
+   703→   703→    try { return localStorage.getItem('rise-planner-quick-note') || '' } catch { return '' }
+   704→   704→  })
+   705→   705→
+   706→   706→  // Save to localStorage on changes (skip first render)
+   707→   707→  useEffect(() => {
+   708→   708→    if (isFirstRender.current) {
+   709→   709→      isFirstRender.current = false
+   710→   710→      return
+   711→   711→    }
+   712→   712→    savePlannerData(data)
+   713→   713→  }, [data])
+   714→   714→
+   715→   715→  // Auto-save quick note
+   716→   716→  useEffect(() => {
+   717→   717→    try { localStorage.setItem('rise-planner-quick-note', quickNoteText) } catch { /* ignore */ }
+   718→   718→  }, [quickNoteText])
+   719→   719→
+   720→   720→  // Derive section items from flat list using createdAt hour
+   721→   721→  const sectionItems = useMemo(() => {
+   722→   722→    const morning: PlannerItem[] = []
+   723→   723→    const noon: PlannerItem[] = []
+   724→   724→    const evening: PlannerItem[] = []
+   725→   725→
+   726→   726→    data.items.forEach((item) => {
+   727→   727→      const h = new Date(item.createdAt).getHours()
+   728→   728→      if (h < 12) morning.push(item)
+   729→   729→      else if (h < 17) noon.push(item)
+   730→   730→      else evening.push(item)
+   731→   731→    })
+   732→   732→
+   733→   733→    return { morning, noon, evening }
+   734→   734→  }, [data.items])
+   735→   735→
+   736→   736→  const addItem = useCallback((sectionId: string, text: string) => {
+   737→   737→    const newItem: PlannerItem = {
+   738→   738→      id: generateId(),
+   739→   739→      text,
+   740→   740→      done: false,
+   741→   741→      isPriority: false,
+   742→   742→      createdAt: new Date().toISOString(),
+   743→   743→    }
+   744→   744→    const adjustedItem = { ...newItem }
+   745→   745→    if (sectionId === 'morning') {
+   746→   746→      const d = new Date()
+   747→   747→      d.setHours(8, 0, 0, 0)
+   748→   748→      adjustedItem.createdAt = d.toISOString()
+   749→   749→    } else if (sectionId === 'noon') {
+   750→   750→      const d = new Date()
+   751→   751→      d.setHours(14, 0, 0, 0)
+   752→   752→      adjustedItem.createdAt = d.toISOString()
+   753→   753→    } else {
+   754→   754→      const d = new Date()
+   755→   755→      d.setHours(19, 0, 0, 0)
+   756→   756→      adjustedItem.createdAt = d.toISOString()
+   757→   757→    }
+   758→   758→
+   759→   759→    setData((prev) => ({
+   760→   760→      ...prev,
+   761→   761→      items: [...prev.items, adjustedItem],
+   762→   762→    }))
+   763→   763→  }, [])
+   764→   764→
+   765→   765→  const toggleItem = useCallback((id: string) => {
+   766→   766→    setData((prev) => ({
+   767→   767→      ...prev,
+   768→   768→      items: prev.items.map((item) =>
+   769→   769→        item.id === id ? { ...item, done: !item.done } : item
+   770→   770→      ),
+   771→   771→    }))
+   772→   772→  }, [])
+   773→   773→
+   774→   774→  const deleteItem = useCallback((id: string) => {
+   775→   775→    setData((prev) => ({
+   776→   776→      ...prev,
+   777→   777→      items: prev.items.filter((item) => item.id !== id),
+   778→   778→      priorities: prev.priorities.filter((pid) => pid !== id),
+   779→   779→    }))
+   780→   780→  }, [])
+   781→   781→
+   782→   782→  const togglePriority = useCallback((id: string) => {
+   783→   783→    setData((prev) => {
+   784→   784→      const isPriority = prev.priorities.includes(id)
+   785→   785→      return {
+   786→   786→        ...prev,
+   787→   787→        priorities: isPriority
+   788→   788→          ? prev.priorities.filter((pid) => pid !== id)
+   789→   789→          : [...prev.priorities, id],
+   790→   790→        items: prev.items.map((item) =>
+   791→   791→          item.id === id ? { ...item, isPriority: !isPriority } : item
+   792→   792→        ),
+   793→   793→      }
+   794→   794→    })
+   795→   795→  }, [])
+   796→   796→
+   797→   797→  // Note handlers
+   798→   798→  const handleAddNote = () => {
+   799→   799→    if (!newNoteText.trim()) return
+   800→   800→    const note: QuickNote = {
+   801→   801→      id: generateId(),
+   802→   802→      text: newNoteText.trim(),
+   803→   803→      createdAt: new Date().toISOString(),
+   804→   804→    }
+   805→   805→    const updated = [note, ...notes]
+   806→   806→    setNotes(updated)
+   807→   807→    saveNotes(updated)
+   808→   808→    setNewNoteText('')
+   809→   809→    setNoteDialogOpen(false)
+   810→   810→    toast.success('تمت إضافة الملاحظة')
+   811→   811→  }
+   812→   812→
+   813→   813→  const handleDeleteNote = (id: string) => {
+   814→   814→    const updated = notes.filter((n) => n.id !== id)
+   815→   815→    setNotes(updated)
+   816→   816→    saveNotes(updated)
+   817→   817→    toast.success('تم حذف الملاحظة')
+   818→   818→  }
+   819→   819→
+   820→   820→  const handleSaveNoteEdit = () => {
+   821→   821→    if (!editingNoteId || !editNoteText.trim()) return
+   822→   822→    const updated = notes.map((n) => n.id === editingNoteId ? { ...n, text: editNoteText.trim() } : n)
+   823→   823→    setNotes(updated)
+   824→   824→    saveNotes(updated)
+   825→   825→    setEditingNoteId(null)
+   826→   826→    setEditNoteText('')
+   827→   827→    toast.success('تم تحديث الملاحظة')
+   828→   828→  }
+   829→   829→
+   830→   830→  const priorityItems = data.items.filter((item) => item.isPriority && !item.done)
+   831→   831→  const totalItems = data.items.length
+   832→   832→  const completedItems = data.items.filter((i) => i.done).length
+   833→   833→  const overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
+   834→   834→
+   835→   835→  // Arabic clock time
+   836→   836→  const toArabicDigits = (n: number) => String(n).padStart(2, '0').replace(/[0-9]/g, (d) => ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'][parseInt(d)])
+   837→   837→  const arabicClock = toArabicDigits(currentTime.getHours()) + ':' + toArabicDigits(currentTime.getMinutes())
+   838→   838→  const currentHour = getCurrentHour()
+   839→   839→  const periodLabel = currentHour < 12 ? 'صباحاً' : currentHour < 17 ? 'ظهراً' : 'مساءً'
+   840→   840→
+   841→   841→  return (
+   842→   842→    <div dir="rtl" className="space-y-6">
+   843→   843→      {/* ── Premium Gradient Header with Live Clock ── */}
+   844→   844→      <motion.div
+   845→   845→        initial={{ opacity: 0, y: 16 }}
+   846→   846→        animate={{ opacity: 1, y: 0 }}
+   847→   847→        transition={{ duration: 0.4 }}
+   848→   848→        className="rounded-2xl overflow-hidden relative"
+   849→   849→      >
+   850→   850→        <div className="absolute inset-0 bg-gradient-to-bl from-forest/20 via-emerald-accent/10 to-gold/10 dark:from-forest/30 dark:via-emerald-accent/15 dark:to-gold/10" />
+   851→   851→        <div className="absolute inset-0 noise-bg opacity-20" />
+   852→   852→        <div className="relative glass p-5 border-0">
+   853→   853→          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   854→   854→            <div className="flex items-center gap-4">
+   855→   855→              {/* Live Clock */}
+   856→   856→              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-accent to-forest flex flex-col items-center justify-center shadow-lg glow-emerald">
+   857→   857→                <Timer className="w-4 h-4 text-white/80 mb-0.5" />
+   858→   858→                <span className="text-white text-base font-bold font-mono tabular-nums leading-none">
+   859→   859→                  {arabicClock}
+   860→   860→                </span>
+   861→   861→              </div>
+   862→   862→              <div>
+   863→   863→                <div className="flex items-center gap-2">
+   864→   864→                  <CalendarDays className="w-4 h-4 text-emerald-accent" />
+   865→   865→                  <h3 className="text-xl font-bold text-foreground">{getArabicDate()}</h3>
+   866→   866→                </div>
+   867→   867→                <p className="text-sm text-muted-foreground mt-0.5">
+   868→   868→                  {totalItems === 0
+   869→   869→                    ? `${periodLabel} — ابدأ بخطة يومك وأنجز أهدافك`
+   870→   870→                    : `${arabicNum(completedItems)} من ${arabicNum(totalItems)} مهمة مكتملة`}
+   871→   871→                </p>
+   872→   872→              </div>
+   873→   873→            </div>
+   874→   874→
+   875→   875→            <div className="flex items-center gap-3">
+   876→   876→              {/* View toggle */}
+   877→   877→              <div className="flex items-center bg-muted/60 rounded-xl p-1 backdrop-blur-sm">
+   878→   878→                <button
+   879→   879→                  onClick={() => setActiveView('sections')}
+   880→   880→                  className={cn(
+   881→   881→                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
+   882→   882→                    activeView === 'sections'
+   883→   883→                      ? 'bg-background text-foreground shadow-sm'
+   884→   884→                      : 'text-muted-foreground hover:text-foreground'
+   885→   885→                  )}
+   886→   886→                >
+   887→   887→                  الأقسام
+   888→   888→                </button>
+   889→   889→                <button
+   890→   890→                  onClick={() => setActiveView('timeline')}
+   891→   891→                  className={cn(
+   892→   892→                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
+   893→   893→                    activeView === 'timeline'
+   894→   894→                      ? 'bg-background text-foreground shadow-sm'
+   895→   895→                      : 'text-muted-foreground hover:text-foreground'
+   896→   896→                  )}
+   897→   897→                >
+   898→   898→                  الجدول الزمني
+   899→   899→                </button>
+   900→   900→              </div>
+   901→   901→
+   902→   902→              {/* Overall progress indicator */}
+   903→   903→              <div className="hidden sm:flex items-center gap-2">
+   904→   904→                <div className="w-24 h-2 rounded-full bg-muted/60 overflow-hidden">
+   905→   905→                  <motion.div
+   906→   906→                    className={cn(
+   907→   907→                      'h-full rounded-full transition-colors',
+   908→   908→                      overallProgress === 100 ? 'bg-emerald-accent' : 'bg-gradient-to-l from-emerald-accent to-forest'
+   909→   909→                    )}
+   910→   910→                    animate={{ width: `${overallProgress}%` }}
+   911→   911→                    transition={{ duration: 0.5, ease: 'easeOut' }}
+   912→   912→                  />
+   913→   913→                </div>
+   914→   914→                <span className="text-xs font-semibold text-muted-foreground tabular-nums min-w-[3rem] text-left">
+   915→   915→                  {arabicNum(overallProgress)}٪
+   916→   916→                </span>
+   917→   917→              </div>
+   918→   918→            </div>
+   919→   919→          </div>
+   920→   920→        </div>
+   921→   921→      </motion.div>
+   922→   922→
+   923→   923→      {/* ── Priority Tasks ── */}
+   924→   924→      <AnimatePresence>
+   925→   925→        {priorityItems.length > 0 && (
+   926→   926→          <motion.div
+   927→   927→            initial={{ opacity: 0, y: 12 }}
+   928→   928→            animate={{ opacity: 1, y: 0 }}
+   929→   929→            exit={{ opacity: 0, y: -12 }}
+   930→   930→            transition={{ duration: 0.4, delay: 0.1 }}
+   931→   931→          >
+   932→   932→            <Card className="overflow-hidden rounded-2xl border-0 shadow-sm gap-0">
+   933→   933→              <div className="px-5 pt-4 pb-2 bg-gradient-to-b from-gold/10 to-gold/5 dark:from-gold/5 dark:to-transparent">
+   934→   934→                <div className="flex items-center gap-2.5">
+   935→   935→                  <div className="w-8 h-8 rounded-lg bg-gold/15 flex items-center justify-center">
+   936→   936→                    <Flag className="w-4 h-4 text-gold" />
+   937→   937→                  </div>
+   938→   938→                  <div>
+   939→   939→                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+   940→   940→                      مهام ذات أولوية
+   941→   941→                      <Badge className="text-[10px] px-1.5 py-0 bg-gold/15 text-gold border-gold/20">
+   942→   942→                        {arabicNum(priorityItems.length)}
+   943→   943→                      </Badge>
+   944→   944→                    </h3>
+   945→   945→                  </div>
+   946→   946→                </div>
+   947→   947→              </div>
+   948→   948→              <CardContent className="p-3 pt-2 space-y-0.5">
+   949→   949→                <AnimatePresence mode="popLayout">
+   950→   950→                  {priorityItems.map((item) => (
+   951→   951→                    <PlannerItemRow
+   952→   952→                      key={item.id}
+   953→   953→                      item={item}
+   954→   954→                      section={SECTIONS[0]}
+   955→   955→                      index={0}
+   956→   956→                      onToggle={toggleItem}
+   957→   957→                      onDelete={deleteItem}
+   958→   958→                      onTogglePriority={togglePriority}
+   959→   959→                    />
+   960→   960→                  ))}
+   961→   961→                </AnimatePresence>
+   962→   962→              </CardContent>
+   963→   963→            </Card>
+   964→   964→          </motion.div>
+   965→   965→        )}
+   966→   966→      </AnimatePresence>
+   967→   967→
+   968→   968→      {/* ── Main Content: Sections or Timeline ── */}
+   969→   969→      <AnimatePresence mode="wait">
+   970→   970→        {activeView === 'sections' ? (
+   971→   971→          <motion.div
+   972→   972→            key="sections"
+   973→   973→            initial={{ opacity: 0 }}
+   974→   974→            animate={{ opacity: 1 }}
+   975→   975→            exit={{ opacity: 0 }}
+   976→   976→            transition={{ duration: 0.3 }}
+   977→   977→            className="grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 relative"
+   978→   978→          >
+   979→   979→            {SECTIONS.map((section, index) => (
+   980→   980→              <div key={section.id} className="relative">
+   981→   981→                {/* Gradient divider line between sections (desktop) */}
+   982→   982→                {index > 0 && (
+   983→   983→                  <div className="hidden lg:block absolute top-6 bottom-6 right-0 w-px bg-gradient-to-b from-transparent via-emerald-accent/20 to-transparent" />
+   984→   984→                )}
+   985→   985→                <SectionCard
+   986→   986→                  section={section}
+   987→   987→                  items={sectionItems[section.id]}
+   988→   988→                  suggestions={QUICK_SUGGESTIONS[section.id]}
+   989→   989→                  onAddItem={addItem}
+   990→   990→                  onToggleItem={toggleItem}
+   991→   991→                  onDeleteItem={deleteItem}
+   992→   992→                  onTogglePriority={togglePriority}
+   993→   993→                  isCurrentSection={
+   994→   994→                    (section.id === 'morning' && currentHour >= 6 && currentHour < 12) ||
+   995→   995→                    (section.id === 'noon' && currentHour >= 12 && currentHour < 17) ||
+   996→   996→                    (section.id === 'evening' && currentHour >= 17 && currentHour <= 22)
+   997→   997→                  }
+   998→   998→                  index={index}
+   999→   999→                />
+  1000→  1000→              </div>
+  1001→  1001→            ))}
+  1002→  1002→          </motion.div>
+  1003→  1003→        ) : (
+  1004→  1004→          <motion.div
+  1005→  1005→            key="timeline"
+  1006→  1006→            initial={{ opacity: 0 }}
+  1007→  1007→            animate={{ opacity: 1 }}
+  1008→  1008→            exit={{ opacity: 0 }}
+  1009→  1009→            transition={{ duration: 0.3 }}
+  1010→  1010→          >
+  1011→  1011→            <Card className="overflow-hidden rounded-2xl border-0 shadow-sm gap-0">
+  1012→  1012→              <div className="px-5 pt-4 pb-2">
+  1013→  1013→                <div className="flex items-center gap-2.5">
+  1014→  1014→                  <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+  1015→  1015→                    <Clock className="w-4 h-4 text-forest" />
+  1016→  1016→                  </div>
+  1017→  1017→                  <h3 className="text-sm font-bold text-foreground">الجدول الزمني</h3>
+  1018→  1018→                  <span className="text-[11px] text-muted-foreground">٦:٠٠ ص – ١٠:٠٠ م</span>
+  1019→  1019→                </div>
+  1020→  1020→              </div>
+  1021→  1021→              <CardContent className="p-4 pt-2">
+  1022→  1022→                <TimelineView items={data.items} onToggleItem={toggleItem} />
+  1023→  1023→              </CardContent>
+  1024→  1024→            </Card>
+  1025→  1025→          </motion.div>
+  1026→  1026→        )}
+  1027→  1027→      </AnimatePresence>
+  1028→  1028→
+  1029→  1029→      {/* ── Quick Stats Footer ── */}
+  1030→  1030→      <motion.div
+  1031→  1031→        initial={{ opacity: 0, y: 12 }}
+  1032→  1032→        animate={{ opacity: 1, y: 0 }}
+  1033→  1033→        transition={{ duration: 0.4, delay: 0.3 }}
+  1034→  1034→        className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+  1035→  1035→      >
+  1036→  1036→        {[
+  1037→  1037→          {
+  1038→  1038→            label: 'إجمالي المهام',
+  1039→  1039→            value: arabicNum(totalItems),
+  1040→  1040→            icon: ListTodo,
+  1041→  1041→            color: 'text-foreground',
+  1042→  1042→            bg: 'bg-muted/50',
+  1043→  1043→          },
+  1044→  1044→          {
+  1045→  1045→            label: 'مكتملة',
+  1046→  1046→            value: arabicNum(completedItems),
+  1047→  1047→            icon: CheckCircle2,
+  1048→  1048→            color: 'text-emerald-accent',
+  1049→  1049→            bg: 'bg-emerald-accent/10',
+  1050→  1050→          },
+  1051→  1051→          {
+  1052→  1052→            label: 'أولوية',
+  1053→  1053→            value: arabicNum(priorityItems.length + data.priorities.filter(p => data.items.find(i => i.id === p)?.done).length),
+  1054→  1054→            icon: Star,
+  1055→  1055→            color: 'text-gold',
+  1056→  1056→            bg: 'bg-gold/10',
+  1057→  1057→          },
+  1058→  1058→          {
+  1059→  1059→            label: 'متبقية',
+  1060→  1060→            value: arabicNum(totalItems - completedItems),
+  1061→  1061→            icon: Circle,
+  1062→  1062→            color: 'text-muted-foreground',
+  1063→  1063→            bg: 'bg-muted/50',
+  1064→  1064→          },
+  1065→  1065→        ].map((stat, i) => (
+  1066→  1066→          <motion.div
+  1067→  1067→            key={stat.label}
+  1068→  1068→            initial={{ opacity: 0, y: 10 }}
+  1069→  1069→            animate={{ opacity: 1, y: 0 }}
+  1070→  1070→            transition={{ duration: 0.3, delay: 0.35 + i * 0.05 }}
+  1071→  1071→            className="glass rounded-xl p-3 flex items-center gap-3"
+  1072→  1072→          >
+  1073→  1073→            <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', stat.bg)}>
+  1074→  1074→              <stat.icon className={cn('w-4 h-4', stat.color)} />
+  1075→  1075→            </div>
+  1076→  1076→            <div>
+  1077→  1077→              <p className="text-[11px] text-muted-foreground">{stat.label}</p>
+  1078→  1078→              <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
+  1079→  1079→            </div>
+  1080→  1080→          </motion.div>
+  1081→  1081→        ))}
+  1082→  1082→      </motion.div>
+  1083→  1083→
+  1084→  1084→      {/* ── Premium Quick Notes Textarea ── */}
+  1085→  1085→      <motion.div
+  1086→  1086→        initial={{ opacity: 0, y: 12 }}
+  1087→  1087→        animate={{ opacity: 1, y: 0 }}
+  1088→  1088→        transition={{ duration: 0.4, delay: 0.35 }}
+  1089→  1089→      >
+  1090→  1090→        <div className="relative rounded-2xl overflow-hidden">
+  1091→  1091→          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-amber-500/5 dark:from-amber-500/8 dark:to-amber-500/3" />
+  1092→  1092→          <div className="absolute inset-0 noise-bg opacity-15" />
+  1093→  1093→          <div className="relative glass border border-amber-200/30 dark:border-amber-700/20 p-4">
+  1094→  1094→            <div className="flex items-center gap-2.5 mb-3">
+  1095→  1095→              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 flex items-center justify-center shadow-sm">
+  1096→  1096→                <StickyNote className="w-4 h-4 text-white" />
+  1097→  1097→              </div>
+  1098→  1098→              <div>
+  1099→  1099→                <h3 className="text-sm font-bold text-foreground">ملاحظات سريعة</h3>
+  1100→  1100→                <p className="text-[10px] text-muted-foreground">أفكار وملاحظات تذكيرية لليوم</p>
+  1101→  1101→              </div>
+  1102→  1102→              <div className="mr-auto">
+  1103→  1103→                <Sparkles className="w-3.5 h-3.5 text-amber-400/50" />
+  1104→  1104→              </div>
+  1105→  1105→            </div>
+  1106→  1106→            <Textarea
+  1107→  1107→              placeholder="اكتب ملاحظاتك السريعة هنا... (تُحفظ تلقائياً)"
+  1108→  1108→              value={quickNoteText}
+  1109→  1109→              onChange={(e) => setQuickNoteText(e.target.value)}
+  1110→  1110→              rows={3}
+  1111→  1111→              className="text-sm resize-none bg-background/40 backdrop-blur-sm border-amber-200/20 dark:border-amber-800/20 focus-visible:ring-amber-400/30 focus-visible:border-amber-300/40 placeholder:text-muted-foreground/40"
+  1112→  1112→            />
+  1113→  1113→          </div>
+  1114→  1114→        </div>
+  1115→  1115→      </motion.div>
+  1116→  1116→
+  1117→  1117→      {/* ── Quick Notes Section ── */}
+  1118→  1118→      {notes.length > 0 && (
+  1119→  1119→        <motion.div
+  1120→  1120→          initial={{ opacity: 0, y: 12 }}
+  1121→  1121→          animate={{ opacity: 1, y: 0 }}
+  1122→  1122→          transition={{ duration: 0.4, delay: 0.4 }}
+  1123→  1123→        >
+  1124→  1124→          <Card className="glass overflow-hidden">
+  1125→  1125→            <div className="px-5 pt-4 pb-2 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-950/10 dark:to-transparent">
+  1126→  1126→              <div className="flex items-center justify-between">
+  1127→  1127→                <div className="flex items-center gap-2.5">
+  1128→  1128→                  <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+  1129→  1129→                    <StickyNote className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+  1130→  1130→                  </div>
+  1131→  1131→                  <h3 className="text-sm font-bold text-foreground">ملاحظات سريعة</h3>
+  1132→  1132→                  <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/30">
+  1133→  1133→                    {arabicNum(notes.length)}
+  1134→  1134→                  </Badge>
+  1135→  1135→                </div>
+  1136→  1136→              </div>
+  1137→  1137→            </div>
+  1138→  1138→            <CardContent className="p-3 space-y-2">
+  1139→  1139→              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+  1140→  1140→                {notes.map((note) => (
+  1141→  1141→                  <motion.div
+  1142→  1142→                    key={note.id}
+  1143→  1143→                    layout
+  1144→  1144→                    initial={{ opacity: 0, scale: 0.95 }}
+  1145→  1145→                    animate={{ opacity: 1, scale: 1 }}
+  1146→  1146→                    className="relative group p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-800/20"
+  1147→  1147→                  >
+  1148→  1148→                    {editingNoteId === note.id ? (
+  1149→  1149→                      <div className="space-y-2">
+  1150→  1150→                        <Textarea
+  1151→  1151→                          value={editNoteText}
+  1152→  1152→                          onChange={(e) => setEditNoteText(e.target.value)}
+  1153→  1153→                          rows={2}
+  1154→  1154→                          className="text-sm resize-none"
+  1155→  1155→                        />
+  1156→  1156→                        <div className="flex gap-1">
+  1157→  1157→                          <Button size="sm" onClick={handleSaveNoteEdit} className="h-6 text-[10px] px-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">حفظ</Button>
+  1158→  1158→                          <Button size="sm" variant="outline" onClick={() => setEditingNoteId(null)} className="h-6 text-[10px] px-2">إلغاء</Button>
+  1159→  1159→                        </div>
+  1160→  1160→                      </div>
+  1161→  1161→                    ) : (
+  1162→  1162→                      <>
+  1163→  1163→                        <p className="text-sm text-foreground leading-relaxed">{note.text}</p>
+  1164→  1164→                        <p className="text-[10px] text-muted-foreground/60 mt-2">
+  1165→  1165→                          {new Date(note.createdAt).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
+  1166→  1166→                        </p>
+  1167→  1167→                        <div className="absolute top-2 left-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+  1168→  1168→                          <button
+  1169→  1169→                            onClick={() => { setEditingNoteId(note.id); setEditNoteText(note.text) }}
+  1170→  1170→                            className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground transition-colors"
+  1171→  1171→                          >
+  1172→  1172→                            <Highlighter className="w-3 h-3" />
+  1173→  1173→                          </button>
+  1174→  1174→                          <button
+  1175→  1175→                            onClick={() => handleDeleteNote(note.id)}
+  1176→  1176→                            className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+  1177→  1177→                          >
+  1178→  1178→                            <X className="w-3 h-3" />
+  1179→  1179→                          </button>
+  1180→  1180→                        </div>
+  1181→  1181→                      </>
+  1182→  1182→                    )}
+  1183→  1183→                  </motion.div>
+  1184→  1184→                ))}
+  1185→  1185→              </div>
+  1186→  1186→            </CardContent>
+  1187→  1187→          </Card>
+  1188→  1188→        </motion.div>
+  1189→  1189→      )}
+  1190→  1190→
+  1191→  1191→      {/* ── Floating Quick Note Button ── */}
+  1192→  1192→      <motion.div
+  1193→  1193→        className="fixed bottom-6 left-6 z-50"
+  1194→  1194→        initial={{ scale: 0 }}
+  1195→  1195→        animate={{ scale: 1 }}
+  1196→  1196→        transition={{ type: 'spring', delay: 0.5 }}
+  1197→  1197→      >
+  1198→  1198→        <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+  1199→  1199→          <DialogTrigger asChild>
+  1200→  1200→            <motion.button
+  1201→  1201→              whileHover={{ scale: 1.05 }}
+  1202→  1202→              whileTap={{ scale: 0.95 }}
+  1203→  1203→              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 text-white shadow-xl shadow-amber-500/30 flex items-center justify-center relative"
+  1204→  1204→            >
+  1205→  1205→              <StickyNote className="w-6 h-6" />
+  1206→  1206→              {notes.length > 0 && (
+  1207→  1207→                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+  1208→  1208→                  {notes.length}
+  1209→  1209→                </div>
+  1210→  1210→              )}
+  1211→  1211→            </motion.button>
+  1212→  1212→          </DialogTrigger>
+  1213→  1213→          <DialogContent className="sm:max-w-md" dir="rtl">
+  1214→  1214→            <DialogHeader>
+  1215→  1215→              <DialogTitle className="flex items-center gap-2">
+  1216→  1216→                <StickyNote className="w-5 h-5 text-amber-500" />
+  1217→  1217→                ملاحظة سريعة
+  1218→  1218→              </DialogTitle>
+  1219→  1219→            </DialogHeader>
+  1220→  1220→            <div className="space-y-4 mt-4">
+  1221→  1221→              <Textarea
+  1222→  1222→                placeholder="اكتب ملاحظتك السريعة هنا..."
+  1223→  1223→                value={newNoteText}
+  1224→  1224→                onChange={(e) => setNewNoteText(e.target.value)}
+  1225→  1225→                rows={4}
+  1226→  1226→                className="text-sm resize-none"
+  1227→  1227→                autoFocus
+  1228→  1228→                onKeyDown={(e) => {
+  1229→  1229→                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddNote()
+  1230→  1230→                }}
+  1231→  1231→              />
+  1232→  1232→              <Button
+  1233→  1233→                onClick={handleAddNote}
+  1234→  1234→                className="w-full bg-amber-500 hover:bg-amber-500/90 text-white"
+  1235→  1235→                disabled={!newNoteText.trim()}
+  1236→  1236→              >
+  1237→  1237→                <StickyNote className="w-4 h-4 ml-2" />
+  1238→  1238→                حفظ الملاحظة
+  1239→  1239→              </Button>
+  1240→  1240→            </div>
+  1241→  1241→          </DialogContent>
+  1242→  1242→        </Dialog>
+  1243→  1243→      </motion.div>
+  1244→  1244→    </div>
+  1245→  1245→  )
+  1246→  1246→}

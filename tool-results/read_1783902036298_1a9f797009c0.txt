@@ -1,0 +1,771 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  BarChart,
+     7→  Bar,
+     8→  LineChart,
+     9→  Line,
+    10→  AreaChart,
+    11→  Area,
+    12→  XAxis,
+    13→  YAxis,
+    14→  Tooltip,
+    15→  ResponsiveContainer,
+    16→  CartesianGrid,
+    17→} from 'recharts'
+    18→import {
+    19→  Heart,
+    20→  Moon,
+    21→  Droplets,
+    22→  Footprints,
+    23→  Flame,
+    24→  Smile,
+    25→  Battery,
+    26→  Save,
+    27→  Plus,
+    28→  Minus,
+    29→  Dumbbell,
+    30→  TrendingUp,
+    31→  Scale,
+    32→  Calendar,
+    33→  Activity,
+    34→} from 'lucide-react'
+    35→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    36→import { Button } from '@/components/ui/button'
+    37→import { Input } from '@/components/ui/input'
+    38→import { Textarea } from '@/components/ui/textarea'
+    39→import { Badge } from '@/components/ui/badge'
+    40→import { Skeleton } from '@/components/ui/skeleton'
+    41→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    42→import { cn } from '@/lib/utils'
+    43→import { toast } from 'sonner'
+    44→
+    45→/* ────────────── Types ────────────── */
+    46→
+    47→interface HealthLog {
+    48→  id: string
+    49→  date: string
+    50→  sleepHours: number
+    51→  sleepQuality: number
+    52→  waterGlasses: number
+    53→  steps: number
+    54→  calories: number
+    55→  weight: number | null
+    56→  mood: number
+    57→  energy: number
+    58→  exerciseType: string
+    59→  exerciseMin: number
+    60→}
+    61→
+    62→interface HealthData {
+    63→  logs: HealthLog[]
+    64→  todayLog: HealthLog | null
+    65→}
+    66→
+    67→/* ────────────── Constants ────────────── */
+    68→
+    69→const MOOD_EMOJIS = ['😞', '😐', '🙂', '😊', '😄']
+    70→const MOOD_LABELS = ['سيء جداً', 'سيء', 'عادي', 'جيد', 'ممتاز']
+    71→const ENERGY_LABELS = ['منهك', 'متعب', 'عادي', 'نشيط', 'ممتليء']
+    72→const EXERCISE_TYPES = [
+    73→  { value: 'جري', label: 'جري' },
+    74→  { value: 'مشي', label: 'مشي' },
+    75→  { value: 'أوزان', label: 'أوزان' },
+    76→  { value: 'يوغا', label: 'يوغا' },
+    77→  { value: 'سباحة', label: 'سباحة' },
+    78→  { value: 'أخرى', label: 'أخرى' },
+    79→]
+    80→
+    81→const SLEEP_QUALITY_LABELS = ['سيئة جداً', 'سيئة', 'متوسطة', 'جيدة', 'ممتازة']
+    82→
+    83→const containerVariants = {
+    84→  hidden: { opacity: 0 },
+    85→  show: {
+    86→    opacity: 1,
+    87→    transition: { staggerChildren: 0.06 },
+    88→  },
+    89→}
+    90→
+    91→const itemVariants = {
+    92→  hidden: { opacity: 0, y: 16 },
+    93→  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+    94→}
+    95→
+    96→const EMPTY_LOG = {
+    97→  sleepHours: 0,
+    98→  sleepQuality: 3,
+    99→  waterGlasses: 0,
+   100→  steps: 0,
+   101→  calories: 0,
+   102→  weight: null as number | null,
+   103→  mood: 3,
+   104→  energy: 3,
+   105→  exerciseType: '',
+   106→  exerciseMin: 0,
+   107→  exerciseNotes: '',
+   108→}
+   109→
+   110→/* ────────────── Component ────────────── */
+   111→
+   112→export default function Health() {
+   113→  const [data, setData] = useState<HealthData | null>(null)
+   114→  const [loading, setLoading] = useState(true)
+   115→  const [saving, setSaving] = useState(false)
+   116→
+   117→  const [form, setForm] = useState({ ...EMPTY_LOG })
+   118→  const [exerciseNotes, setExerciseNotes] = useState('')
+   119→
+   120→  const today = new Date().toISOString().split('T')[0]
+   121→
+   122→  /* ─── Fetch ─── */
+   123→  const fetchHealth = useCallback(async () => {
+   124→    try {
+   125→      const res = await fetch('/api/rise/health')
+   126→      if (res.ok) {
+   127→        const json = await res.json()
+   128→        setData(json)
+   129→        if (json.todayLog) {
+   130→          const t = json.todayLog
+   131→          setForm({
+   132→            sleepHours: t.sleepHours || 0,
+   133→            sleepQuality: t.sleepQuality || 3,
+   134→            waterGlasses: t.waterGlasses || 0,
+   135→            steps: t.steps || 0,
+   136→            calories: t.calories || 0,
+   137→            weight: t.weight || null,
+   138→            mood: t.mood || 3,
+   139→            energy: t.energy || 3,
+   140→            exerciseType: t.exerciseType || '',
+   141→            exerciseMin: t.exerciseMin || 0,
+   142→            exerciseNotes: '',
+   143→          })
+   144→        }
+   145→      }
+   146→    } catch {
+   147→      toast.error('فشل في تحميل بيانات الصحة')
+   148→    } finally {
+   149→      setLoading(false)
+   150→    }
+   151→  }, [])
+   152→
+   153→  useEffect(() => {
+   154→    fetchHealth()
+   155→  }, [fetchHealth])
+   156→
+   157→  /* ─── Save ─── */
+   158→  const handleSave = async () => {
+   159→    setSaving(true)
+   160→    try {
+   161→      const res = await fetch('/api/rise/health', {
+   162→        method: 'POST',
+   163→        headers: { 'Content-Type': 'application/json' },
+   164→        body: JSON.stringify({
+   165→          ...form,
+   166→          date: today,
+   167→          exerciseNotes,
+   168→        }),
+   169→      })
+   170→      if (res.ok) {
+   171→        toast.success('تم حفظ بيانات الصحة بنجاح 💪')
+   172→        fetchHealth()
+   173→      } else {
+   174→        toast.error('فشل في حفظ البيانات')
+   175→      }
+   176→    } catch {
+   177→      toast.error('حدث خطأ أثناء الحفظ')
+   178→    } finally {
+   179→      setSaving(false)
+   180→    }
+   181→  }
+   182→
+   183→  const updateForm = (field: string, value: number | string | null) => {
+   184→    setForm((prev) => ({ ...prev, [field]: value }))
+   185→  }
+   186→
+   187→  /* ─── Chart Data ─── */
+   188→  const last14 = useMemo(() => {
+   189→    const days: { date: string; label: string }[] = []
+   190→    for (let i = 13; i >= 0; i--) {
+   191→      const d = new Date()
+   192→      d.setDate(d.getDate() - i)
+   193→      const key = d.toISOString().split('T')[0]
+   194→      days.push({
+   195→        date: key,
+   196→        label: d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }),
+   197→      })
+   198→    }
+   199→    return days
+   200→  }, [])
+   201→
+   202→  const logsMap = useMemo(() => {
+   203→    const map: Record<string, HealthLog> = {}
+   204→    ;(data?.logs || []).forEach((l) => {
+   205→      map[l.date] = l
+   206→    })
+   207→    return map
+   208→  }, [data])
+   209→
+   210→  const sleepChartData = useMemo(
+   211→    () =>
+   212→      last14.map((d) => {
+   213→        const log = logsMap[d.date]
+   214→        return {
+   215→          day: d.label,
+   216→          ساعات: log?.sleepHours || 0,
+   217→          جودة: log?.sleepQuality || 0,
+   218→        }
+   219→      }),
+   220→    [last14, logsMap]
+   221→  )
+   222→
+   223→  const waterChartData = useMemo(
+   224→    () =>
+   225→      last14.map((d) => {
+   226→        const log = logsMap[d.date]
+   227→        return {
+   228→          day: d.label,
+   229→          أكواب: log?.waterGlasses || 0,
+   230→        }
+   231→      }),
+   232→    [last14, logsMap]
+   233→  )
+   234→
+   235→  const stepsChartData = useMemo(
+   236→    () =>
+   237→      last14.map((d) => {
+   238→        const log = logsMap[d.date]
+   239→        return {
+   240→          day: d.label,
+   241→          خطوات: log?.steps || 0,
+   242→        }
+   243→      }),
+   244→    [last14, logsMap]
+   245→  )
+   246→
+   247→  const moodEnergyChartData = useMemo(
+   248→    () =>
+   249→      last14.map((d) => {
+   250→        const log = logsMap[d.date]
+   251→        return {
+   252→          day: d.label,
+   253→          المزاج: log?.mood || 0,
+   254→          الطاقة: log?.energy || 0,
+   255→        }
+   256→      }),
+   257→    [last14, logsMap]
+   258→  )
+   259→
+   260→  const weightChartData = useMemo(() => {
+   261→    const weightLogs = (data?.logs || [])
+   262→      .filter((l) => l.weight && l.weight > 0)
+   263→      .sort((a, b) => a.date.localeCompare(b.date))
+   264→      .slice(-30)
+   265→    return weightLogs.map((l) => ({
+   266→      day: new Date(l.date).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }),
+   267→      الوزن: l.weight,
+   268→    }))
+   269→  }, [data])
+   270→
+   271→  const tooltipStyle = {
+   272→    backgroundColor: 'var(--color-popover)',
+   273→    border: '1px solid var(--color-border)',
+   274→    borderRadius: '12px',
+   275→    fontSize: '12px',
+   276→    direction: 'rtl' as const,
+   277→  }
+   278→
+   279→  /* ─── Loading ─── */
+   280→  if (loading) {
+   281→    return (
+   282→      <div className="space-y-4 p-4">
+   283→        <Skeleton className="h-8 w-48" />
+   284→        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+   285→          {[1, 2, 3, 4, 5, 6].map((i) => (
+   286→            <Skeleton key={i} className="h-28 rounded-2xl" />
+   287→          ))}
+   288→        </div>
+   289→        <Skeleton className="h-64 rounded-2xl" />
+   290→      </div>
+   291→    )
+   292→  }
+   293→
+   294→  return (
+   295→    <motion.div
+   296→      variants={containerVariants}
+   297→      initial="hidden"
+   298→      animate="show"
+   299→      className="space-y-6 p-4 md:p-6"
+   300→    >
+   301→      {/* Header */}
+   302→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   303→        <div className="flex items-center gap-3">
+   304→          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center shadow-lg">
+   305→            <Heart className="w-5 h-5 text-white" />
+   306→          </div>
+   307→          <div>
+   308→            <h2 className="text-xl font-bold text-foreground">الصحة</h2>
+   309→            <p className="text-xs text-muted-foreground">تتبع صحتك وعافيتك اليومية</p>
+   310→          </div>
+   311→        </div>
+   312→        <motion.div whileTap={{ scale: 0.95 }}>
+   313→          <Button
+   314→            onClick={handleSave}
+   315→            disabled={saving}
+   316→            className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-10 text-sm font-semibold"
+   317→          >
+   318→            {saving ? (
+   319→              <motion.div
+   320→                animate={{ rotate: 360 }}
+   321→                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+   322→              >
+   323→                <Save className="w-4 h-4 ml-1" />
+   324→              </motion.div>
+   325→            ) : (
+   326→              <Save className="w-4 h-4 ml-1" />
+   327→            )}
+   328→            {saving ? 'جاري الحفظ...' : 'حفظ'}
+   329→          </Button>
+   330→        </motion.div>
+   331→      </motion.div>
+   332→
+   333→      {/* Today's Overview - 2x3 Grid */}
+   334→      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+   335→        {/* Sleep */}
+   336→        <Card className="glass border-0 shadow-sm">
+   337→          <CardContent className="p-4 space-y-3">
+   338→            <div className="flex items-center gap-2">
+   339→              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+   340→                <Moon className="w-4 h-4 text-indigo-400" />
+   341→              </div>
+   342→              <span className="text-sm font-semibold text-foreground">النوم</span>
+   343→            </div>
+   344→            <div className="flex items-baseline gap-1">
+   345→              <Input
+   346→                type="number"
+   347→                value={form.sleepHours ? Number(form.sleepHours.toFixed(1)) : ''}
+   348→                onChange={(e) => updateForm('sleepHours', parseFloat(e.target.value) || 0)}
+   349→                className="w-16 h-8 text-lg font-bold text-center rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0"
+   350→                placeholder="٠"
+   351→                min={0}
+   352→                max={24}
+   353→                step={0.5}
+   354→              />
+   355→              <span className="text-xs text-muted-foreground">ساعة</span>
+   356→            </div>
+   357→            <div className="space-y-1">
+   358→              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+   359→                <span>الجودة</span>
+   360→                <span>{SLEEP_QUALITY_LABELS[form.sleepQuality - 1]}</span>
+   361→              </div>
+   362→              <input
+   363→                type="range"
+   364→                min={1}
+   365→                max={5}
+   366→                value={form.sleepQuality}
+   367→                onChange={(e) => updateForm('sleepQuality', parseInt(e.target.value))}
+   368→                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-indigo-400"
+   369→                style={{
+   370→                  background: `linear-gradient(to left, rgb(129 140 248) ${((form.sleepQuality - 1) / 4) * 100}%, var(--color-muted) ${((form.sleepQuality - 1) / 4) * 100}%)`,
+   371→                }}
+   372→              />
+   373→            </div>
+   374→          </CardContent>
+   375→        </Card>
+   376→
+   377→        {/* Water */}
+   378→        <Card className="glass border-0 shadow-sm">
+   379→          <CardContent className="p-4 space-y-3">
+   380→            <div className="flex items-center gap-2">
+   381→              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+   382→                <Droplets className="w-4 h-4 text-cyan-500" />
+   383→              </div>
+   384→              <span className="text-sm font-semibold text-foreground">الماء</span>
+   385→            </div>
+   386→            <div className="flex items-center justify-center gap-4">
+   387→              <motion.button
+   388→                whileTap={{ scale: 0.9 }}
+   389→                onClick={() => updateForm('waterGlasses', Math.max(0, form.waterGlasses - 1))}
+   390→                className="w-9 h-9 rounded-xl bg-muted/50 hover:bg-muted flex items-center justify-center transition-colors"
+   391→              >
+   392→                <Minus className="w-4 h-4 text-muted-foreground" />
+   393→              </motion.button>
+   394→              <div className="text-center">
+   395→                <span className="text-2xl font-bold text-foreground">{form.waterGlasses}</span>
+   396→                <span className="text-xs text-muted-foreground block">كوب</span>
+   397→              </div>
+   398→              <motion.button
+   399→                whileTap={{ scale: 0.9 }}
+   400→                onClick={() => updateForm('waterGlasses', form.waterGlasses + 1)}
+   401→                className="w-9 h-9 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 flex items-center justify-center transition-colors"
+   402→              >
+   403→                <Plus className="w-4 h-4 text-cyan-500" />
+   404→              </motion.button>
+   405→            </div>
+   406→            {/* Water visual */}
+   407→            <div className="flex items-center gap-1 justify-center">
+   408→              {Array.from({ length: 8 }).map((_, i) => (
+   409→                <motion.div
+   410→                  key={i}
+   411→                  animate={{
+   412→                    backgroundColor: i < form.waterGlasses ? 'var(--color-cyan-500)' : 'var(--color-muted)',
+   413→                    scale: i < form.waterGlasses ? 1 : 0.8,
+   414→                  }}
+   415→                  className="w-2.5 h-2.5 rounded-full transition-colors"
+   416→                />
+   417→              ))}
+   418→            </div>
+   419→          </CardContent>
+   420→        </Card>
+   421→
+   422→        {/* Steps */}
+   423→        <Card className="glass border-0 shadow-sm">
+   424→          <CardContent className="p-4 space-y-3">
+   425→            <div className="flex items-center gap-2">
+   426→              <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   427→                <Footprints className="w-4 h-4 text-emerald-accent" />
+   428→              </div>
+   429→              <span className="text-sm font-semibold text-foreground">الخطوات</span>
+   430→            </div>
+   431→            <div className="flex items-baseline gap-1">
+   432→              <Input
+   433→                type="number"
+   434→                value={form.steps || ''}
+   435→                onChange={(e) => updateForm('steps', parseInt(e.target.value) || 0)}
+   436→                className="w-24 h-8 text-lg font-bold rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0 text-center"
+   437→                placeholder="٠"
+   438→                min={0}
+   439→              />
+   440→            </div>
+   441→            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+   442→              <motion.div
+   443→                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+   444→                animate={{ width: `${Math.min(100, (form.steps / 10000) * 100)}%` }}
+   445→                transition={{ duration: 0.5 }}
+   446→              />
+   447→            </div>
+   448→            <span className="text-[10px] text-muted-foreground">
+   449→              الهدف: ١٠,٠٠٠ خطوة ({Math.round((form.steps / 10000) * 100)}%)
+   450→            </span>
+   451→          </CardContent>
+   452→        </Card>
+   453→
+   454→        {/* Calories */}
+   455→        <Card className="glass border-0 shadow-sm">
+   456→          <CardContent className="p-4 space-y-3">
+   457→            <div className="flex items-center gap-2">
+   458→              <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+   459→                <Flame className="w-4 h-4 text-orange-500" />
+   460→              </div>
+   461→              <span className="text-sm font-semibold text-foreground">السعرات</span>
+   462→            </div>
+   463→            <div className="flex items-baseline gap-1">
+   464→              <Input
+   465→                type="number"
+   466→                value={form.calories || ''}
+   467→                onChange={(e) => updateForm('calories', parseInt(e.target.value) || 0)}
+   468→                className="w-24 h-8 text-lg font-bold rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0 text-center"
+   469→                placeholder="٠"
+   470→                min={0}
+   471→              />
+   472→              <span className="text-xs text-muted-foreground">سعرة</span>
+   473→            </div>
+   474→            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+   475→              <motion.div
+   476→                className="h-full rounded-full bg-gradient-to-l from-orange-400 to-orange-600"
+   477→                animate={{ width: `${Math.min(100, (form.calories / 2500) * 100)}%` }}
+   478→                transition={{ duration: 0.5 }}
+   479→              />
+   480→            </div>
+   481→            <span className="text-[10px] text-muted-foreground">
+   482→              الهدف: ٢,٥٠٠ سعرة
+   483→            </span>
+   484→          </CardContent>
+   485→        </Card>
+   486→
+   487→        {/* Mood */}
+   488→        <Card className="glass border-0 shadow-sm">
+   489→          <CardContent className="p-4 space-y-3">
+   490→            <div className="flex items-center gap-2">
+   491→              <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+   492→                <Smile className="w-4 h-4 text-gold" />
+   493→              </div>
+   494→              <span className="text-sm font-semibold text-foreground">المزاج</span>
+   495→            </div>
+   496→            <div className="flex items-center justify-center gap-1.5 py-1">
+   497→              {MOOD_EMOJIS.map((emoji, i) => (
+   498→                <motion.button
+   499→                  key={i}
+   500→                  whileHover={{ scale: 1.15 }}
+   501→                  whileTap={{ scale: 0.9 }}
+   502→                  onClick={() => updateForm('mood', i + 1)}
+   503→                  className={cn(
+   504→                    'text-2xl p-1.5 rounded-lg transition-all',
+   505→                    form.mood === i + 1
+   506→                      ? 'bg-gold/15 scale-110'
+   507→                      : 'opacity-50 hover:opacity-100'
+   508→                  )}
+   509→                >
+   510→                  {emoji}
+   511→                </motion.button>
+   512→              ))}
+   513→            </div>
+   514→            <p className="text-center text-[11px] text-muted-foreground">
+   515→              {MOOD_LABELS[form.mood - 1]}
+   516→            </p>
+   517→          </CardContent>
+   518→        </Card>
+   519→
+   520→        {/* Energy */}
+   521→        <Card className="glass border-0 shadow-sm">
+   522→          <CardContent className="p-4 space-y-3">
+   523→            <div className="flex items-center gap-2">
+   524→              <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+   525→                <Battery className="w-4 h-4 text-forest" />
+   526→              </div>
+   527→              <span className="text-sm font-semibold text-foreground">الطاقة</span>
+   528→            </div>
+   529→            <div className="flex items-center justify-center gap-1 text-3xl font-bold text-forest">
+   530→              {form.energy}
+   531→            </div>
+   532→            <div className="space-y-1">
+   533→              <input
+   534→                type="range"
+   535→                min={1}
+   536→                max={5}
+   537→                value={form.energy}
+   538→                onChange={(e) => updateForm('energy', parseInt(e.target.value))}
+   539→                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-accent"
+   540→                style={{
+   541→                  background: `linear-gradient(to left, var(--color-emerald-accent) ${((form.energy - 1) / 4) * 100}%, var(--color-muted) ${((form.energy - 1) / 4) * 100}%)`,
+   542→                }}
+   543→              />
+   544→              <p className="text-center text-[11px] text-muted-foreground">
+   545→                {ENERGY_LABELS[form.energy - 1]}
+   546→              </p>
+   547→            </div>
+   548→          </CardContent>
+   549→        </Card>
+   550→      </motion.div>
+   551→
+   552→      {/* Exercise Section */}
+   553→      <motion.div variants={itemVariants}>
+   554→        <Card className="glass border-0 shadow-sm">
+   555→          <CardHeader className="pb-3">
+   556→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   557→              <Dumbbell className="w-4 h-4 text-emerald-accent" />
+   558→              التمارين
+   559→            </CardTitle>
+   560→          </CardHeader>
+   561→          <CardContent className="space-y-4">
+   562→            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+   563→              {EXERCISE_TYPES.map((type) => (
+   564→                <motion.button
+   565→                  key={type.value}
+   566→                  whileHover={{ scale: 1.02 }}
+   567→                  whileTap={{ scale: 0.97 }}
+   568→                  onClick={() => updateForm('exerciseType', form.exerciseType === type.value ? '' : type.value)}
+   569→                  className={cn(
+   570→                    'rounded-xl p-3 text-center text-sm font-medium transition-all border',
+   571→                    form.exerciseType === type.value
+   572→                      ? 'border-emerald-accent/40 bg-emerald-accent/5 text-emerald-accent shadow-sm'
+   573→                      : 'border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50'
+   574→                  )}
+   575→                >
+   576→                  {type.label}
+   577→                </motion.button>
+   578→              ))}
+   579→            </div>
+   580→            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   581→              <div className="space-y-1.5">
+   582→                <label className="text-xs font-semibold text-muted-foreground">المدة (دقائق)</label>
+   583→                <Input
+   584→                  type="number"
+   585→                  value={form.exerciseMin || ''}
+   586→                  onChange={(e) => updateForm('exerciseMin', parseInt(e.target.value) || 0)}
+   587→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   588→                  placeholder="٣٠"
+   589→                  min={0}
+   590→                />
+   591→              </div>
+   592→              <div className="space-y-1.5">
+   593→                <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
+   594→                <Input
+   595→                  value={exerciseNotes}
+   596→                  onChange={(e) => setExerciseNotes(e.target.value)}
+   597→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   598→                  placeholder="ملاحظات إضافية..."
+   599→                  dir="rtl"
+   600→                />
+   601→              </div>
+   602→            </div>
+   603→          </CardContent>
+   604→        </Card>
+   605→      </motion.div>
+   606→
+   607→      {/* Weight Tracking */}
+   608→      <motion.div variants={itemVariants}>
+   609→        <Card className="glass border-0 shadow-sm">
+   610→          <CardHeader className="pb-3">
+   611→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   612→              <Scale className="w-4 h-4 text-forest" />
+   613→              تتبع الوزن
+   614→            </CardTitle>
+   615→          </CardHeader>
+   616→          <CardContent className="space-y-4">
+   617→            <div className="flex items-center gap-3">
+   618→              <Input
+   619→                type="number"
+   620→                value={form.weight ?? ''}
+   621→                onChange={(e) => updateForm('weight', parseFloat(e.target.value) || null)}
+   622→                className="w-32 h-10 rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm text-center"
+   623→                placeholder="كجم"
+   624→                min={0}
+   625→                step={0.1}
+   626→              />
+   627→              <span className="text-sm text-muted-foreground">كيلوغرام</span>
+   628→            </div>
+   629→
+   630→            {weightChartData.length > 1 && (
+   631→              <div className="h-44">
+   632→                <ResponsiveContainer width="100%" height="100%">
+   633→                  <LineChart data={weightChartData}>
+   634→                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   635→                    <XAxis
+   636→                      dataKey="day"
+   637→                      tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   638→                      axisLine={false}
+   639→                      tickLine={false}
+   640→                    />
+   641→                    <YAxis
+   642→                      tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   643→                      axisLine={false}
+   644→                      tickLine={false}
+   645→                      width={40}
+   646→                      domain={['dataMin - 2', 'dataMax + 2']}
+   647→                    />
+   648→                    <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value} كجم`, 'الوزن']} />
+   649→                    <Line
+   650→                      type="monotone"
+   651→                      dataKey="الوزن"
+   652→                      stroke="var(--color-emerald-accent)"
+   653→                      strokeWidth={2}
+   654→                      dot={{ fill: 'var(--color-emerald-accent)', r: 3 }}
+   655→                      activeDot={{ r: 5 }}
+   656→                    />
+   657→                  </LineChart>
+   658→                </ResponsiveContainer>
+   659→              </div>
+   660→            )}
+   661→          </CardContent>
+   662→        </Card>
+   663→      </motion.div>
+   664→
+   665→      {/* Charts Section */}
+   666→      <motion.div variants={itemVariants}>
+   667→        <Card className="glass border-0 shadow-sm">
+   668→          <CardHeader className="pb-2">
+   669→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   670→              <Activity className="w-4 h-4 text-emerald-accent" />
+   671→              الرسوم البيانية (آخر ١٤ يوم)
+   672→            </CardTitle>
+   673→          </CardHeader>
+   674→          <CardContent>
+   675→            <Tabs defaultValue="sleep" className="w-full">
+   676→              <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50 rounded-xl">
+   677→                <TabsTrigger
+   678→                  value="sleep"
+   679→                  className="text-xs rounded-lg py-2 data-[state=active]:bg-emerald-accent data-[state=active]:text-white"
+   680→                >
+   681→                  النوم
+   682→                </TabsTrigger>
+   683→                <TabsTrigger
+   684→                  value="water"
+   685→                  className="text-xs rounded-lg py-2 data-[state=active]:bg-cyan-500 data-[state=active]:text-white"
+   686→                >
+   687→                  الماء
+   688→                </TabsTrigger>
+   689→                <TabsTrigger
+   690→                  value="steps"
+   691→                  className="text-xs rounded-lg py-2 data-[state=active]:bg-emerald-accent data-[state=active]:text-white"
+   692→                >
+   693→                  الخطوات
+   694→                </TabsTrigger>
+   695→                <TabsTrigger
+   696→                  value="mood"
+   697→                  className="text-xs rounded-lg py-2 data-[state=active]:bg-gold data-[state=active]:text-forest-dark"
+   698→                >
+   699→                  المزاج
+   700→                </TabsTrigger>
+   701→              </TabsList>
+   702→
+   703→              <TabsContent value="sleep" className="mt-4">
+   704→                <div className="h-52">
+   705→                  <ResponsiveContainer width="100%" height="100%">
+   706→                    <BarChart data={sleepChartData} barCategoryGap="20%">
+   707→                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   708→                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+   709→                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={25} />
+   710→                      <Tooltip contentStyle={tooltipStyle} />
+   711→                      <Bar dataKey="ساعات" fill="var(--color-emerald-accent)" radius={[4, 4, 0, 0]} opacity={0.8} />
+   712→                    </BarChart>
+   713→                  </ResponsiveContainer>
+   714→                </div>
+   715→              </TabsContent>
+   716→
+   717→              <TabsContent value="water" className="mt-4">
+   718→                <div className="h-52">
+   719→                  <ResponsiveContainer width="100%" height="100%">
+   720→                    <BarChart data={waterChartData} barCategoryGap="20%">
+   721→                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   722→                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+   723→                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={25} />
+   724→                      <Tooltip contentStyle={tooltipStyle} />
+   725→                      <Bar dataKey="أكواب" fill="var(--color-cyan-500)" radius={[4, 4, 0, 0]} opacity={0.8} />
+   726→                    </BarChart>
+   727→                  </ResponsiveContainer>
+   728→                </div>
+   729→              </TabsContent>
+   730→
+   731→              <TabsContent value="steps" className="mt-4">
+   732→                <div className="h-52">
+   733→                  <ResponsiveContainer width="100%" height="100%">
+   734→                    <AreaChart data={stepsChartData}>
+   735→                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   736→                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+   737→                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={30} />
+   738→                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value.toLocaleString('ar-SA')}`, 'خطوات']} />
+   739→                      <defs>
+   740→                        <linearGradient id="stepsGrad" x1="0" y1="0" x2="0" y2="1">
+   741→                          <stop offset="0%" stopColor="var(--color-emerald-accent)" stopOpacity={0.3} />
+   742→                          <stop offset="100%" stopColor="var(--color-emerald-accent)" stopOpacity={0} />
+   743→                        </linearGradient>
+   744→                      </defs>
+   745→                      <Area type="monotone" dataKey="خطوات" stroke="var(--color-emerald-accent)" strokeWidth={2} fill="url(#stepsGrad)" />
+   746→                    </AreaChart>
+   747→                  </ResponsiveContainer>
+   748→                </div>
+   749→              </TabsContent>
+   750→
+   751→              <TabsContent value="mood" className="mt-4">
+   752→                <div className="h-52">
+   753→                  <ResponsiveContainer width="100%" height="100%">
+   754→                    <LineChart data={moodEnergyChartData}>
+   755→                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   756→                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+   757→                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={25} domain={[0, 5]} />
+   758→                      <Tooltip contentStyle={tooltipStyle} />
+   759→                      <Line type="monotone" dataKey="المزاج" stroke="var(--color-gold)" strokeWidth={2} dot={{ fill: 'var(--color-gold)', r: 3 }} />
+   760→                      <Line type="monotone" dataKey="الطاقة" stroke="var(--color-emerald-accent)" strokeWidth={2} dot={{ fill: 'var(--color-emerald-accent)', r: 3 }} />
+   761→                    </LineChart>
+   762→                  </ResponsiveContainer>
+   763→                </div>
+   764→              </TabsContent>
+   765→            </Tabs>
+   766→          </CardContent>
+   767→        </Card>
+   768→      </motion.div>
+   769→    </motion.div>
+   770→  )
+   771→}

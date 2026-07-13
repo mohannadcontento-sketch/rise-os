@@ -19,6 +19,8 @@ import {
   X,
   TrendingUp,
   ListChecks,
+  Star,
+  Users,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -116,9 +118,25 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (progress / 100) * circumference
   const isHighProgress = progress > 75
+  const gradientId = `progGrad-${size}-${color.replace('#', '')}`
 
   return (
     <svg width={size} height={size} className="transform -rotate-90">
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={color} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.6} />
+        </linearGradient>
+        {isHighProgress && (
+          <filter id={`glow-${size}-${color.replace('#', '')}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        )}
+      </defs>
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -128,31 +146,19 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
         strokeWidth={strokeWidth}
         className="text-muted/50"
       />
-      {/* Glow filter for high progress */}
-      {isHighProgress && (
-        <defs>
-          <filter id={`glow-${size}-${color}`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-      )}
       <motion.circle
         cx={size / 2}
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke={color}
+        stroke={`url(#${gradientId})`}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeDasharray={circumference}
         initial={{ strokeDashoffset: circumference }}
         animate={{ strokeDashoffset: offset }}
-        transition={{ duration: 0.8, ease: 'easeOut' }}
-        filter={isHighProgress ? `url(#glow-${size}-${color})` : undefined}
+        transition={{ duration: 1, ease: 'easeOut' }}
+        filter={isHighProgress ? `url(#glow-${size}-${color.replace('#', '')})` : undefined}
       />
       <text
         x="50%"
@@ -165,6 +171,99 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
         {Math.round(progress)}%
       </text>
     </svg>
+  )
+}
+
+  /* ────────────── Team Avatars Component ────────────── */
+
+function TeamAvatars() {
+  const names = ['أحمد', 'سارة', 'محمد', 'نورة', 'خالد']
+  const colors = ['#059669', '#3B82F6', '#F59E0B', '#EC4899', '#8B5CF6']
+  return (
+    <div className="flex items-center">
+      {names.slice(0, 4).map((name, i) => (
+        <div
+          key={name}
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 border-background -mr-2 last:mr-0"
+          style={{ backgroundColor: colors[i], zIndex: 4 - i }}
+          title={name}
+        >
+          {name.charAt(0)}
+        </div>
+      ))}
+      {names.length > 4 && (
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-medium text-muted-foreground bg-muted border-2 border-background -mr-2">
+          +{names.length - 4}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ────────────── Featured Project Hero ────────────── */
+
+function FeaturedProject({ project, onClick }: { project: Project; onClick: () => void }) {
+  const taskCount = 0
+  const doneCount = 0
+  const progress = project.progress
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.005 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      className="cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="premium-card rounded-2xl overflow-hidden relative">
+        <div
+          className="absolute inset-0 bg-gradient-to-bl pointer-events-none"
+          style={{ background: `linear-gradient(135deg, ${project.color}12, ${project.color}04, transparent)` }}
+        />
+        <div className="relative p-6 flex flex-col sm:flex-row items-center gap-6">
+          <div className="relative">
+            <ProgressRing progress={progress} size={100} strokeWidth={6} color={project.color} />
+            <motion.div
+              className="absolute -top-1 -right-1"
+              animate={{ y: [0, -4, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-md">
+                <Star className="w-3 h-3 text-forest-dark" />
+              </div>
+            </motion.div>
+          </div>
+          <div className="flex-1 text-center sm:text-right">
+            <div className="flex items-center gap-2 justify-center sm:justify-start mb-1">
+              <FolderKanban className="w-5 h-5" style={{ color: project.color }} />
+              <h3 className="text-lg font-bold">{project.name}</h3>
+              <Badge
+                variant="secondary"
+                className={cn(
+                  'text-[10px] px-2 py-0 rounded-full font-medium',
+                  project.status === 'active' && 'bg-emerald-accent/10 text-emerald-accent border border-emerald-accent/20',
+                  project.status === 'completed' && 'bg-gold/10 text-gold border border-gold/20',
+                  project.status === 'archived' && 'bg-muted text-muted-foreground border border-muted/30'
+                )}
+              >
+                {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'متوقف'}
+              </Badge>
+            </div>
+            {project.description && (
+              <p className="text-sm text-muted-foreground leading-relaxed mt-1">{project.description}</p>
+            )}
+            <div className="flex items-center gap-4 mt-3 justify-center sm:justify-start">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <ListChecks className="w-3.5 h-3.5" />
+                {progress}% مكتمل
+              </span>
+              <TeamAvatars />
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   )
 }
 
@@ -808,6 +907,16 @@ export function Projects() {
         </Dialog>
       </div>
 
+      {/* Featured Project */}
+      {filteredProjects.length > 0 && (() => {
+        const featured = filteredProjects.reduce((a, b) => a.progress > b.progress ? a : b, filteredProjects[0])
+        return (
+          <motion.div variants={itemVariants}>
+            <FeaturedProject project={featured} onClick={() => setSelectedProjectId(featured.id)} />
+          </motion.div>
+        )
+      })()}
+
       {/* Projects Grid */}
       {filteredProjects.length === 0 ? (
         <EmptyState />
@@ -836,8 +945,7 @@ export function Projects() {
                   <div className="glass rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-emerald-accent/5 h-full flex flex-col">
                     {/* Color accent bar with gradient overlay */}
                     <div className="h-1.5 w-full relative overflow-hidden">
-                      <div className="absolute inset-0" style={{ backgroundColor: project.color }} />
-                      <div className="absolute inset-0" style={{ background: `linear-gradient(to left, transparent, ${project.color}50)` }} />
+                      <div className="absolute inset-0" style={{ background: `linear-gradient(to left, transparent, ${project.color}, ${project.color}80)` }} />
                     </div>
 
                     <div className="p-5 flex-1 flex flex-col">
@@ -882,11 +990,14 @@ export function Projects() {
                       {/* Name & Description */}
                       <h3 className="text-base font-bold mb-1 truncate">{project.name}</h3>
                       {project.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-4 flex-1">
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-3 flex-1">
                           {project.description}
                         </p>
                       )}
                       {!project.description && <div className="flex-1" />}
+
+                      {/* Team Avatars */}
+                      <TeamAvatars />
 
                       {/* Bottom: Task count + status */}
                       <div className="flex items-center justify-between pt-3 border-t border-border/50">
@@ -905,13 +1016,13 @@ export function Projects() {
                         <Badge
                           variant="secondary"
                           className={cn(
-                            'text-[10px] h-5 px-2 rounded-full font-medium',
-                            project.status === 'active' && 'bg-emerald-accent/10 text-emerald-accent',
-                            project.status === 'completed' && 'bg-gold/10 text-gold',
-                            project.status === 'archived' && 'bg-muted text-muted-foreground'
+                            'text-[10px] h-5 px-2 rounded-full font-medium border',
+                            project.status === 'active' && 'bg-emerald-accent/10 text-emerald-accent border-emerald-accent/20',
+                            project.status === 'completed' && 'bg-gold/10 text-gold border-gold/20',
+                            project.status === 'archived' && 'bg-muted text-muted-foreground border-muted/30'
                           )}
                         >
-                          {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'مؤرشف'}
+                          {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'متوقف'}
                         </Badge>
                       </div>
 

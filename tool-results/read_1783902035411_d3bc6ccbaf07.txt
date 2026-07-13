@@ -1,0 +1,666 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Network,
+     7→  Plus,
+     8→  Search,
+     9→  Star,
+    10→  FolderOpen,
+    11→  Tag,
+    12→  Trash2,
+    13→  Edit3,
+    14→  Check,
+    15→  X,
+    16→  Lightbulb,
+    17→  BookMarked,
+    18→  FileText,
+    19→  FolderKanban,
+    20→  Briefcase,
+    21→  Beaker,
+    22→  Palette,
+    23→  Sparkles,
+    24→  Archive,
+    25→  Grid3X3,
+    26→  List,
+    27→  Zap,
+    28→} from 'lucide-react'
+    29→import { Card, CardContent } from '@/components/ui/card'
+    30→import { Button } from '@/components/ui/button'
+    31→import { Badge } from '@/components/ui/badge'
+    32→import { Input } from '@/components/ui/input'
+    33→import { Textarea } from '@/components/ui/textarea'
+    34→import {
+    35→  Dialog,
+    36→  DialogContent,
+    37→  DialogHeader,
+    38→  DialogTitle,
+    39→  DialogTrigger,
+    40→} from '@/components/ui/dialog'
+    41→import {
+    42→  Select,
+    43→  SelectContent,
+    44→  SelectItem,
+    45→  SelectTrigger,
+    46→  SelectValue,
+    47→} from '@/components/ui/select'
+    48→import { Skeleton } from '@/components/ui/skeleton'
+    49→import { cn } from '@/lib/utils'
+    50→import { toast } from 'sonner'
+    51→
+    52→/* ────────────── Types ────────────── */
+    53→
+    54→interface KnowledgeItem {
+    55→  id: string
+    56→  type: string
+    57→  title: string
+    58→  content: string
+    59→  folder: string | null
+    60→  tags: string | null
+    61→  source: string | null
+    62→  isFavorite: boolean
+    63→  createdAt: string
+    64→  updatedAt: string
+    65→}
+    66→
+    67→/* ────────────── Config ────────────── */
+    68→
+    69→const typeConfig: Record<string, { label: string; icon: React.ElementType; color: string; stripColor: string }> = {
+    70→  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent', stripColor: 'bg-emerald-accent' },
+    71→  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-forest/10 text-forest', stripColor: 'bg-forest' },
+    72→  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold', stripColor: 'bg-gold' },
+    73→  resource: { label: 'موارد', icon: FileText, color: 'bg-cyan-500/10 text-cyan-500', stripColor: 'bg-cyan-500' },
+    74→  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-amber-500/10 text-amber-500', stripColor: 'bg-amber-500' },
+    75→  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-purple-500/10 text-purple-500', stripColor: 'bg-purple-500' },
+    76→  research: { label: 'بحث', icon: Beaker, color: 'bg-rose-500/10 text-rose-500', stripColor: 'bg-rose-500' },
+    77→  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500' },
+    78→}
+    79→
+    80→const tagColors = [
+    81→  'bg-emerald-accent/15 text-emerald-accent',
+    82→  'bg-forest/15 text-forest',
+    83→  'bg-gold/15 text-gold',
+    84→  'bg-purple-500/15 text-purple-500',
+    85→  'bg-orange-500/15 text-orange-500',
+    86→  'bg-rose-500/15 text-rose-500',
+    87→  'bg-cyan-500/15 text-cyan-500',
+    88→  'bg-pink-500/15 text-pink-500',
+    89→  'bg-amber-500/15 text-amber-500',
+    90→  'bg-lime-500/15 text-lime-600',
+    91→]
+    92→
+    93→const tagBorderColors = [
+    94→  'border-emerald-accent/25',
+    95→  'border-forest/25',
+    96→  'border-gold/25',
+    97→  'border-purple-500/25',
+    98→  'border-orange-500/25',
+    99→  'border-rose-500/25',
+   100→  'border-cyan-500/25',
+   101→  'border-pink-500/25',
+   102→  'border-amber-500/25',
+   103→  'border-lime-500/25',
+   104→]
+   105→
+   106→const folders = [
+   107→  { id: 'all', label: 'الكل', icon: Archive },
+   108→  { id: 'general', label: 'عام', icon: FolderOpen },
+   109→  { id: 'work', label: 'العمل', icon: Briefcase },
+   110→  { id: 'personal', label: 'شخصي', icon: Star },
+   111→  { id: 'learning', label: 'تعلم', icon: BookMarked },
+   112→  { id: 'creative', label: 'إبداعي', icon: Palette },
+   113→]
+   114→
+   115→/* ────────────── Component ────────────── */
+   116→
+   117→export default function SecondBrain() {
+   118→  const [items, setItems] = useState<KnowledgeItem[]>([])
+   119→  const [loading, setLoading] = useState(true)
+   120→  const [searchQuery, setSearchQuery] = useState('')
+   121→  const [activeType, setActiveType] = useState('all')
+   122→  const [activeFolder, setActiveFolder] = useState('all')
+   123→  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+   124→  const [addDialogOpen, setAddDialogOpen] = useState(false)
+   125→
+   126→  // Quick Capture
+   127→  const [quickCapture, setQuickCapture] = useState('')
+   128→  const [isCapturing, setIsCapturing] = useState(false)
+   129→
+   130→  // Add form
+   131→  const [newType, setNewType] = useState('note')
+   132→  const [newTitle, setNewTitle] = useState('')
+   133→  const [newContent, setNewContent] = useState('')
+   134→  const [newFolder, setNewFolder] = useState('general')
+   135→  const [newTags, setNewTags] = useState('')
+   136→  const [newSource, setNewSource] = useState('')
+   137→
+   138→  // Edit
+   139→  const [editingId, setEditingId] = useState<string | null>(null)
+   140→  const [editTitle, setEditTitle] = useState('')
+   141→  const [editContent, setEditContent] = useState('')
+   142→
+   143→  const fetchItems = useCallback(async () => {
+   144→    try {
+   145→      const res = await fetch('/api/rise/knowledge')
+   146→      const data = await res.json()
+   147→      setItems(data.items || [])
+   148→    } catch {
+   149→      toast.error('فشل في تحميل البيانات')
+   150→    } finally {
+   151→      setLoading(false)
+   152→    }
+   153→  }, [])
+   154→
+   155→  useEffect(() => {
+   156→    fetchItems()
+   157→  }, [fetchItems])
+   158→
+   159→  // Quick Capture handler
+   160→  const handleQuickCapture = useCallback(async () => {
+   161→    const text = quickCapture.trim()
+   162→    if (!text) return
+   163→    setIsCapturing(true)
+   164→    try {
+   165→      await fetch('/api/rise/knowledge', {
+   166→        method: 'POST',
+   167→        headers: { 'Content-Type': 'application/json' },
+   168→        body: JSON.stringify({
+   169→          type: 'idea',
+   170→          title: text,
+   171→          content: '',
+   172→          folder: 'general',
+   173→          tags: null,
+   174→          source: null,
+   175→        }),
+   176→      })
+   177→      setQuickCapture('')
+   178→      toast.success('تم التقاط الفكرة بسرعة!')
+   179→      fetchItems()
+   180→    } catch {
+   181→      toast.error('فشل في الحفظ')
+   182→    } finally {
+   183→      setIsCapturing(false)
+   184→    }
+   185→  }, [quickCapture, fetchItems])
+   186→
+   187→  const handleAdd = async () => {
+   188→    if (!newTitle.trim()) return
+   189→    try {
+   190→      await fetch('/api/rise/knowledge', {
+   191→        method: 'POST',
+   192→        headers: { 'Content-Type': 'application/json' },
+   193→        body: JSON.stringify({
+   194→          type: newType,
+   195→          title: newTitle,
+   196→          content: newContent,
+   197→          folder: newFolder,
+   198→          tags: newTags ? JSON.stringify(newTags.split(',').map((t) => t.trim()).filter(Boolean)) : null,
+   199→          source: newSource || null,
+   200→        }),
+   201→      })
+   202→      toast.success('تمت الإضافة بنجاح')
+   203→      setNewTitle('')
+   204→      setNewContent('')
+   205→      setNewTags('')
+   206→      setNewSource('')
+   207→      setAddDialogOpen(false)
+   208→      fetchItems()
+   209→    } catch {
+   210→      toast.error('فشل في الإضافة')
+   211→    }
+   212→  }
+   213→
+   214→  const handleUpdate = async (id: string, data: Partial<KnowledgeItem>) => {
+   215→    try {
+   216→      await fetch('/api/rise/knowledge', {
+   217→        method: 'PUT',
+   218→        headers: { 'Content-Type': 'application/json' },
+   219→        body: JSON.stringify({ id, ...data }),
+   220→      })
+   221→      fetchItems()
+   222→    } catch {
+   223→      toast.error('فشل في التحديث')
+   224→    }
+   225→  }
+   226→
+   227→  const handleDelete = async (id: string) => {
+   228→    try {
+   229→      await fetch(`/api/rise/knowledge?id=${id}`, { method: 'DELETE' })
+   230→      toast.success('تم الحذف')
+   231→      fetchItems()
+   232→    } catch {
+   233→      toast.error('فشل في الحذف')
+   234→    }
+   235→  }
+   236→
+   237→  const toggleFavorite = (id: string, current: boolean) => {
+   238→    handleUpdate(id, { isFavorite: !current })
+   239→  }
+   240→
+   241→  const startEdit = (item: KnowledgeItem) => {
+   242→    setEditingId(item.id)
+   243→    setEditTitle(item.title)
+   244→    setEditContent(item.content)
+   245→  }
+   246→
+   247→  const saveEdit = () => {
+   248→    if (editingId) {
+   249→      handleUpdate(editingId, { title: editTitle, content: editContent })
+   250→      setEditingId(null)
+   251→    }
+   252→  }
+   253→
+   254→  // Filter
+   255→  const filtered = items.filter((item) => {
+   256→    if (activeType !== 'all' && item.type !== activeType) return false
+   257→    if (activeFolder !== 'all' && item.folder !== activeFolder) return false
+   258→    if (searchQuery) {
+   259→      const q = searchQuery.toLowerCase()
+   260→      return item.title.toLowerCase().includes(q) || item.content.toLowerCase().includes(q)
+   261→    }
+   262→    return true
+   263→  })
+   264→
+   265→  // All tags
+   266→  const allTags: string[] = []
+   267→  items.forEach((item) => {
+   268→    if (item.tags) {
+   269→      try {
+   270→        const tags: string[] = JSON.parse(item.tags)
+   271→        tags.forEach((t) => {
+   272→          if (!allTags.includes(t)) allTags.push(t)
+   273→        })
+   274→      } catch { /* ignore */ }
+   275→    }
+   276→  })
+   277→
+   278→  return (
+   279→    <div className="space-y-6">
+   280→      {/* Header */}
+   281→      <div className="flex items-center justify-between">
+   282→        <div>
+   283→          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   284→            <Network className="w-6 h-6 text-emerald-accent" />
+   285→            الدماغ الثاني
+   286→          </h2>
+   287→          <p className="text-sm text-muted-foreground mt-1">نظّم أفكارك ومعرفتك ومواريدك في مكان واحد</p>
+   288→        </div>
+   289→        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+   290→          <DialogTrigger asChild>
+   291→            <Button className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+   292→              <Plus className="w-4 h-4" />
+   293→              إضافة
+   294→            </Button>
+   295→          </DialogTrigger>
+   296→          <DialogContent className="sm:max-w-lg" dir="rtl">
+   297→            <DialogHeader><DialogTitle>إضافة عنصر جديد</DialogTitle></DialogHeader>
+   298→            <div className="space-y-4 mt-4">
+   299→              <div className="grid grid-cols-2 gap-3">
+   300→                <div className="space-y-2">
+   301→                  <label className="text-sm font-medium">النوع</label>
+   302→                  <Select value={newType} onValueChange={setNewType}>
+   303→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   304→                    <SelectContent>
+   305→                      {Object.entries(typeConfig).map(([key, cfg]) => (
+   306→                        <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+   307→                      ))}
+   308→                    </SelectContent>
+   309→                  </Select>
+   310→                </div>
+   311→                <div className="space-y-2">
+   312→                  <label className="text-sm font-medium">المجلد</label>
+   313→                  <Select value={newFolder} onValueChange={setNewFolder}>
+   314→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   315→                    <SelectContent>
+   316→                      {folders.filter((f) => f.id !== 'all').map((f) => (
+   317→                        <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>
+   318→                      ))}
+   319→                    </SelectContent>
+   320→                  </Select>
+   321→                </div>
+   322→              </div>
+   323→              <div className="space-y-2">
+   324→                <label className="text-sm font-medium">العنوان</label>
+   325→                <Input placeholder="عنوان العنصر" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+   326→              </div>
+   327→              <div className="space-y-2">
+   328→                <label className="text-sm font-medium">المحتوى</label>
+   329→                <Textarea placeholder="اكتب المحتوى هنا..." value={newContent} onChange={(e) => setNewContent(e.target.value)} rows={5} />
+   330→              </div>
+   331→              <div className="grid grid-cols-2 gap-3">
+   332→                <div className="space-y-2">
+   333→                  <label className="text-sm font-medium">الوسوم (مفصولة بفواصل)</label>
+   334→                  <Input placeholder="تصميم, تقنية, إنتاجية" value={newTags} onChange={(e) => setNewTags(e.target.value)} />
+   335→                </div>
+   336→                <div className="space-y-2">
+   337→                  <label className="text-sm font-medium">المصدر</label>
+   338→                  <Input placeholder="رابط أو اسم المصدر" value={newSource} onChange={(e) => setNewSource(e.target.value)} />
+   339→                </div>
+   340→              </div>
+   341→              <Button onClick={handleAdd} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newTitle.trim()}>
+   342→                إضافة
+   343→              </Button>
+   344→            </div>
+   345→          </DialogContent>
+   346→        </Dialog>
+   347→      </div>
+   348→
+   349→      {/* Quick Capture */}
+   350→      <motion.div
+   351→        initial={{ opacity: 0, y: 12 }}
+   352→        animate={{ opacity: 1, y: 0 }}
+   353→        transition={{ delay: 0.1 }}
+   354→      >
+   355→        <Card className="glass overflow-hidden">
+   356→          <div className="bg-gradient-to-l from-emerald-accent/8 via-emerald-accent/3 to-transparent p-4">
+   357→            <div className="flex items-center gap-3 mb-3">
+   358→              <motion.div
+   359→                className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20"
+   360→                whileHover={{ scale: 1.05, rotate: -5 }}
+   361→              >
+   362→                <Zap className="w-4.5 h-4.5 text-white" />
+   363→              </motion.div>
+   364→              <div>
+   365→                <h3 className="text-sm font-bold">التقاط سريع</h3>
+   366→                <p className="text-[11px] text-muted-foreground">اكتب فكرة واضغط Enter للحفظ الفوري</p>
+   367→              </div>
+   368→            </div>
+   369→            <div className="relative">
+   370→              <Input
+   371→                placeholder="اكتب فكرتك أو ملاحظتك هنا..."
+   372→                value={quickCapture}
+   373→                onChange={(e) => setQuickCapture(e.target.value)}
+   374→                onKeyDown={(e) => {
+   375→                  if (e.key === 'Enter') handleQuickCapture()
+   376→                }}
+   377→                className={cn(
+   378→                  'pl-11 pr-4 h-11 text-sm rounded-xl transition-all duration-300',
+   379→                  'border-emerald-accent/30 focus:border-emerald-accent/60 focus:ring-emerald-accent/20',
+   380→                  'bg-background/50 focus:bg-background',
+   381→                  quickCapture && !isCapturing && 'ring-2 ring-emerald-accent/15 border-emerald-accent/50'
+   382→                )}
+   383→                disabled={isCapturing}
+   384→              />
+   385→              <motion.button
+   386→                whileTap={{ scale: 0.9 }}
+   387→                onClick={handleQuickCapture}
+   388→                disabled={!quickCapture.trim() || isCapturing}
+   389→                className={cn(
+   390→                  'absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-xl text-white transition-all duration-200',
+   391→                  quickCapture.trim() && !isCapturing
+   392→                    ? 'bg-emerald-accent hover:bg-emerald-accent/90 shadow-md shadow-emerald-accent/25'
+   393→                    : 'bg-muted/70 text-muted-foreground'
+   394→                )}
+   395→              >
+   396→                {isCapturing ? (
+   397→                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+   398→                ) : (
+   399→                  <Plus className="w-4 h-4" />
+   400→                )}
+   401→              </motion.button>
+   402→            </div>
+   403→          </div>
+   404→        </Card>
+   405→      </motion.div>
+   406→
+   407→      {/* Layout: Sidebar + Content */}
+   408→      <div className="flex gap-4 flex-col lg:flex-row">
+   409→        {/* Sidebar */}
+   410→        <div className="lg:w-56 shrink-0 space-y-4">
+   411→          {/* Type Filter */}
+   412→          <Card className="glass">
+   413→            <CardContent className="p-3">
+   414→              <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">النوع</p>
+   415→              <div className="space-y-0.5">
+   416→                <button
+   417→                  onClick={() => setActiveType('all')}
+   418→                  className={cn(
+   419→                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right',
+   420→                    activeType === 'all'
+   421→                      ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+   422→                      : 'text-muted-foreground hover:bg-muted/50'
+   423→                  )}
+   424→                >
+   425→                  <Archive className="w-3.5 h-3.5" />
+   426→                  الكل
+   427→                </button>
+   428→                {Object.entries(typeConfig).map(([key, cfg]) => {
+   429→                  const Icon = cfg.icon
+   430→                  return (
+   431→                    <button
+   432→                      key={key}
+   433→                      onClick={() => setActiveType(key)}
+   434→                      className={cn(
+   435→                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right',
+   436→                        activeType === key
+   437→                          ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+   438→                          : 'text-muted-foreground hover:bg-muted/50'
+   439→                      )}
+   440→                    >
+   441→                      <Icon className="w-3.5 h-3.5" />
+   442→                      {cfg.label}
+   443→                    </button>
+   444→                  )
+   445→                })}
+   446→              </div>
+   447→            </CardContent>
+   448→          </Card>
+   449→
+   450→          {/* Folders */}
+   451→          <Card className="glass">
+   452→            <CardContent className="p-3">
+   453→              <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">المجلدات</p>
+   454→              <div className="space-y-0.5">
+   455→                {folders.map((folder) => {
+   456→                  const Icon = folder.icon
+   457→                  return (
+   458→                    <button
+   459→                      key={folder.id}
+   460→                      onClick={() => setActiveFolder(folder.id)}
+   461→                      className={cn(
+   462→                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right relative',
+   463→                        activeFolder === folder.id
+   464→                          ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+   465→                          : 'text-muted-foreground hover:bg-muted/50'
+   466→                      )}
+   467→                    >
+   468→                      {activeFolder === folder.id && (
+   469→                        <motion.div
+   470→                          layoutId="folder-indicator"
+   471→                          className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-full bg-emerald-accent"
+   472→                        />
+   473→                      )}
+   474→                      <Icon className="w-3.5 h-3.5" />
+   475→                      {folder.label}
+   476→                    </button>
+   477→                  )
+   478→                })}
+   479→              </div>
+   480→            </CardContent>
+   481→          </Card>
+   482→
+   483→          {/* Tags Cloud */}
+   484→          {allTags.length > 0 && (
+   485→            <Card className="glass">
+   486→              <CardContent className="p-3">
+   487→                <p className="text-xs font-semibold text-muted-foreground mb-2 px-1 flex items-center gap-1.5">
+   488→                  <Tag className="w-3 h-3" />
+   489→                  الوسوم
+   490→                </p>
+   491→                <div className="flex flex-wrap gap-1.5">
+   492→                  {allTags.map((tag, i) => (
+   493→                    <Badge
+   494→                      key={tag}
+   495→                      className={cn(
+   496→                        'text-[10px] rounded-full px-2.5 py-0.5 cursor-pointer hover:opacity-80 transition-all font-medium border',
+   497→                        tagColors[i % tagColors.length],
+   498→                        tagBorderColors[i % tagBorderColors.length]
+   499→                      )}
+   500→                    >
+   501→                      {tag}
+   502→                    </Badge>
+   503→                  ))}
+   504→                </div>
+   505→              </CardContent>
+   506→            </Card>
+   507→          )}
+   508→        </div>
+   509→
+   510→        {/* Main Content */}
+   511→        <div className="flex-1 min-w-0 space-y-4">
+   512→          {/* Search + View Toggle */}
+   513→          <div className="flex items-center gap-3">
+   514→            <div className="relative flex-1">
+   515→              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   516→              <Input
+   517→                placeholder="بحث في العناصر..."
+   518→                value={searchQuery}
+   519→                onChange={(e) => setSearchQuery(e.target.value)}
+   520→                className="pr-9"
+   521→              />
+   522→            </div>
+   523→            <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
+   524→              <button
+   525→                onClick={() => setViewMode('grid')}
+   526→                className={cn('p-1.5 rounded-md transition-colors', viewMode === 'grid' ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+   527→              >
+   528→                <Grid3X3 className="w-4 h-4" />
+   529→              </button>
+   530→              <button
+   531→                onClick={() => setViewMode('list')}
+   532→                className={cn('p-1.5 rounded-md transition-colors', viewMode === 'list' ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+   533→              >
+   534→                <List className="w-4 h-4" />
+   535→              </button>
+   536→            </div>
+   537→          </div>
+   538→
+   539→          {/* Items */}
+   540→          {loading ? (
+   541→            <div className={cn('gap-3', viewMode === 'grid' ? 'grid sm:grid-cols-2' : 'flex flex-col')}>
+   542→              {Array.from({ length: 6 }).map((_, i) => (
+   543→                <Card key={i} className="glass">
+   544→                  <CardContent className="p-4 space-y-3">
+   545→                    <Skeleton className="h-5 w-3/4" />
+   546→                    <Skeleton className="h-3 w-full" />
+   547→                    <Skeleton className="h-3 w-1/2" />
+   548→                  </CardContent>
+   549→                </Card>
+   550→              ))}
+   551→            </div>
+   552→          ) : filtered.length === 0 ? (
+   553→            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 text-center">
+   554→              <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+   555→                <Network className="w-8 h-8 text-muted-foreground/50" />
+   556→              </div>
+   557→              <p className="text-lg font-semibold text-muted-foreground">لا توجد عناصر</p>
+   558→              <p className="text-sm text-muted-foreground/70 mt-1">أضف أول عنصر أو استخدم التقاط السريع</p>
+   559→            </motion.div>
+   560→          ) : (
+   561→            <AnimatePresence mode="popLayout">
+   562→              <motion.div
+   563→                layout
+   564→                className={viewMode === 'grid' ? 'grid sm:grid-cols-2 gap-3' : 'flex flex-col gap-3'}
+   565→              >
+   566→                {filtered.map((item, i) => {
+   567→                  const cfg = typeConfig[item.type] || typeConfig.knowledge
+   568→                  const TypeIcon = cfg.icon
+   569→                  const tags: string[] = item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags) : []
+   570→
+   571→                  return (
+   572→                    <motion.div
+   573→                      key={item.id}
+   574→                      layout
+   575→                      initial={{ opacity: 0, y: 15 }}
+   576→                      animate={{ opacity: 1, y: 0 }}
+   577→                      exit={{ opacity: 0, scale: 0.95 }}
+   578→                      transition={{ delay: i * 0.03 }}
+   579→                    >
+   580→                      <Card className="glass group hover:shadow-lg transition-all overflow-hidden">
+   581→                        {/* Colored left strip */}
+   582→                        <div className="flex">
+   583→                          <div className={cn('w-1 rounded-l-lg shrink-0', cfg.stripColor)} />
+   584→                          <CardContent className="p-4 flex-1">
+   585→                            {editingId === item.id ? (
+   586→                              <div className="space-y-3">
+   587→                                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-sm font-semibold" />
+   588→                                <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} className="text-sm" />
+   589→                                <div className="flex gap-2">
+   590→                                  <Button size="sm" onClick={saveEdit} className="bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs">
+   591→                                    <Check className="w-3 h-3 ml-1" /> حفظ
+   592→                                  </Button>
+   593→                                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="text-xs">
+   594→                                    إلغاء
+   595→                                  </Button>
+   596→                                </div>
+   597→                              </div>
+   598→                            ) : (
+   599→                              <>
+   600→                                <div className="flex items-start justify-between gap-2 mb-2">
+   601→                                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+   602→                                    <div className={cn('p-2 rounded-lg shrink-0', cfg.color)}>
+   603→                                      <TypeIcon className="w-3.5 h-3.5" />
+   604→                                    </div>
+   605→                                    <div className="flex-1 min-w-0">
+   606→                                      <h3 className="font-semibold text-sm leading-snug truncate">{item.title}</h3>
+   607→                                      {item.content && (
+   608→                                        <p className={cn('text-xs text-muted-foreground mt-1', viewMode === 'grid' ? 'line-clamp-2' : 'line-clamp-1')}>
+   609→                                          {item.content}
+   610→                                        </p>
+   611→                                      )}
+   612→                                    </div>
+   613→                                  </div>
+   614→                                  <div className="flex items-center gap-0.5 shrink-0">
+   615→                                    <button
+   616→                                      onClick={() => toggleFavorite(item.id, item.isFavorite)}
+   617→                                      className={cn('p-1.5 rounded-lg transition-colors', item.isFavorite ? 'text-gold' : 'text-muted-foreground/30 hover:text-gold')}
+   618→                                    >
+   619→                                      <Star className={cn('w-3.5 h-3.5', item.isFavorite && 'fill-gold')} />
+   620→                                    </button>
+   621→                                    <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
+   622→                                      <Edit3 className="w-3.5 h-3.5" />
+   623→                                    </button>
+   624→                                    <button onClick={() => handleDelete(item.id)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100">
+   625→                                      <Trash2 className="w-3.5 h-3.5" />
+   626→                                    </button>
+   627→                                  </div>
+   628→                                </div>
+   629→
+   630→                                {tags.length > 0 && (
+   631→                                  <div className="flex flex-wrap gap-1 mt-2">
+   632→                                    {tags.map((tag, ti) => (
+   633→                                      <Badge
+   634→                                        key={tag}
+   635→                                        className={cn(
+   636→                                          'text-[10px] rounded-full px-2.5 py-0.5 font-medium border',
+   637→                                          tagColors[ti % tagColors.length],
+   638→                                          tagBorderColors[ti % tagBorderColors.length]
+   639→                                        )}
+   640→                                      >
+   641→                                        {tag}
+   642→                                      </Badge>
+   643→                                    ))}
+   644→                                  </div>
+   645→                                )}
+   646→
+   647→                                {item.source && (
+   648→                                  <p className="text-[10px] text-muted-foreground/60 mt-2 truncate">المصدر: {item.source}</p>
+   649→                                )}
+   650→                              </>
+   651→                            )}
+   652→                          </CardContent>
+   653→                        </div>
+   654→                      </Card>
+   655→                    </motion.div>
+   656→                  )
+   657→                })}
+   658→              </motion.div>
+   659→            </AnimatePresence>
+   660→          )}
+   661→        </div>
+   662→      </div>
+   663→    </div>
+   664→  )
+   665→}
+   666→

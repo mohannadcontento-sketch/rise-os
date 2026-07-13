@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   BarChart,
   Bar,
@@ -31,6 +31,7 @@ import {
   Scale,
   Calendar,
   Activity,
+  CheckCircle2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -70,12 +71,12 @@ const MOOD_EMOJIS = ['😞', '😐', '🙂', '😊', '😄']
 const MOOD_LABELS = ['سيء جداً', 'سيء', 'عادي', 'جيد', 'ممتاز']
 const ENERGY_LABELS = ['منهك', 'متعب', 'عادي', 'نشيط', 'ممتليء']
 const EXERCISE_TYPES = [
-  { value: 'جري', label: 'جري' },
-  { value: 'مشي', label: 'مشي' },
-  { value: 'أوزان', label: 'أوزان' },
-  { value: 'يوغا', label: 'يوغا' },
-  { value: 'سباحة', label: 'سباحة' },
-  { value: 'أخرى', label: 'أخرى' },
+  { value: 'جري', label: 'جري', icon: '🏃' },
+  { value: 'مشي', label: 'مشي', icon: '🚶' },
+  { value: 'أوزان', label: 'أوزان', icon: '🏋️' },
+  { value: 'يوغا', label: 'يوغا', icon: '🧘' },
+  { value: 'سباحة', label: 'سباحة', icon: '🏊' },
+  { value: 'أخرى', label: 'أخرى', icon: '⚡' },
 ]
 
 const SLEEP_QUALITY_LABELS = ['سيئة جداً', 'سيئة', 'متوسطة', 'جيدة', 'ممتازة']
@@ -105,6 +106,25 @@ const EMPTY_LOG = {
   exerciseType: '',
   exerciseMin: 0,
   exerciseNotes: '',
+}
+
+/* ────────────── Animated Counter ────────────── */
+
+function AnimatedCounter({ target }: { target: number }) {
+  const mv = useMotionValue(0)
+  const display = useTransform(mv, v => Math.round(v))
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const controls = animate(mv, target, { duration: 1.2, ease: 'easeOut' })
+    return controls.stop
+  }, [mv, target])
+  useEffect(() => {
+    const unsubscribe = display.on('change', v => {
+      if (ref.current) ref.current.textContent = String(v)
+    })
+    return unsubscribe
+  }, [display])
+  return <span ref={ref}>{target}</span>
 }
 
 /* ────────────── Component ────────────── */
@@ -268,6 +288,80 @@ export default function Health() {
     }))
   }, [data])
 
+  /* ─── Health Score ─── */
+  const healthScore = useMemo(() => {
+    const log = data?.todayLog
+    if (!log) return 50
+    let score = 0
+    // Sleep (0-25)
+    const sleepScore = Math.min(25, (log.sleepHours || 0) / 8 * 25)
+    score += sleepScore
+    // Water (0-25) - 8 glasses = max
+    const waterScore = Math.min(25, (log.waterGlasses || 0) / 8 * 25)
+    score += waterScore
+    // Exercise (0-25) - 30 min = max
+    const exerciseScore = Math.min(25, (log.exerciseMin || 0) / 30 * 25)
+    score += exerciseScore
+    // Mood (0-25)
+    const moodScore = (log.mood || 3) / 5 * 25
+    score += moodScore
+    return Math.round(score)
+  }, [data?.todayLog])
+
+  const healthScoreColor = healthScore >= 70 ? 'text-emerald-accent' : healthScore >= 40 ? 'text-gold' : 'text-red-500'
+  const healthScoreBg = healthScore >= 70 ? 'from-emerald-accent' : healthScore >= 40 ? 'from-gold' : 'from-red-500'
+
+  /* ─── Weekly Comparison ─── */
+  const weeklyComparison = useMemo(() => {
+    const logs = data?.logs || []
+    const today = new Date()
+    const thisWeekLogs = logs.filter(l => {
+      const d = new Date(l.date)
+      const weekAgo = new Date(today)
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      return d >= weekAgo && d <= today
+    })
+    const lastWeekLogs = logs.filter(l => {
+      const d = new Date(l.date)
+      const twoWeeksAgo = new Date(today)
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+      const oneWeekAgo = new Date(today)
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+      return d >= twoWeeksAgo && d < oneWeekAgo
+    })
+    const avg = (arr: HealthLog[]) => arr.length > 0
+      ? arr.reduce((s, l) => s + (l.mood || 3), 0) / arr.length
+      : 0
+    const avgWater = (arr: HealthLog[]) => arr.length > 0
+      ? arr.reduce((s, l) => s + (l.waterGlasses || 0), 0) / arr.length
+      : 0
+    return {
+      thisMood: Math.round(avg(thisWeekLogs) * 10) / 10,
+      lastMood: Math.round(avg(lastWeekLogs) * 10) / 10,
+      thisWater: Math.round(avgWater(thisWeekLogs) * 10) / 10,
+      lastWater: Math.round(avgWater(lastWeekLogs) * 10) / 10,
+    }
+  }, [data?.logs])
+
+  /* ─── Insight Cards ─── */
+  const healthInsights = useMemo(() => {
+    const items: { text: string; type: 'positive' | 'negative' | 'neutral'; icon: string }[] = []
+    const logs = data?.logs || []
+    if (logs.length >= 2) {
+      const recent = logs.slice(-3)
+      const avgSleep = recent.reduce((s, l) => s + (l.sleepHours || 0), 0) / recent.length
+      if (avgSleep >= 7) items.push({ text: 'نومك أفضل هذا الأسبوع! 👏', type: 'positive', icon: '🌙' })
+      else if (avgSleep < 6) items.push({ text: 'تحتاج لزيادة ساعات النوم', type: 'negative', icon: '😴' })
+      const avgWater = recent.reduce((s, l) => s + (l.waterGlasses || 0), 0) / recent.length
+      if (avgWater >= 6) items.push({ text: 'شربك للماء ممتاز! 💧', type: 'positive', icon: '💧' })
+      else if (avgWater < 4) items.push({ text: 'تحتاج لشرب مزيد من الماء', type: 'negative', icon: '💧' })
+      const avgMood = recent.reduce((s, l) => s + (l.mood || 3), 0) / recent.length
+      if (avgMood >= 4) items.push({ text: 'مزاجك إيجابي هذه الأيام! 😊', type: 'positive', icon: '😊' })
+    }
+    if (items.length === 0) items.push({ text: 'استمر في تتبع بياناتك اليومية!', type: 'neutral', icon: '💪' })
+    return items.slice(0, 3)
+  }, [data?.logs])
+
   const tooltipStyle = {
     backgroundColor: 'var(--color-popover)',
     border: '1px solid var(--color-border)',
@@ -328,6 +422,206 @@ export default function Health() {
             {saving ? 'جاري الحفظ...' : 'حفظ'}
           </Button>
         </motion.div>
+      </motion.div>
+
+      {/* Health Score Hero */}
+      <motion.div variants={itemVariants}>
+        <div className="premium-card rounded-2xl overflow-hidden relative">
+          <div className={cn("noise-bg absolute inset-0 bg-gradient-to-l", healthScoreBg, "/8 via-transparent to-transparent pointer-events-none")} />
+          <div className="relative z-10 p-6 flex flex-col items-center text-center gap-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">درجة الصحة اليوم</p>
+            <motion.div
+              className={cn("text-7xl font-black tabular-nums", healthScoreColor)}
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+            >
+              <AnimatedCounter target={healthScore} />
+            </motion.div>
+            <p className={cn("text-sm font-semibold", healthScoreColor)}>
+              {healthScore >= 70 ? 'ممتاز 🎉' : healthScore >= 40 ? 'جيد 👍' : 'يحتاج تحسين 💪'}
+            </p>
+            <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+              <span>نوم {data?.todayLog?.sleepHours || 0}س</span>
+              <span>·</span>
+              <span>ماء {data?.todayLog?.waterGlasses || 0} كوب</span>
+              <span>·</span>
+              <span>خطوات {data?.todayLog?.steps?.toLocaleString('ar-SA') || '٠'}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Daily Checklist + Weekly Comparison */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Daily Checklist */}
+        <Card className="glass border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
+              قائمة اليوم
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Water glasses as clickable icons */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground">الماء (هدف: ٨ أكواب)</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <motion.button
+                    key={i}
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => updateForm('waterGlasses', i < form.waterGlasses ? i : i + 1)}
+                    className="text-2xl transition-all"
+                  >
+                    <motion.span
+                      animate={{ scale: i < form.waterGlasses ? 1 : 0.8, opacity: i < form.waterGlasses ? 1 : 0.3 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                    >
+                      💧
+                    </motion.span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+            {/* Exercise toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Dumbbell className="w-4 h-4 text-emerald-accent" />
+                <span className="text-xs font-semibold text-muted-foreground">تمارين اليوم</span>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={() => updateForm('exerciseType', form.exerciseType ? '' : 'مشي')}
+                className={cn(
+                  "w-12 h-6 rounded-full transition-colors relative",
+                  form.exerciseType ? "bg-emerald-accent" : "bg-muted"
+                )}
+              >
+                <motion.div
+                  className={cn("absolute top-0.5 w-5 h-5 rounded-full shadow-md", form.exerciseType ? "left-0.5 bg-white" : "right-0.5 bg-muted-foreground/50")}
+                  animate={{ x: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              </motion.button>
+            </div>
+            {/* Sleep quality stars */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground">جودة النوم</p>
+                <span className="text-[10px] text-muted-foreground">{SLEEP_QUALITY_LABELS[form.sleepQuality - 1]}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <motion.button
+                    key={i}
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => updateForm('sleepQuality', i + 1)}
+                  >
+                    <Moon
+                      className={cn(
+                        "w-6 h-6 transition-colors",
+                        i < form.sleepQuality ? "text-indigo-400 fill-indigo-400" : "text-muted/30"
+                      )}
+                    />
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Weekly Comparison Mini Bar */}
+        <Card className="glass border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+              مقارنة أسبوعية
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Mood comparison */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">المزاج</span>
+                <span className="text-foreground font-medium">{weeklyComparison.thisMood} vs {weeklyComparison.lastMood}</span>
+              </div>
+              <div className="flex gap-2 h-4">
+                <div className="flex-1 bg-muted rounded-full overflow-hidden flex justify-end">
+                  <motion.div
+                    className="h-full bg-gold/50 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(weeklyComparison.lastMood / 5) * 100}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+                <div className="flex-1 bg-muted rounded-full overflow-hidden flex justify-end">
+                  <motion.div
+                    className="h-full bg-gold rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(weeklyComparison.thisMood / 5) * 100}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground">
+                <span>الأسبوع الماضي</span>
+                <span>هذا الأسبوع</span>
+              </div>
+            </div>
+            {/* Water comparison */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">الماء</span>
+                <span className="text-foreground font-medium">{weeklyComparison.thisWater} vs {weeklyComparison.lastWater}</span>
+              </div>
+              <div className="flex gap-2 h-4">
+                <div className="flex-1 bg-muted rounded-full overflow-hidden flex justify-end">
+                  <motion.div
+                    className="h-full bg-cyan-500/50 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (weeklyComparison.lastWater / 8) * 100)}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+                <div className="flex-1 bg-muted rounded-full overflow-hidden flex justify-end">
+                  <motion.div
+                    className="h-full bg-cyan-500 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (weeklyComparison.thisWater / 8) * 100)}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground">
+                <span>الأسبوع الماضي</span>
+                <span>هذا الأسبوع</span>
+              </div>
+            </div>
+            {/* Insight cards */}
+            <div className="space-y-2 pt-2">
+              {healthInsights.map((insight, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + i * 0.1 }}
+                  className={cn(
+                    "flex items-center gap-2 p-2.5 rounded-xl text-xs",
+                    insight.type === 'positive' && "bg-emerald-accent/8 text-emerald-accent border border-emerald-accent/15",
+                    insight.type === 'negative' && "bg-red-500/8 text-red-500 border border-red-500/15",
+                    insight.type === 'neutral' && "bg-muted/30 text-muted-foreground"
+                  )}
+                >
+                  <span className="text-base">{insight.icon}</span>
+                  <span className="font-medium">{insight.text}</span>
+                </motion.div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Today's Overview - 2x3 Grid */}
@@ -573,6 +867,7 @@ export default function Health() {
                       : 'border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50'
                   )}
                 >
+                  <span className="text-lg block mb-0.5">{type.icon}</span>
                   {type.label}
                 </motion.button>
               ))}
@@ -708,7 +1003,13 @@ export default function Health() {
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={25} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Bar dataKey="ساعات" fill="var(--color-emerald-accent)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                      <defs>
+                        <linearGradient id="sleepBarGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--color-emerald-accent)" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="var(--color-emerald-accent)" stopOpacity={0.3} />
+                        </linearGradient>
+                      </defs>
+                      <Bar dataKey="ساعات" fill="url(#sleepBarGrad)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -722,7 +1023,13 @@ export default function Health() {
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={25} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Bar dataKey="أكواب" fill="var(--color-cyan-500)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                      <defs>
+                        <linearGradient id="waterBarGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--color-cyan-500)" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="var(--color-cyan-500)" stopOpacity={0.3} />
+                        </linearGradient>
+                      </defs>
+                      <Bar dataKey="أكواب" fill="url(#waterBarGrad)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -758,6 +1065,12 @@ export default function Health() {
                       <Tooltip contentStyle={tooltipStyle} />
                       <Line type="monotone" dataKey="المزاج" stroke="var(--color-gold)" strokeWidth={2} dot={{ fill: 'var(--color-gold)', r: 3 }} />
                       <Line type="monotone" dataKey="الطاقة" stroke="var(--color-emerald-accent)" strokeWidth={2} dot={{ fill: 'var(--color-emerald-accent)', r: 3 }} />
+                      <defs>
+                        <linearGradient id="moodLineGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--color-gold)" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="var(--color-gold)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
                     </LineChart>
                   </ResponsiveContainer>
                 </div>

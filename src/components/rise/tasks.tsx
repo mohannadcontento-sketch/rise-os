@@ -25,7 +25,25 @@ import {
   Sparkles,
   Lock,
   Link2,
+  GripVertical,
 } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -395,6 +413,56 @@ export function Tasks() {
     { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/5' },
   ]
 
+  /* ── Drag & Drop state ── */
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const dragSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id))
+  }, [])
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    setActiveDragId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const activeTask = tasks.find((t) => t.id === String(active.id))
+    if (!activeTask) return
+
+    // Find tasks with same status
+    const statusTasks = tasks.filter((t) => t.status === activeTask.status)
+    const oldIndex = statusTasks.findIndex((t) => t.id === activeTask.id)
+    const newIndex = statusTasks.findIndex((t) => t.id === String(over.id))
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+
+    // Reorder within status group
+    const reordered = arrayMove(statusTasks, oldIndex, newIndex)
+    const updates = reordered.map((t, i) => ({ id: t.id, order: i }))
+
+    // Optimistic update
+    setTasks((prev) => {
+      const newTasks = prev.map((t) => {
+        if (t.status !== activeTask.status) return t
+        const idx = updates.findIndex((u) => u.id === t.id)
+        if (idx === -1) return t
+        return { ...t, order: updates[idx].order }
+      })
+      return newTasks.sort((a, b) => a.order - b.order)
+    })
+
+    try {
+      await Promise.all(updates.map((u) =>
+        fetch('/api/rise/tasks', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(u),
+        })
+      ))
+    } catch { fetchData() }
+  }, [tasks, fetchData])
+
+  const activeDragTask = activeDragId ? tasks.find((t) => t.id === activeDragId) : null
+
   /* ────────────── Render: Task Item (List) ────────────── */
   const renderTaskItem = (task: Task, index: number) => {
     const isExpanded = expandedId === task.id
@@ -423,6 +491,14 @@ export function Tasks() {
           whileHover={{ scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
         >
           <div className="flex items-start gap-3">
+            {/* Drag Handle */}
+            <div
+              className="pt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+              aria-label="اسحب لإعادة الترتيب"
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+
             {/* Checkbox */}
             <div className="pt-0.5">
               <motion.div
@@ -606,8 +682,18 @@ export function Tasks() {
   /* ────────────── Render: Board Card ────────────── */
   const boardColBorderColors: Record<string, string> = {
     todo: 'border-t-blue-500',
-    in_progress: 'border-t-gold',
-    done: 'border-t-emerald-accent',
+    in_progress: 'border-t-emerald-accent',
+    done: 'border-t-gold',
+  }
+  const boardColGradientBorders: Record<string, string> = {
+    todo: 'linear-gradient(135deg, oklch(0.55 0.22 260), oklch(0.60 0.18 250))',
+    in_progress: 'linear-gradient(135deg, oklch(0.65 0.17 163), oklch(0.55 0.14 163))',
+    done: 'linear-gradient(135deg, oklch(0.78 0.12 85), oklch(0.88 0.06 85))',
+  }
+  const boardColHeaderBg: Record<string, string> = {
+    todo: 'bg-blue-500/8',
+    in_progress: 'bg-emerald-accent/8',
+    done: 'bg-gold/8',
   }
   const renderBoardCard = (task: Task) => {
     const isDone = task.status === 'done'
@@ -622,10 +708,13 @@ export function Tasks() {
       >
         <motion.div
           className={cn(
-            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300 cursor-pointer',
+            'glass rounded-2xl p-4 border-r-4 transition-all duration-300 cursor-pointer',
             'hover:shadow-lg hover:shadow-emerald-accent/8',
             priorityBorderColors[task.priority] || 'border-r-border',
-            isDone && 'opacity-60'
+            isDone && 'opacity-60',
+            task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-500/[0.03]' : '',
+            task.priority === 'medium' ? 'bg-gold/[0.03]' : '',
+            task.priority === 'low' ? 'bg-emerald-accent/[0.03]' : '',
           )}
           whileHover={{ scale: 1.02, y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
           onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
@@ -747,6 +836,40 @@ export function Tasks() {
   }
 
   /* ────────────── Render: Main ────────────── */
+  if (filteredTasks.length === 0 && !loading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center justify-center py-16 text-center"
+      >
+        <div className="relative mb-6">
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-accent/15 to-forest/10 flex items-center justify-center">
+            <Inbox className="w-10 h-10 text-emerald-accent/50" />
+          </div>
+          <motion.div
+            className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-gold/20 flex items-center justify-center"
+            animate={{ y: [0, -5, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-gold" />
+          </motion.div>
+        </div>
+        <h3 className="text-lg font-bold text-foreground mb-2">لا توجد مهام بعد</h3>
+        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+          ابدأ بإضافة مهمتك الأولى ونظّم يومك بشكل أفضل. كل مهمة تُنجزها تقربك من أهدافك!
+        </p>
+        <Button
+          onClick={() => setAddOpen(true)}
+          className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+        >
+          <Plus className="w-4 h-4 ml-1.5" />
+          أضف أول مهمة
+        </Button>
+      </motion.div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       {/* Header bar */}
@@ -1072,46 +1195,68 @@ export function Tasks() {
         ))}
       </div>
 
-      {/* ── List View ── */}
+      {/* ── List View (with Drag & Drop) ── */}
       {view === 'list' && (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="space-y-2"
+        <DndContext
+          sensors={dragSensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
-          {STATUSES.map((status) => {
-            const col = statusColumns.find((c) => c.key === status)!
-            const statusTasks = groupedTasks[status]
-            return (
-              <div key={status}>
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <col.icon className={cn('w-4 h-4', col.color)} />
-                  <span className="text-sm font-semibold">{col.label}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
-                    {statusTasks.length}
+          <DragOverlay>
+            {activeDragTask ? (
+              <div className="glass rounded-2xl p-4 border-r-4 border-r-emerald-accent shadow-2xl shadow-emerald-accent/20 backdrop-blur-xl opacity-90 rotate-2 scale-105 max-w-md">
+                <div className="flex items-center gap-3">
+                  <GripVertical className="w-4 h-4 text-muted-foreground/50" />
+                  <span className="text-sm font-semibold text-foreground truncate">{activeDragTask.title}</span>
+                  <Badge className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[activeDragTask.priority])}>
+                    {priorityLabels[activeDragTask.priority]}
                   </Badge>
                 </div>
-                <AnimatePresence mode="popLayout">
-                  {statusTasks.length === 0 ? (
-                    <motion.div
-                      key="empty"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="glass rounded-2xl p-6 text-center text-sm text-muted-foreground"
-                    >
-                      لا توجد مهام
-                    </motion.div>
-                  ) : (
-                    <div className="space-y-2">
-                      {statusTasks.map((task, idx) => renderTaskItem(task, idx))}
-                    </div>
-                  )}
-                </AnimatePresence>
               </div>
-            )
-          })}
-        </motion.div>
+            ) : null}
+          </DragOverlay>
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-2"
+          >
+            {STATUSES.map((status) => {
+              const col = statusColumns.find((c) => c.key === status)!
+              const statusTasks = groupedTasks[status]
+              return (
+                <div key={status}>
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <col.icon className={cn('w-4 h-4', col.color)} />
+                    <span className="text-sm font-semibold">{col.label}</span>
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
+                      {statusTasks.length}
+                    </Badge>
+                  </div>
+                  <AnimatePresence mode="popLayout">
+                    {statusTasks.length === 0 ? (
+                      <motion.div
+                        key="empty"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="glass rounded-2xl p-6 text-center text-sm text-muted-foreground"
+                      >
+                        لا توجد مهام
+                      </motion.div>
+                    ) : (
+                      <SortableContext items={statusTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {statusTasks.map((task, idx) => renderTaskItem(task, idx))}
+                        </div>
+                      </SortableContext>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            })}
+          </motion.div>
+        </DndContext>
       )}
 
       {/* ── Board View ── */}
@@ -1125,12 +1270,12 @@ export function Tasks() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: statusColumns.indexOf(col) * 0.1 }}
-                className={cn('flex flex-col min-h-[200px] glass rounded-2xl p-3 border-t-4', boardColBorderColors[col.key])}
+                className={cn('flex flex-col min-h-[200px] glass rounded-2xl overflow-hidden border-t-[3px]', boardColBorderColors[col.key])}
               >
-                <div className={cn('flex items-center gap-2 mb-3 px-1', col.color)}>
+                <div className={cn('flex items-center gap-2 mb-3 px-3 pt-3 pb-2', col.color, boardColHeaderBg[col.key])}>
                   <col.icon className="w-4 h-4" />
                   <span className="text-sm font-semibold">{col.label}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5 min-w-[22px] px-1.5 rounded-full justify-center font-bold">
+                  <Badge variant="secondary" className="text-[10px] h-5 min-w-[22px] px-1.5 rounded-full justify-center font-bold bg-background/50">
                     {colTasks.length}
                   </Badge>
                 </div>

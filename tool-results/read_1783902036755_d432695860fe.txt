@@ -1,0 +1,1144 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  PieChart,
+     7→  Pie,
+     8→  Cell,
+     9→  BarChart,
+    10→  Bar,
+    11→  XAxis,
+    12→  YAxis,
+    13→  Tooltip,
+    14→  ResponsiveContainer,
+    15→  CartesianGrid,
+    16→} from 'recharts'
+    17→import {
+    18→  Wallet,
+    19→  TrendingUp,
+    20→  TrendingDown,
+    21→  PiggyBank,
+    22→  Landmark,
+    23→  Plus,
+    24→  Trash2,
+    25→  ArrowUpRight,
+    26→  ArrowDownRight,
+    27→  Repeat,
+    28→  CreditCard,
+    29→  Receipt,
+    30→  ShoppingBag,
+    31→  Utensils,
+    32→  Car,
+    33→  Home,
+    34→  Zap,
+    35→  Gift,
+    36→  GraduationCap,
+    37→  Briefcase,
+    38→  Heart,
+    39→  Sparkles,
+    40→  Shield,
+    41→  AlertTriangle,
+    42→  Target,
+    43→} from 'lucide-react'
+    44→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    45→import { Button } from '@/components/ui/button'
+    46→import { Input } from '@/components/ui/input'
+    47→import {
+    48→  Dialog,
+    49→  DialogContent,
+    50→  DialogHeader,
+    51→  DialogTitle,
+    52→  DialogTrigger,
+    53→} from '@/components/ui/dialog'
+    54→import { Badge } from '@/components/ui/badge'
+    55→import { Separator } from '@/components/ui/separator'
+    56→import { Skeleton } from '@/components/ui/skeleton'
+    57→import { cn } from '@/lib/utils'
+    58→import { toast } from 'sonner'
+    59→
+    60→/* ────────────── Types ────────────── */
+    61→
+    62→interface FinanceRecord {
+    63→  id: string
+    64→  type: string
+    65→  category: string
+    66→  description: string
+    67→  amount: number
+    68→  date: string
+    69→  recurring: boolean
+    70→}
+    71→
+    72→interface FinanceData {
+    73→  records: FinanceRecord[]
+    74→}
+    75→
+    76→/* ────────────── Constants ────────────── */
+    77→
+    78→const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string; borderColor: string; dotColor: string; trendValue?: number }> = {
+    79→  دخل: { label: 'الدخل', color: 'bg-emerald-accent/10 text-emerald-accent', icon: TrendingUp, amountColor: 'text-emerald-accent', borderColor: 'border-r-emerald-accent', dotColor: 'bg-emerald-accent', trendValue: 12 },
+    80→  مصروف: { label: 'المصروفات', color: 'bg-orange-500/10 text-orange-500', icon: TrendingDown, amountColor: 'text-orange-500', borderColor: 'border-r-orange-500', dotColor: 'bg-orange-500', trendValue: -5 },
+    81→  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest', borderColor: 'border-r-forest', dotColor: 'bg-forest', trendValue: 8 },
+    82→  استثمار: { label: 'الاستثمار', color: 'bg-sky-500/10 text-sky-500', icon: Landmark, amountColor: 'text-sky-500', borderColor: 'border-r-sky-500', dotColor: 'bg-sky-500', trendValue: 15 },
+    83→  اشتراك: { label: 'الاشتراكات', color: 'bg-purple-500/10 text-purple-500', icon: CreditCard, amountColor: 'text-purple-500', borderColor: 'border-r-purple-500', dotColor: 'bg-purple-500', trendValue: -3 },
+    84→}
+    85→
+    86→const TYPE_CARD_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; borderColor: string; activeBg: string }> = {
+    87→  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-emerald-accent/5', borderColor: 'border-emerald-accent/30', activeBg: 'bg-emerald-accent/15 ring-emerald-accent/40' },
+    88→  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-orange-500/5', borderColor: 'border-orange-500/30', activeBg: 'bg-orange-500/15 ring-orange-500/40' },
+    89→  ادخار: { label: 'الادخار', icon: PiggyBank, bg: 'bg-forest/5', borderColor: 'border-forest/30', activeBg: 'bg-forest/15 ring-forest/40' },
+    90→  استثمار: { label: 'الاستثمار', icon: Landmark, bg: 'bg-sky-500/5', borderColor: 'border-sky-500/30', activeBg: 'bg-sky-500/15 ring-sky-500/40' },
+    91→  اشتراك: { label: 'الاشتراكات', icon: CreditCard, bg: 'bg-purple-500/5', borderColor: 'border-purple-500/30', activeBg: 'bg-purple-500/15 ring-purple-500/40' },
+    92→}
+    93→
+    94→const CATEGORY_ICONS: Record<string, React.ElementType> = {
+    95→  راتب: Briefcase,
+    96→  حر: Sparkles,
+    97→  طعام: Utensils,
+    98→  مواصلات: Car,
+    99→  سكن: Home,
+   100→  فواتير: Zap,
+   101→  تسوق: ShoppingBag,
+   102→  هدايا: Gift,
+   103→  تعليم: GraduationCap,
+   104→  صحة: Heart,
+   105→  ترفيه: Gift,
+   106→  أخرى: Receipt,
+   107→}
+   108→
+   109→const PIE_COLORS = [
+   110→  'var(--color-emerald-accent)',
+   111→  'var(--color-gold)',
+   112→  'var(--color-forest)',
+   113→  'var(--color-forest-light)',
+   114→  'var(--color-chart-5)',
+   115→  'var(--color-chart-3)',
+   116→  'var(--color-chart-4)',
+   117→  'var(--color-chart-1)',
+   118→  'var(--color-chart-2)',
+   119→]
+   120→
+   121→const containerVariants = {
+   122→  hidden: { opacity: 0 },
+   123→  show: {
+   124→    opacity: 1,
+   125→    transition: { staggerChildren: 0.06 },
+   126→  },
+   127→}
+   128→
+   129→const itemVariants = {
+   130→  hidden: { opacity: 0, y: 16 },
+   131→  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+   132→}
+   133→
+   134→const EMPTY_FORM = {
+   135→  type: 'مصروف',
+   136→  category: '',
+   137→  description: '',
+   138→  amount: 0,
+   139→  date: new Date().toISOString().split('T')[0],
+   140→  recurring: false,
+   141→}
+   142→
+   143→/* ────────────── Budget System ────────────── */
+   144→
+   145→interface BudgetCategory {
+   146→  name: string
+   147→  limit: number
+   148→  icon: React.ElementType
+   149→}
+   150→
+   151→const DEFAULT_BUDGET_CATEGORIES: BudgetCategory[] = [
+   152→  { name: 'سكن', limit: 2000, icon: Home },
+   153→  { name: 'غذاء', limit: 1500, icon: Utensils },
+   154→  { name: 'تنقل', limit: 800, icon: Car },
+   155→  { name: 'اشتراكات', limit: 300, icon: CreditCard },
+   156→  { name: 'صحة', limit: 500, icon: Heart },
+   157→  { name: 'ترفيه', limit: 400, icon: Gift },
+   158→  { name: 'تعليم', limit: 600, icon: GraduationCap },
+   159→  { name: 'أخرى', limit: 500, icon: Receipt },
+   160→]
+   161→
+   162→function toArabicNum(n: number): string {
+   163→  return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+   164→}
+   165→
+   166→/* ────────────── Component ────────────── */
+   167→
+   168→export default function Finance() {
+   169→  const [data, setData] = useState<FinanceData | null>(null)
+   170→  const [loading, setLoading] = useState(true)
+   171→  const [dialogOpen, setDialogOpen] = useState(false)
+   172→  const [saving, setSaving] = useState(false)
+   173→  const [deleting, setDeleting] = useState<string | null>(null)
+   174→
+   175→  const [form, setForm] = useState({ ...EMPTY_FORM })
+   176→
+   177→  /* ─── Budget State ─── */
+   178→  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(DEFAULT_BUDGET_CATEGORIES)
+   179→  const [editingBudget, setEditingBudget] = useState<string | null>(null)
+   180→  const budgetEditRef = useRef<HTMLInputElement>(null)
+   181→  const [budgetImpact, setBudgetImpact] = useState<{ category: string; remaining: number; over: boolean } | null>(null)
+   182→
+   183→  // Load budgets from localStorage
+   184→  useEffect(() => {
+   185→    try {
+   186→      const stored = localStorage.getItem('rise-finance-budgets')
+   187→      if (stored) {
+   188→        const parsed = JSON.parse(stored) as Record<string, number>
+   189→        setBudgetCategories(prev =>
+   190→          prev.map(cat => ({
+   191→            ...cat,
+   192→            limit: parsed[cat.name] ?? cat.limit,
+   193→          }))
+   194→        )
+   195→      }
+   196→    } catch { /* ignore */ }
+   197→  }, [])
+   198→
+   199→  // Save budgets to localStorage
+   200→  const saveBudgets = useCallback((categories: BudgetCategory[]) => {
+   201→    const map: Record<string, number> = {}
+   202→    categories.forEach(cat => { map[cat.name] = cat.limit })
+   203→    localStorage.setItem('rise-finance-budgets', JSON.stringify(map))
+   204→  }, [])
+   205→
+   206→  /* ─── Fetch ─── */
+   207→  const fetchFinance = useCallback(async () => {
+   208→    try {
+   209→      const res = await fetch('/api/rise/finance')
+   210→      if (res.ok) {
+   211→        const json = await res.json()
+   212→        setData(json)
+   213→      }
+   214→    } catch {
+   215→      toast.error('فشل في تحميل البيانات المالية')
+   216→    } finally {
+   217→      setLoading(false)
+   218→    }
+   219→  }, [])
+   220→
+   221→  useEffect(() => {
+   222→    fetchFinance()
+   223→  }, [fetchFinance])
+   224→
+   225→  /* ─── Save Record ─── */
+   226→  const handleSave = async () => {
+   227→    if (!form.category || !form.amount) {
+   228→      toast.error('يرجى ملء الفئة والمبلغ')
+   229→      return
+   230→    }
+   231→    setSaving(true)
+   232→    try {
+   233→      const res = await fetch('/api/rise/finance', {
+   234→        method: 'POST',
+   235→        headers: { 'Content-Type': 'application/json' },
+   236→        body: JSON.stringify(form),
+   237→      })
+   238→      if (res.ok) {
+   239→        toast.success('تم إضافة السجل بنجاح ✨')
+   240→        // Show budget impact
+   241→        if (form.type === 'مصروف' && form.category && form.amount > 0) {
+   242→          const budgetItem = budgetData.items.find(b => b.name === form.category)
+   243→          if (budgetItem) {
+   244→            const newRemaining = budgetItem.remaining - form.amount
+   245→            setBudgetImpact({
+   246→              category: form.category,
+   247→              remaining: newRemaining,
+   248→              over: newRemaining < 0,
+   249→            })
+   250→            setTimeout(() => setBudgetImpact(null), 4000)
+   251→          }
+   252→        }
+   253→        setDialogOpen(false)
+   254→        setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
+   255→        fetchFinance()
+   256→      } else {
+   257→        toast.error('فشل في إضافة السجل')
+   258→      }
+   259→    } catch {
+   260→      toast.error('حدث خطأ أثناء الحفظ')
+   261→    } finally {
+   262→      setSaving(false)
+   263→    }
+   264→  }
+   265→
+   266→  /* ─── Delete Record ─── */
+   267→  const handleDelete = async (id: string) => {
+   268→    setDeleting(id)
+   269→    try {
+   270→      const res = await fetch(`/api/rise/finance?id=${id}`, { method: 'DELETE' })
+   271→      if (res.ok) {
+   272→        toast.success('تم حذف السجل')
+   273→        fetchFinance()
+   274→      }
+   275→    } catch {
+   276→      toast.error('فشل في حذف السجل')
+   277→    } finally {
+   278→      setDeleting(null)
+   279→    }
+   280→  }
+   281→
+   282→  const updateForm = (field: string, value: string | number | boolean) => {
+   283→    setForm((prev) => ({ ...prev, [field]: value }))
+   284→  }
+   285→
+   286→  /* ─── Computed Stats ─── */
+   287→  const stats = useMemo(() => {
+   288→    const records = data?.records || []
+   289→    const income = records.filter((r) => r.type === 'دخل').reduce((sum, r) => sum + r.amount, 0)
+   290→    const expenses = records.filter((r) => r.type === 'مصروف').reduce((sum, r) => sum + r.amount, 0)
+   291→    const savings = records.filter((r) => r.type === 'ادخار').reduce((sum, r) => sum + r.amount, 0)
+   292→    const investment = records.filter((r) => r.type === 'استثمار').reduce((sum, r) => sum + r.amount, 0)
+   293→    return { income, expenses, savings, investment }
+   294→  }, [data])
+   295→
+   296→  /* ─── Budget Computation ─── */
+   297→  const budgetData = useMemo(() => {
+   298→    const now = new Date()
+   299→    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+   300→    const monthExpenses = (data?.records || []).filter(
+   301→      (r) => r.type === 'مصروف' && r.date.startsWith(currentMonth)
+   302→    )
+   303→
+   304→    const categorySpending: Record<string, number> = {}
+   305→    monthExpenses.forEach((r) => {
+   306→      categorySpending[r.category] = (categorySpending[r.category] || 0) + r.amount
+   307→    })
+   308→
+   309→    let totalBudget = 0
+   310→    let totalSpent = 0
+   311→    let totalRemaining = 0
+   312→    let healthSum = 0
+   313→    let categoriesWithBudget = 0
+   314→
+   315→    const items = budgetCategories.map((cat) => {
+   316→      const spent = categorySpending[cat.name] || 0
+   317→      const remaining = Math.max(cat.limit - spent, 0)
+   318→      const percentage = cat.limit > 0 ? (spent / cat.limit) * 100 : 0
+   319→
+   320→      totalBudget += cat.limit
+   321→      totalSpent += spent
+   322→      totalRemaining += remaining
+   323→      categoriesWithBudget++
+   324→
+   325→      // Health: 100 if 0% spent, 0 if >= 100% spent, linear in between
+   326→      const health = Math.max(0, Math.min(100, 100 - percentage))
+   327→      healthSum += health
+   328→
+   329→      let barColor = 'bg-emerald-accent'
+   330→      if (percentage >= 100) barColor = 'bg-red-500'
+   331→      else if (percentage >= 80) barColor = 'bg-gold'
+   332→
+   333→      return { ...cat, spent, remaining, percentage, health, barColor }
+   334→    })
+   335→
+   336→    const overallHealth = categoriesWithBudget > 0 ? Math.round(healthSum / categoriesWithBudget) : 100
+   337→
+   338→    return { items, totalBudget, totalSpent, totalRemaining, overallHealth }
+   339→  }, [data, budgetCategories])
+   340→
+   341→  /* ─── Grouped Records ─── */
+   342→  const groupedRecords = useMemo(() => {
+   343→    const records = data?.records || []
+   344→    const groups: Record<string, FinanceRecord[]> = {}
+   345→    records.forEach((r) => {
+   346→      if (!groups[r.type]) groups[r.type] = []
+   347→      groups[r.type].push(r)
+   348→    })
+   349→    // Sort each group by date desc
+   350→    Object.values(groups).forEach((g) => g.sort((a, b) => b.date.localeCompare(a.date)))
+   351→    return groups
+   352→  }, [data])
+   353→
+   354→  /* ─── Expense by Category (for pie chart) ─── */
+   355→  const expenseByCategory = useMemo(() => {
+   356→    const expenses = (data?.records || []).filter((r) => r.type === 'مصروف')
+   357→    const map: Record<string, number> = {}
+   358→    expenses.forEach((r) => {
+   359→      map[r.category] = (map[r.category] || 0) + r.amount
+   360→    })
+   361→    return Object.entries(map)
+   362→      .map(([name, value]) => ({ name, قيمة: value }))
+   363→      .sort((a, b) => b.قيمة - a.قيمة)
+   364→  }, [data])
+   365→
+   366→  /* ─── Monthly Income vs Expenses ─── */
+   367→  const monthlyChartData = useMemo(() => {
+   368→    const records = data?.records || []
+   369→    const months: Record<string, { month: string; دخل: number; مصروفات: number }> = {}
+   370→    
+   371→    // Last 6 months
+   372→    for (let i = 5; i >= 0; i--) {
+   373→      const d = new Date()
+   374→      d.setMonth(d.getMonth() - i)
+   375→      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+   376→      months[key] = {
+   377→        month: d.toLocaleDateString('ar-SA', { month: 'short' }),
+   378→        دخل: 0,
+   379→        مصروفات: 0,
+   380→      }
+   381→    }
+   382→
+   383→    records.forEach((r) => {
+   384→      const key = r.date.substring(0, 7)
+   385→      if (months[key]) {
+   386→        if (r.type === 'دخل') months[key].دخل += r.amount
+   387→        if (r.type === 'مصروف') months[key].مصروفات += r.amount
+   388→      }
+   389→    })
+   390→
+   391→    return Object.values(months)
+   392→  }, [data])
+   393→
+   394→  const tooltipStyle = {
+   395→    backgroundColor: 'var(--color-popover)',
+   396→    border: '1px solid var(--color-border)',
+   397→    borderRadius: '12px',
+   398→    fontSize: '12px',
+   399→    direction: 'rtl' as const,
+   400→  }
+   401→
+   402→  const formatAmount = (amount: number) => {
+   403→    return amount.toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+   404→  }
+   405→
+   406→  /* ─── Loading ─── */
+   407→  if (loading) {
+   408→    return (
+   409→      <div className="space-y-4 p-4">
+   410→        <Skeleton className="h-8 w-48" />
+   411→        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   412→          {[1, 2, 3, 4].map((i) => (
+   413→            <Skeleton key={i} className="h-28 rounded-2xl" />
+   414→          ))}
+   415→        </div>
+   416→        <Skeleton className="h-64 rounded-2xl" />
+   417→      </div>
+   418→    )
+   419→  }
+   420→
+   421→  return (
+   422→    <motion.div
+   423→      variants={containerVariants}
+   424→      initial="hidden"
+   425→      animate="show"
+   426→      className="space-y-6 p-4 md:p-6"
+   427→    >
+   428→      {/* Header */}
+   429→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   430→        <div className="flex items-center gap-3">
+   431→          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
+   432→            <Wallet className="w-5 h-5 text-white" />
+   433→          </div>
+   434→          <div>
+   435→            <h2 className="text-xl font-bold text-foreground">المالية</h2>
+   436→            <p className="text-xs text-muted-foreground">تتبع دخلك ومصروفاتك واستثماراتك</p>
+   437→          </div>
+   438→        </div>
+   439→
+   440→        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   441→          <DialogTrigger asChild>
+   442→            <motion.div whileTap={{ scale: 0.95 }}>
+   443→              <Button className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-10 text-sm font-semibold">
+   444→                <Plus className="w-4 h-4 ml-1" />
+   445→                إضافة سجل
+   446→              </Button>
+   447→            </motion.div>
+   448→          </DialogTrigger>
+   449→          <DialogContent className="max-w-md glass border-0">
+   450→            <DialogHeader>
+   451→              <DialogTitle className="text-right flex items-center gap-2">
+   452→                <Plus className="w-5 h-5 text-emerald-accent" />
+   453→                سجل مالي جديد
+   454→              </DialogTitle>
+   455→            </DialogHeader>
+   456→            <div className="space-y-4 pt-2">
+   457→              {/* Type - Visual Cards instead of dropdown */}
+   458→              <div className="space-y-1.5">
+   459→                <label className="text-sm font-semibold text-foreground">النوع</label>
+   460→                <div className="grid grid-cols-5 gap-2">
+   461→                  {Object.entries(TYPE_CARD_CONFIG).map(([key, cfg]) => {
+   462→                    const Icon = cfg.icon
+   463→                    const isActive = form.type === key
+   464→                    return (
+   465→                      <motion.button
+   466→                        key={key}
+   467→                        type="button"
+   468→                        whileHover={{ scale: 1.05 }}
+   469→                        whileTap={{ scale: 0.95 }}
+   470→                        onClick={() => updateForm('type', key)}
+   471→                        className={cn(
+   472→                          'rounded-xl p-2.5 flex flex-col items-center gap-1 border transition-all duration-200',
+   473→                          isActive
+   474→                            ? `${cfg.activeBg} ring-1 shadow-sm`
+   475→                            : `${cfg.bg} ${cfg.borderColor} hover:shadow-sm`
+   476→                        )}
+   477→                      >
+   478→                        <Icon className={cn(
+   479→                          'w-4 h-4 transition-colors',
+   480→                          isActive ? cfg.activeBg.split(' ')[0].replace('bg-', 'text-').split('/')[0] : 'text-muted-foreground'
+   481→                        )} style={isActive ? { color: `var(--color-${key === 'دخل' ? 'emerald-accent' : key === 'مصروف' ? 'orange-500' : key === 'ادخار' ? 'forest' : key === 'استثمار' ? 'sky-500' : 'purple-500'})` } : undefined} />
+   482→                        <span className={cn(
+   483→                          'text-[10px] font-medium leading-tight text-center',
+   484→                          isActive ? 'text-foreground' : 'text-muted-foreground'
+   485→                        )}>
+   486→                          {cfg.label}
+   487→                        </span>
+   488→                      </motion.button>
+   489→                    )
+   490→                  })}
+   491→                </div>
+   492→              </div>
+   493→
+   494→              {/* Category */}
+   495→              <div className="space-y-1.5">
+   496→                <label className="text-sm font-semibold text-foreground">الفئة</label>
+   497→                <Input
+   498→                  value={form.category}
+   499→                  onChange={(e) => updateForm('category', e.target.value)}
+   500→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   501→                  placeholder="مثال: طعام، مواصلات..."
+   502→                  dir="rtl"
+   503→                />
+   504→              </div>
+   505→
+   506→              {/* Description */}
+   507→              <div className="space-y-1.5">
+   508→                <label className="text-sm font-semibold text-foreground">الوصف</label>
+   509→                <Input
+   510→                  value={form.description}
+   511→                  onChange={(e) => updateForm('description', e.target.value)}
+   512→                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   513→                  placeholder="وصف اختياري..."
+   514→                  dir="rtl"
+   515→                />
+   516→              </div>
+   517→
+   518→              {/* Amount & Date */}
+   519→              <div className="grid grid-cols-2 gap-3">
+   520→                <div className="space-y-1.5">
+   521→                  <label className="text-sm font-semibold text-foreground">المبلغ</label>
+   522→                  <Input
+   523→                    type="number"
+   524→                    value={form.amount || ''}
+   525→                    onChange={(e) => updateForm('amount', parseFloat(e.target.value) || 0)}
+   526→                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   527→                    placeholder="٠"
+   528→                    min={0}
+   529→                  />
+   530→                </div>
+   531→                <div className="space-y-1.5">
+   532→                  <label className="text-sm font-semibold text-foreground">التاريخ</label>
+   533→                  <Input
+   534→                    type="date"
+   535→                    value={form.date}
+   536→                    onChange={(e) => updateForm('date', e.target.value)}
+   537→                    className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
+   538→                  />
+   539→                </div>
+   540→              </div>
+   541→
+   542→              {/* Recurring toggle */}
+   543→              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+   544→                <input
+   545→                  type="checkbox"
+   546→                  checked={form.recurring}
+   547→                  onChange={(e) => updateForm('recurring', e.target.checked)}
+   548→                  className="w-4 h-4 rounded accent-emerald-accent"
+   549→                />
+   550→                <Repeat className="w-4 h-4 text-muted-foreground" />
+   551→                <span className="text-sm text-foreground">مكرر شهرياً</span>
+   552→              </label>
+   553→
+   554→              {/* Save */}
+   555→              <motion.div whileTap={{ scale: 0.98 }}>
+   556→                <Button
+   557→                  onClick={handleSave}
+   558→                  disabled={saving}
+   559→                  className="w-full bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 text-sm font-semibold"
+   560→                >
+   561→                  {saving ? 'جاري الحفظ...' : 'حفظ السجل'}
+   562→                </Button>
+   563→              </motion.div>
+   564→            </div>
+   565→          </DialogContent>
+   566→        </Dialog>
+   567→      </motion.div>
+   568→
+   569→      {/* ══════════ Budget Section ══════════ */}
+   570→      <motion.div variants={itemVariants}>
+   571→        <Card className="glass border-0 shadow-sm">
+   572→          <CardHeader className="pb-3">
+   573→            <div className="flex items-center justify-between">
+   574→              <CardTitle className="text-sm font-bold flex items-center gap-2">
+   575→                <Target className="w-4 h-4 text-emerald-accent" />
+   576→                الميزانية الشهرية
+   577→              </CardTitle>
+   578→              <div className="flex items-center gap-3">
+   579→                {/* Budget Health Indicator */}
+   580→                <div className="flex items-center gap-2">
+   581→                  <div className="relative w-8 h-8">
+   582→                    <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+   583→                      <circle cx="16" cy="16" r="13" fill="none" className="stroke-primary/10" strokeWidth="3" />
+   584→                      <motion.circle
+   585→                        cx="16"
+   586→                        cy="16"
+   587→                        r="13"
+   588→                        fill="none"
+   589→                        className={
+   590→                          budgetData.overallHealth >= 60 ? 'stroke-emerald-accent' :
+   591→                          budgetData.overallHealth >= 30 ? 'stroke-gold' : 'stroke-red-500'
+   592→                        }
+   593→                        strokeWidth="3"
+   594→                        strokeLinecap="round"
+   595→                        strokeDasharray={13 * 2 * Math.PI}
+   596→                        initial={{ strokeDashoffset: 13 * 2 * Math.PI }}
+   597→                        animate={{ strokeDashoffset: 13 * 2 * Math.PI * (1 - budgetData.overallHealth / 100) }}
+   598→                        transition={{ duration: 1, ease: 'easeOut' }}
+   599→                      />
+   600→                    </svg>
+   601→                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-foreground">
+   602→                      {toArabicNum(budgetData.overallHealth)}
+   603→                    </span>
+   604→                  </div>
+   605→                  <div className="text-right">
+   606→                    <p className="text-[10px] text-muted-foreground">صحة الميزانية</p>
+   607→                    <p className={cn(
+   608→                      'text-xs font-bold',
+   609→                      budgetData.overallHealth >= 60 ? 'text-emerald-accent' :
+   610→                      budgetData.overallHealth >= 30 ? 'text-gold' : 'text-red-500'
+   611→                    )}>
+   612→                      {budgetData.overallHealth >= 60 ? 'ممتازة' : budgetData.overallHealth >= 30 ? 'متوسطة' : 'حرجة'}
+   613→                    </p>
+   614→                  </div>
+   615→                </div>
+   616→              </div>
+   617→            </div>
+   618→          </CardHeader>
+   619→          <CardContent>
+   620→            {/* Budget Impact Alert */}
+   621→            <AnimatePresence>
+   622→              {budgetImpact && (
+   623→                <motion.div
+   624→                  initial={{ opacity: 0, height: 0 }}
+   625→                  animate={{ opacity: 1, height: 'auto' }}
+   626→                  exit={{ opacity: 0, height: 0 }}
+   627→                  className={cn(
+   628→                    'mb-4 p-3 rounded-xl flex items-center gap-2 text-sm font-medium',
+   629→                    budgetImpact.over
+   630→                      ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+   631→                      : 'bg-emerald-accent/10 text-emerald-accent border border-emerald-accent/20'
+   632→                  )}
+   633→                >
+   634→                  {budgetImpact.over ? (
+   635→                    <AlertTriangle className="w-4 h-4 shrink-0" />
+   636→                  ) : (
+   637→                    <Shield className="w-4 h-4 shrink-0" />
+   638→                  )}
+   639→                  <span>
+   640→                    {budgetImpact.over
+   641→                      ? `تجاوزت ميزانية "${budgetImpact.category}"! المتبقي: ${toArabicNum(Math.abs(budgetImpact.remaining))} ر.س`
+   642→                      : `المتبقي من "${budgetImpact.category}": ${toArabicNum(budgetImpact.remaining)} ر.س`
+   643→                    }
+   644→                  </span>
+   645→                </motion.div>
+   646→              )}
+   647→            </AnimatePresence>
+   648→
+   649→            {/* Total Remaining */}
+   650→            <div className="text-center mb-5">
+   651→              <p className="text-[11px] text-muted-foreground mb-1">المتبقي من الميزانية هذا الشهر</p>
+   652→              <p className={cn(
+   653→                'text-3xl font-black tracking-tight',
+   654→                budgetData.totalRemaining > budgetData.totalBudget * 0.3
+   655→                  ? 'text-emerald-accent'
+   656→                  : budgetData.totalRemaining > 0
+   657→                    ? 'text-gold'
+   658→                    : 'text-red-500'
+   659→              )}>
+   660→                {toArabicNum(budgetData.totalRemaining)}
+   661→                <span className="text-sm font-normal text-muted-foreground mr-1">ر.س</span>
+   662→              </p>
+   663→              <p className="text-[10px] text-muted-foreground mt-1">
+   664→                أنفقت {toArabicNum(budgetData.totalSpent)} من {toArabicNum(budgetData.totalBudget)} ر.س
+   665→              </p>
+   666→            </div>
+   667→
+   668→            {/* Category Budget Bars */}
+   669→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   670→              {budgetData.items.map((item) => {
+   671→                const Icon = item.icon
+   672→                return (
+   673→                  <div
+   674→                    key={item.name}
+   675→                    className="rounded-xl bg-muted/20 p-3 space-y-2 group"
+   676→                  >
+   677→                    <div className="flex items-center justify-between">
+   678→                      <div className="flex items-center gap-2">
+   679→                        <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center">
+   680→                          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+   681→                        </div>
+   682→                        <span className="text-sm font-medium text-foreground">{item.name}</span>
+   683→                      </div>
+   684→                      <div className="flex items-center gap-1.5">
+   685→                        {editingBudget === item.name ? (
+   686→                          <input
+   687→                            ref={budgetEditRef}
+   688→                            type="number"
+   689→                            defaultValue={item.limit}
+   690→                            min={0}
+   691→                            className="w-20 h-6 text-xs text-left rounded-md bg-muted border border-primary/20 px-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-accent/50"
+   692→                            dir="ltr"
+   693→                            onBlur={(e) => {
+   694→                              const val = parseFloat(e.target.value) || 0
+   695→                              const updated = budgetCategories.map(c =>
+   696→                                c.name === item.name ? { ...c, limit: val } : c
+   697→                              )
+   698→                              setBudgetCategories(updated)
+   699→                              saveBudgets(updated)
+   700→                              setEditingBudget(null)
+   701→                            }}
+   702→                            onKeyDown={(e) => {
+   703→                              if (e.key === 'Enter') {
+   704→                                (e.target as HTMLInputElement).blur()
+   705→                              }
+   706→                            }}
+   707→                            autoFocus
+   708→                          />
+   709→                        ) : (
+   710→                          <motion.button
+   711→                            whileTap={{ scale: 0.95 }}
+   712→                            onClick={() => setEditingBudget(item.name)}
+   713→                            className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-1.5 py-0.5 rounded hover:bg-primary/5 transition-colors"
+   714→                          >
+   715→                            {toArabicNum(item.limit)} ر.س
+   716→                          </motion.button>
+   717→                        )}
+   718→                      </div>
+   719→                    </div>
+   720→                    {/* Progress bar */}
+   721→                    <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
+   722→                      <motion.div
+   723→                        className={cn('h-full rounded-full', item.barColor)}
+   724→                        initial={{ width: 0 }}
+   725→                        animate={{ width: `${Math.min(item.percentage, 100)}%` }}
+   726→                        transition={{ duration: 0.6, ease: 'easeOut' }}
+   727→                      />
+   728→                    </div>
+   729→                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+   730→                      <span>أنفقت {toArabicNum(Math.round(item.spent))}</span>
+   731→                      <span className={cn(
+   732→                        item.percentage >= 100 ? 'text-red-500 font-semibold' :
+   733→                        item.percentage >= 80 ? 'text-gold font-medium' : ''
+   734→                      )}>
+   735→                        {item.percentage >= 100 ? 'تجاوز!' : `${toArabicNum(Math.round(100 - item.percentage))}٪ متبقي`}
+   736→                      </span>
+   737→                    </div>
+   738→                  </div>
+   739→                )
+   740→              })}
+   741→            </div>
+   742→          </CardContent>
+   743→        </Card>
+   744→      </motion.div>
+   745→
+   746→      {/* Summary Cards with colored left borders and trend arrows */}
+   747→      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+   748→        {/* Income */}
+   749→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   750→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-emerald-accent rounded-r-2xl" />
+   751→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   752→            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   753→              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+   754→            </div>
+   755→            <div className="flex items-center gap-1">
+   756→              <span className="text-xl font-bold text-emerald-accent count-up">
+   757→                {formatAmount(stats.income)}
+   758→              </span>
+   759→              {stats.income > 0 && (
+   760→                <motion.div
+   761→                  initial={{ opacity: 0, y: 5 }}
+   762→                  animate={{ opacity: 1, y: 0 }}
+   763→                  className="flex items-center"
+   764→                >
+   765→                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   766→                </motion.div>
+   767→              )}
+   768→            </div>
+   769→            <span className="text-[11px] text-muted-foreground">الدخل</span>
+   770→          </CardContent>
+   771→        </Card>
+   772→
+   773→        {/* Expenses */}
+   774→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   775→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-orange-500 rounded-r-2xl" />
+   776→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   777→            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+   778→              <TrendingDown className="w-4 h-4 text-orange-500" />
+   779→            </div>
+   780→            <div className="flex items-center gap-1">
+   781→              <span className="text-xl font-bold text-orange-500 count-up">
+   782→                {formatAmount(stats.expenses)}
+   783→              </span>
+   784→              {stats.expenses > 0 && (
+   785→                <motion.div
+   786→                  initial={{ opacity: 0, y: 5 }}
+   787→                  animate={{ opacity: 1, y: 0 }}
+   788→                  className="flex items-center"
+   789→                >
+   790→                  <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+   791→                </motion.div>
+   792→              )}
+   793→            </div>
+   794→            <span className="text-[11px] text-muted-foreground">المصروفات</span>
+   795→          </CardContent>
+   796→        </Card>
+   797→
+   798→        {/* Savings */}
+   799→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   800→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-forest rounded-r-2xl" />
+   801→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   802→            <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+   803→              <PiggyBank className="w-4 h-4 text-forest" />
+   804→            </div>
+   805→            <div className="flex items-center gap-1">
+   806→              <span className="text-xl font-bold text-forest count-up">
+   807→                {formatAmount(stats.savings)}
+   808→              </span>
+   809→              {stats.savings > 0 && (
+   810→                <motion.div
+   811→                  initial={{ opacity: 0, y: 5 }}
+   812→                  animate={{ opacity: 1, y: 0 }}
+   813→                  className="flex items-center"
+   814→                >
+   815→                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   816→                </motion.div>
+   817→              )}
+   818→            </div>
+   819→            <span className="text-[11px] text-muted-foreground">الادخار</span>
+   820→          </CardContent>
+   821→        </Card>
+   822→
+   823→        {/* Investment */}
+   824→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   825→          <div className="absolute top-0 right-0 bottom-0 w-1 bg-sky-500 rounded-r-2xl" />
+   826→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   827→            <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
+   828→              <Landmark className="w-4 h-4 text-sky-500" />
+   829→            </div>
+   830→            <div className="flex items-center gap-1">
+   831→              <span className="text-xl font-bold text-sky-500 count-up">
+   832→                {formatAmount(stats.investment)}
+   833→              </span>
+   834→              {stats.investment > 0 && (
+   835→                <motion.div
+   836→                  initial={{ opacity: 0, y: 5 }}
+   837→                  animate={{ opacity: 1, y: 0 }}
+   838→                  className="flex items-center"
+   839→                >
+   840→                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   841→                </motion.div>
+   842→              )}
+   843→            </div>
+   844→            <span className="text-[11px] text-muted-foreground">الاستثمار</span>
+   845→          </CardContent>
+   846→        </Card>
+   847→      </motion.div>
+   848→
+   849→      {/* Charts Row */}
+   850→      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   851→        {/* Expense Pie Chart with labels and legend */}
+   852→        <Card className="glass border-0 shadow-sm">
+   853→          <CardHeader className="pb-2">
+   854→            <CardTitle className="text-sm font-bold">توزيع المصروفات حسب الفئة</CardTitle>
+   855→          </CardHeader>
+   856→          <CardContent>
+   857→            {expenseByCategory.length === 0 ? (
+   858→              <div className="text-center py-10">
+   859→                <Receipt className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   860→                <p className="text-sm text-muted-foreground">لا توجد مصروفات بعد</p>
+   861→              </div>
+   862→            ) : (
+   863→              <div className="flex flex-col items-center">
+   864→                <div className="h-52 w-full relative">
+   865→                  <ResponsiveContainer width="100%" height="100%">
+   866→                    <PieChart>
+   867→                      <Pie
+   868→                        data={expenseByCategory}
+   869→                        cx="50%"
+   870→                        cy="50%"
+   871→                        innerRadius={50}
+   872→                        outerRadius={85}
+   873→                        paddingAngle={3}
+   874→                        dataKey="قيمة"
+   875→                        strokeWidth={0}
+   876→                      >
+   877→                        {expenseByCategory.map((_, index) => (
+   878→                          <Cell
+   879→                            key={index}
+   880→                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+   881→                            stroke="var(--color-card)"
+   882→                            strokeWidth={2}
+   883→                          />
+   884→                        ))}
+   885→                      </Pie>
+   886→                      <Tooltip
+   887→                        contentStyle={tooltipStyle}
+   888→                        formatter={(value: number) => [`${formatAmount(value)} ر.س`, 'المبلغ']}
+   889→                      />
+   890→                    </PieChart>
+   891→                  </ResponsiveContainer>
+   892→                  {/* Center label */}
+   893→                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+   894→                    <span className="text-xs text-muted-foreground">المجموع</span>
+   895→                    <span className="text-sm font-bold text-foreground">
+   896→                      {formatAmount(expenseByCategory.reduce((s, e) => s + e.قيمة, 0))}
+   897→                    </span>
+   898→                  </div>
+   899→                </div>
+   900→                {/* Legend with labels and percentages */}
+   901→                <div className="flex flex-wrap items-start gap-x-4 gap-y-2 justify-center mt-3 px-2">
+   902→                  {expenseByCategory.map((entry, index) => {
+   903→                    const total = expenseByCategory.reduce((s, e) => s + e.قيمة, 0)
+   904→                    const pct = total > 0 ? Math.round((entry.قيمة / total) * 100) : 0
+   905→                    return (
+   906→                      <div key={entry.name} className="flex items-center gap-1.5">
+   907→                        <div
+   908→                          className="w-2.5 h-2.5 rounded-sm"
+   909→                          style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+   910→                        />
+   911→                        <span className="text-[10px] text-muted-foreground">
+   912→                          {entry.name} ({pct}%)
+   913→                        </span>
+   914→                      </div>
+   915→                    )
+   916→                  })}
+   917→                </div>
+   918→              </div>
+   919→            )}
+   920→          </CardContent>
+   921→        </Card>
+   922→
+   923→        {/* Income vs Expenses Bar Chart */}
+   924→        <Card className="glass border-0 shadow-sm">
+   925→          <CardHeader className="pb-2">
+   926→            <CardTitle className="text-sm font-bold">الدخل مقابل المصروفات</CardTitle>
+   927→          </CardHeader>
+   928→          <CardContent>
+   929→            <div className="h-64">
+   930→              <ResponsiveContainer width="100%" height="100%">
+   931→                <BarChart data={monthlyChartData} barCategoryGap="15%">
+   932→                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+   933→                  <XAxis
+   934→                    dataKey="month"
+   935→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   936→                    axisLine={false}
+   937→                    tickLine={false}
+   938→                  />
+   939→                  <YAxis
+   940→                    tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }}
+   941→                    axisLine={false}
+   942→                    tickLine={false}
+   943→                    width={45}
+   944→                    tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+   945→                  />
+   946→                  <Tooltip
+   947→                    contentStyle={tooltipStyle}
+   948→                    formatter={(value: number, name: string) => [
+   949→                      `${formatAmount(value)} ر.س`,
+   950→                      name,
+   951→                    ]}
+   952→                  />
+   953→                  <Bar dataKey="دخل" fill="var(--color-emerald-accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
+   954→                  <Bar dataKey="مصروفات" fill="var(--color-orange-500)" radius={[4, 4, 0, 0]} opacity={0.85} />
+   955→                </BarChart>
+   956→              </ResponsiveContainer>
+   957→            </div>
+   958→          </CardContent>
+   959→        </Card>
+   960→      </motion.div>
+   961→
+   962→      {/* Monthly Summary */}
+   963→      <motion.div variants={itemVariants}>
+   964→        <Card className="glass border-0 shadow-sm">
+   965→          <CardHeader className="pb-3">
+   966→            <CardTitle className="text-sm font-bold flex items-center gap-2">
+   967→              <Receipt className="w-4 h-4 text-gold" />
+   968→              ملخص الشهر الحالي
+   969→            </CardTitle>
+   970→          </CardHeader>
+   971→          <CardContent>
+   972→            {(() => {
+   973→              const now = new Date()
+   974→              const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+   975→              const monthRecords = (data?.records || []).filter((r) => r.date.startsWith(currentMonth))
+   976→              const mIncome = monthRecords.filter((r) => r.type === 'دخل').reduce((s, r) => s + r.amount, 0)
+   977→              const mExpenses = monthRecords.filter((r) => r.type === 'مصروف').reduce((s, r) => s + r.amount, 0)
+   978→              const mSavings = monthRecords.filter((r) => r.type === 'ادخار').reduce((s, r) => s + r.amount, 0)
+   979→              const mInvestment = monthRecords.filter((r) => r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
+   980→              const mSubscriptions = monthRecords.filter((r) => r.type === 'اشتراك').reduce((s, r) => s + r.amount, 0)
+   981→              const net = mIncome - mExpenses - mSavings - mInvestment - mSubscriptions
+   982→              const savingsRate = mIncome > 0 ? Math.round(((mSavings + mInvestment) / mIncome) * 100) : 0
+   983→
+   984→              return (
+   985→                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   986→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+   987→                    <p className="text-[11px] text-muted-foreground mb-1">صافي الرصيد</p>
+   988→                    <div className="flex items-center justify-center gap-1">
+   989→                      <span className={cn('text-lg font-bold', net >= 0 ? 'text-emerald-accent' : 'text-orange-500')}>
+   990→                        {net >= 0 ? '+' : ''}{formatAmount(net)}
+   991→                      </span>
+   992→                      {net >= 0 ? (
+   993→                        <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+   994→                      ) : (
+   995→                        <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+   996→                      )}
+   997→                    </div>
+   998→                  </div>
+   999→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+  1000→                    <p className="text-[11px] text-muted-foreground mb-1">الاشتراكات</p>
+  1001→                    <span className="text-lg font-bold text-purple-500">{formatAmount(mSubscriptions)}</span>
+  1002→                  </div>
+  1003→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+  1004→                    <p className="text-[11px] text-muted-foreground mb-1">نسبة الادخار</p>
+  1005→                    <span className="text-lg font-bold text-forest">{savingsRate}%</span>
+  1006→                  </div>
+  1007→                  <div className="rounded-xl bg-muted/30 p-3 text-center">
+  1008→                    <p className="text-[11px] text-muted-foreground mb-1">عدد العمليات</p>
+  1009→                    <span className="text-lg font-bold text-foreground">{monthRecords.length}</span>
+  1010→                  </div>
+  1011→                </div>
+  1012→              )
+  1013→            })()}
+  1014→          </CardContent>
+  1015→        </Card>
+  1016→      </motion.div>
+  1017→
+  1018→      {/* Transaction List with alternating rows, colored dots, smooth delete animation */}
+  1019→      <motion.div variants={itemVariants}>
+  1020→        <Card className="glass border-0 shadow-sm">
+  1021→          <CardHeader className="pb-3">
+  1022→            <CardTitle className="text-sm font-bold">سجل المعاملات</CardTitle>
+  1023→          </CardHeader>
+  1024→          <CardContent>
+  1025→            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+  1026→              {Object.keys(groupedRecords).length === 0 ? (
+  1027→                <div className="text-center py-10">
+  1028→                  <Wallet className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+  1029→                  <p className="text-sm text-muted-foreground">لا توجد معاملات بعد</p>
+  1030→                  <p className="text-xs text-muted-foreground/60 mt-1">اضغط &quot;إضافة سجل&quot; للبدء</p>
+  1031→                </div>
+  1032→              ) : (
+  1033→                Object.entries(groupedRecords).map(([type, records]) => {
+  1034→                  const config = TYPE_CONFIG[type]
+  1035→                  if (!config) return null
+  1036→                  const Icon = config.icon
+  1037→                  const total = records.reduce((s, r) => s + r.amount, 0)
+  1038→
+  1039→                  return (
+  1040→                    <div key={type}>
+  1041→                      {/* Group header */}
+  1042→                      <div className="flex items-center gap-2 mb-2 px-1">
+  1043→                        <div className={cn('w-6 h-6 rounded-md flex items-center justify-center', config.color)}>
+  1044→                          <Icon className="w-3.5 h-3.5" />
+  1045→                        </div>
+  1046→                        <span className="text-sm font-semibold text-foreground">{config.label}</span>
+  1047→                        <Badge variant="secondary" className="text-[10px] rounded-full bg-muted text-muted-foreground border-0">
+  1048→                          {records.length}
+  1049→                        </Badge>
+  1050→                        <span className="text-xs text-muted-foreground mr-auto">
+  1051→                          {formatAmount(total)} ر.س
+  1052→                        </span>
+  1053→                      </div>
+  1054→
+  1055→                      {/* Records with alternating backgrounds and colored dots */}
+  1056→                      <div className="space-y-1.5 mb-4">
+  1057→                        <AnimatePresence mode="popLayout">
+  1058→                          {records.map((record, index) => {
+  1059→                            const CatIcon = CATEGORY_ICONS[record.category] || Receipt
+  1060→                            const isPositive = record.type === 'دخل'
+  1061→                            return (
+  1062→                              <motion.div
+  1063→                                key={record.id}
+  1064→                                layout
+  1065→                                initial={{ opacity: 0, x: 10, scale: 0.97 }}
+  1066→                                animate={{ opacity: 1, x: 0, scale: 1 }}
+  1067→                                exit={{ opacity: 0, x: -30, scale: 0.9, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.3, ease: 'easeIn' as const } }}
+  1068→                                transition={{
+  1069→                                  layout: { duration: 0.3 },
+  1070→                                }}
+  1071→                                className={cn(
+  1072→                                  'flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden',
+  1073→                                  index % 2 === 0 ? 'bg-muted/20' : 'bg-transparent',
+  1074→                                  'hover:shadow-sm hover:bg-muted/30'
+  1075→                                )}
+  1076→                              >
+  1077→                                {/* Colored type dot */}
+  1078→                                <div className={cn('w-2 h-2 rounded-full shrink-0', config.dotColor)} />
+  1079→
+  1080→                                <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', config.color)}>
+  1081→                                  <CatIcon className="w-4 h-4" />
+  1082→                                </div>
+  1083→                                <div className="flex-1 min-w-0">
+  1084→                                  <div className="flex items-center gap-2">
+  1085→                                    <span className="text-sm font-medium text-foreground truncate">
+  1086→                                      {record.description || record.category}
+  1087→                                    </span>
+  1088→                                    {record.recurring && (
+  1089→                                      <Repeat className="w-3 h-3 text-muted-foreground shrink-0" />
+  1090→                                    )}
+  1091→                                  </div>
+  1092→                                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+  1093→                                    <span>{record.category}</span>
+  1094→                                    <span>•</span>
+  1095→                                    <span>
+  1096→                                      {new Date(record.date).toLocaleDateString('ar-SA', {
+  1097→                                        month: 'short',
+  1098→                                        day: 'numeric',
+  1099→                                      })}
+  1100→                                    </span>
+  1101→                                  </div>
+  1102→                                </div>
+  1103→                                <div className="flex items-center gap-2 shrink-0">
+  1104→                                  <div className="text-left">
+  1105→                                    <span className={cn('text-sm font-bold', config.amountColor)}>
+  1106→                                      {isPositive ? '+' : '-'}{formatAmount(record.amount)}
+  1107→                                    </span>
+  1108→                                  </div>
+  1109→                                  <motion.button
+  1110→                                    whileHover={{ scale: 1.1 }}
+  1111→                                    whileTap={{ scale: 0.85 }}
+  1112→                                    onClick={() => handleDelete(record.id)}
+  1113→                                    disabled={deleting === record.id}
+  1114→                                    className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+  1115→                                  >
+  1116→                                    {deleting === record.id ? (
+  1117→                                      <motion.div
+  1118→                                        animate={{ rotate: 360 }}
+  1119→                                        transition={{ duration: 0.5, repeat: Infinity, ease: 'linear' }}
+  1120→                                        className="w-3.5 h-3.5 border-2 border-destructive/30 border-t-destructive rounded-full"
+  1121→                                      />
+  1122→                                    ) : (
+  1123→                                      <Trash2 className="w-3.5 h-3.5" />
+  1124→                                    )}
+  1125→                                  </motion.button>
+  1126→                                </div>
+  1127→                              </motion.div>
+  1128→                            )
+  1129→                          })}
+  1130→                        </AnimatePresence>
+  1131→                      </div>
+  1132→
+  1133→                      <Separator className="my-2" />
+  1134→                    </div>
+  1135→                  )
+  1136→                })
+  1137→              )}
+  1138→            </div>
+  1139→          </CardContent>
+  1140→        </Card>
+  1141→      </motion.div>
+  1142→    </motion.div>
+  1143→  )
+  1144→}

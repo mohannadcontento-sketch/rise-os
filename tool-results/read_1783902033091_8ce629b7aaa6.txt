@@ -1,0 +1,523 @@
+  1200→        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
+  1201→          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+  1202→            <div className="flex items-center gap-4">
+  1203→              <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+  1204→                <Target className="w-7 h-7 text-forest" />
+  1205→              </div>
+  1206→              <div className="flex-1 min-w-0">
+  1207→                <p className="text-xs text-muted-foreground mb-0.5">العادات</p>
+  1208→                <p className="text-xl font-bold text-foreground">
+  1209→                  <AnimatedNumber value={today.habitsCompleted} />
+  1210→                  <span className="text-sm font-normal text-muted-foreground mr-1">
+  1211→                    / {toArabicNum(today.habitsTotal)}
+  1212→                  </span>
+  1213→                </p>
+  1214→              </div>
+  1215→            </div>
+  1216→            <div className="mt-3 flex items-center justify-between">
+  1217→              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+  1218→              <MiniSparkline data={habitTrend} color="bg-forest" />
+  1219→            </div>
+  1220→          </PremiumGlass>
+  1221→        </motion.div>
+  1222→
+  1223→        {/* Focus */}
+  1224→        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
+  1225→          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+  1226→            <div className="flex items-center gap-4">
+  1227→              <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+  1228→                <Clock className="w-7 h-7 text-gold" />
+  1229→              </div>
+  1230→              <div className="flex-1 min-w-0">
+  1231→                <p className="text-xs text-muted-foreground mb-0.5">التركيز</p>
+  1232→                <p className="text-xl font-bold text-foreground">
+  1233→                  <AnimatedNumber value={today.focusMin} />
+  1234→                  <span className="text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
+  1235→                </p>
+  1236→              </div>
+  1237→            </div>
+  1238→            <div className="mt-3 flex items-center justify-between">
+  1239→              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+  1240→              <MiniSparkline data={focusTrend} color="bg-gold" />
+  1241→            </div>
+  1242→          </PremiumGlass>
+  1243→        </motion.div>
+  1244→      </motion.div>
+  1245→
+  1246→      {/* ══════════ 3. Weekly Score Chart ══════════ */}
+  1247→      {chartData.length > 0 && (
+  1248→        <motion.div variants={itemVariants}>
+  1249→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1250→            <CardHeader className="pb-3 pt-0">
+  1251→              <SectionHeader icon={TrendingUp} iconColor="text-emerald-accent">
+  1252→                أداء الأسبوع
+  1253→              </SectionHeader>
+  1254→            </CardHeader>
+  1255→            <CardContent className="pt-0">
+  1256→              <PremiumGlass className="p-4 lg:p-5" style={{ height: 250 }}>
+  1257→                <ResponsiveContainer width="100%" height="100%">
+  1258→                  <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+  1259→                    <defs>
+  1260→                      <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+  1261→                        <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.35} />
+  1262→                        <stop offset="50%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.12} />
+  1263→                        <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+  1264→                      </linearGradient>
+  1265→                    </defs>
+  1266→                    <XAxis
+  1267→                      dataKey="dayLabel"
+  1268→                      axisLine={false}
+  1269→                      tickLine={false}
+  1270→                      tick={{ fill: 'oklch(0.50 0.01 160)', fontSize: 11 }}
+  1271→                      dy={8}
+  1272→                    />
+  1273→                    <YAxis
+  1274→                      domain={[0, 100]}
+  1275→                      axisLine={false}
+  1276→                      tickLine={false}
+  1277→                      tick={{ fill: 'oklch(0.50 0.01 160)', fontSize: 11 }}
+  1278→                      dx={-4}
+  1279→                      width={28}
+  1280→                    />
+  1281→                    <RechartsTooltip content={<ChartTooltip />} />
+  1282→                    <Area
+  1283→                      type="monotone"
+  1284→                      dataKey="score"
+  1285→                      stroke="oklch(0.55 0.14 163)"
+  1286→                      strokeWidth={2.5}
+  1287→                      fill="url(#scoreGradient)"
+  1288→                      dot={{ r: 4, fill: 'oklch(0.55 0.14 163)', strokeWidth: 2, stroke: 'var(--card)' }}
+  1289→                      activeDot={{ r: 6, fill: 'oklch(0.55 0.14 163)', strokeWidth: 2, stroke: 'var(--card)' }}
+  1290→                      name="الدرجة"
+  1291→                    />
+  1292→                  </AreaChart>
+  1293→                </ResponsiveContainer>
+  1294→              </PremiumGlass>
+  1295→            </CardContent>
+  1296→          </Card>
+  1297→        </motion.div>
+  1298→      )}
+  1299→
+  1300→      {/* ══════════ 4. Two-column Layout ══════════ */}
+  1301→      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1302→
+  1303→        {/* ── Right Column: Tasks + Goals ── */}
+  1304→        <div className="space-y-6">
+  1305→          {/* Upcoming Tasks */}
+  1306→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1307→            <CardHeader className="pb-3 pt-0">
+  1308→              <SectionHeader icon={CheckCircle2} iconColor="text-emerald-accent" badge={
+  1309→                <Badge variant="secondary" className="text-[10px]">
+  1310→                  {toArabicNum(upcomingTasks.length)} مهام
+  1311→                </Badge>
+  1312→              }>
+  1313→                المهام القادمة
+  1314→              </SectionHeader>
+  1315→            </CardHeader>
+  1316→            <CardContent className="pt-0">
+  1317→              <PremiumGlass className="divide-y divide-border/30 overflow-hidden">
+  1318→                {upcomingTasks.length === 0 ? (
+  1319→                  <div className="p-6 text-center text-sm text-muted-foreground">
+  1320→                    <Sparkles className="w-8 h-8 mx-auto mb-2 text-gold/40" />
+  1321→                    لا توجد مهام قادمة
+  1322→                  </div>
+  1323→                ) : (
+  1324→                  upcomingTasks.map((task, i) => (
+  1325→                    <motion.div
+  1326→                      key={task.id}
+  1327→                      initial={{ opacity: 0, x: -12 }}
+  1328→                      animate={{ opacity: 1, x: 0 }}
+  1329→                      transition={{ delay: 0.3 + i * 0.06, duration: 0.35 }}
+  1330→                      className={cn(
+  1331→                        'flex items-center gap-3 px-4 py-3 last:pb-3 first:pt-3 transition-all duration-200',
+  1332→                        getPriorityBorderColor(task.priority),
+  1333→                        'hover:bg-emerald-accent/[0.03] dark:hover:bg-emerald-accent/[0.05]'
+  1334→                      )}
+  1335→                    >
+  1336→                      <span className="flex-1 text-sm font-medium text-foreground truncate">{task.title}</span>
+  1337→                      {task.projectName && (
+  1338→                        <span
+  1339→                          className="text-[10px] px-2 py-0.5 rounded-full font-medium hidden sm:inline-block"
+  1340→                          style={{ backgroundColor: `${task.projectColor}15`, color: task.projectColor }}
+  1341→                        >
+  1342→                          {task.projectName}
+  1343→                        </span>
+  1344→                      )}
+  1345→                      <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0', getPriorityColor(task.priority))}>
+  1346→                        {getPriorityLabel(task.priority)}
+  1347→                      </Badge>
+  1348→                    </motion.div>
+  1349→                  ))
+  1350→                )}
+  1351→              </PremiumGlass>
+  1352→            </CardContent>
+  1353→          </Card>
+  1354→
+  1355→          {/* Active Goals */}
+  1356→          {activeGoals.length > 0 && (
+  1357→            <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1358→              <CardHeader className="pb-3 pt-0">
+  1359→                <SectionHeader icon={Target} iconColor="text-forest" badge={
+  1360→                  <Badge variant="secondary" className="text-[10px]">
+  1361→                    {toArabicNum(activeGoals.length)} أهداف
+  1362→                  </Badge>
+  1363→                }>
+  1364→                  الأهداف النشطة
+  1365→                </SectionHeader>
+  1366→              </CardHeader>
+  1367→              <CardContent className="pt-0">
+  1368→                <PremiumGlass className="p-4 space-y-4">
+  1369→                  {activeGoals.map((goal, i) => (
+  1370→                    <motion.div
+  1371→                      key={goal.id}
+  1372→                      initial={{ opacity: 0, y: 8 }}
+  1373→                      animate={{ opacity: 1, y: 0 }}
+  1374→                      transition={{ delay: 0.4 + i * 0.08, duration: 0.35 }}
+  1375→                      className="space-y-2"
+  1376→                    >
+  1377→                      <div className="flex items-center justify-between">
+  1378→                        <div className="flex items-center gap-2 min-w-0">
+  1379→                          <div className="w-2 h-2 rounded-full bg-forest shrink-0" />
+  1380→                          <span className="text-sm font-medium text-foreground truncate">{goal.title}</span>
+  1381→                        </div>
+  1382→                        <span className="text-xs font-semibold text-emerald-accent shrink-0 mr-2">
+  1383→                          {toArabicNum(Math.round(goal.progress))}٪
+  1384→                        </span>
+  1385→                      </div>
+  1386→                      <Progress value={goal.progress} className="h-1.5" />
+  1387→                      <p className="text-[10px] text-muted-foreground">
+  1388→                        الموعد: {new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
+  1389→                      </p>
+  1390→                    </motion.div>
+  1391→                  ))}
+  1392→                </PremiumGlass>
+  1393→              </CardContent>
+  1394→            </Card>
+  1395→          )}
+  1396→        </div>
+  1397→
+  1398→        {/* ── Left Column: Habits + Achievements ── */}
+  1399→        <div className="space-y-6">
+  1400→          {/* Today's Habits */}
+  1401→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1402→            <CardHeader className="pb-3 pt-0">
+  1403→              <SectionHeader icon={Flame} iconColor="text-orange-500" badge={
+  1404→                <Badge variant="secondary" className="text-[10px]">
+  1405→                  {toArabicNum(today.habitsCompleted)} / {toArabicNum(today.habitsTotal)}
+  1406→                </Badge>
+  1407→              }>
+  1408→                تتبع العادات اليوم
+  1409→              </SectionHeader>
+  1410→            </CardHeader>
+  1411→            <CardContent className="pt-0">
+  1412→              <PremiumGlass className="p-4">
+  1413→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+  1414→                  {habits.map((habit, i) => (
+  1415→                    <motion.div
+  1416→                      key={habit.id}
+  1417→                      initial={{ opacity: 0, scale: 0.95 }}
+  1418→                      animate={{ opacity: 1, scale: 1 }}
+  1419→                      transition={{ delay: 0.35 + i * 0.06, duration: 0.3 }}
+  1420→                      className={cn(
+  1421→                        'flex items-center gap-3 rounded-xl p-3 transition-all duration-200',
+  1422→                        habit.todayCompleted
+  1423→                          ? 'bg-emerald-accent/5 border border-emerald-accent/15'
+  1424→                          : 'hover:bg-primary/[0.02] border border-transparent'
+  1425→                      )}
+  1426→                    >
+  1427→                      <Checkbox
+  1428→                        checked={habit.todayCompleted}
+  1429→                        disabled
+  1430→                        className={cn(
+  1431→                          habit.todayCompleted && 'data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+  1432→                        )}
+  1433→                      />
+  1434→                      <div
+  1435→                        className={cn(
+  1436→                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-lg transition-shadow duration-300',
+  1437→                          habit.todayCompleted && 'pulse-glow'
+  1438→                        )}
+  1439→                        style={{
+  1440→                          backgroundColor: `${habit.color}15`,
+  1441→                          boxShadow: habit.todayCompleted ? `0 0 12px ${habit.color}40` : 'none',
+  1442→                        }}
+  1443→                      >
+  1444→                        {habit.icon}
+  1445→                      </div>
+  1446→                      <div className="flex-1 min-w-0">
+  1447→                        <p className={cn('text-sm font-medium truncate', habit.todayCompleted ? 'text-foreground/60 line-through' : 'text-foreground')}>
+  1448→                          {habit.name}
+  1449→                        </p>
+  1450→                        <p className="text-[10px] text-muted-foreground">
+  1451→                          {toArabicNum(habit.todayCount)} / {toArabicNum(habit.targetCount)} · +{toArabicNum(habit.xpReward)} خبرة
+  1452→                        </p>
+  1453→                      </div>
+  1454→                    </motion.div>
+  1455→                  ))}
+  1456→                </div>
+  1457→              </PremiumGlass>
+  1458→            </CardContent>
+  1459→          </Card>
+  1460→
+  1461→          {/* Recent Achievements */}
+  1462→          {achievements.length > 0 && (
+  1463→            <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1464→              <CardHeader className="pb-3 pt-0">
+  1465→                <SectionHeader icon={Award} iconColor="text-gold">
+  1466→                  الإنجازات الأخيرة
+  1467→                </SectionHeader>
+  1468→              </CardHeader>
+  1469→              <CardContent className="pt-0">
+  1470→                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+  1471→                  {achievements.map((ach, i) => (
+  1472→                    <motion.div
+  1473→                      key={i}
+  1474→                      initial={{ opacity: 0, y: 12 }}
+  1475→                      animate={{ opacity: 1, y: 0 }}
+  1476→                      transition={{ delay: 0.5 + i * 0.08, duration: 0.35 }}
+  1477→                      whileHover={{ y: -3, transition: { duration: 0.2 } }}
+  1478→                      className="shine glass rounded-xl p-3 min-w-[140px] flex-shrink-0 text-center space-y-2 border border-white/10 dark:border-white/5 cursor-default"
+  1479→                    >
+  1480→                      <div className="text-2xl">{ach.badgeIcon}</div>
+  1481→                      <p className="text-xs font-semibold text-foreground truncate">{ach.badgeName}</p>
+  1482→                      <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{ach.badgeDesc}</p>
+  1483→                    </motion.div>
+  1484→                  ))}
+  1485→                </div>
+  1486→              </CardContent>
+  1487→            </Card>
+  1488→          )}
+  1489→
+  1490→          {/* Available Badges */}
+  1491→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1492→            <CardHeader className="pb-3 pt-0">
+  1493→              <SectionHeader icon={Trophy} iconColor="text-gold">
+  1494→                الشارات المتاحة
+  1495→              </SectionHeader>
+  1496→            </CardHeader>
+  1497→            <CardContent className="pt-0">
+  1498→              <div className="glass rounded-2xl p-4 border border-white/10 dark:border-white/5">
+  1499→                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  1500→                  {BADGES.map((badge, i) => {
+  1501→                    const earned = badge.condition(badgeStats)
+  1502→                    return (
+  1503→                      <motion.div
+  1504→                        key={badge.id}
+  1505→                        initial={{ opacity: 0, scale: 0.85 }}
+  1506→                        animate={{ opacity: earned ? 1 : 0.4, scale: 1 }}
+  1507→                        transition={{ delay: 0.6 + i * 0.04, duration: 0.4, type: 'spring', stiffness: 200 }}
+  1508→                        whileHover={earned ? { y: -3, scale: 1.03, transition: { duration: 0.2 } } : undefined}
+  1509→                        className={cn(
+  1510→                          'rounded-xl p-3 text-center space-y-1.5 border transition-shadow duration-300',
+  1511→                          earned
+  1512→                            ? 'bg-primary/[0.03] border-gold/20 shadow-[0_0_15px_oklch(0.78_0.12_85/0.08)]'
+  1513→                            : 'bg-primary/[0.02] border-primary/10'
+  1514→                        )}
+  1515→                      >
+  1516→                        <motion.div
+  1517→                          className="text-2xl"
+  1518→                          animate={earned ? { rotate: [0, -10, 10, -5, 5, 0], scale: [1, 1.2, 1] } : {}}
+  1519→                          transition={{ delay: 0.8 + i * 0.04, duration: 0.6 }}
+  1520→                        >
+  1521→                          {badge.icon}
+  1522→                        </motion.div>
+  1523→                        <p className={cn('text-xs font-semibold truncate', earned ? 'text-foreground' : 'text-muted-foreground')}>
+  1524→                          {badge.name}
+  1525→                        </p>
+  1526→                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
+  1527→                          {badge.desc}
+  1528→                        </p>
+  1529→                        {earned && (
+  1530→                          <motion.div
+  1531→                            initial={{ opacity: 0, scale: 0 }}
+  1532→                            animate={{ opacity: 1, scale: 1 }}
+  1533→                            transition={{ delay: 1 + i * 0.04, type: 'spring', stiffness: 300 }}
+  1534→                            className="flex justify-center"
+  1535→                          >
+  1536→                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-accent" />
+  1537→                          </motion.div>
+  1538→                        )}
+  1539→                      </motion.div>
+  1540→                    )
+  1541→                  })}
+  1542→                </div>
+  1543→              </div>
+  1544→            </CardContent>
+  1545→          </Card>
+  1546→        </div>
+  1547→      </motion.div>
+  1548→
+  1549→      {/* ══════════ 5. Bottom Row ══════════ */}
+  1550→      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+  1551→
+  1552→        {/* Today's Health */}
+  1553→        {health && (
+  1554→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1555→            <CardHeader className="pb-3 pt-0">
+  1556→              <SectionHeader icon={Heart} iconColor="text-red-500">
+  1557→                الصحة اليوم
+  1558→              </SectionHeader>
+  1559→            </CardHeader>
+  1560→            <CardContent className="pt-0">
+  1561→              <PremiumGlass className="p-4">
+  1562→                <div className="grid grid-cols-2 gap-3">
+  1563→                  {/* Sleep */}
+  1564→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1565→                    <Moon className="w-5 h-5 mx-auto text-indigo-400" />
+  1566→                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.sleepHours)}</p>
+  1567→                    <p className="text-[10px] text-muted-foreground">ساعات نوم</p>
+  1568→                  </div>
+  1569→                  {/* Water */}
+  1570→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1571→                    <Droplets className="w-5 h-5 mx-auto text-blue-400" />
+  1572→                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.waterGlasses)}</p>
+  1573→                    <p className="text-[10px] text-muted-foreground">كوب ماء</p>
+  1574→                  </div>
+  1575→                  {/* Steps */}
+  1576→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1577→                    <Footprints className="w-5 h-5 mx-auto text-emerald-accent" />
+  1578→                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.steps)}</p>
+  1579→                    <p className="text-[10px] text-muted-foreground">خطوة</p>
+  1580→                  </div>
+  1581→                  {/* Mood & Energy */}
+  1582→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1583→                    <div className="flex justify-center gap-3">
+  1584→                      <div className="flex flex-col items-center gap-1">
+  1585→                        <span className="text-lg">{getMoodEmoji(health.mood)}</span>
+  1586→                        <span className="text-[10px] text-muted-foreground">المزاج</span>
+  1587→                      </div>
+  1588→                      <div className="flex flex-col items-center gap-1">
+  1589→                        <span className="text-lg">{getEnergyEmoji(health.energy)}</span>
+  1590→                        <span className="text-[10px] text-muted-foreground">الطاقة</span>
+  1591→                      </div>
+  1592→                    </div>
+  1593→                  </div>
+  1594→                </div>
+  1595→              </PremiumGlass>
+  1596→            </CardContent>
+  1597→          </Card>
+  1598→        )}
+  1599→
+  1600→        {/* Current Reading */}
+  1601→        {activeBooks.length > 0 && (
+  1602→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1603→            <CardHeader className="pb-3 pt-0">
+  1604→              <SectionHeader icon={BookOpen} iconColor="text-forest">
+  1605→                القراءة الحالية
+  1606→              </SectionHeader>
+  1607→            </CardHeader>
+  1608→            <CardContent className="pt-0">
+  1609→              <PremiumGlass className="p-4 space-y-4">
+  1610→                {activeBooks.map((book, i) => (
+  1611→                  <motion.div
+  1612→                    key={i}
+  1613→                    initial={{ opacity: 0, y: 8 }}
+  1614→                    animate={{ opacity: 1, y: 0 }}
+  1615→                    transition={{ delay: 0.6 + i * 0.1, duration: 0.35 }}
+  1616→                    className="space-y-2"
+  1617→                  >
+  1618→                    <div className="flex items-center justify-between">
+  1619→                      <div className="min-w-0 flex-1">
+  1620→                        <p className="text-sm font-semibold text-foreground truncate">{book.title}</p>
+  1621→                        <p className="text-[10px] text-muted-foreground">{book.author}</p>
+  1622→                      </div>
+  1623→                      <span className="text-xs font-semibold text-emerald-accent shrink-0 mr-2">
+  1624→                        {toArabicNum(Math.round(book.progress))}٪
+  1625→                      </span>
+  1626→                    </div>
+  1627→                    <Progress value={book.progress} className="h-1.5" />
+  1628→                  </motion.div>
+  1629→                ))}
+  1630→              </PremiumGlass>
+  1631→            </CardContent>
+  1632→          </Card>
+  1633→        )}
+  1634→
+  1635→        {/* Motivational Wall */}
+  1636→        <MotivationalWall />
+  1637→      </motion.div>
+  1638→
+  1639→      {/* ══════════ Recent Focus Sessions ══════════ */}
+  1640→      {data.recentFocus.length > 0 && (
+  1641→        <motion.div variants={itemVariants}>
+  1642→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1643→            <CardHeader className="pb-3 pt-0">
+  1644→              <SectionHeader icon={Clock} iconColor="text-gold">
+  1645→                جلسات التركيز الأخيرة
+  1646→              </SectionHeader>
+  1647→            </CardHeader>
+  1648→            <CardContent className="pt-0">
+  1649→              <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+  1650→                {data.recentFocus.map((session, i) => (
+  1651→                  <motion.div
+  1652→                    key={i}
+  1653→                    initial={{ opacity: 0, x: 12 }}
+  1654→                    animate={{ opacity: 1, x: 0 }}
+  1655→                    transition={{ delay: 0.6 + i * 0.06, duration: 0.3 }}
+  1656→                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
+  1657→                    className="glass rounded-xl p-3 min-w-[120px] flex-shrink-0 text-center space-y-1.5 border border-white/10 dark:border-white/5"
+  1658→                  >
+  1659→                    <Brain className="w-5 h-5 mx-auto text-emerald-accent" />
+  1660→                    <p className="text-sm font-bold text-foreground">{toArabicNum(session.actualMin)} د</p>
+  1661→                    <p className="text-[10px] text-muted-foreground">{session.type === 'deep' ? 'عميق' : 'عادي'}</p>
+  1662→                    <Badge variant="secondary" className={cn('text-[10px]', session.completed ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-gold/10 text-gold')}>
+  1663→                      {session.completed ? 'مكتمل' : 'قيد التنفيذ'}
+  1664→                    </Badge>
+  1665→                  </motion.div>
+  1666→                ))}
+  1667→              </div>
+  1668→            </CardContent>
+  1669→          </Card>
+  1670→        </motion.div>
+  1671→      )}
+  1672→
+  1673→      {/* ══════════ Projects Overview ══════════ */}
+  1674→      {data.projects.length > 0 && (
+  1675→        <motion.div variants={itemVariants}>
+  1676→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1677→            <CardHeader className="pb-3 pt-0">
+  1678→              <SectionHeader icon={FolderKanban} iconColor="text-emerald-accent" badge={
+  1679→                <Badge variant="secondary" className="text-[10px]">
+  1680→                  {toArabicNum(data.projects.length)} مشاريع
+  1681→                </Badge>
+  1682→              }>
+  1683→                المشاريع
+  1684→              </SectionHeader>
+  1685→            </CardHeader>
+  1686→            <CardContent className="pt-0">
+  1687→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  1688→                {data.projects.slice(0, 6).map((project, i) => (
+  1689→                  <motion.div
+  1690→                    key={project.id}
+  1691→                    initial={{ opacity: 0, y: 10 }}
+  1692→                    animate={{ opacity: 1, y: 0 }}
+  1693→                    transition={{ delay: 0.5 + i * 0.07, duration: 0.35 }}
+  1694→                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
+  1695→                    className="glass rounded-xl p-4 space-y-2.5 border border-white/10 dark:border-white/5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default"
+  1696→                  >
+  1697→                    <div className="flex items-center gap-2.5">
+  1698→                      <div
+  1699→                        className="w-3 h-3 rounded-full shrink-0"
+  1700→                        style={{ backgroundColor: project.color }}
+  1701→                      />
+  1702→                      <span className="text-sm font-semibold text-foreground truncate flex-1">
+  1703→                        {project.name}
+  1704→                      </span>
+  1705→                    </div>
+  1706→                    <div className="space-y-1.5">
+  1707→                      <div className="flex justify-between text-[10px] text-muted-foreground">
+  1708→                        <span>{toArabicNum(project.doneTaskCount)} / {toArabicNum(project.taskCount)} مهمة</span>
+  1709→                        <span>{toArabicNum(Math.round(project.progress))}٪</span>
+  1710→                      </div>
+  1711→                      <Progress value={project.progress} className="h-1.5" />
+  1712→                    </div>
+  1713→                  </motion.div>
+  1714→                ))}
+  1715→              </div>
+  1716→            </CardContent>
+  1717→          </Card>
+  1718→        </motion.div>
+  1719→      )}
+  1720→    </motion.div>
+  1721→  )
+  1722→}

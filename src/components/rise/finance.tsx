@@ -40,6 +40,8 @@ import {
   Shield,
   AlertTriangle,
   Target,
+  DollarSign,
+  Eye,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -338,6 +340,42 @@ export default function Finance() {
     return { items, totalBudget, totalSpent, totalRemaining, overallHealth }
   }, [data, budgetCategories])
 
+  /* ─── Savings Goal ─── */
+  const [savingsGoal, setSavingsGoal] = useState(10000)
+  const totalSavings = stats.savings + stats.investment
+  const savingsProgress = Math.min(100, (totalSavings / savingsGoal) * 100)
+
+  /* ─── Cash Flow Data ─── */
+  const cashFlowData = useMemo(() => {
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const monthRecords = (data?.records || []).filter(r => r.date.startsWith(currentMonth))
+    const income = monthRecords.filter(r => r.type === 'دخل').reduce((s, r) => s + r.amount, 0)
+    const expenses = monthRecords.filter(r => r.type === 'مصروف').reduce((s, r) => s + r.amount, 0)
+    const saved = monthRecords.filter(r => r.type === 'ادخار' || r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
+    return [
+      { name: 'الدخل', قيمة: income, fill: 'oklch(0.55 0.14 163)' },
+      { name: 'المصروفات', قيمة: -expenses, fill: 'oklch(0.65 0.18 25)' },
+      { name: 'المدخرات', قيمة: saved, fill: 'oklch(0.35 0.10 160)' },
+    ]
+  }, [data])
+
+  /* ─── Monthly Category Sparklines ─── */
+  const categoryMonthlyData = useMemo(() => {
+    const records = data?.records || []
+    const result: Record<string, number[]> = {}
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date()
+      d.setMonth(d.getMonth() - i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      records.filter(r => r.type === 'مصروف' && r.date.startsWith(key)).forEach(r => {
+        if (!result[r.category]) result[r.category] = []
+        result[r.category].push(r.amount)
+      })
+    }
+    return result
+  }, [data])
+
   /* ─── Grouped Records ─── */
   const groupedRecords = useMemo(() => {
     const records = data?.records || []
@@ -491,16 +529,29 @@ export default function Finance() {
                 </div>
               </div>
 
-              {/* Category */}
+              {/* Category - Icon Grid */}
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-foreground">الفئة</label>
-                <Input
-                  value={form.category}
-                  onChange={(e) => updateForm('category', e.target.value)}
-                  className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
-                  placeholder="مثال: طعام، مواصلات..."
-                  dir="rtl"
-                />
+                <div className="grid grid-cols-5 gap-2">
+                  {Object.entries(CATEGORY_ICONS).map(([cat, Icon]) => (
+                    <motion.button
+                      key={cat}
+                      type="button"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      onClick={() => updateForm('category', cat)}
+                      className={cn(
+                        'rounded-xl p-2.5 flex flex-col items-center gap-1 border transition-all duration-200',
+                        form.category === cat
+                          ? 'border-emerald-accent/40 bg-emerald-accent/10 ring-1 ring-emerald-accent/30'
+                          : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="text-[9px] font-medium leading-tight text-center">{cat}</span>
+                    </motion.button>
+                  ))}
+                </div>
               </div>
 
               {/* Description */}
@@ -846,8 +897,82 @@ export default function Finance() {
         </Card>
       </motion.div>
 
+      {/* Savings Goal Tracker */}
+      <motion.div variants={itemVariants}>
+        <Card className="glass border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <PiggyBank className="w-4 h-4 text-forest" />
+                هدف الادخار
+              </CardTitle>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSavingsGoal(prev => prev + 5000)}
+                className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <DollarSign className="w-3 h-3 inline ml-0.5" />
+                زيادة الهدف
+              </motion.button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="relative h-6 rounded-full bg-muted/50 overflow-hidden mb-2">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                initial={{ width: 0 }}
+                animate={{ width: `${savingsProgress}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+              />
+              {savingsProgress >= 100 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-sm"
+                >
+                  🎉
+                </motion.div>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                <span className="font-bold text-forest">{formatAmount(totalSavings)}</span> من <span className="font-medium">{formatAmount(savingsGoal)}</span> ر.س
+              </span>
+              <span className="font-semibold text-forest">{Math.round(savingsProgress)}%</span>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Charts Row */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Cash Flow Waterfall */}
+        <Card className="glass border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Eye className="w-4 h-4 text-emerald-accent" />
+              التدفق النقدي (هذا الشهر)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cashFlowData} barCategoryGap="10%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={45} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${formatAmount(Math.abs(value))} ر.س`, '']} />
+                  <Bar dataKey="قيمة" radius={[4, 4, 0, 0]}>
+                    {cashFlowData.map((entry, index) => (
+                      <Cell key={index} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Expense Pie Chart with labels and legend */}
         <Card className="glass border-0 shadow-sm">
           <CardHeader className="pb-2">
@@ -1058,15 +1183,17 @@ export default function Finance() {
                           {records.map((record, index) => {
                             const CatIcon = CATEGORY_ICONS[record.category] || Receipt
                             const isPositive = record.type === 'دخل'
+                            const isSavings = record.type === 'ادخار' || record.type === 'استثمار'
                             return (
                               <motion.div
                                 key={record.id}
                                 layout
-                                initial={{ opacity: 0, x: 10, scale: 0.97 }}
-                                animate={{ opacity: 1, x: 0, scale: 1 }}
+                                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, x: -30, scale: 0.9, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.3, ease: 'easeIn' as const } }}
                                 transition={{
                                   layout: { duration: 0.3 },
+                                  delay: index * 0.03,
                                 }}
                                 className={cn(
                                   'flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden',
@@ -1102,9 +1229,17 @@ export default function Finance() {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <div className="text-left">
-                                    <span className={cn('text-sm font-bold', config.amountColor)}>
-                                      {isPositive ? '+' : '-'}{formatAmount(record.amount)}
+                                    <span className={cn(
+                                      'text-sm font-bold',
+                                      isPositive ? 'text-emerald-accent' : isSavings ? 'text-sky-500' : 'text-red-500'
+                                    )}>
+                                      {isPositive ? '+' : isSavings ? '+' : '-'}{formatAmount(record.amount)}
                                     </span>
+                                    <div className="flex items-center gap-1 mt-0.5 justify-end">
+                                      {isPositive && <Badge className="text-[8px] px-1.5 py-0 h-3.5 bg-emerald-accent/10 text-emerald-accent border-0 rounded-full">دخل</Badge>}
+                                      {isSavings && <Badge className="text-[8px] px-1.5 py-0 h-3.5 bg-sky-500/10 text-sky-500 border-0 rounded-full">ادخار</Badge>}
+                                      {!isPositive && !isSavings && <Badge className="text-[8px] px-1.5 py-0 h-3.5 bg-red-500/10 text-red-500 border-0 rounded-full">مصروف</Badge>}
+                                    </div>
                                   </div>
                                   <motion.button
                                     whileHover={{ scale: 1.1 }}

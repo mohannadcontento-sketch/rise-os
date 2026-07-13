@@ -1,0 +1,1722 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback, useRef } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  AreaChart,
+     7→     7→  Area,
+     8→     8→  XAxis,
+     9→     9→  YAxis,
+    10→    10→  Tooltip as RechartsTooltip,
+    11→    11→  ResponsiveContainer,
+    12→    12→} from 'recharts'
+    13→    13→import {
+    14→    14→  Sun,
+    15→    15→  Moon,
+    16→    16→  Flame,
+    17→    17→  Zap,
+    18→    18→  CheckCircle2,
+    19→    19→  Target,
+    20→    20→  Clock,
+    21→    21→  Trophy,
+    22→    22→  Star,
+    23→    23→  BookOpen,
+    24→    24→  Heart,
+    25→    25→  Droplets,
+    26→    26→  Footprints,
+    27→    27→  Smile,
+    28→    28→  Battery,
+    29→    29→  TrendingUp,
+    30→    30→  Circle,
+    31→    31→  Sparkles,
+    32→    32→  Award,
+    33→    33→  Quote,
+    34→    34→  FolderKanban,
+    35→    35→  Brain,
+    36→    36→  Eye,
+    37→    37→  ArrowUpRight,
+    38→    38→  ArrowDownRight,
+    39→    39→  CalendarClock,
+    40→    40→} from 'lucide-react'
+    41→    41→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    42→    42→import { Progress } from '@/components/ui/progress'
+    43→    43→import { Badge } from '@/components/ui/badge'
+    44→    44→import { Skeleton } from '@/components/ui/skeleton'
+    45→    45→import { Checkbox } from '@/components/ui/checkbox'
+    46→    46→import { cn } from '@/lib/utils'
+    47→    47→import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
+    48→    48→import {
+    49→    49→  Tooltip,
+    50→    50→  TooltipContent,
+    51→    51→  TooltipProvider,
+    52→    52→  TooltipTrigger,
+    53→    53→} from '@/components/ui/tooltip'
+    54→    54→
+    55→    55→/* ────────────── Types ────────────── */
+    56→    56→
+    57→    57→interface DashboardData {
+    58→    58→  user: {
+    59→    59→    name: string
+    60→    60→    level: number
+    61→    61→    xp: number
+    62→    62→    streak: number
+    63→    63→    longestStreak: number
+    64→    64→    totalFocusMin: number
+    65→    65→    totalTasksDone: number
+    66→    66→  }
+    67→    67→  today: {
+    68→    68→    tasksCompleted: number
+    69→    69→    tasksTotal: number
+    70→    70→    habitsCompleted: number
+    71→    71→    habitsTotal: number
+    72→    72→    focusMin: number
+    73→    73→    morningScore: number
+    74→    74→  }
+    75→    75→  tasks: {
+    76→    76→    id: string
+    77→    77→    title: string
+    78→    78→    priority: string
+    79→    79→    done: boolean
+    80→    80→    projectName?: string
+    81→    81→    projectColor?: string
+    82→    82→  }[]
+    83→    83→  habits: {
+    84→    84→    id: string
+    85→    85→    name: string
+    86→    86→    icon: string
+    87→    87→    color: string
+    88→    88→    todayCompleted: boolean
+    89→    89→    todayCount: number
+    90→    90→    targetCount: number
+    91→    91→    xpReward: number
+    92→    92→  }[]
+    93→    93→  recentFocus: {
+    94→    94→    duration: number
+    95→    95→    actualMin: number
+    96→    96→    type: string
+    97→    97→    completed: boolean
+    98→    98→    startedAt: string
+    99→    99→  }[]
+   100→   100→  health: {
+   101→   101→    sleepHours: number
+   102→   102→    waterGlasses: number
+   103→   103→    steps: number
+   104→   104→    mood: string
+   105→   105→    energy: string
+   106→   106→  } | null
+   107→   107→  morning: {
+   108→   108→    score: number
+   109→   109→    totalItems: number
+   110→   110→  } | null
+   111→   111→  achievements: {
+   112→   112→    badgeIcon: string
+   113→   113→    badgeName: string
+   114→   114→    badgeDesc: string
+   115→   115→  }[]
+   116→   116→  dailyScores: {
+   117→   117→    date: string
+   118→   118→    score: number
+   119→   119→    morningScore: number
+   120→   120→    taskScore: number
+   121→   121→    habitScore: number
+   122→   122→    focusScore: number
+   123→   123→  }[]
+   124→   124→  projects: {
+   125→   125→    id: string
+   126→   126→    name: string
+   127→   127→    color: string
+   128→   128→    progress: number
+   129→   129→    taskCount: number
+   130→   130→    doneTaskCount: number
+   131→   131→  }[]
+   132→   132→  goals: {
+   133→   133→    id: string
+   134→   134→    title: string
+   135→   135→    type: string
+   136→   136→    progress: number
+   137→   137→    deadline: string
+   138→   138→  }[]
+   139→   139→  books: {
+   140→   140→    title: string
+   141→   141→    author: string
+   142→   142→    progress: number
+   143→   143→    status: string
+   144→   144→  }[]
+   145→   145→  journals: {
+   146→   146→    date: string
+   147→   147→    content: string
+   148→   148→    mood: string
+   149→   149→    energy: string
+   150→   150→  }[]
+   151→   151→  weekDays: string[]
+   152→   152→}
+   153→   153→
+   154→   154→/* ────────────── Helpers ────────────── */
+   155→   155→
+   156→   156→const ARABIC_DAYS: Record<string, string> = {
+   157→   157→  Sun: 'الأحد',
+   158→   158→  Mon: 'الإثنين',
+   159→   159→  Tue: 'الثلاثاء',
+   160→   160→  Wed: 'الأربعاء',
+   161→   161→  Thu: 'الخميس',
+   162→   162→  Fri: 'الجمعة',
+   163→   163→  Sat: 'السبت',
+   164→   164→}
+   165→   165→
+   166→   166→function getGreeting(): string {
+   167→   167→  const h = new Date().getHours()
+   168→   168→  if (h >= 4 && h < 12) return 'صباح الخير'
+   169→   169→  if (h >= 12 && h < 17) return 'مساء النور'
+   170→   170→  if (h >= 17 && h < 21) return 'مساء الخير'
+   171→   171→  return 'مساء النجوم'
+   172→   172→}
+   173→   173→
+   174→   174→function toArabicNum(n: number): string {
+   175→   175→  return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+   176→   176→}
+   177→   177→
+   178→   178→function getDayLabel(dateStr: string): string {
+   179→   179→  try {
+   180→   180→    const d = new Date(dateStr)
+   181→   181→    const dayEN = d.toLocaleDateString('en-US', { weekday: 'short' })
+   182→   182→    return ARABIC_DAYS[dayEN] || dayEN
+   183→   183→  } catch {
+   184→   184→    return ''
+   185→   185→  }
+   186→   186→}
+   187→   187→
+   188→   188→/* XP/Level now handled by calculateLevel from @/lib/gamification */
+   189→   189→
+   190→   190→function getPriorityColor(priority: string): string {
+   191→   191→  switch (priority) {
+   192→   192→    case 'high':
+   193→   193→      return 'bg-red-500/15 text-red-600 dark:text-red-400'
+   194→   194→    case 'medium':
+   195→   195→      return 'bg-gold/15 text-gold'
+   196→   196→    case 'low':
+   197→   197→      return 'bg-emerald-accent/15 text-emerald-accent'
+   198→   198→    default:
+   199→   199→      return 'bg-muted text-muted-foreground'
+   200→   200→  }
+   201→   201→}
+   202→   202→
+   203→   203→function getPriorityBorderColor(priority: string): string {
+   204→   204→  switch (priority) {
+   205→   205→    case 'high':
+   206→   206→      return 'border-r-2 border-r-red-500/60'
+   207→   207→    case 'medium':
+   208→   208→      return 'border-r-2 border-r-gold/60'
+   209→   209→    case 'low':
+   210→   210→      return 'border-r-2 border-r-emerald-accent/60'
+   211→   211→    default:
+   212→   212→      return 'border-r-2 border-r-border/40'
+   213→   213→  }
+   214→   214→}
+   215→   215→
+   216→   216→function getPriorityLabel(priority: string): string {
+   217→   217→  switch (priority) {
+   218→   218→    case 'high':
+   219→   219→      return 'عالية'
+   220→   220→    case 'medium':
+   221→   221→      return 'متوسطة'
+   222→   222→    case 'low':
+   223→   223→      return 'منخفضة'
+   224→   224→    default:
+   225→   225→      return priority
+   226→   226→  }
+   227→   227→}
+   228→   228→
+   229→   229→function getMoodEmoji(mood: string): string {
+   230→   230→  switch (mood) {
+   231→   231→    case 'excellent':
+   232→   232→      return '😊'
+   233→   233→    case 'good':
+   234→   234→      return '🙂'
+   235→   235→    case 'okay':
+   236→   236→      return '😐'
+   237→   237→    case 'bad':
+   238→   238→      return '😔'
+   239→   239→    case 'terrible':
+   240→   240→      return '😢'
+   241→   241→    default:
+   242→   242→      return '🙂'
+   243→   243→  }
+   244→   244→}
+   245→   245→
+   246→   246→function getEnergyEmoji(energy: string): string {
+   247→   247→  switch (energy) {
+   248→   248→    case 'high':
+   249→   249→      return '⚡'
+   250→   250→    case 'medium':
+   251→   251→      return '🔋'
+   252→   252→    case 'low':
+   253→   253→      return '🪫'
+   254→   254→    default:
+   255→   255→      return '🔋'
+   256→   256→  }
+   257→   257→}
+   258→   258→
+   259→   259→const MOTIVATIONAL_QUOTES = [
+   260→   260→  'النجاح ليس نهائياً والفشل ليس قاتلاً، بل الشجاعة للاستمرار هي ما يهم.',
+   261→   261→  'الطريقة الوحيدة لعمل عمل عظيم هي أن تحب ما تفعله.',
+   262→   262→  'ابدأ من حيث أنت. استخدم ما لديك. افعل ما يمكنك.',
+   263→   263→  'لا تنتظر الفرصة، بل اصنعها.',
+   264→   264→  'الصبر مفتاح الفرج، والمثابرة سلم النجاح.',
+   265→   265→  'من جدّ وجد، ومن زرع حصد.',
+   266→   266→  'لا تقارن نفسك بالآخرين، قارن نفسك بنفسك بالأمس.',
+   267→   267→  'كل يوم هو فرصة جديدة لتكون نسخة أفضل من نفسك.',
+   268→   268→  'الاستثمار في المعرفة يدفع أفضل فائدة.',
+   269→   269→  'العلم نور والجهل ظلام، والعلم يهدي إلى الجنة.',
+   270→   270→  'لا يهم كم مرة سقطت، المهم كم مرة نهضت.',
+   271→   271→  'النجاح يبدأ من اللحظة التي تقرر فيها المحاولة.',
+   272→   272→  'أنت أقوى مما تظن وأجمل مما تتخيل.',
+   273→   273→  'الطريق إلى الألف ميل يبدأ بخطوة واحدة.',
+   274→   274→  'لا تكن مشغولاً دائماً، كن منتجاً دائماً.',
+   275→   275→  'التحديات هي فرص مقنّعة.',
+   276→   276→  'التفاؤل هو الإيمان بالإنجاز، لا يدرك ما هو ممكن إلا من يراه.',
+   277→   277→  'اجعل حياتك تستحق التذكر، لا أن تُنسى.',
+   278→   278→  'النجاح ليس مقياساً لمدى ارتفاعك، بل لعدد المرات التي نهضت فيها.',
+   279→   279→  'اقرأ كثيراً، تعلّم دائماً، وكن فضولياً.',
+   280→   280→  'الصباح هو هدية جديدة، اغتنمها.',
+   281→   281→  'النظام هو الجسر بين الأهداف والإنجازات.',
+   282→   282→  'ما لا يقتلك يقويك، وما يوقفك يعلّمك.',
+   283→   283→  'لا تستسلم، فالبداية دائماً أصعب مرحلة.',
+   284→   284→]
+   285→   285→
+   286→   286→/* ────────────── Mini Sparkline ────────────── */
+   287→   287→
+   288→   288→function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+   289→   289→  const max = Math.max(...data, 1)
+   290→   290→  const min = Math.min(...data, 0)
+   291→   291→  const range = max - min || 1
+   292→   292→  const barCount = data.length
+   293→   293→  return (
+   294→   294→    <div className="flex items-end gap-[2px] h-6">
+   295→   295→      {data.map((val, i) => {
+   296→   296→        const height = Math.max(((val - min) / range) * 100, 8)
+   297→   297→        return (
+   298→   298→          <motion.div
+   299→   299→            key={i}
+   300→   300→            className={cn('w-[3px] rounded-full', color)}
+   301→   301→            initial={{ height: 0 }}
+   302→   302→            animate={{ height: `${height}%` }}
+   303→   303→            transition={{ delay: 0.6 + i * 0.04, duration: 0.3, ease: 'easeOut' }}
+   304→   304→            style={{ opacity: 0.3 + (val / max) * 0.5 }}
+   305→   305→          />
+   306→   306→        )
+   307→   307→      })}
+   308→   308→    </div>
+   309→   309→  )
+   310→   310→}
+   311→   311→
+   312→   312→/* ────────────── Animation Variants ────────────── */
+   313→   313→
+   314→   314→const containerVariants = {
+   315→   315→  hidden: { opacity: 0 },
+   316→   316→  show: {
+   317→   317→    opacity: 1,
+   318→   318→    transition: { staggerChildren: 0.07, delayChildren: 0.1 },
+   319→   319→  },
+   320→   320→}
+   321→   321→
+   322→   322→const itemVariants = {
+   323→   323→  hidden: { opacity: 0, y: 20 },
+   324→   324→  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] as const } },
+   325→   325→}
+   326→   326→
+   327→   327→const scaleHover = {
+   328→   328→  whileHover: { y: -2, transition: { duration: 0.2, ease: 'easeOut' as const } },
+   329→   329→  whileTap: { scale: 0.98 },
+   330→   330→}
+   331→   331→
+   332→   332→/* ────────────── Animated Number ────────────── */
+   333→   333→
+   334→   334→function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: number }) {
+   335→   335→  const [display, setDisplay] = useState(0)
+   336→   336→
+   337→   337→  useEffect(() => {
+   338→   338→    let start = 0
+   339→   339→    const end = value
+   340→   340→    if (start === end) return
+   341→   341→    const incrementTime = duration / Math.max(end, 1)
+   342→   342→    const timer = setInterval(() => {
+   343→   343→      start += 1
+   344→   344→      setDisplay(start)
+   345→   345→      if (start >= end) clearInterval(timer)
+   346→   346→    }, incrementTime)
+   347→   347→    return () => clearInterval(timer)
+   348→   348→  }, [value, duration])
+   349→   349→
+   350→   350→  return <>{toArabicNum(display)}</>
+   351→   351→}
+   352→   352→
+   353→   353→/* ────────────── Circular Progress ────────────── */
+   354→   354→
+   355→   355→function CircularProgress({
+   356→   356→  value,
+   357→   357→  size = 80,
+   358→   358→  strokeWidth = 6,
+   359→   359→  color = 'stroke-emerald-accent',
+   360→   360→}: {
+   361→   361→  value: number
+   362→   362→  size?: number
+   363→   363→  strokeWidth?: number
+   364→   364→  color?: string
+   365→   365→}) {
+   366→   366→  const radius = (size - strokeWidth) / 2
+   367→   367→  const circumference = radius * 2 * Math.PI
+   368→   368→  const offset = circumference - (value / 100) * circumference
+   369→   369→
+   370→   370→  return (
+   371→   371→    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+   372→   372→      <svg width={size} height={size} className="-rotate-90">
+   373→   373→        <circle
+   374→   374→          cx={size / 2}
+   375→   375→          cy={size / 2}
+   376→   376→          r={radius}
+   377→   377→          fill="none"
+   378→   378→          className="stroke-primary/10"
+   379→   379→          strokeWidth={strokeWidth}
+   380→   380→        />
+   381→   381→        <motion.circle
+   382→   382→          cx={size / 2}
+   383→   383→          cy={size / 2}
+   384→   384→          r={radius}
+   385→   385→          fill="none"
+   386→   386→          className={color}
+   387→   387→          strokeWidth={strokeWidth}
+   388→   388→          strokeLinecap="round"
+   389→   389→          strokeDasharray={circumference}
+   390→   390→          initial={{ strokeDashoffset: circumference }}
+   391→   391→          animate={{ strokeDashoffset: offset }}
+   392→   392→          transition={{ duration: 1.2, ease: 'easeOut' }}
+   393→   393→        />
+   394→   394→      </svg>
+   395→   395→      <div className="absolute inset-0 flex items-center justify-center">
+   396→   396→        <span className="text-lg font-bold text-foreground">{toArabicNum(Math.round(value))}</span>
+   397→   397→      </div>
+   398→   398→    </div>
+   399→   399→  )
+   400→   400→}
+   401→   401→
+   402→   402→/* ────────────── Loading Skeleton ────────────── */
+   403→   403→
+   404→   404→function DashboardSkeleton() {
+   405→   405→  return (
+   406→   406→    <div className="space-y-6 p-4 lg:p-6" dir="rtl">
+   407→   407→      {/* Top bar */}
+   408→   408→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   409→   409→        <div className="space-y-2">
+   410→   410→          <Skeleton className="h-8 w-48" />
+   411→   411→          <Skeleton className="h-4 w-32" />
+   412→   412→        </div>
+   413→   413→        <div className="flex items-center gap-4">
+   414→   414→          <Skeleton className="h-10 w-48 rounded-xl" />
+   415→   415→          <Skeleton className="h-10 w-24 rounded-xl" />
+   416→   416→        </div>
+   417→   417→      </div>
+   418→   418→
+   419→   419→      {/* Score cards */}
+   420→   420→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   421→   421→        {Array.from({ length: 4 }).map((_, i) => (
+   422→   422→          <Skeleton key={i} className="h-32 rounded-2xl" />
+   423→   423→        ))}
+   424→   424→      </div>
+   425→   425→
+   426→   426→      {/* Chart */}
+   427→   427→      <Skeleton className="h-64 rounded-2xl" />
+   428→   428→
+   429→   429→      {/* Two columns */}
+   430→   430→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   431→   431→        <div className="space-y-4">
+   432→   432→          <Skeleton className="h-6 w-32" />
+   433→   433→          {Array.from({ length: 4 }).map((_, i) => (
+   434→   434→            <Skeleton key={i} className="h-14 rounded-xl" />
+   435→   435→          ))}
+   436→   436→        </div>
+   437→   437→        <div className="space-y-4">
+   438→   438→          <Skeleton className="h-6 w-32" />
+   439→   439→          <div className="grid grid-cols-2 gap-3">
+   440→   440→            {Array.from({ length: 6 }).map((_, i) => (
+   441→   441→              <Skeleton key={i} className="h-20 rounded-xl" />
+   442→   442→            ))}
+   443→   443→          </div>
+   444→   444→        </div>
+   445→   445→      </div>
+   446→   446→
+   447→   447→      {/* Bottom row */}
+   448→   448→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+   449→   449→        <Skeleton className="h-48 rounded-2xl" />
+   450→   450→        <Skeleton className="h-48 rounded-2xl" />
+   451→   451→        <Skeleton className="h-48 rounded-2xl" />
+   452→   452→      </div>
+   453→   453→    </div>
+   454→   454→  )
+   455→   455→}
+   456→   456→
+   457→   457→/* ────────────── Custom Tooltip ────────────── */
+   458→   458→
+   459→   459→function ChartTooltip({ active, payload, label }: any) {
+   460→   460→  if (!active || !payload?.length) return null
+   461→   461→  return (
+   462→   462→    <div className="glass rounded-xl px-4 py-2.5 text-xs shadow-xl border border-white/10 dark:border-white/5" dir="rtl">
+   463→   463→      <p className="font-semibold text-foreground mb-1.5">{label}</p>
+   464→   464→      {payload.map((entry: any, i: number) => (
+   465→   465→        <p key={i} className="text-muted-foreground flex items-center gap-1.5">
+   466→   466→          <span className="w-1.5 h-1.5 rounded-full bg-emerald-accent inline-block" />
+   467→   467→          {entry.name}: {toArabicNum(Math.round(entry.value))}
+   468→   468→        </p>
+   469→   469→      ))}
+   470→   470→    </div>
+   471→   471→  )
+   472→   472→}
+   473→   473→
+   474→   474→/* ────────────── Section Header ────────────── */
+   475→   475→
+   476→   476→function SectionHeader({ icon: Icon, children, badge, iconColor }: { icon: React.ElementType; children: React.ReactNode; badge?: React.ReactNode; iconColor?: string }) {
+   477→   477→  return (
+   478→   478→    <div className="flex items-center justify-between">
+   479→   479→      <CardTitle className="text-[15px] font-bold tracking-tight flex items-center gap-2.5 border-r-[3px] border-r-emerald-accent pr-2.5 py-0.5">
+   480→   480→        <Icon className={cn('w-4 h-4', iconColor || 'text-emerald-accent')} />
+   481→   481→        {children}
+   482→   482→      </CardTitle>
+   483→   483→      {badge}
+   484→   484→    </div>
+   485→   485→  )
+   486→   486→}
+   487→   487→
+   488→   488→/* ────────────── Premium Glass Card ────────────── */
+   489→   489→
+   490→   490→function PremiumGlass({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+   491→   491→  return (
+   492→   492→    <div
+   493→   493→      className={cn(
+   494→   494→        'glass rounded-2xl border border-white/10 dark:border-white/5',
+   495→   495→        'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.04)]',
+   496→   496→        'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_1px_3px_rgba(0,0,0,0.2)]',
+   497→   497→        className
+   498→   498→      )}
+   499→   499→      style={style}
+   500→   500→    >
+   501→   501→      {children}
+   502→   502→    </div>
+   503→   503→  )
+   504→   504→}
+   505→   505→
+   506→   506→/* ────────────── Productivity Score Card ────────────── */
+   507→   507→
+   508→   508→interface ProductivityScoreData {
+   509→   509→  score: number
+   510→   510→  breakdown: { tasks: number; habits: number; focus: number; morning: number; streak: number }
+   511→   511→  grade: string
+   512→   512→}
+   513→   513→
+   514→   514→function ProductivityScoreCard() {
+   515→   515→  const [prodData, setProdData] = useState<ProductivityScoreData | null>(null)
+   516→   516→
+   517→   517→  useEffect(() => {
+   518→   518→    fetch('/api/rise/productivity-score')
+   519→   519→      .then((r) => r.json())
+   520→   520→      .then((data) => setProdData(data))
+   521→   521→      .catch(() => {})
+   522→   522→  }, [])
+   523→   523→
+   524→   524→  if (!prodData) {
+   525→   525→    return (
+   526→   526→      <PremiumGlass className="p-5 lg:p-6">
+   527→   527→        <div className="flex items-center justify-center gap-8">
+   528→   528→          <Skeleton className="w-32 h-32 rounded-full" />
+   529→   529→          <div className="flex-1 space-y-3">
+   530→   530→            <Skeleton className="h-6 w-32" />
+   531→   531→            {Array.from({ length: 5 }).map((_, i) => (
+   532→   532→              <Skeleton key={i} className="h-3 w-full" />
+   533→   533→            ))}
+   534→   534→          </div>
+   535→   535→        </div>
+   536→   536→      </PremiumGlass>
+   537→   537→    )
+   538→   538→  }
+   539→   539→
+   540→   540→  const { score, breakdown, grade } = prodData
+   541→   541→  const size = 130
+   542→   542→  const strokeWidth = 10
+   543→   543→  const radius = (size - strokeWidth) / 2
+   544→   544→  const circumference = radius * 2 * Math.PI
+   545→   545→  const offset = circumference - (score / 100) * circumference
+   546→   546→
+   547→   547→  // Gradient color based on score
+   548→   548→  const gradientId = 'prodScoreGradient'
+   549→   549→  let strokeColor1 = 'oklch(0.55 0.14 163)'
+   550→   550→  let strokeColor2 = 'oklch(0.45 0.12 163)'
+   551→   551→  let glowColor = 'rgba(16, 185, 129, 0.25)'
+   552→   552→  let gradeColor = 'text-emerald-accent'
+   553→   553→
+   554→   554→  if (score >= 70) {
+   555→   555→    strokeColor1 = 'oklch(0.55 0.14 163)'
+   556→   556→    strokeColor2 = 'oklch(0.45 0.12 163)'
+   557→   557→    glowColor = 'rgba(16, 185, 129, 0.25)'
+   558→   558→    gradeColor = 'text-emerald-accent'
+   559→   559→  } else if (score >= 50) {
+   560→   560→    strokeColor1 = 'oklch(0.75 0.15 80)'
+   561→   561→    strokeColor2 = 'oklch(0.65 0.13 75)'
+   562→   562→    glowColor = 'rgba(234, 179, 8, 0.25)'
+   563→   563→    gradeColor = 'text-gold'
+   564→   564→  } else {
+   565→   565→    strokeColor1 = 'oklch(0.55 0.18 25)'
+   566→   566→    strokeColor2 = 'oklch(0.50 0.15 20)'
+   567→   567→    glowColor = 'rgba(239, 68, 68, 0.25)'
+   568→   568→    gradeColor = 'text-red-500'
+   569→   569→  }
+   570→   570→
+   571→   571→  const breakdownItems = [
+   572→   572→    { label: 'المهام', value: breakdown.tasks, color: 'bg-emerald-accent' },
+   573→   573→    { label: 'العادات', value: breakdown.habits, color: 'bg-forest' },
+   574→   574→    { label: 'التركيز', value: breakdown.focus, color: 'bg-gold' },
+   575→   575→    { label: 'الصباح', value: breakdown.morning, color: 'bg-amber-400' },
+   576→   576→    { label: 'السلسلة', value: breakdown.streak, color: 'bg-orange-500' },
+   577→   577→  ]
+   578→   578→
+   579→   579→  return (
+   580→   580→    <PremiumGlass className="p-5 lg:p-6 relative overflow-hidden">
+   581→   581→      {/* Background glow */}
+   582→   582→      <div
+   583→   583→        className="absolute top-1/2 -translate-y-1/2 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none"
+   584→   584→        style={{ background: glowColor, right: '10%' }}
+   585→   585→      />
+   586→   586→
+   587→   587→      <div className="relative flex flex-col sm:flex-row items-center gap-6 lg:gap-10">
+   588→   588→        {/* Circular Gauge */}
+   589→   589→        <div className="relative shrink-0">
+   590→   590→          <svg width={size} height={size} className="-rotate-90">
+   591→   591→            <defs>
+   592→   592→              <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+   593→   593→                <stop offset="0%" stopColor={strokeColor1} />
+   594→   594→                <stop offset="100%" stopColor={strokeColor2} />
+   595→   595→              </linearGradient>
+   596→   596→            </defs>
+   597→   597→            <circle
+   598→   598→              cx={size / 2}
+   599→   599→              cy={size / 2}
+   600→   600→              r={radius}
+   601→   601→              fill="none"
+   602→   602→              className="stroke-primary/10"
+   603→   603→              strokeWidth={strokeWidth}
+   604→   604→            />
+   605→   605→            <motion.circle
+   606→   606→              cx={size / 2}
+   607→   607→              cy={size / 2}
+   608→   608→              r={radius}
+   609→   609→              fill="none"
+   610→   610→              stroke={`url(#${gradientId})`}
+   611→   611→              strokeWidth={strokeWidth}
+   612→   612→              strokeLinecap="round"
+   613→   613→              strokeDasharray={circumference}
+   614→   614→              initial={{ strokeDashoffset: circumference }}
+   615→   615→              animate={{ strokeDashoffset: offset }}
+   616→   616→              transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+   617→   617→              style={{ filter: `drop-shadow(0 0 6px ${glowColor})` }}
+   618→   618→            />
+   619→   619→          </svg>
+   620→   620→          <div className="absolute inset-0 flex flex-col items-center justify-center">
+   621→   621→            <motion.span
+   622→   622→              className="text-4xl font-black tracking-tight text-foreground"
+   623→   623→              initial={{ opacity: 0, scale: 0.5 }}
+   624→   624→              animate={{ opacity: 1, scale: 1 }}
+   625→   625→              transition={{ delay: 0.8, duration: 0.5, type: 'spring' }}
+   626→   626→            >
+   627→   627→              {toArabicNum(score)}
+   628→   628→            </motion.span>
+   629→   629→            <span className="text-[10px] text-muted-foreground mt-0.5">من ١٠٠</span>
+   630→   630→          </div>
+   631→   631→        </div>
+   632→   632→
+   633→   633→        {/* Right side: grade + breakdown */}
+   634→   634→        <div className="flex-1 w-full min-w-0 space-y-4">
+   635→   635→          <div>
+   636→   636→            <p className="text-xs text-muted-foreground mb-1">درجة الإنتاجية اليومية</p>
+   637→   637→            <motion.span
+   638→   638→              className={cn('text-2xl font-bold', gradeColor)}
+   639→   639→              initial={{ opacity: 0, x: 20 }}
+   640→   640→              animate={{ opacity: 1, x: 0 }}
+   641→   641→              transition={{ delay: 0.6, duration: 0.4 }}
+   642→   642→            >
+   643→   643→              {grade}
+   644→   644→            </motion.span>
+   645→   645→          </div>
+   646→   646→
+   647→   647→          {/* Mini breakdown bars */}
+   648→   648→          <div className="space-y-2.5">
+   649→   649→            {breakdownItems.map((item, i) => (
+   650→   650→              <div key={item.label} className="flex items-center gap-3">
+   651→   651→                <span className="text-xs text-muted-foreground w-14 text-right shrink-0">{item.label}</span>
+   652→   652→                <div className="flex-1 h-2 rounded-full bg-primary/10 overflow-hidden">
+   653→   653→                  <motion.div
+   654→   654→                    className={cn('h-full rounded-full', item.color)}
+   655→   655→                    initial={{ width: 0 }}
+   656→   656→                    animate={{ width: `${item.value}%` }}
+   657→   657→                    transition={{ delay: 0.8 + i * 0.1, duration: 0.6, ease: 'easeOut' }}
+   658→   658→                  />
+   659→   659→                </div>
+   660→   660→                <span className="text-[11px] font-semibold text-foreground w-8 text-left shrink-0">
+   661→   661→                  {toArabicNum(item.value)}٪
+   662→   662→                </span>
+   663→   663→              </div>
+   664→   664→            ))}
+   665→   665→          </div>
+   666→   666→        </div>
+   667→   667→      </div>
+   668→   668→    </PremiumGlass>
+   669→   669→  )
+   670→   670→}
+   671→   671→
+   672→   672→/* ══════════════════════════════════════════════════════════════════════
+   673→   673→   MOTIVATIONAL WALL
+   674→   674→   ══════════════════════════════════════════════════════════════════════ */
+   675→   675→
+   676→   676→function MotivationalWall() {
+   677→   677→  const [currentIndex, setCurrentIndex] = useState(0)
+   678→   678→  const [favorites, setFavorites] = useState<Set<string>>(() => {
+   679→   679→    try {
+   680→   680→      const stored = localStorage.getItem('rise-favorite-quotes')
+   681→   681→      if (stored) return new Set(JSON.parse(stored) as string[])
+   682→   682→    } catch { /* ignore */ }
+   683→   683→    return new Set()
+   684→   684→  })
+   685→   685→  const [seenToday, setSeenToday] = useState<Set<number>>(() => {
+   686→   686→    try {
+   687→   687→      const todayKey = new Date().toISOString().split('T')[0]
+   688→   688→      const stored = localStorage.getItem('rise-seen-quotes-today')
+   689→   689→      if (stored) {
+   690→   690→        const parsed = JSON.parse(stored) as { date: string; indices: number[] }
+   691→   691→        if (parsed.date === todayKey) {
+   692→   692→          const s = new Set(parsed.indices)
+   693→   693→          s.add(0)
+   694→   694→          return s
+   695→   695→        }
+   696→   696→      }
+   697→   697→    } catch { /* ignore */ }
+   698→   698→    const s = new Set<number>()
+   699→   699→    s.add(0)
+   700→   700→    return s
+   701→   701→  })
+   702→   702→  const cardRef = useRef<HTMLDivElement>(null)
+   703→   703→  const [parallax, setParallax] = useState({ x: 0, y: 0 })
+   704→   704→
+   705→   705→  // Save favorites
+   706→   706→  useEffect(() => {
+   707→   707→    localStorage.setItem('rise-favorite-quotes', JSON.stringify([...favorites]))
+   708→   708→  }, [favorites])
+   709→   709→
+   710→   710→  // Save seen today
+   711→   711→  useEffect(() => {
+   712→   712→    const todayKey = new Date().toISOString().split('T')[0]
+   713→   713→    localStorage.setItem('rise-seen-quotes-today', JSON.stringify({
+   714→   714→      date: todayKey,
+   715→   715→      indices: [...seenToday],
+   716→   716→    }))
+   717→   717→  }, [seenToday])
+   718→   718→
+   719→   719→  // Auto-rotate every 15 seconds
+   720→   720→  const advanceQuote = useCallback(() => {
+   721→   721→    setCurrentIndex(prev => {
+   722→   722→      const next = (prev + 1) % MOTIVATIONAL_QUOTES.length
+   723→   723→      // Track seen
+   724→   724→      setSeenToday(s => {
+   725→   725→        const n = new Set(s)
+   726→   726→        n.add(next)
+   727→   727→        return n
+   728→   728→      })
+   729→   729→      return next
+   730→   730→    })
+   731→   731→  }, [])
+   732→   732→
+   733→   733→  useEffect(() => {
+   734→   734→    const timer = setInterval(() => {
+   735→   735→      advanceQuote()
+   736→   736→    }, 15000)
+   737→   737→    return () => clearInterval(timer)
+   738→   738→  }, [advanceQuote])
+   739→   739→
+   740→   740→  const toggleFavorite = (quote: string) => {
+   741→   741→    setFavorites(prev => {
+   742→   742→      const next = new Set(prev)
+   743→   743→      if (next.has(quote)) {
+   744→   744→        next.delete(quote)
+   745→   745→      } else {
+   746→   746→        next.add(quote)
+   747→   747→      }
+   748→   748→      return next
+   749→   749→    })
+   750→   750→  }
+   751→   751→
+   752→   752→  // Parallax on mouse move
+   753→   753→  const handleMouseMove = (e: React.MouseEvent) => {
+   754→   754→    if (!cardRef.current) return
+   755→   755→    const rect = cardRef.current.getBoundingClientRect()
+   756→   756→    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 12
+   757→   757→    const y = ((e.clientY - rect.top) / rect.height - 0.5) * 8
+   758→   758→    setParallax({ x, y })
+   759→   759→  }
+   760→   760→
+   761→   761→  const handleMouseLeave = () => {
+   762→   762→    setParallax({ x: 0, y: 0 })
+   763→   763→  }
+   764→   764→
+   765→   765→  const currentQuote = MOTIVATIONAL_QUOTES[currentIndex]
+   766→   766→  const isFav = favorites.has(currentQuote)
+   767→   767→
+   768→   768→  return (
+   769→   769→    <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+   770→   770→      <CardHeader className="pb-3 pt-0">
+   771→   771→        <SectionHeader icon={Quote} iconColor="text-gold">
+   772→   772→          جدار التحفيز
+   773→   773→        </SectionHeader>
+   774→   774→      </CardHeader>
+   775→   775→      <CardContent className="pt-0">
+   776→   776→        <motion.div
+   777→   777→          ref={cardRef}
+   778→   778→          onMouseMove={handleMouseMove}
+   779→   779→          onMouseLeave={handleMouseLeave}
+   780→   780→          onClick={advanceQuote}
+   781→   781→          className="premium-card rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center text-center min-h-[220px] relative overflow-hidden cursor-pointer select-none"
+   782→   782→          animate={{
+   783→   783→            x: parallax.x,
+   784→   784→            y: parallax.y,
+   785→   785→            rotateX: parallax.y * -0.3,
+   786→   786→            rotateY: parallax.x * 0.3,
+   787→   787→          }}
+   788→   788→          transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+   789→   789→          style={{ perspective: 1000 }}
+   790→   790→        >
+   791→   791→          {/* Background glow */}
+   792→   792→          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-forest/[0.06] dark:bg-forest/[0.1] blur-3xl pointer-events-none" />
+   793→   793→
+   794→   794→          {/* Decorative watermark */}
+   795→   795→          <span
+   796→   796→            className="absolute top-1 right-6 text-[140px] font-serif leading-none opacity-[0.03] dark:opacity-[0.05] text-foreground select-none pointer-events-none"
+   797→   797→            aria-hidden="true"
+   798→   798→          >
+   799→   799→            &ldquo;
+   800→   800→          </span>
+   801→   801→
+   802→   802→          {/* Quote with fade animation */}
+   803→   803→          <AnimatePresence mode="wait">
+   804→   804→            <motion.div
+   805→   805→              key={currentIndex}
+   806→   806→              initial={{ opacity: 0, y: 12 }}
+   807→   807→              animate={{ opacity: 1, y: 0 }}
+   808→   808→              exit={{ opacity: 0, y: -12 }}
+   809→   809→              transition={{ duration: 0.5, ease: 'easeOut' }}
+   810→   810→              className="relative flex flex-col items-center"
+   811→   811→            >
+   812→   812→              {/* Favorite Heart */}
+   813→   813→              <motion.button
+   814→   814→                onClick={(e) => {
+   815→   815→                  e.stopPropagation()
+   816→   816→                  toggleFavorite(currentQuote)
+   817→   817→                }}
+   818→   818→                whileTap={{ scale: 0.8 }}
+   819→   819→                className="absolute -top-1 left-0 z-10 p-1.5 rounded-full bg-primary/5 hover:bg-primary/10 transition-colors"
+   820→   820→              >
+   821→   821→                <motion.div
+   822→   822→                  animate={isFav ? { scale: [1, 1.3, 1] } : {}}
+   823→   823→                  transition={{ duration: 0.3 }}
+   824→   824→                >
+   825→   825→                  <Heart
+   826→   826→                    className={cn(
+   827→   827→                      'w-4 h-4 transition-colors',
+   828→   828→                      isFav ? 'fill-red-500 text-red-500' : 'text-muted-foreground/40'
+   829→   829→                    )}
+   830→   830→                  />
+   831→   831→                </motion.div>
+   832→   832→              </motion.button>
+   833→   833→
+   834→   834→              {/* Decorative icon */}
+   835→   835→              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-gold/20 to-gold-light/20 flex items-center justify-center mb-4 shadow-[0_0_20px_oklch(0.78_0.12_85/0.1)]">
+   836→   836→                <Star className="w-5 h-5 text-gold" />
+   837→   837→              </div>
+   838→   838→
+   839→   839→              {/* Quote text with gradient */}
+   840→   840→              <blockquote className="text-base lg:text-xl font-bold leading-relaxed text-gradient-forest mb-4 max-w-sm px-2">
+   841→   841→                {currentQuote}
+   842→   842→              </blockquote>
+   843→   843→
+   844→   844→              {/* Seen counter */}
+   845→   845→              <div className="flex items-center gap-1.5 text-muted-foreground/50">
+   846→   846→                <Eye className="w-3 h-3" />
+   847→   847→                <span className="text-[10px] font-medium">{toArabicNum(seenToday.size)}</span>
+   848→   848→              </div>
+   849→   849→            </motion.div>
+   850→   850→          </AnimatePresence>
+   851→   851→
+   852→   852→          {/* Progress dots */}
+   853→   853→          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1">
+   854→   854→            {MOTIVATIONAL_QUOTES.slice(0, Math.min(MOTIVATIONAL_QUOTES.length, 8)).map((_, i) => (
+   855→   855→              <motion.div
+   856→   856→                key={i}
+   857→   857→                className={cn(
+   858→   858→                  'w-1 h-1 rounded-full transition-all duration-300',
+   859→   859→                  i === currentIndex % 8
+   860→   860→                    ? 'bg-gold w-3'
+   861→   861→                    : 'bg-muted-foreground/20'
+   862→   862→                )}
+   863→   863→              />
+   864→   864→            ))}
+   865→   865→          </div>
+   866→   866→        </motion.div>
+   867→   867→      </CardContent>
+   868→   868→    </Card>
+   869→   869→  )
+   870→   870→}
+   871→   871→
+   872→   872→/* ────────────── On This Day Widget ────────────── */
+   873→   873→
+   874→   874→function OnThisDayWidget() {
+   875→   875→  const [data, setData] = useState<{ lastWeek: number | null; lastMonth: number | null } | null>(null)
+   876→   876→
+   877→   877→  useEffect(() => {
+   878→   878→    async function fetchOnThisDay() {
+   879→   879→      try {
+   880→   880→        const today = new Date()
+   881→   881→        const dayOfMonth = today.getDate()
+   882→   882→        const lastWeek = new Date(today)
+   883→   883→        lastWeek.setDate(today.getDate() - 7)
+   884→   884→        const lastMonth = new Date(today)
+   885→   885→        lastMonth.setMonth(today.getMonth() - 1)
+   886→   886→
+   887→   887→        const lastWeekStr = `${lastWeek.getFullYear()}-${String(lastWeek.getMonth() + 1).padStart(2, '0')}-${String(lastWeek.getDate()).padStart(2, '0')}`
+   888→   888→        const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-${String(lastMonth.getDate()).padStart(2, '0')}`
+   889→   889→
+   890→   890→        const res = await fetch(`/api/rise/productivity-score?dates=${lastWeekStr},${lastMonthStr}`)
+   891→   891→        if (res.ok) {
+   892→   892→          const json = await res.json()
+   893→   893→          setData({
+   894→   894→            lastWeek: json.scores?.[0]?.score ?? null,
+   895→   895→            lastMonth: json.scores?.[1]?.score ?? null,
+   896→   896→          })
+   897→   897→        }
+   898→   898→      } catch {
+   899→   899→        setData({ lastWeek: null, lastMonth: null })
+   900→   900→      }
+   901→   901→    }
+   902→   902→    fetchOnThisDay()
+   903→   903→  }, [])
+   904→   904→
+   905→   905→  const hasData = data && (data.lastWeek !== null || data.lastMonth !== null)
+   906→   906→  const improvement = (data?.lastWeek && data?.lastMonth) ? data.lastWeek - data.lastMonth : null
+   907→   907→
+   908→   908→  return (
+   909→   909→    <motion.div
+   910→   910→      initial={{ opacity: 0, y: 12 }}
+   911→   911→      animate={{ opacity: 1, y: 0 }}
+   912→   912→      transition={{ duration: 0.5, ease: 'easeOut' }}
+   913→   913→    >
+   914→   914→      <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+   915→   915→        <CardHeader className="pb-3 pt-0">
+   916→   916→          <SectionHeader icon={CalendarClock} iconColor="text-gold">
+   917→   917→            في مثل هذا اليوم
+   918→   918→          </SectionHeader>
+   919→   919→        </CardHeader>
+   920→   920→        <CardContent className="pt-0">
+   921→   921→          <PremiumGlass className="p-4 lg:p-5">
+   922→   922→            {!hasData ? (
+   923→   923→              <div className="text-center py-4">
+   924→   924→                <CalendarClock className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+   925→   925→                <p className="text-sm text-muted-foreground">لا توجد بيانات سابقة</p>
+   926→   926→              </div>
+   927→   927→            ) : (
+   928→   928→              <div className="space-y-3">
+   929→   929→                <div className="flex items-center justify-between gap-4">
+   930→   930→                  <div className="flex-1">
+   931→   931→                    <p className="text-[11px] text-muted-foreground mb-1">الأسبوع الماضي</p>
+   932→   932→                    <div className="flex items-center gap-2">
+   933→   933→                      <span className="text-2xl font-bold text-foreground">
+   934→   934→                        {data.lastWeek !== null ? toArabicNum(data.lastWeek) : '—'}
+   935→   935→                      </span>
+   936→   936→                      {data.lastWeek !== null && (
+   937→   937→                        <span className="text-xs text-muted-foreground">/ ١٠٠</span>
+   938→   938→                      )}
+   939→   939→                    </div>
+   940→   940→                  </div>
+   941→   941→                  <div className="w-px h-10 bg-border/40" />
+   942→   942→                  <div className="flex-1">
+   943→   943→                    <p className="text-[11px] text-muted-foreground mb-1">الشهر الماضي</p>
+   944→   944→                    <div className="flex items-center gap-2">
+   945→   945→                      <span className="text-2xl font-bold text-foreground">
+   946→   946→                        {data.lastMonth !== null ? toArabicNum(data.lastMonth) : '—'}
+   947→   947→                      </span>
+   948→   948→                      {data.lastMonth !== null && (
+   949→   949→                        <span className="text-xs text-muted-foreground">/ ١٠٠</span>
+   950→   950→                      )}
+   951→   951→                    </div>
+   952→   952→                  </div>
+   953→   953→                </div>
+   954→   954→                {improvement !== null && (
+   955→   955→                  <motion.div
+   956→   956→                    initial={{ opacity: 0, scale: 0.9 }}
+   957→   957→                    animate={{ opacity: 1, scale: 1 }}
+   958→   958→                    transition={{ delay: 0.3, duration: 0.4 }}
+   959→   959→                    className={cn(
+   960→   960→                      'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold',
+   961→   961→                      improvement >= 0
+   962→   962→                        ? 'bg-emerald-accent/10 text-emerald-accent'
+   963→   963→                        : 'bg-red-500/10 text-red-500'
+   964→   964→                    )}
+   965→   965→                  >
+   966→   966→                    {improvement >= 0 ? (
+   967→   967→                      <ArrowUpRight className="w-4 h-4" />
+   968→   968→                    ) : (
+   969→   969→                      <ArrowDownRight className="w-4 h-4" />
+   970→   970→                    )}
+   971→   971→                    <span>
+   972→   972→                      {improvement >= 0 ? '+' : ''}{toArabicNum(improvement)} نقطة مقارنة بالشهر الماضي
+   973→   973→                    </span>
+   974→   974→                  </motion.div>
+   975→   975→                )}
+   976→   976→              </div>
+   977→   977→            )}
+   978→   978→          </PremiumGlass>
+   979→   979→        </CardContent>
+   980→   980→      </Card>
+   981→   981→    </motion.div>
+   982→   982→  )
+   983→   983→}
+   984→   984→
+   985→   985→/* ══════════════════════════════════════════════════════════════════════
+   986→   986→   MAIN DASHBOARD COMPONENT
+   987→   987→   ══════════════════════════════════════════════════════════════════════ */
+   988→   988→
+   989→   989→export default function Dashboard() {
+   990→   990→  const [data, setData] = useState<DashboardData | null>(null)
+   991→   991→  const [loading, setLoading] = useState(true)
+   992→   992→  const [error, setError] = useState<string | null>(null)
+   993→   993→
+   994→   994→  const fetchDashboard = useCallback(async () => {
+   995→   995→    try {
+   996→   996→      setLoading(true)
+   997→   997→      setError(null)
+   998→   998→      const res = await fetch('/api/rise/dashboard')
+   999→   999→      if (!res.ok) throw new Error('فشل في تحميل البيانات')
+  1000→  1000→      const json = await res.json()
+  1001→  1001→      setData(json)
+  1002→  1002→    } catch (err: any) {
+  1003→  1003→      setError(err.message || 'حدث خطأ غير متوقع')
+  1004→  1004→    } finally {
+  1005→  1005→      setLoading(false)
+  1006→  1006→    }
+  1007→  1007→  }, [])
+  1008→  1008→
+  1009→  1009→  useEffect(() => {
+  1010→  1010→    fetchDashboard()
+  1011→  1011→  }, [fetchDashboard])
+  1012→  1012→
+  1013→  1013→  if (loading) return <DashboardSkeleton />
+  1014→  1014→
+  1015→  1015→  if (error || !data) {
+  1016→  1016→    return (
+  1017→  1017→      <div className="flex items-center justify-center min-h-[60vh]" dir="rtl">
+  1018→  1018→        <div className="text-center space-y-4">
+  1019→  1019→          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+  1020→  1020→            <Circle className="w-8 h-8 text-destructive" />
+  1021→  1021→          </div>
+  1022→  1022→          <p className="text-muted-foreground">{error || 'لا توجد بيانات'}</p>
+  1023→  1023→          <button
+  1024→  1024→            onClick={fetchDashboard}
+  1025→  1025→            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+  1026→  1026→          >
+  1027→  1027→            إعادة المحاولة
+  1028→  1028→          </button>
+  1029→  1029→        </div>
+  1030→  1030→      </div>
+  1031→  1031→    )
+  1032→  1032→  }
+  1033→  1033→
+  1034→  1034→  const { user, today, tasks, habits, health, achievements, dailyScores, goals, books } = data
+  1035→  1035→  const greeting = getGreeting()
+  1036→  1036→
+  1037→  1037→  const levelInfo = calculateLevel(user.xp)
+  1038→  1038→  const badgeStats: BadgeStats = {
+  1039→  1039→    totalTasks: user.totalTasksDone,
+  1040→  1040→    streak: user.streak,
+  1041→  1041→    totalFocusMin: user.totalFocusMin,
+  1042→  1042→    booksCompleted: 0,
+  1043→  1043→    totalHabits: habits.length,
+  1044→  1044→    journalStreak: 0,
+  1045→  1045→  }
+  1046→  1046→
+  1047→  1047→  const upcomingTasks = tasks.filter((t) => !t.done).slice(0, 5)
+  1048→  1048→  const activeGoals = goals.slice(0, 4)
+  1049→  1049→  const activeBooks = books.filter((b) => b.status === 'reading' || b.progress > 0).slice(0, 3)
+  1050→  1050→
+  1051→  1051→  const chartData = dailyScores.map((d) => ({
+  1052→  1052→    ...d,
+  1053→  1053→    dayLabel: getDayLabel(d.date),
+  1054→  1054→  }))
+  1055→  1055→
+  1056→  1056→  // Sparkline data derived from daily scores
+  1057→  1057→  const morningTrend = dailyScores.map(d => d.morningScore)
+  1058→  1058→  const taskTrend = dailyScores.map(d => d.taskScore)
+  1059→  1059→  const habitTrend = dailyScores.map(d => d.habitScore)
+  1060→  1060→  const focusTrend = dailyScores.map(d => d.focusScore)
+  1061→  1061→
+  1062→  1062→  return (
+  1063→  1063→    <motion.div
+  1064→  1064→      className="space-y-6 p-4 lg:p-6"
+  1065→  1065→      dir="rtl"
+  1066→  1066→      variants={containerVariants}
+  1067→  1067→      initial="hidden"
+  1068→  1068→      animate="show"
+  1069→  1069→    >
+  1070→  1070→      {/* ══════════ 1. Top Welcome & Stats Bar ══════════ */}
+  1071→  1071→      <motion.div variants={itemVariants} className="relative">
+  1072→  1072→        {/* Gradient background for hero */}
+  1073→  1073→        <div className="absolute inset-0 -m-4 lg:-m-6 rounded-3xl bg-gradient-to-bl from-forest/[0.04] via-emerald-accent/[0.03] to-transparent dark:from-emerald-accent/[0.06] dark:via-forest/[0.04] pointer-events-none" />
+  1074→  1074→        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+  1075→  1075→          <div className="space-y-1.5">
+  1076→  1076→            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+  1077→  1077→              {new Date().getHours() >= 4 && new Date().getHours() < 17 ? (
+  1078→  1078→                <Sun className="w-4 h-4 text-gold" />
+  1079→  1079→              ) : (
+  1080→  1080→                <Moon className="w-4 h-4 text-emerald-accent" />
+  1081→  1081→              )}
+  1082→  1082→              <span>{greeting}،</span>
+  1083→  1083→            </div>
+  1084→  1084→            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{user.name}</h1>
+  1085→  1085→          </div>
+  1086→  1086→
+  1087→  1087→          <div className="flex items-center gap-3 flex-wrap">
+  1088→  1088→            {/* Level Badge */}
+  1089→  1089→            <TooltipProvider>
+  1090→  1090→              <Tooltip>
+  1091→  1091→                <TooltipTrigger asChild>
+  1092→  1092→                  <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[200px] border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] cursor-default">
+  1093→  1093→                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shrink-0 shadow-md">
+  1094→  1094→                      <Zap className="w-5 h-5 text-forest-dark" />
+  1095→  1095→                    </div>
+  1096→  1096→                    <div className="flex-1 min-w-0">
+  1097→  1097→                      <div className="flex items-center justify-between mb-1">
+  1098→  1098→                        <span className="text-xs font-semibold text-foreground">
+  1099→  1099→                          المستوى {toArabicNum(levelInfo.level)}
+  1100→  1100→                        </span>
+  1101→  1101→                        <span className="text-[10px] text-muted-foreground">
+  1102→  1102→                          {toArabicNum(levelInfo.currentXp)} / {toArabicNum(levelInfo.xpToNext)}
+  1103→  1103→                        </span>
+  1104→  1104→                      </div>
+  1105→  1105→                      {/* XP bar with glow */}
+  1106→  1106→                      <div className="relative">
+  1107→  1107→                        <div className="absolute -inset-1 rounded-full bg-gradient-to-l from-gold/30 to-gold-light/20 blur-sm opacity-60" />
+  1108→  1108→                        <div className="relative h-1.5 rounded-full bg-primary/10 overflow-hidden">
+  1109→  1109→                          <motion.div
+  1110→  1110→                            className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
+  1111→  1111→                            initial={{ width: 0 }}
+  1112→  1112→                            animate={{ width: `${levelInfo.progress}%` }}
+  1113→  1113→                            transition={{ duration: 1.2, ease: 'easeOut' }}
+  1114→  1114→                          />
+  1115→  1115→                        </div>
+  1116→  1116→                      </div>
+  1117→  1117→                    </div>
+  1118→  1118→                  </div>
+  1119→  1119→                </TooltipTrigger>
+  1120→  1120→                <TooltipContent side="bottom" className="text-xs">
+  1121→  1121→                  {toArabicNum(levelInfo.xpToNext - levelInfo.currentXp)} خبرة للمستوى التالي
+  1122→  1122→                </TooltipContent>
+  1123→  1123→              </Tooltip>
+  1124→  1124→            </TooltipProvider>
+  1125→  1125→
+  1126→  1126→            {/* Streak */}
+  1127→  1127→            <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 pulse-glow border border-white/10 dark:border-white/5">
+  1128→  1128→              <Flame className="w-5 h-5 text-orange-500" />
+  1129→  1129→              <div>
+  1130→  1130→                <p className="text-sm font-bold leading-none">{toArabicNum(user.streak)}</p>
+  1131→  1131→                <p className="text-[10px] text-muted-foreground mt-0.5">أيام متتالية</p>
+  1132→  1132→              </div>
+  1133→  1133→            </div>
+  1134→  1134→          </div>
+  1135→  1135→        </div>
+  1136→  1136→      </motion.div>
+  1137→  1137→
+  1138→  1138→      {/* ══════════ 2. Productivity Score (Full Width) ══════════ */}
+  1139→  1139→      <motion.div variants={itemVariants}>
+  1140→  1140→        <ProductivityScoreCard />
+  1141→  1141→      </motion.div>
+  1142→  1142→
+  1143→  1143→      {/* ══════════ 2b. On This Day ══════════ */}
+  1144→  1144→      <motion.div variants={itemVariants}>
+  1145→  1145→        <OnThisDayWidget />
+  1146→  1146→      </motion.div>
+  1147→  1147→
+  1148→  1148→      {/* ══════════ 3. Score Cards Row ══════════ */}
+  1149→  1149→      <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+  1150→  1150→        {/* Morning Score */}
+  1151→  1151→        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
+  1152→  1152→          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+  1153→  1153→            <div className="flex items-center gap-4">
+  1154→  1154→              <CircularProgress
+  1155→  1155→                value={today.morningScore}
+  1156→  1156→                size={64}
+  1157→  1157→                strokeWidth={5}
+  1158→  1158→                color="stroke-gold"
+  1159→  1159→              />
+  1160→  1160→              <div className="flex-1 min-w-0">
+  1161→  1161→                <p className="text-xs text-muted-foreground mb-0.5">درجة الصباح</p>
+  1162→  1162→                <p className="text-xl font-bold text-foreground">
+  1163→  1163→                  <AnimatedNumber value={today.morningScore} />
+  1164→  1164→                  <span className="text-sm font-normal text-muted-foreground mr-1">/ ١٠٠</span>
+  1165→  1165→                </p>
+  1166→  1166→              </div>
+  1167→  1167→            </div>
+  1168→  1168→            <div className="mt-3 flex items-center justify-between">
+  1169→  1169→              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+  1170→  1170→              <MiniSparkline data={morningTrend} color="bg-gold" />
+  1171→  1171→            </div>
+  1172→  1172→          </PremiumGlass>
+  1173→  1173→        </motion.div>
+  1174→  1174→
+  1175→  1175→        {/* Tasks Completed */}
+  1176→  1176→        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
+  1177→  1177→          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+  1178→  1178→            <div className="flex items-center gap-4">
+  1179→  1179→              <div className="w-14 h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+  1180→  1180→                <CheckCircle2 className="w-7 h-7 text-emerald-accent" />
+  1181→  1181→              </div>
+  1182→  1182→              <div className="flex-1 min-w-0">
+  1183→  1183→                <p className="text-xs text-muted-foreground mb-0.5">المهام المكتملة</p>
+  1184→  1184→                <p className="text-xl font-bold text-foreground">
+  1185→  1185→                  <AnimatedNumber value={today.tasksCompleted} />
+  1186→  1186→                  <span className="text-sm font-normal text-muted-foreground mr-1">
+  1187→  1187→                    / {toArabicNum(today.tasksTotal)}
+  1188→  1188→                  </span>
+  1189→  1189→                </p>
+  1190→  1190→              </div>
+  1191→  1191→            </div>
+  1192→  1192→            <div className="mt-3 flex items-center justify-between">
+  1193→  1193→              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+  1194→  1194→              <MiniSparkline data={taskTrend} color="bg-emerald-accent" />
+  1195→  1195→            </div>
+  1196→  1196→          </PremiumGlass>
+  1197→  1197→        </motion.div>
+  1198→  1198→
+  1199→  1199→        {/* Habits */}
+  1200→  1200→        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
+  1201→  1201→          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+  1202→  1202→            <div className="flex items-center gap-4">
+  1203→  1203→              <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+  1204→  1204→                <Target className="w-7 h-7 text-forest" />
+  1205→  1205→              </div>
+  1206→  1206→              <div className="flex-1 min-w-0">
+  1207→  1207→                <p className="text-xs text-muted-foreground mb-0.5">العادات</p>
+  1208→  1208→                <p className="text-xl font-bold text-foreground">
+  1209→  1209→                  <AnimatedNumber value={today.habitsCompleted} />
+  1210→  1210→                  <span className="text-sm font-normal text-muted-foreground mr-1">
+  1211→  1211→                    / {toArabicNum(today.habitsTotal)}
+  1212→  1212→                  </span>
+  1213→  1213→                </p>
+  1214→  1214→              </div>
+  1215→  1215→            </div>
+  1216→  1216→            <div className="mt-3 flex items-center justify-between">
+  1217→  1217→              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+  1218→  1218→              <MiniSparkline data={habitTrend} color="bg-forest" />
+  1219→  1219→            </div>
+  1220→  1220→          </PremiumGlass>
+  1221→  1221→        </motion.div>
+  1222→  1222→
+  1223→  1223→        {/* Focus */}
+  1224→  1224→        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
+  1225→  1225→          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+  1226→  1226→            <div className="flex items-center gap-4">
+  1227→  1227→              <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
+  1228→  1228→                <Clock className="w-7 h-7 text-gold" />
+  1229→  1229→              </div>
+  1230→  1230→              <div className="flex-1 min-w-0">
+  1231→  1231→                <p className="text-xs text-muted-foreground mb-0.5">التركيز</p>
+  1232→  1232→                <p className="text-xl font-bold text-foreground">
+  1233→  1233→                  <AnimatedNumber value={today.focusMin} />
+  1234→  1234→                  <span className="text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
+  1235→  1235→                </p>
+  1236→  1236→              </div>
+  1237→  1237→            </div>
+  1238→  1238→            <div className="mt-3 flex items-center justify-between">
+  1239→  1239→              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+  1240→  1240→              <MiniSparkline data={focusTrend} color="bg-gold" />
+  1241→  1241→            </div>
+  1242→  1242→          </PremiumGlass>
+  1243→  1243→        </motion.div>
+  1244→  1244→      </motion.div>
+  1245→  1245→
+  1246→  1246→      {/* ══════════ 3. Weekly Score Chart ══════════ */}
+  1247→  1247→      {chartData.length > 0 && (
+  1248→  1248→        <motion.div variants={itemVariants}>
+  1249→  1249→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1250→  1250→            <CardHeader className="pb-3 pt-0">
+  1251→  1251→              <SectionHeader icon={TrendingUp} iconColor="text-emerald-accent">
+  1252→  1252→                أداء الأسبوع
+  1253→  1253→              </SectionHeader>
+  1254→  1254→            </CardHeader>
+  1255→  1255→            <CardContent className="pt-0">
+  1256→  1256→              <PremiumGlass className="p-4 lg:p-5" style={{ height: 250 }}>
+  1257→  1257→                <ResponsiveContainer width="100%" height="100%">
+  1258→  1258→                  <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+  1259→  1259→                    <defs>
+  1260→  1260→                      <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+  1261→  1261→                        <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.35} />
+  1262→  1262→                        <stop offset="50%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.12} />
+  1263→  1263→                        <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+  1264→  1264→                      </linearGradient>
+  1265→  1265→                    </defs>
+  1266→  1266→                    <XAxis
+  1267→  1267→                      dataKey="dayLabel"
+  1268→  1268→                      axisLine={false}
+  1269→  1269→                      tickLine={false}
+  1270→  1270→                      tick={{ fill: 'oklch(0.50 0.01 160)', fontSize: 11 }}
+  1271→  1271→                      dy={8}
+  1272→  1272→                    />
+  1273→  1273→                    <YAxis
+  1274→  1274→                      domain={[0, 100]}
+  1275→  1275→                      axisLine={false}
+  1276→  1276→                      tickLine={false}
+  1277→  1277→                      tick={{ fill: 'oklch(0.50 0.01 160)', fontSize: 11 }}
+  1278→  1278→                      dx={-4}
+  1279→  1279→                      width={28}
+  1280→  1280→                    />
+  1281→  1281→                    <RechartsTooltip content={<ChartTooltip />} />
+  1282→  1282→                    <Area
+  1283→  1283→                      type="monotone"
+  1284→  1284→                      dataKey="score"
+  1285→  1285→                      stroke="oklch(0.55 0.14 163)"
+  1286→  1286→                      strokeWidth={2.5}
+  1287→  1287→                      fill="url(#scoreGradient)"
+  1288→  1288→                      dot={{ r: 4, fill: 'oklch(0.55 0.14 163)', strokeWidth: 2, stroke: 'var(--card)' }}
+  1289→  1289→                      activeDot={{ r: 6, fill: 'oklch(0.55 0.14 163)', strokeWidth: 2, stroke: 'var(--card)' }}
+  1290→  1290→                      name="الدرجة"
+  1291→  1291→                    />
+  1292→  1292→                  </AreaChart>
+  1293→  1293→                </ResponsiveContainer>
+  1294→  1294→              </PremiumGlass>
+  1295→  1295→            </CardContent>
+  1296→  1296→          </Card>
+  1297→  1297→        </motion.div>
+  1298→  1298→      )}
+  1299→  1299→
+  1300→  1300→      {/* ══════════ 4. Two-column Layout ══════════ */}
+  1301→  1301→      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1302→  1302→
+  1303→  1303→        {/* ── Right Column: Tasks + Goals ── */}
+  1304→  1304→        <div className="space-y-6">
+  1305→  1305→          {/* Upcoming Tasks */}
+  1306→  1306→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1307→  1307→            <CardHeader className="pb-3 pt-0">
+  1308→  1308→              <SectionHeader icon={CheckCircle2} iconColor="text-emerald-accent" badge={
+  1309→  1309→                <Badge variant="secondary" className="text-[10px]">
+  1310→  1310→                  {toArabicNum(upcomingTasks.length)} مهام
+  1311→  1311→                </Badge>
+  1312→  1312→              }>
+  1313→  1313→                المهام القادمة
+  1314→  1314→              </SectionHeader>
+  1315→  1315→            </CardHeader>
+  1316→  1316→            <CardContent className="pt-0">
+  1317→  1317→              <PremiumGlass className="divide-y divide-border/30 overflow-hidden">
+  1318→  1318→                {upcomingTasks.length === 0 ? (
+  1319→  1319→                  <div className="p-6 text-center text-sm text-muted-foreground">
+  1320→  1320→                    <Sparkles className="w-8 h-8 mx-auto mb-2 text-gold/40" />
+  1321→  1321→                    لا توجد مهام قادمة
+  1322→  1322→                  </div>
+  1323→  1323→                ) : (
+  1324→  1324→                  upcomingTasks.map((task, i) => (
+  1325→  1325→                    <motion.div
+  1326→  1326→                      key={task.id}
+  1327→  1327→                      initial={{ opacity: 0, x: -12 }}
+  1328→  1328→                      animate={{ opacity: 1, x: 0 }}
+  1329→  1329→                      transition={{ delay: 0.3 + i * 0.06, duration: 0.35 }}
+  1330→  1330→                      className={cn(
+  1331→  1331→                        'flex items-center gap-3 px-4 py-3 last:pb-3 first:pt-3 transition-all duration-200',
+  1332→  1332→                        getPriorityBorderColor(task.priority),
+  1333→  1333→                        'hover:bg-emerald-accent/[0.03] dark:hover:bg-emerald-accent/[0.05]'
+  1334→  1334→                      )}
+  1335→  1335→                    >
+  1336→  1336→                      <span className="flex-1 text-sm font-medium text-foreground truncate">{task.title}</span>
+  1337→  1337→                      {task.projectName && (
+  1338→  1338→                        <span
+  1339→  1339→                          className="text-[10px] px-2 py-0.5 rounded-full font-medium hidden sm:inline-block"
+  1340→  1340→                          style={{ backgroundColor: `${task.projectColor}15`, color: task.projectColor }}
+  1341→  1341→                        >
+  1342→  1342→                          {task.projectName}
+  1343→  1343→                        </span>
+  1344→  1344→                      )}
+  1345→  1345→                      <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0', getPriorityColor(task.priority))}>
+  1346→  1346→                        {getPriorityLabel(task.priority)}
+  1347→  1347→                      </Badge>
+  1348→  1348→                    </motion.div>
+  1349→  1349→                  ))
+  1350→  1350→                )}
+  1351→  1351→              </PremiumGlass>
+  1352→  1352→            </CardContent>
+  1353→  1353→          </Card>
+  1354→  1354→
+  1355→  1355→          {/* Active Goals */}
+  1356→  1356→          {activeGoals.length > 0 && (
+  1357→  1357→            <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1358→  1358→              <CardHeader className="pb-3 pt-0">
+  1359→  1359→                <SectionHeader icon={Target} iconColor="text-forest" badge={
+  1360→  1360→                  <Badge variant="secondary" className="text-[10px]">
+  1361→  1361→                    {toArabicNum(activeGoals.length)} أهداف
+  1362→  1362→                  </Badge>
+  1363→  1363→                }>
+  1364→  1364→                  الأهداف النشطة
+  1365→  1365→                </SectionHeader>
+  1366→  1366→              </CardHeader>
+  1367→  1367→              <CardContent className="pt-0">
+  1368→  1368→                <PremiumGlass className="p-4 space-y-4">
+  1369→  1369→                  {activeGoals.map((goal, i) => (
+  1370→  1370→                    <motion.div
+  1371→  1371→                      key={goal.id}
+  1372→  1372→                      initial={{ opacity: 0, y: 8 }}
+  1373→  1373→                      animate={{ opacity: 1, y: 0 }}
+  1374→  1374→                      transition={{ delay: 0.4 + i * 0.08, duration: 0.35 }}
+  1375→  1375→                      className="space-y-2"
+  1376→  1376→                    >
+  1377→  1377→                      <div className="flex items-center justify-between">
+  1378→  1378→                        <div className="flex items-center gap-2 min-w-0">
+  1379→  1379→                          <div className="w-2 h-2 rounded-full bg-forest shrink-0" />
+  1380→  1380→                          <span className="text-sm font-medium text-foreground truncate">{goal.title}</span>
+  1381→  1381→                        </div>
+  1382→  1382→                        <span className="text-xs font-semibold text-emerald-accent shrink-0 mr-2">
+  1383→  1383→                          {toArabicNum(Math.round(goal.progress))}٪
+  1384→  1384→                        </span>
+  1385→  1385→                      </div>
+  1386→  1386→                      <Progress value={goal.progress} className="h-1.5" />
+  1387→  1387→                      <p className="text-[10px] text-muted-foreground">
+  1388→  1388→                        الموعد: {new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
+  1389→  1389→                      </p>
+  1390→  1390→                    </motion.div>
+  1391→  1391→                  ))}
+  1392→  1392→                </PremiumGlass>
+  1393→  1393→              </CardContent>
+  1394→  1394→            </Card>
+  1395→  1395→          )}
+  1396→  1396→        </div>
+  1397→  1397→
+  1398→  1398→        {/* ── Left Column: Habits + Achievements ── */}
+  1399→  1399→        <div className="space-y-6">
+  1400→  1400→          {/* Today's Habits */}
+  1401→  1401→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1402→  1402→            <CardHeader className="pb-3 pt-0">
+  1403→  1403→              <SectionHeader icon={Flame} iconColor="text-orange-500" badge={
+  1404→  1404→                <Badge variant="secondary" className="text-[10px]">
+  1405→  1405→                  {toArabicNum(today.habitsCompleted)} / {toArabicNum(today.habitsTotal)}
+  1406→  1406→                </Badge>
+  1407→  1407→              }>
+  1408→  1408→                تتبع العادات اليوم
+  1409→  1409→              </SectionHeader>
+  1410→  1410→            </CardHeader>
+  1411→  1411→            <CardContent className="pt-0">
+  1412→  1412→              <PremiumGlass className="p-4">
+  1413→  1413→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+  1414→  1414→                  {habits.map((habit, i) => (
+  1415→  1415→                    <motion.div
+  1416→  1416→                      key={habit.id}
+  1417→  1417→                      initial={{ opacity: 0, scale: 0.95 }}
+  1418→  1418→                      animate={{ opacity: 1, scale: 1 }}
+  1419→  1419→                      transition={{ delay: 0.35 + i * 0.06, duration: 0.3 }}
+  1420→  1420→                      className={cn(
+  1421→  1421→                        'flex items-center gap-3 rounded-xl p-3 transition-all duration-200',
+  1422→  1422→                        habit.todayCompleted
+  1423→  1423→                          ? 'bg-emerald-accent/5 border border-emerald-accent/15'
+  1424→  1424→                          : 'hover:bg-primary/[0.02] border border-transparent'
+  1425→  1425→                      )}
+  1426→  1426→                    >
+  1427→  1427→                      <Checkbox
+  1428→  1428→                        checked={habit.todayCompleted}
+  1429→  1429→                        disabled
+  1430→  1430→                        className={cn(
+  1431→  1431→                          habit.todayCompleted && 'data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
+  1432→  1432→                        )}
+  1433→  1433→                      />
+  1434→  1434→                      <div
+  1435→  1435→                        className={cn(
+  1436→  1436→                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-lg transition-shadow duration-300',
+  1437→  1437→                          habit.todayCompleted && 'pulse-glow'
+  1438→  1438→                        )}
+  1439→  1439→                        style={{
+  1440→  1440→                          backgroundColor: `${habit.color}15`,
+  1441→  1441→                          boxShadow: habit.todayCompleted ? `0 0 12px ${habit.color}40` : 'none',
+  1442→  1442→                        }}
+  1443→  1443→                      >
+  1444→  1444→                        {habit.icon}
+  1445→  1445→                      </div>
+  1446→  1446→                      <div className="flex-1 min-w-0">
+  1447→  1447→                        <p className={cn('text-sm font-medium truncate', habit.todayCompleted ? 'text-foreground/60 line-through' : 'text-foreground')}>
+  1448→  1448→                          {habit.name}
+  1449→  1449→                        </p>
+  1450→  1450→                        <p className="text-[10px] text-muted-foreground">
+  1451→  1451→                          {toArabicNum(habit.todayCount)} / {toArabicNum(habit.targetCount)} · +{toArabicNum(habit.xpReward)} خبرة
+  1452→  1452→                        </p>
+  1453→  1453→                      </div>
+  1454→  1454→                    </motion.div>
+  1455→  1455→                  ))}
+  1456→  1456→                </div>
+  1457→  1457→              </PremiumGlass>
+  1458→  1458→            </CardContent>
+  1459→  1459→          </Card>
+  1460→  1460→
+  1461→  1461→          {/* Recent Achievements */}
+  1462→  1462→          {achievements.length > 0 && (
+  1463→  1463→            <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1464→  1464→              <CardHeader className="pb-3 pt-0">
+  1465→  1465→                <SectionHeader icon={Award} iconColor="text-gold">
+  1466→  1466→                  الإنجازات الأخيرة
+  1467→  1467→                </SectionHeader>
+  1468→  1468→              </CardHeader>
+  1469→  1469→              <CardContent className="pt-0">
+  1470→  1470→                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+  1471→  1471→                  {achievements.map((ach, i) => (
+  1472→  1472→                    <motion.div
+  1473→  1473→                      key={i}
+  1474→  1474→                      initial={{ opacity: 0, y: 12 }}
+  1475→  1475→                      animate={{ opacity: 1, y: 0 }}
+  1476→  1476→                      transition={{ delay: 0.5 + i * 0.08, duration: 0.35 }}
+  1477→  1477→                      whileHover={{ y: -3, transition: { duration: 0.2 } }}
+  1478→  1478→                      className="shine glass rounded-xl p-3 min-w-[140px] flex-shrink-0 text-center space-y-2 border border-white/10 dark:border-white/5 cursor-default"
+  1479→  1479→                    >
+  1480→  1480→                      <div className="text-2xl">{ach.badgeIcon}</div>
+  1481→  1481→                      <p className="text-xs font-semibold text-foreground truncate">{ach.badgeName}</p>
+  1482→  1482→                      <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{ach.badgeDesc}</p>
+  1483→  1483→                    </motion.div>
+  1484→  1484→                  ))}
+  1485→  1485→                </div>
+  1486→  1486→              </CardContent>
+  1487→  1487→            </Card>
+  1488→  1488→          )}
+  1489→  1489→
+  1490→  1490→          {/* Available Badges */}
+  1491→  1491→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1492→  1492→            <CardHeader className="pb-3 pt-0">
+  1493→  1493→              <SectionHeader icon={Trophy} iconColor="text-gold">
+  1494→  1494→                الشارات المتاحة
+  1495→  1495→              </SectionHeader>
+  1496→  1496→            </CardHeader>
+  1497→  1497→            <CardContent className="pt-0">
+  1498→  1498→              <div className="glass rounded-2xl p-4 border border-white/10 dark:border-white/5">
+  1499→  1499→                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  1500→  1500→                  {BADGES.map((badge, i) => {
+  1501→  1501→                    const earned = badge.condition(badgeStats)
+  1502→  1502→                    return (
+  1503→  1503→                      <motion.div
+  1504→  1504→                        key={badge.id}
+  1505→  1505→                        initial={{ opacity: 0, scale: 0.85 }}
+  1506→  1506→                        animate={{ opacity: earned ? 1 : 0.4, scale: 1 }}
+  1507→  1507→                        transition={{ delay: 0.6 + i * 0.04, duration: 0.4, type: 'spring', stiffness: 200 }}
+  1508→  1508→                        whileHover={earned ? { y: -3, scale: 1.03, transition: { duration: 0.2 } } : undefined}
+  1509→  1509→                        className={cn(
+  1510→  1510→                          'rounded-xl p-3 text-center space-y-1.5 border transition-shadow duration-300',
+  1511→  1511→                          earned
+  1512→  1512→                            ? 'bg-primary/[0.03] border-gold/20 shadow-[0_0_15px_oklch(0.78_0.12_85/0.08)]'
+  1513→  1513→                            : 'bg-primary/[0.02] border-primary/10'
+  1514→  1514→                        )}
+  1515→  1515→                      >
+  1516→  1516→                        <motion.div
+  1517→  1517→                          className="text-2xl"
+  1518→  1518→                          animate={earned ? { rotate: [0, -10, 10, -5, 5, 0], scale: [1, 1.2, 1] } : {}}
+  1519→  1519→                          transition={{ delay: 0.8 + i * 0.04, duration: 0.6 }}
+  1520→  1520→                        >
+  1521→  1521→                          {badge.icon}
+  1522→  1522→                        </motion.div>
+  1523→  1523→                        <p className={cn('text-xs font-semibold truncate', earned ? 'text-foreground' : 'text-muted-foreground')}>
+  1524→  1524→                          {badge.name}
+  1525→  1525→                        </p>
+  1526→  1526→                        <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
+  1527→  1527→                          {badge.desc}
+  1528→  1528→                        </p>
+  1529→  1529→                        {earned && (
+  1530→  1530→                          <motion.div
+  1531→  1531→                            initial={{ opacity: 0, scale: 0 }}
+  1532→  1532→                            animate={{ opacity: 1, scale: 1 }}
+  1533→  1533→                            transition={{ delay: 1 + i * 0.04, type: 'spring', stiffness: 300 }}
+  1534→  1534→                            className="flex justify-center"
+  1535→  1535→                          >
+  1536→  1536→                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-accent" />
+  1537→  1537→                          </motion.div>
+  1538→  1538→                        )}
+  1539→  1539→                      </motion.div>
+  1540→  1540→                    )
+  1541→  1541→                  })}
+  1542→  1542→                </div>
+  1543→  1543→              </div>
+  1544→  1544→            </CardContent>
+  1545→  1545→          </Card>
+  1546→  1546→        </div>
+  1547→  1547→      </motion.div>
+  1548→  1548→
+  1549→  1549→      {/* ══════════ 5. Bottom Row ══════════ */}
+  1550→  1550→      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+  1551→  1551→
+  1552→  1552→        {/* Today's Health */}
+  1553→  1553→        {health && (
+  1554→  1554→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1555→  1555→            <CardHeader className="pb-3 pt-0">
+  1556→  1556→              <SectionHeader icon={Heart} iconColor="text-red-500">
+  1557→  1557→                الصحة اليوم
+  1558→  1558→              </SectionHeader>
+  1559→  1559→            </CardHeader>
+  1560→  1560→            <CardContent className="pt-0">
+  1561→  1561→              <PremiumGlass className="p-4">
+  1562→  1562→                <div className="grid grid-cols-2 gap-3">
+  1563→  1563→                  {/* Sleep */}
+  1564→  1564→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1565→  1565→                    <Moon className="w-5 h-5 mx-auto text-indigo-400" />
+  1566→  1566→                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.sleepHours)}</p>
+  1567→  1567→                    <p className="text-[10px] text-muted-foreground">ساعات نوم</p>
+  1568→  1568→                  </div>
+  1569→  1569→                  {/* Water */}
+  1570→  1570→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1571→  1571→                    <Droplets className="w-5 h-5 mx-auto text-blue-400" />
+  1572→  1572→                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.waterGlasses)}</p>
+  1573→  1573→                    <p className="text-[10px] text-muted-foreground">كوب ماء</p>
+  1574→  1574→                  </div>
+  1575→  1575→                  {/* Steps */}
+  1576→  1576→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1577→  1577→                    <Footprints className="w-5 h-5 mx-auto text-emerald-accent" />
+  1578→  1578→                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.steps)}</p>
+  1579→  1579→                    <p className="text-[10px] text-muted-foreground">خطوة</p>
+  1580→  1580→                  </div>
+  1581→  1581→                  {/* Mood & Energy */}
+  1582→  1582→                  <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
+  1583→  1583→                    <div className="flex justify-center gap-3">
+  1584→  1584→                      <div className="flex flex-col items-center gap-1">
+  1585→  1585→                        <span className="text-lg">{getMoodEmoji(health.mood)}</span>
+  1586→  1586→                        <span className="text-[10px] text-muted-foreground">المزاج</span>
+  1587→  1587→                      </div>
+  1588→  1588→                      <div className="flex flex-col items-center gap-1">
+  1589→  1589→                        <span className="text-lg">{getEnergyEmoji(health.energy)}</span>
+  1590→  1590→                        <span className="text-[10px] text-muted-foreground">الطاقة</span>
+  1591→  1591→                      </div>
+  1592→  1592→                    </div>
+  1593→  1593→                  </div>
+  1594→  1594→                </div>
+  1595→  1595→              </PremiumGlass>
+  1596→  1596→            </CardContent>
+  1597→  1597→          </Card>
+  1598→  1598→        )}
+  1599→  1599→
+  1600→  1600→        {/* Current Reading */}
+  1601→  1601→        {activeBooks.length > 0 && (
+  1602→  1602→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1603→  1603→            <CardHeader className="pb-3 pt-0">
+  1604→  1604→              <SectionHeader icon={BookOpen} iconColor="text-forest">
+  1605→  1605→                القراءة الحالية
+  1606→  1606→              </SectionHeader>
+  1607→  1607→            </CardHeader>
+  1608→  1608→            <CardContent className="pt-0">
+  1609→  1609→              <PremiumGlass className="p-4 space-y-4">
+  1610→  1610→                {activeBooks.map((book, i) => (
+  1611→  1611→                  <motion.div
+  1612→  1612→                    key={i}
+  1613→  1613→                    initial={{ opacity: 0, y: 8 }}
+  1614→  1614→                    animate={{ opacity: 1, y: 0 }}
+  1615→  1615→                    transition={{ delay: 0.6 + i * 0.1, duration: 0.35 }}
+  1616→  1616→                    className="space-y-2"
+  1617→  1617→                  >
+  1618→  1618→                    <div className="flex items-center justify-between">
+  1619→  1619→                      <div className="min-w-0 flex-1">
+  1620→  1620→                        <p className="text-sm font-semibold text-foreground truncate">{book.title}</p>
+  1621→  1621→                        <p className="text-[10px] text-muted-foreground">{book.author}</p>
+  1622→  1622→                      </div>
+  1623→  1623→                      <span className="text-xs font-semibold text-emerald-accent shrink-0 mr-2">
+  1624→  1624→                        {toArabicNum(Math.round(book.progress))}٪
+  1625→  1625→                      </span>
+  1626→  1626→                    </div>
+  1627→  1627→                    <Progress value={book.progress} className="h-1.5" />
+  1628→  1628→                  </motion.div>
+  1629→  1629→                ))}
+  1630→  1630→              </PremiumGlass>
+  1631→  1631→            </CardContent>
+  1632→  1632→          </Card>
+  1633→  1633→        )}
+  1634→  1634→
+  1635→  1635→        {/* Motivational Wall */}
+  1636→  1636→        <MotivationalWall />
+  1637→  1637→      </motion.div>
+  1638→  1638→
+  1639→  1639→      {/* ══════════ Recent Focus Sessions ══════════ */}
+  1640→  1640→      {data.recentFocus.length > 0 && (
+  1641→  1641→        <motion.div variants={itemVariants}>
+  1642→  1642→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1643→  1643→            <CardHeader className="pb-3 pt-0">
+  1644→  1644→              <SectionHeader icon={Clock} iconColor="text-gold">
+  1645→  1645→                جلسات التركيز الأخيرة
+  1646→  1646→              </SectionHeader>
+  1647→  1647→            </CardHeader>
+  1648→  1648→            <CardContent className="pt-0">
+  1649→  1649→              <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+  1650→  1650→                {data.recentFocus.map((session, i) => (
+  1651→  1651→                  <motion.div
+  1652→  1652→                    key={i}
+  1653→  1653→                    initial={{ opacity: 0, x: 12 }}
+  1654→  1654→                    animate={{ opacity: 1, x: 0 }}
+  1655→  1655→                    transition={{ delay: 0.6 + i * 0.06, duration: 0.3 }}
+  1656→  1656→                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
+  1657→  1657→                    className="glass rounded-xl p-3 min-w-[120px] flex-shrink-0 text-center space-y-1.5 border border-white/10 dark:border-white/5"
+  1658→  1658→                  >
+  1659→  1659→                    <Brain className="w-5 h-5 mx-auto text-emerald-accent" />
+  1660→  1660→                    <p className="text-sm font-bold text-foreground">{toArabicNum(session.actualMin)} د</p>
+  1661→  1661→                    <p className="text-[10px] text-muted-foreground">{session.type === 'deep' ? 'عميق' : 'عادي'}</p>
+  1662→  1662→                    <Badge variant="secondary" className={cn('text-[10px]', session.completed ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-gold/10 text-gold')}>
+  1663→  1663→                      {session.completed ? 'مكتمل' : 'قيد التنفيذ'}
+  1664→  1664→                    </Badge>
+  1665→  1665→                  </motion.div>
+  1666→  1666→                ))}
+  1667→  1667→              </div>
+  1668→  1668→            </CardContent>
+  1669→  1669→          </Card>
+  1670→  1670→        </motion.div>
+  1671→  1671→      )}
+  1672→  1672→
+  1673→  1673→      {/* ══════════ Projects Overview ══════════ */}
+  1674→  1674→      {data.projects.length > 0 && (
+  1675→  1675→        <motion.div variants={itemVariants}>
+  1676→  1676→          <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
+  1677→  1677→            <CardHeader className="pb-3 pt-0">
+  1678→  1678→              <SectionHeader icon={FolderKanban} iconColor="text-emerald-accent" badge={
+  1679→  1679→                <Badge variant="secondary" className="text-[10px]">
+  1680→  1680→                  {toArabicNum(data.projects.length)} مشاريع
+  1681→  1681→                </Badge>
+  1682→  1682→              }>
+  1683→  1683→                المشاريع
+  1684→  1684→              </SectionHeader>
+  1685→  1685→            </CardHeader>
+  1686→  1686→            <CardContent className="pt-0">
+  1687→  1687→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  1688→  1688→                {data.projects.slice(0, 6).map((project, i) => (
+  1689→  1689→                  <motion.div
+  1690→  1690→                    key={project.id}
+  1691→  1691→                    initial={{ opacity: 0, y: 10 }}
+  1692→  1692→                    animate={{ opacity: 1, y: 0 }}
+  1693→  1693→                    transition={{ delay: 0.5 + i * 0.07, duration: 0.35 }}
+  1694→  1694→                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
+  1695→  1695→                    className="glass rounded-xl p-4 space-y-2.5 border border-white/10 dark:border-white/5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default"
+  1696→  1696→                  >
+  1697→  1697→                    <div className="flex items-center gap-2.5">
+  1698→  1698→                      <div
+  1699→  1699→                        className="w-3 h-3 rounded-full shrink-0"
+  1700→  1700→                        style={{ backgroundColor: project.color }}
+  1701→  1701→                      />
+  1702→  1702→                      <span className="text-sm font-semibold text-foreground truncate flex-1">
+  1703→  1703→                        {project.name}
+  1704→  1704→                      </span>
+  1705→  1705→                    </div>
+  1706→  1706→                    <div className="space-y-1.5">
+  1707→  1707→                      <div className="flex justify-between text-[10px] text-muted-foreground">
+  1708→  1708→                        <span>{toArabicNum(project.doneTaskCount)} / {toArabicNum(project.taskCount)} مهمة</span>
+  1709→  1709→                        <span>{toArabicNum(Math.round(project.progress))}٪</span>
+  1710→  1710→                      </div>
+  1711→  1711→                      <Progress value={project.progress} className="h-1.5" />
+  1712→  1712→                    </div>
+  1713→  1713→                  </motion.div>
+  1714→  1714→                ))}
+  1715→  1715→              </div>
+  1716→  1716→            </CardContent>
+  1717→  1717→          </Card>
+  1718→  1718→        </motion.div>
+  1719→  1719→      )}
+  1720→  1720→    </motion.div>
+  1721→  1721→  )
+  1722→  1722→}

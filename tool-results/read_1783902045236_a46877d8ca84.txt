@@ -1,0 +1,832 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useMemo, useCallback } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  BookOpen,
+     7→     7→  Search,
+     8→     8→  Save,
+     9→     9→  ChevronDown,
+    10→    10→  ChevronUp,
+    11→    11→  Sparkles,
+    12→    12→  Flame,
+    13→    13→  Smile,
+    14→    14→  Calendar,
+    15→    15→  Edit3,
+    16→    16→  X,
+    17→    17→  Lightbulb,
+    18→    18→  Trophy,
+    19→    19→  AlertTriangle,
+    20→    20→  Heart,
+    21→    21→  Battery,
+    22→    22→  Tag,
+    23→    23→  CalendarDays,
+    24→    24→} from 'lucide-react'
+    25→    25→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    26→    26→import { Button } from '@/components/ui/button'
+    27→    27→import { Textarea } from '@/components/ui/textarea'
+    28→    28→import { Input } from '@/components/ui/input'
+    29→    29→import { Badge } from '@/components/ui/badge'
+    30→    30→import { Skeleton } from '@/components/ui/skeleton'
+    31→    31→import { cn } from '@/lib/utils'
+    32→    32→import { toast } from 'sonner'
+    33→    33→
+    34→    34→/* ────────────── Types ────────────── */
+    35→    35→
+    36→    36→interface JournalEntry {
+    37→    37→  id: string
+    38→    38→  date: string
+    39→    39→  content: string
+    40→    40→  gratitude: string
+    41→    41→  wins: string
+    42→    42→  challenges: string
+    43→    43→  mood: number
+    44→    44→  energy: number
+    45→    45→  ideas: string
+    46→    46→  tomorrowPlan: string
+    47→    47→  tags: string
+    48→    48→}
+    49→    49→
+    50→    50→interface JournalData {
+    51→    51→  journal: JournalEntry | null
+    52→    52→  recentJournals: JournalEntry[]
+    53→    53→}
+    54→    54→
+    55→    55→/* ────────────── Constants ────────────── */
+    56→    56→
+    57→    57→const MOOD_EMOJIS: { value: number; emoji: string; label: string; color: string }[] = [
+    58→    58→  { value: 1, emoji: '😞', label: 'سيء جداً', color: 'bg-red-500/15 ring-red-500/30' },
+    59→    59→  { value: 2, emoji: '😐', label: 'سيء', color: 'bg-gray-400/15 ring-gray-400/30' },
+    60→    60→  { value: 3, emoji: '🙂', label: 'عادي', color: 'bg-gold/15 ring-gold/30' },
+    61→    61→  { value: 4, emoji: '😊', label: 'جيد', color: 'bg-emerald-accent/15 ring-emerald-accent/30' },
+    62→    62→  { value: 5, emoji: '😄', label: 'ممتاز', color: 'bg-emerald-accent/20 ring-emerald-accent/40' },
+    63→    63→]
+    64→    64→
+    65→    65→const ENERGY_LABELS = ['منهك', 'متعب', 'عادي', 'نشيط', 'ممتليء طاقة']
+    66→    66→
+    67→    67→const MOOD_STRIP_COLORS: Record<number, string> = {
+    68→    68→  1: 'bg-red-500',
+    69→    69→  2: 'bg-gray-400',
+    70→    70→  3: 'bg-gold',
+    71→    71→  4: 'bg-emerald-accent',
+    72→    72→  5: 'bg-emerald-accent',
+    73→    73→}
+    74→    74→
+    75→    75→const TEXTAREA_ACCENT_COLORS: Record<string, string> = {
+    76→    76→  content: 'border-r-[3px] border-r-emerald-accent/50',
+    77→    77→  gratitude: 'border-r-[3px] border-r-rose-400/50',
+    78→    78→  wins: 'border-r-[3px] border-r-gold/50',
+    79→    79→  challenges: 'border-r-[3px] border-r-orange-400/50',
+    80→    80→  ideas: 'border-r-[3px] border-r-yellow-400/50',
+    81→    81→  tomorrowPlan: 'border-r-[3px] border-r-forest-light/50',
+    82→    82→}
+    83→    83→
+    84→    84→const EMPTY_FORM: Omit<JournalEntry, 'id' | 'date' | 'tags'> = {
+    85→    85→  content: '',
+    86→    86→  gratitude: '',
+    87→    87→  wins: '',
+    88→    88→  challenges: '',
+    89→    89→  mood: 3,
+    90→    90→  energy: 3,
+    91→    91→  ideas: '',
+    92→    92→  tomorrowPlan: '',
+    93→    93→}
+    94→    94→
+    95→    95→/* ────────────── Animations ────────────── */
+    96→    96→
+    97→    97→const containerVariants = {
+    98→    98→  hidden: { opacity: 0 },
+    99→    99→  show: {
+   100→   100→    opacity: 1,
+   101→   101→    transition: { staggerChildren: 0.06 },
+   102→   102→  },
+   103→   103→}
+   104→   104→
+   105→   105→const itemVariants = {
+   106→   106→  hidden: { opacity: 0, y: 16 },
+   107→   107→  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+   108→   108→}
+   109→   109→
+   110→   110→/* ────────────── Component ────────────── */
+   111→   111→
+   112→   112→export default function Journal() {
+   113→   113→  const [data, setData] = useState<JournalData | null>(null)
+   114→   114→  const [loading, setLoading] = useState(true)
+   115→   115→  const [saving, setSaving] = useState(false)
+   116→   116→  const [searchQuery, setSearchQuery] = useState('')
+   117→   117→  const [isEditing, setIsEditing] = useState(false)
+   118→   118→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   119→   119→
+   120→   120→  const [form, setForm] = useState({ ...EMPTY_FORM })
+   121→   121→  const [tagInput, setTagInput] = useState('')
+   122→   122→
+   123→   123→  const today = new Date().toISOString().split('T')[0]
+   124→   124→
+   125→   125→  /* ─── Fetch ─── */
+   126→   126→  const fetchJournal = useCallback(async () => {
+   127→   127→    try {
+   128→   128→      const res = await fetch('/api/rise/journal')
+   129→   129→      if (res.ok) {
+   130→   130→        const json = await res.json()
+   131→   131→        setData(json)
+   132→   132→        if (json.journal) {
+   133→   133→          setForm({
+   134→   134→            content: json.journal.content || '',
+   135→   135→            gratitude: json.journal.gratitude || '',
+   136→   136→            wins: json.journal.wins || '',
+   137→   137→            challenges: json.journal.challenges || '',
+   138→   138→            mood: json.journal.mood || 3,
+   139→   139→            energy: json.journal.energy || 3,
+   140→   140→            ideas: json.journal.ideas || '',
+   141→   141→            tomorrowPlan: json.journal.tomorrowPlan || '',
+   142→   142→          })
+   143→   143→          setTagInput(json.journal.tags || '')
+   144→   144→        }
+   145→   145→      }
+   146→   146→    } catch {
+   147→   147→      toast.error('فشل في تحميل اليوميات')
+   148→   148→    } finally {
+   149→   149→      setLoading(false)
+   150→   150→    }
+   151→   151→  }, [])
+   152→   152→
+   153→   153→  useEffect(() => {
+   154→   154→    fetchJournal()
+   155→   155→  }, [fetchJournal])
+   156→   156→
+   157→   157→  /* ─── Save ─── */
+   158→   158→  const handleSave = async () => {
+   159→   159→    setSaving(true)
+   160→   160→    try {
+   161→   161→      const res = await fetch('/api/rise/journal', {
+   162→   162→        method: 'POST',
+   163→   163→        headers: { 'Content-Type': 'application/json' },
+   164→   164→        body: JSON.stringify({
+   165→   165→          ...form,
+   166→   166→          tags: tagInput,
+   167→   167→          date: today,
+   168→   168→        }),
+   169→   169→      })
+   170→   170→      if (res.ok) {
+   171→   171→        toast.success('تم حفظ اليوميات بنجاح ✨')
+   172→   172→        setIsEditing(false)
+   173→   173→        fetchJournal()
+   174→   174→      } else {
+   175→   175→        toast.error('فشل في حفظ اليوميات')
+   176→   176→      }
+   177→   177→    } catch {
+   178→   178→      toast.error('حدث خطأ أثناء الحفظ')
+   179→   179→    } finally {
+   180→   180→      setSaving(false)
+   181→   181→    }
+   182→   182→  }
+   183→   183→
+   184→   184→  /* ─── Filtered recent ─── */
+   185→   185→  const filteredJournals = useMemo(() => {
+   186→   186→    if (!data?.recentJournals) return []
+   187→   187→    if (!searchQuery.trim()) return data.recentJournals
+   188→   188→    const q = searchQuery.toLowerCase()
+   189→   189→    return data.recentJournals.filter(
+   190→   190→      (j) =>
+   191→   191→        j.content?.toLowerCase().includes(q) ||
+   192→   192→        j.gratitude?.toLowerCase().includes(q) ||
+   193→   193→        j.wins?.toLowerCase().includes(q) ||
+   194→   194→        j.ideas?.toLowerCase().includes(q) ||
+   195→   195→        j.tags?.toLowerCase().includes(q)
+   196→   196→    )
+   197→   197→  }, [data?.recentJournals, searchQuery])
+   198→   198→
+   199→   199→  /* ─── Stats ─── */
+   200→   200→  const stats = useMemo(() => {
+   201→   201→    const journals = data?.recentJournals || []
+   202→   202→    const total = journals.length
+   203→   203→    const moods = journals.filter((j) => j.mood).map((j) => j.mood)
+   204→   204→    const avgMood = moods.length
+   205→   205→      ? (moods.reduce((a, b) => a + b, 0) / moods.length).toFixed(1)
+   206→   206→      : '—'
+   207→   207→
+   208→   208→    // Calculate streak
+   209→   209→    let streak = 0
+   210→   210→    const sortedDates = journals
+   211→   211→      .map((j) => j.date)
+   212→   212→      .sort()
+   213→   213→      .reverse()
+   214→   214→    if (sortedDates.length > 0) {
+   215→   215→      const checkDate = new Date(today)
+   216→   216→      for (const d of sortedDates) {
+   217→   217→        const entryDate = new Date(d)
+   218→   218→        const diffDays = Math.floor(
+   219→   219→          (checkDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
+   220→   220→        )
+   221→   221→        if (diffDays <= 1) {
+   222→   222→          streak++
+   223→   223→          checkDate.setTime(entryDate.getTime())
+   224→   224→        } else {
+   225→   225→          break
+   226→   226→        }
+   227→   227→      }
+   228→   228→    }
+   229→   229→
+   230→   230→    return { total, streak, avgMood }
+   231→   231→  }, [data?.recentJournals, today])
+   232→   232→
+   233→   233→  /* ─── Helpers ─── */
+   234→   234→  const formatDate = (dateStr: string) => {
+   235→   235→    const d = new Date(dateStr)
+   236→   236→    return d.toLocaleDateString('ar-SA', {
+   237→   237→      weekday: 'long',
+   238→   238→      year: 'numeric',
+   239→   239→      month: 'long',
+   240→   240→      day: 'numeric',
+   241→   241→    })
+   242→   242→  }
+   243→   243→
+   244→   244→  const getMoodEmoji = (mood: number) => MOOD_EMOJIS.find((m) => m.value === mood)?.emoji || '🙂'
+   245→   245→
+   246→   246→  const updateForm = (field: string, value: string | number) => {
+   247→   247→    setForm((prev) => ({ ...prev, [field]: value }))
+   248→   248→  }
+   249→   249→
+   250→   250→  /* ─── Loading ─── */
+   251→   251→  if (loading) {
+   252→   252→    return (
+   253→   253→      <div className="space-y-4 p-4">
+   254→   254→        <Skeleton className="h-8 w-48" />
+   255→   255→        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   256→   256→          {[1, 2, 3].map((i) => (
+   257→   257→            <Skeleton key={i} className="h-24 rounded-2xl" />
+   258→   258→          ))}
+   259→   259→        </div>
+   260→   260→        <Skeleton className="h-96 rounded-2xl" />
+   261→   261→      </div>
+   262→   262→    )
+   263→   263→  }
+   264→   264→
+   265→   265→  const hasTodayEntry = !!data?.journal
+   266→   266→  const showForm = !hasTodayEntry || isEditing
+   267→   267→
+   268→   268→  return (
+   269→   269→    <motion.div
+   270→   270→      variants={containerVariants}
+   271→   271→      initial="hidden"
+   272→   272→      animate="show"
+   273→   273→      className="space-y-6 p-4 md:p-6"
+   274→   274→    >
+   275→   275→      {/* Header */}
+   276→   276→      <motion.div variants={itemVariants} className="flex items-center justify-between">
+   277→   277→        <div className="flex items-center gap-3">
+   278→   278→          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg">
+   279→   279→            <BookOpen className="w-5 h-5 text-white" />
+   280→   280→          </div>
+   281→   281→          <div>
+   282→   282→            <h2 className="text-xl font-bold text-foreground">اليوميات</h2>
+   283→   283→            <p className="text-xs text-muted-foreground">سجّل أفكارك وانتصاراتك اليومية</p>
+   284→   284→          </div>
+   285→   285→        </div>
+   286→   286→      </motion.div>
+   287→   287→
+   288→   288→      {/* Stats */}
+   289→   289→      <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 md:gap-4">
+   290→   290→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   291→   291→          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
+   292→   292→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   293→   293→            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
+   294→   294→              <Calendar className="w-4 h-4 text-emerald-accent" />
+   295→   295→            </div>
+   296→   296→            <span className="text-2xl font-bold text-foreground count-up">{stats.total}</span>
+   297→   297→            <span className="text-[11px] text-muted-foreground">إجمالي المدخلات</span>
+   298→   298→          </CardContent>
+   299→   299→        </Card>
+   300→   300→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   301→   301→          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
+   302→   302→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   303→   303→            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+   304→   304→              <Flame className="w-4 h-4 text-gold" />
+   305→   305→            </div>
+   306→   306→            <span className="text-2xl font-bold text-foreground count-up">{stats.streak}</span>
+   307→   307→            <span className="text-[11px] text-muted-foreground">أيام متتالية</span>
+   308→   308→          </CardContent>
+   309→   309→        </Card>
+   310→   310→        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+   311→   311→          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
+   312→   312→          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+   313→   313→            <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+   314→   314→              <Smile className="w-4 h-4 text-forest" />
+   315→   315→            </div>
+   316→   316→            <span className="text-2xl font-bold text-foreground count-up">{stats.avgMood}</span>
+   317→   317→            <span className="text-[11px] text-muted-foreground">متوسط المزاج</span>
+   318→   318→          </CardContent>
+   319→   319→        </Card>
+   320→   320→      </motion.div>
+   321→   321→
+   322→   322→      {/* Today's Entry Form or View */}
+   323→   323→      <motion.div variants={itemVariants}>
+   324→   324→        <Card className="glass border-0 shadow-sm overflow-hidden">
+   325→   325→          <CardHeader className="pb-3">
+   326→   326→            <div className="flex items-center justify-between">
+   327→   327→              <CardTitle className="text-base font-bold flex items-center gap-2">
+   328→   328→                <Sparkles className="w-4 h-4 text-gold" />
+   329→   329→                {showForm ? (hasTodayEntry ? 'تعديل اليوميات' : 'يوميات اليوم') : "يومية اليوم"}
+   330→   330→              </CardTitle>
+   331→   331→              {hasTodayEntry && !isEditing && (
+   332→   332→                <Button
+   333→   333→                  variant="ghost"
+   334→   334→                  size="sm"
+   335→   335→                  onClick={() => setIsEditing(true)}
+   336→   336→                  className="text-emerald-accent hover:text-emerald-accent/80 hover:bg-emerald-accent/10"
+   337→   337→                >
+   338→   338→                  <Edit3 className="w-4 h-4 ml-1" />
+   339→   339→                  تعديل
+   340→   340→                </Button>
+   341→   341→              )}
+   342→   342→              {isEditing && (
+   343→   343→                <Button
+   344→   344→                  variant="ghost"
+   345→   345→                  size="sm"
+   346→   346→                  onClick={() => {
+   347→   347→                    setIsEditing(false)
+   348→   348→                    if (data?.journal) {
+   349→   349→                      setForm({
+   350→   350→                        content: data.journal.content || '',
+   351→   351→                        gratitude: data.journal.gratitude || '',
+   352→   352→                        wins: data.journal.wins || '',
+   353→   353→                        challenges: data.journal.challenges || '',
+   354→   354→                        mood: data.journal.mood || 3,
+   355→   355→                        energy: data.journal.energy || 3,
+   356→   356→                        ideas: data.journal.ideas || '',
+   357→   357→                        tomorrowPlan: data.journal.tomorrowPlan || '',
+   358→   358→                      })
+   359→   359→                      setTagInput(data.journal.tags || '')
+   360→   360→                    }
+   361→   361→                  }}
+   362→   362→                  className="text-muted-foreground hover:bg-muted"
+   363→   363→                >
+   364→   364→                  <X className="w-4 h-4" />
+   365→   365→                </Button>
+   366→   366→              )}
+   367→   367→            </div>
+   368→   368→            <p className="text-xs text-muted-foreground">
+   369→   369→              {formatDate(today)}
+   370→   370→            </p>
+   371→   371→          </CardHeader>
+   372→   372→
+   373→   373→          <CardContent className="space-y-5">
+   374→   374→            {showForm ? (
+   375→   375→              <>
+   376→   376→                {/* Paper texture form background */}
+   377→   377→                <div className="rounded-2xl p-4 -mx-2 space-y-5 bg-[repeating-linear-gradient(0deg,transparent,transparent_27px,oklch(0.5_0_0/0.03)_27px,oklch(0.5_0_0/0.03)_28px)]">
+   378→   378→                  {/* Journal Content */}
+   379→   379→                  <div className="space-y-2">
+   380→   380→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   381→   381→                      <BookOpen className="w-4 h-4 text-emerald-accent" />
+   382→   382→                      اليوميات
+   383→   383→                    </label>
+   384→   384→                    <Textarea
+   385→   385→                      value={form.content}
+   386→   386→                      onChange={(e) => updateForm('content', e.target.value)}
+   387→   387→                      placeholder="اكتب أفكارك ومشاعرك اليوم..."
+   388→   388→                      className={cn(
+   389→   389→                        'min-h-[120px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+   390→   390→                        TEXTAREA_ACCENT_COLORS.content
+   391→   391→                      )}
+   392→   392→                      dir="rtl"
+   393→   393→                    />
+   394→   394→                  </div>
+   395→   395→
+   396→   396→                  {/* Gratitude */}
+   397→   397→                  <div className="space-y-2">
+   398→   398→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   399→   399→                      <Heart className="w-4 h-4 text-rose-400" />
+   400→   400→                      الامتنان
+   401→   401→                    </label>
+   402→   402→                    <Textarea
+   403→   403→                      value={form.gratitude}
+   404→   404→                      onChange={(e) => updateForm('gratitude', e.target.value)}
+   405→   405→                      placeholder="ما الذي تشكر الله عليه اليوم؟"
+   406→   406→                      className={cn(
+   407→   407→                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+   408→   408→                        TEXTAREA_ACCENT_COLORS.gratitude
+   409→   409→                      )}
+   410→   410→                      dir="rtl"
+   411→   411→                    />
+   412→   412→                  </div>
+   413→   413→
+   414→   414→                  {/* Wins */}
+   415→   415→                  <div className="space-y-2">
+   416→   416→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   417→   417→                      <Trophy className="w-4 h-4 text-gold" />
+   418→   418→                      الانتصارات
+   419→   419→                    </label>
+   420→   420→                    <Textarea
+   421→   421→                      value={form.wins}
+   422→   422→                      onChange={(e) => updateForm('wins', e.target.value)}
+   423→   423→                      placeholder="ما هي إنجازاتك اليوم؟"
+   424→   424→                      className={cn(
+   425→   425→                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+   426→   426→                        TEXTAREA_ACCENT_COLORS.wins
+   427→   427→                      )}
+   428→   428→                      dir="rtl"
+   429→   429→                    />
+   430→   430→                  </div>
+   431→   431→
+   432→   432→                  {/* Challenges */}
+   433→   433→                  <div className="space-y-2">
+   434→   434→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   435→   435→                      <AlertTriangle className="w-4 h-4 text-orange-400" />
+   436→   436→                      التحديات
+   437→   437→                    </label>
+   438→   438→                    <Textarea
+   439→   439→                      value={form.challenges}
+   440→   440→                      onChange={(e) => updateForm('challenges', e.target.value)}
+   441→   441→                      placeholder="ما هي التحديات التي واجهتها؟"
+   442→   442→                      className={cn(
+   443→   443→                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+   444→   444→                        TEXTAREA_ACCENT_COLORS.challenges
+   445→   445→                      )}
+   446→   446→                      dir="rtl"
+   447→   447→                    />
+   448→   448→                  </div>
+   449→   449→
+   450→   450→                  {/* Mood Selector with spring animation */}
+   451→   451→                  <div className="space-y-3">
+   452→   452→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   453→   453→                      <Smile className="w-4 h-4 text-emerald-accent" />
+   454→   454→                      المزاج
+   455→   455→                    </label>
+   456→   456→                    <div className="flex items-center gap-2 justify-center py-2">
+   457→   457→                      {MOOD_EMOJIS.map((m) => (
+   458→   458→                        <motion.button
+   459→   459→                          key={m.value}
+   460→   460→                          whileHover={{ scale: 1.15 }}
+   461→   461→                          whileTap={{ scale: 0.85 }}
+   462→   462→                          animate={form.mood === m.value ? { scale: [1, 1.35, 1.1] } : { scale: 1 }}
+   463→   463→                          transition={form.mood === m.value
+   464→   464→                            ? { type: 'spring', stiffness: 400, damping: 10, duration: 0.5 }
+   465→   465→                            : { duration: 0.2 }
+   466→   466→                          }
+   467→   467→                          onClick={() => updateForm('mood', m.value)}
+   468→   468→                          className={cn(
+   469→   469→                            'text-3xl p-2 rounded-xl transition-all duration-200 ring-1',
+   470→   470→                            form.mood === m.value
+   471→   471→                              ? `${m.color} shadow-md`
+   472→   472→                              : 'ring-transparent hover:bg-muted/50 opacity-60 hover:opacity-100'
+   473→   473→                          )}
+   474→   474→                          title={m.label}
+   475→   475→                        >
+   476→   476→                          {m.emoji}
+   477→   477→                        </motion.button>
+   478→   478→                      ))}
+   479→   479→                    </div>
+   480→   480→                    <p className="text-center text-xs text-muted-foreground">
+   481→   481→                      {MOOD_EMOJIS.find((m) => m.value === form.mood)?.label}
+   482→   482→                    </p>
+   483→   483→                  </div>
+   484→   484→
+   485→   485→                  {/* Energy Slider with gradient fill */}
+   486→   486→                  <div className="space-y-3">
+   487→   487→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   488→   488→                      <Battery className="w-4 h-4 text-forest" />
+   489→   489→                      الطاقة: <span className="text-emerald-accent font-bold">{ENERGY_LABELS[form.energy - 1]}</span>
+   490→   490→                    </label>
+   491→   491→                    <div className="flex items-center gap-3 px-1">
+   492→   492→                      <span className="text-xs text-muted-foreground">١</span>
+   493→   493→                      <div className="flex-1 relative">
+   494→   494→                        <div className="absolute inset-0 h-2 rounded-full top-1/2 -translate-y-1/2 bg-muted" />
+   495→   495→                        <div
+   496→   496→                          className="absolute inset-y-0 right-0 h-2 rounded-full transition-all duration-300"
+   497→   497→                          style={{
+   498→   498→                            width: `${((form.energy - 1) / 4) * 100}%`,
+   499→   499→                            background: 'linear-gradient(to left, #ef4444, #f97316, #eab308, #22c55e, #10b981)',
+   500→   500→                          }}
+   501→   501→                        />
+   502→   502→                        <input
+   503→   503→                          type="range"
+   504→   504→                          min={1}
+   505→   505→                          max={5}
+   506→   506→                          value={form.energy}
+   507→   507→                          onChange={(e) => updateForm('energy', parseInt(e.target.value))}
+   508→   508→                          className="relative z-10 w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-accent bg-transparent"
+   509→   509→                        />
+   510→   510→                      </div>
+   511→   511→                      <span className="text-xs text-muted-foreground">٥</span>
+   512→   512→                    </div>
+   513→   513→                  </div>
+   514→   514→
+   515→   515→                  {/* Ideas */}
+   516→   516→                  <div className="space-y-2">
+   517→   517→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   518→   518→                      <Lightbulb className="w-4 h-4 text-gold" />
+   519→   519→                      أفكار
+   520→   520→                    </label>
+   521→   521→                    <Textarea
+   522→   522→                      value={form.ideas}
+   523→   523→                      onChange={(e) => updateForm('ideas', e.target.value)}
+   524→   524→                      placeholder="أي أفكار جديدة أو إلهامات..."
+   525→   525→                      className={cn(
+   526→   526→                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+   527→   527→                        TEXTAREA_ACCENT_COLORS.ideas
+   528→   528→                      )}
+   529→   529→                      dir="rtl"
+   530→   530→                    />
+   531→   531→                  </div>
+   532→   532→
+   533→   533→                  {/* Tomorrow's Plan */}
+   534→   534→                  <div className="space-y-2">
+   535→   535→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   536→   536→                      <Calendar className="w-4 h-4 text-forest-light" />
+   537→   537→                      خطة الغد
+   538→   538→                    </label>
+   539→   539→                    <Textarea
+   540→   540→                      value={form.tomorrowPlan}
+   541→   541→                      onChange={(e) => updateForm('tomorrowPlan', e.target.value)}
+   542→   542→                      placeholder="ما الذي تخطط لفعله غداً؟"
+   543→   543→                      className={cn(
+   544→   544→                        'min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
+   545→   545→                        TEXTAREA_ACCENT_COLORS.tomorrowPlan
+   546→   546→                      )}
+   547→   547→                      dir="rtl"
+   548→   548→                    />
+   549→   549→                  </div>
+   550→   550→
+   551→   551→                  {/* Tags */}
+   552→   552→                  <div className="space-y-2">
+   553→   553→                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+   554→   554→                      <Tag className="w-4 h-4 text-muted-foreground" />
+   555→   555→                      الوسوم
+   556→   556→                    </label>
+   557→   557→                    <Input
+   558→   558→                      value={tagInput}
+   559→   559→                      onChange={(e) => setTagInput(e.target.value)}
+   560→   560→                      placeholder="أدخل وسوم مفصولة بفواصل..."
+   561→   561→                      className="rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
+   562→   562→                      dir="rtl"
+   563→   563→                    />
+   564→   564→                  </div>
+   565→   565→                </div>
+   566→   566→
+   567→   567→                {/* Save Button */}
+   568→   568→                <motion.div whileTap={{ scale: 0.98 }} className="pt-2">
+   569→   569→                  <Button
+   570→   570→                    onClick={handleSave}
+   571→   571→                    disabled={saving}
+   572→   572→                    className="w-full bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 text-sm font-semibold"
+   573→   573→                  >
+   574→   574→                    {saving ? (
+   575→   575→                      <motion.div
+   576→   576→                        animate={{ rotate: 360 }}
+   577→   577→                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+   578→   578→                      >
+   579→   579→                        <Save className="w-4 h-4 ml-2" />
+   580→   580→                      </motion.div>
+   581→   581→                    ) : (
+   582→   582→                      <Save className="w-4 h-4 ml-2" />
+   583→   583→                    )}
+   584→   584→                    {saving ? 'جاري الحفظ...' : 'حفظ اليوميات'}
+   585→   585→                  </Button>
+   586→   586→                </motion.div>
+   587→   587→              </>
+   588→   588→            ) : (
+   589→   589→              /* View Mode */
+   590→   590→              data?.journal && (
+   591→   591→                <div className="space-y-4">
+   592→   592→                  {/* Mood & Energy */}
+   593→   593→                  <div className="flex items-center gap-4 justify-center py-2">
+   594→   594→                    <div className="flex items-center gap-2 glass rounded-xl px-4 py-2">
+   595→   595→                      <Smile className="w-4 h-4 text-muted-foreground" />
+   596→   596→                      <span className="text-2xl">{getMoodEmoji(data.journal.mood)}</span>
+   597→   597→                    </div>
+   598→   598→                    <div className="flex items-center gap-2 glass rounded-xl px-4 py-2">
+   599→   599→                      <Battery className="w-4 h-4 text-muted-foreground" />
+   600→   600→                      <span className="text-sm font-medium">{ENERGY_LABELS[(data.journal.energy || 3) - 1]}</span>
+   601→   601→                    </div>
+   602→   602→                  </div>
+   603→   603→
+   604→   604→                  {/* Tags */}
+   605→   605→                  {data.journal.tags && (
+   606→   606→                    <div className="flex items-center gap-2 flex-wrap">
+   607→   607→                      {data.journal.tags.split(',').map(
+   608→   608→                        (tag, i) =>
+   609→   609→                          tag.trim() && (
+   610→   610→                            <Badge
+   611→   611→                              key={i}
+   612→   612→                              variant="secondary"
+   613→   613→                              className="rounded-full text-xs bg-emerald-accent/10 text-emerald-accent border-0"
+   614→   614→                            >
+   615→   615→                              {tag.trim()}
+   616→   616→                            </Badge>
+   617→   617→                          )
+   618→   618→                      )}
+   619→   619→                    </div>
+   620→   620→                  )}
+   621→   621→
+   622→   622→                  {/* Sections */}
+   623→   623→                  {[
+   624→   624→                    { label: 'اليوميات', content: data.journal.content, icon: BookOpen, color: 'text-emerald-accent' },
+   625→   625→                    { label: 'الامتنان', content: data.journal.gratitude, icon: Heart, color: 'text-rose-400' },
+   626→   626→                    { label: 'الانتصارات', content: data.journal.wins, icon: Trophy, color: 'text-gold' },
+   627→   627→                    { label: 'التحديات', content: data.journal.challenges, icon: AlertTriangle, color: 'text-orange-400' },
+   628→   628→                    { label: 'أفكار', content: data.journal.ideas, icon: Lightbulb, color: 'text-gold' },
+   629→   629→                    { label: 'خطة الغد', content: data.journal.tomorrowPlan, icon: Calendar, color: 'text-forest-light' },
+   630→   630→                  ].map(
+   631→   631→                    (section) =>
+   632→   632→                      section.content && (
+   633→   633→                        <div key={section.label} className="space-y-1.5">
+   634→   634→                          <div className="flex items-center gap-2">
+   635→   635→                            <section.icon className={cn('w-4 h-4', section.color)} />
+   636→   636→                            <span className="text-sm font-semibold text-foreground">{section.label}</span>
+   637→   637→                          </div>
+   638→   638→                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/30 rounded-xl p-3">
+   639→   639→                            {section.content}
+   640→   640→                          </p>
+   641→   641→                        </div>
+   642→   642→                      )
+   643→   643→                  )}
+   644→   644→                </div>
+   645→   645→              )
+   646→   646→            )}
+   647→   647→          </CardContent>
+   648→   648→        </Card>
+   649→   649→      </motion.div>
+   650→   650→
+   651→   651→      {/* Recent Entries */}
+   652→   652→      <motion.div variants={itemVariants}>
+   653→   653→        <Card className="glass border-0 shadow-sm overflow-hidden">
+   654→   654→          <CardHeader className="pb-3">
+   655→   655→            <CardTitle className="text-base font-bold">المدخلات السابقة</CardTitle>
+   656→   656→          </CardHeader>
+   657→   657→          <CardContent className="space-y-4">
+   658→   658→            {/* Search */}
+   659→   659→            <div className="relative">
+   660→   660→              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   661→   661→              <Input
+   662→   662→                value={searchQuery}
+   663→   663→                onChange={(e) => setSearchQuery(e.target.value)}
+   664→   664→                placeholder="ابحث في اليوميات..."
+   665→   665→                className="pr-9 rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
+   666→   666→                dir="rtl"
+   667→   667→              />
+   668→   668→            </div>
+   669→   669→
+   670→   670→            {/* List */}
+   671→   671→            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+   672→   672→              {filteredJournals.length === 0 ? (
+   673→   673→                <div className="text-center py-10">
+   674→   674→                  <BookOpen className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+   675→   675→                  <p className="text-sm text-muted-foreground">
+   676→   676→                    {searchQuery ? 'لا توجد نتائج للبحث' : 'لا توجد مدخلات سابقة بعد'}
+   677→   677→                  </p>
+   678→   678→                </div>
+   679→   679→              ) : (
+   680→   680→                <AnimatePresence>
+   681→   681→                  {filteredJournals.map((entry, index) => (
+   682→   682→                    <motion.div
+   683→   683→                      key={entry.id}
+   684→   684→                      initial={{ opacity: 0, y: 10 }}
+   685→   685→                      animate={{ opacity: 1, y: 0 }}
+   686→   686→                      exit={{ opacity: 0, x: -20, scale: 0.95 }}
+   687→   687→                      transition={{ delay: index * 0.03 }}
+   688→   688→                    >
+   689→   689→                      <button
+   690→   690→                        onClick={() =>
+   691→   691→                          setExpandedId(expandedId === entry.id ? null : entry.id)
+   692→   692→                        }
+   693→   693→                        className="w-full text-right"
+   694→   694→                      >
+   695→   695→                        <div
+   696→   696→                          className={cn(
+   697→   697→                            'rounded-xl p-4 transition-all duration-200 relative overflow-hidden',
+   698→   698→                            'hover:shadow-md hover:-translate-y-0.5 border border-transparent hover:border-border/50',
+   699→   699→                            expandedId === entry.id && 'bg-muted/30 border-border/50'
+   700→   700→                          )}
+   701→   701→                        >
+   702→   702→                          {/* Mood color strip */}
+   703→   703→                          <div className={cn(
+   704→   704→                            'absolute top-0 right-0 bottom-0 w-1 rounded-r-xl',
+   705→   705→                            MOOD_STRIP_COLORS[entry.mood] || 'bg-gray-400'
+   706→   706→                          )} />
+   707→   707→
+   708→   708→                          <div className="flex items-center justify-between mb-2 pr-2">
+   709→   709→                            <div className="flex items-center gap-2">
+   710→   710→                              <span className="text-xl">{getMoodEmoji(entry.mood)}</span>
+   711→   711→                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   712→   712→                                <CalendarDays className="w-3 h-3" />
+   713→   713→                                <span>
+   714→   714→                                  {new Date(entry.date).toLocaleDateString('ar-SA', {
+   715→   715→                                    month: 'short',
+   716→   716→                                    day: 'numeric',
+   717→   717→                                  })}
+   718→   718→                                </span>
+   719→   719→                              </div>
+   720→   720→                            </div>
+   721→   721→                            <div className="flex items-center gap-1">
+   722→   722→                              {entry.tags &&
+   723→   723→                                entry.tags.split(',').slice(0, 2).map(
+   724→   724→                                  (tag, i) =>
+   725→   725→                                    tag.trim() && (
+   726→   726→                                      <Badge
+   727→   727→                                        key={i}
+   728→   728→                                        variant="secondary"
+   729→   729→                                        className="rounded-full text-[10px] bg-emerald-accent/10 text-emerald-accent border-0"
+   730→   730→                                      >
+   731→   731→                                        {tag.trim()}
+   732→   732→                                      </Badge>
+   733→   733→                                    )
+   734→   734→                                )}
+   735→   735→                              {expandedId === entry.id ? (
+   736→   736→                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+   737→   737→                              ) : (
+   738→   738→                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+   739→   739→                              )}
+   740→   740→                            </div>
+   741→   741→                          </div>
+   742→   742→
+   743→   743→                          <p className="text-sm text-foreground/80 line-clamp-2 pr-2">
+   744→   744→                            {entry.content || 'لا يوجد محتوى'}
+   745→   745→                          </p>
+   746→   746→
+   747→   747→                          <AnimatePresence>
+   748→   748→                            {expandedId === entry.id && (
+   749→   749→                              <motion.div
+   750→   750→                                initial={{ height: 0, opacity: 0 }}
+   751→   751→                                animate={{ height: 'auto', opacity: 1 }}
+   752→   752→                                exit={{ height: 0, opacity: 0 }}
+   753→   753→                                transition={{ duration: 0.3 }}
+   754→   754→                                className="overflow-hidden"
+   755→   755→                              >
+   756→   756→                                <div className="pt-3 mt-3 border-t border-border/50 space-y-3 pr-2">
+   757→   757→                                  {entry.gratitude && (
+   758→   758→                                    <div>
+   759→   759→                                      <span className="text-xs font-semibold text-rose-400 flex items-center gap-1 mb-1">
+   760→   760→                                        <Heart className="w-3 h-3" /> الامتنان
+   761→   761→                                      </span>
+   762→   762→                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+   763→   763→                                        {entry.gratitude}
+   764→   764→                                      </p>
+   765→   765→                                    </div>
+   766→   766→                                  )}
+   767→   767→                                  {entry.wins && (
+   768→   768→                                    <div>
+   769→   769→                                      <span className="text-xs font-semibold text-gold flex items-center gap-1 mb-1">
+   770→   770→                                        <Trophy className="w-3 h-3" /> الانتصارات
+   771→   771→                                      </span>
+   772→   772→                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+   773→   773→                                        {entry.wins}
+   774→   774→                                      </p>
+   775→   775→                                    </div>
+   776→   776→                                  )}
+   777→   777→                                  {entry.challenges && (
+   778→   778→                                    <div>
+   779→   779→                                      <span className="text-xs font-semibold text-orange-400 flex items-center gap-1 mb-1">
+   780→   780→                                        <AlertTriangle className="w-3 h-3" /> التحديات
+   781→   781→                                      </span>
+   782→   782→                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+   783→   783→                                        {entry.challenges}
+   784→   784→                                      </p>
+   785→   785→                                    </div>
+   786→   786→                                  )}
+   787→   787→                                  {entry.ideas && (
+   788→   788→                                    <div>
+   789→   789→                                      <span className="text-xs font-semibold text-gold flex items-center gap-1 mb-1">
+   790→   790→                                        <Lightbulb className="w-3 h-3" /> أفكار
+   791→   791→                                      </span>
+   792→   792→                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+   793→   793→                                        {entry.ideas}
+   794→   794→                                      </p>
+   795→   795→                                    </div>
+   796→   796→                                  )}
+   797→   797→                                  {entry.tomorrowPlan && (
+   798→   798→                                    <div>
+   799→   799→                                      <span className="text-xs font-semibold text-forest-light flex items-center gap-1 mb-1">
+   800→   800→                                        <Calendar className="w-3 h-3" /> خطة الغد
+   801→   801→                                      </span>
+   802→   802→                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+   803→   803→                                        {entry.tomorrowPlan}
+   804→   804→                                      </p>
+   805→   805→                                    </div>
+   806→   806→                                  )}
+   807→   807→                                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1">
+   808→   808→                                    <span>
+   809→   809→                                      الطاقة: {ENERGY_LABELS[(entry.energy || 3) - 1]}
+   810→   810→                                    </span>
+   811→   811→                                    <span>
+   812→   812→                                      المزاج: {getMoodEmoji(entry.mood)}{' '}
+   813→   813→                                      {MOOD_EMOJIS.find((m) => m.value === entry.mood)?.label}
+   814→   814→                                    </span>
+   815→   815→                                  </div>
+   816→   816→                                </div>
+   817→   817→                              </motion.div>
+   818→   818→                            )}
+   819→   819→                          </AnimatePresence>
+   820→   820→                        </div>
+   821→   821→                      </button>
+   822→   822→                    </motion.div>
+   823→   823→                  ))}
+   824→   824→                </AnimatePresence>
+   825→   825→              )}
+   826→   826→            </div>
+   827→   827→          </CardContent>
+   828→   828→        </Card>
+   829→   829→      </motion.div>
+   830→   830→    </motion.div>
+   831→   831→  )
+   832→   832→}

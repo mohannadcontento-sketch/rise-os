@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Network,
@@ -25,6 +25,10 @@ import {
   Grid3X3,
   List,
   Zap,
+  Heart,
+  Shuffle,
+  Clock,
+  Eye,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -66,15 +70,15 @@ interface KnowledgeItem {
 
 /* ────────────── Config ────────────── */
 
-const typeConfig: Record<string, { label: string; icon: React.ElementType; color: string; stripColor: string }> = {
-  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent', stripColor: 'bg-emerald-accent' },
-  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-forest/10 text-forest', stripColor: 'bg-forest' },
-  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold', stripColor: 'bg-gold' },
-  resource: { label: 'موارد', icon: FileText, color: 'bg-cyan-500/10 text-cyan-500', stripColor: 'bg-cyan-500' },
-  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-amber-500/10 text-amber-500', stripColor: 'bg-amber-500' },
-  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-purple-500/10 text-purple-500', stripColor: 'bg-purple-500' },
-  research: { label: 'بحث', icon: Beaker, color: 'bg-rose-500/10 text-rose-500', stripColor: 'bg-rose-500' },
-  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500' },
+const typeConfig: Record<string, { label: string; icon: React.ElementType; color: string; stripColor: string; borderColor: string }> = {
+  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent', stripColor: 'bg-emerald-accent', borderColor: 'border-r-emerald-accent' },
+  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-sky-500/10 text-sky-500', stripColor: 'bg-sky-500', borderColor: 'border-r-sky-500' },
+  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold', stripColor: 'bg-gold', borderColor: 'border-r-gold' },
+  resource: { label: 'موارد', icon: FileText, color: 'bg-cyan-500/10 text-cyan-500', stripColor: 'bg-cyan-500', borderColor: 'border-r-cyan-500' },
+  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-purple-500/10 text-purple-500', stripColor: 'bg-purple-500', borderColor: 'border-r-purple-500' },
+  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500', borderColor: 'border-r-pink-500' },
+  research: { label: 'بحث', icon: Beaker, color: 'bg-rose-500/10 text-rose-500', stripColor: 'bg-rose-500', borderColor: 'border-r-rose-500' },
+  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500', borderColor: 'border-r-pink-500' },
 }
 
 const tagColors = [
@@ -238,6 +242,25 @@ export default function SecondBrain() {
     handleUpdate(id, { isFavorite: !current })
   }
 
+  // Random insight
+  const [randomItem, setRandomItem] = useState<KnowledgeItem | null>(null)
+  const [showInsight, setShowInsight] = useState(false)
+  const handleRandomInsight = useCallback(() => {
+    if (items.length === 0) return
+    let pick = items[Math.floor(Math.random() * items.length)]
+    if (randomItem && pick.id === randomItem.id && items.length > 1) {
+      pick = items.find(i => i.id !== randomItem.id) || pick
+    }
+    setRandomItem(pick)
+    setShowInsight(true)
+  }, [items, randomItem])
+
+  // Recently viewed
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([])
+  const viewItem = useCallback((id: string) => {
+    setRecentlyViewed(prev => [id, ...prev.filter(i => i !== id)].slice(0, 5))
+  }, [])
+
   const startEdit = (item: KnowledgeItem) => {
     setEditingId(item.id)
     setEditTitle(item.title)
@@ -262,18 +285,21 @@ export default function SecondBrain() {
     return true
   })
 
-  // All tags
-  const allTags: string[] = []
+  // All tags with counts
+  const allTagsWithCount: { tag: string; count: number }[] = []
   items.forEach((item) => {
     if (item.tags) {
       try {
         const tags: string[] = JSON.parse(item.tags)
         tags.forEach((t) => {
-          if (!allTags.includes(t)) allTags.push(t)
+          const existing = allTagsWithCount.find(a => a.tag === t)
+          if (existing) existing.count++
+          else allTagsWithCount.push({ tag: t, count: 1 })
         })
       } catch { /* ignore */ }
     }
   })
+  allTagsWithCount.sort((a, b) => b.count - a.count)
 
   return (
     <div className="space-y-6">
@@ -341,10 +367,82 @@ export default function SecondBrain() {
               <Button onClick={handleAdd} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newTitle.trim()}>
                 إضافة
               </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleRandomInsight} disabled={items.length === 0} className="flex-1 gap-2">
+                  <Shuffle className="w-4 h-4" />
+                  فكرة عشوائية
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Recently Viewed */}
+      {recentlyViewed.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <p className="text-xs font-semibold text-muted-foreground">شوهد مؤخراً</p>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+            {recentlyViewed.map(id => {
+              const item = items.find(i => i.id === id)
+              if (!item) return null
+              const cfg = typeConfig[item.type] || typeConfig.knowledge
+              const Icon = cfg.icon
+              return (
+                <motion.button
+                  key={id}
+                  whileHover={{ scale: 1.03 }}
+                  onClick={() => { setActiveType('all'); setActiveFolder('all'); setSearchQuery(item.title) }}
+                  className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border shrink-0 transition-colors bg-muted/20 hover:bg-muted/40", cfg.borderColor)}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium max-w-[120px] truncate">{item.title}</span>
+                </motion.button>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Random Insight */}
+      <AnimatePresence>
+        {showInsight && randomItem && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            className="premium-card rounded-2xl overflow-hidden relative"
+          >
+            <div className="noise-bg" />
+            <div className="relative z-10 p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gold/15 flex items-center justify-center">
+                    <Shuffle className="w-4 h-4 text-gold" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">فكرة عشوائية</p>
+                    <p className="text-sm font-bold text-gold">💡</p>
+                  </div>
+                </div>
+                <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowInsight(false)} className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground">
+                  <X className="w-4 h-4" />
+                </motion.button>
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-2">{randomItem.title}</h3>
+              {randomItem.content && <p className="text-sm text-muted-foreground leading-relaxed line-clamp-4">{randomItem.content}</p>}
+              {randomItem.source && <p className="text-[10px] text-muted-foreground/60 mt-2">المصدر: {randomItem.source}</p>}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Quick Capture */}
       <motion.div
@@ -480,8 +578,8 @@ export default function SecondBrain() {
             </CardContent>
           </Card>
 
-          {/* Tags Cloud */}
-          {allTags.length > 0 && (
+          {/* Tags Cloud - sized pills */}
+          {allTagsWithCount.length > 0 && (
             <Card className="glass">
               <CardContent className="p-3">
                 <p className="text-xs font-semibold text-muted-foreground mb-2 px-1 flex items-center gap-1.5">
@@ -489,17 +587,24 @@ export default function SecondBrain() {
                   الوسوم
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {allTags.map((tag, i) => (
-                    <Badge
+                  {allTagsWithCount.map(({ tag, count }, i) => (
+                    <motion.button
                       key={tag}
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.92 }}
+                      onClick={() => setSearchQuery(tag)}
                       className={cn(
-                        'text-[10px] rounded-full px-2.5 py-0.5 cursor-pointer hover:opacity-80 transition-all font-medium border',
+                        'rounded-full px-2.5 py-0.5 cursor-pointer hover:opacity-80 transition-all font-medium border',
                         tagColors[i % tagColors.length],
-                        tagBorderColors[i % tagBorderColors.length]
+                        tagBorderColors[i % tagBorderColors.length],
+                        count >= 3 ? 'text-xs' : 'text-[10px]',
+                        count >= 3 ? 'px-3 py-1' : 'px-2.5 py-0.5'
                       )}
+                      style={count >= 3 ? { fontSize: `${10 + Math.min(count, 5) * 1.5}px` } : undefined}
                     >
                       {tag}
-                    </Badge>
+                      {count >= 2 && <span className="opacity-60 mr-0.5">{count}</span>}
+                    </motion.button>
                   ))}
                 </div>
               </CardContent>
@@ -613,10 +718,15 @@ export default function SecondBrain() {
                                   </div>
                                   <div className="flex items-center gap-0.5 shrink-0">
                                     <button
-                                      onClick={() => toggleFavorite(item.id, item.isFavorite)}
-                                      className={cn('p-1.5 rounded-lg transition-colors', item.isFavorite ? 'text-gold' : 'text-muted-foreground/30 hover:text-gold')}
+                                      onClick={() => { toggleFavorite(item.id, item.isFavorite) }}
+                                      className="p-1.5 rounded-lg transition-colors"
                                     >
-                                      <Star className={cn('w-3.5 h-3.5', item.isFavorite && 'fill-gold')} />
+                                      <motion.span
+                                        animate={item.isFavorite ? { scale: [1, 1.4, 1] } : { scale: 1 }}
+                                        transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+                                      >
+                                        <Heart className={cn('w-3.5 h-3.5 transition-colors', item.isFavorite ? 'text-rose-500 fill-rose-500' : 'text-muted-foreground/30 hover:text-rose-400')} />
+                                      </motion.span>
                                     </button>
                                     <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
                                       <Edit3 className="w-3.5 h-3.5" />

@@ -45,6 +45,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
@@ -572,6 +573,92 @@ export function HabitsView() {
         {/* ── Reminders Banner ── */}
         <HabitReminders habits={habits} onToggleReminder={handleToggleReminder} />
 
+        {/* ── Today's Score Hero Card ── */}
+        {habits.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="premium-card rounded-2xl p-6 relative overflow-hidden glow-emerald"
+          >
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-emerald-accent/[0.06] blur-3xl pointer-events-none" />
+            <div className="relative flex flex-col sm:flex-row items-center gap-6">
+              {/* Completion Ring */}
+              <div className="relative">
+                <svg width={90} height={90} className="-rotate-90">
+                  <defs>
+                    <linearGradient id="habitScoreRing" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="oklch(0.55 0.14 163)" />
+                      <stop offset="100%" stopColor="oklch(0.78 0.12 85)" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx={45} cy={45} r={38} fill="none" className="stroke-primary/10" strokeWidth={5} />
+                  <motion.circle
+                    cx={45} cy={45} r={38} fill="none"
+                    stroke="url(#habitScoreRing)"
+                    strokeWidth={5} strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 38}
+                    initial={{ strokeDashoffset: 2 * Math.PI * 38 }}
+                    animate={{ strokeDashoffset: 2 * Math.PI * 38 - (stats.todayRate / 100) * 2 * Math.PI * 38 }}
+                    transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+                    style={{ filter: 'drop-shadow(0 0 6px oklch(0.55 0.14 163 / 0.3))' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-gradient-forest">{stats.todayRate}</span>
+                  <span className="text-[9px] text-muted-foreground">٪</span>
+                </div>
+              </div>
+
+              <div className="flex-1 text-center sm:text-right">
+                <p className="text-xs text-muted-foreground mb-1">درجة إنجاز اليوم</p>
+                <div className="flex items-center gap-2 justify-center sm:justify-start">
+                  <span className={cn(
+                    'text-3xl font-black',
+                    stats.todayRate >= 80 ? 'text-gradient-forest' : stats.todayRate >= 50 ? 'text-gradient-gold' : 'text-muted-foreground'
+                  )}>
+                    {stats.todayRate >= 80 ? 'A' : stats.todayRate >= 60 ? 'B' : stats.todayRate >= 40 ? 'C' : 'D'}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {logs.filter((l) => l.date === todayStr && l.completed).length} من {habits.length} عادة مكتملة
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground/70 mt-2">
+                  {stats.todayRate >= 80 ? '🌟 أداء ممتاز! استمر على هذا النحو' : stats.todayRate >= 50 ? '💪 جيد! واصل التحسن' : stats.todayRate >= 25 ? '🌱 لا بأس، كل خطوة مهمة' : '✨ ابدأ بإتمام عادة واحدة'}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Best Streak Celebration ── */}
+        {stats.longestStreak > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+          >
+            <div className="premium-card rounded-2xl p-4 relative overflow-hidden" style={{ border: '1px solid oklch(0.78 0.12 85 / 0.25)' }}>
+              <div className="absolute top-1/2 -translate-y-1/2 left-4 w-20 h-20 rounded-full bg-gold/[0.06] blur-2xl pointer-events-none" />
+              <div className="relative flex items-center gap-3">
+                <motion.div
+                  animate={{ scale: [1, 1.15, 1], rotate: [0, 8, -8, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg shrink-0"
+                >
+                  <Trophy className="w-5 h-5 text-forest-dark" />
+                </motion.div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-gradient-gold">أفضل سلسلة: {stats.longestStreak} يوم</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {stats.longestStreak >= 30 ? '🏆 إنجاز خارق! أنت منضبط جداً' : stats.longestStreak >= 14 ? '🔥 سلسلة رائعة! واصل الحماس' : '💪 بداية جيدة! حافظ على الاستمرارية'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* ── Statistics ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <motion.div
@@ -755,16 +842,18 @@ export function HabitsView() {
                             <p className="text-xs font-semibold truncate">{habit.name}</p>
                           </div>
 
-                          {/* Streak with 🔥 for streak > 3 */}
+                          {/* Streak with animated flame for streak > 3 */}
                           {streak.current > 0 && (
                             <div className="flex items-center justify-center gap-1 mb-3">
-                              {streak.current > 3 && (
-                                <span className="text-sm">🔥</span>
-                              )}
-                              <Flame
-                                className="w-3.5 h-3.5"
-                                style={{ color: habit.color }}
-                              />
+                              <motion.div
+                                animate={streak.current > 3 ? { scale: [1, 1.3, 1] } : {}}
+                                transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                              >
+                                <Flame
+                                  className="w-4 h-4"
+                                  style={{ color: habit.color, filter: streak.current > 5 ? 'drop-shadow(0 0 4px oklch(0.55 0.18 25 / 0.4))' : 'none' }}
+                                />
+                              </motion.div>
                               <span
                                 className="text-xs font-bold"
                                 style={{ color: habit.color }}
@@ -929,7 +1018,7 @@ export function HabitsView() {
                                           whileHover={{ scale: 1.3, zIndex: 10 }}
                                           transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                                           className={cn(
-                                            'w-[14px] h-[14px] rounded-sm transition-all duration-300 cursor-default',
+                                            'w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-default',
                                             dayInWeek ? `heat-${heatLevel}` : 'bg-transparent',
                                             isToday &&
                                               'ring-2 ring-emerald-accent ring-offset-1 ring-offset-background shadow-[0_0_8px_var(--color-emerald-accent)]'

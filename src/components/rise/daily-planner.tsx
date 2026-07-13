@@ -28,6 +28,7 @@ import {
   Highlighter,
   StickyNote,
   Timer,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -49,11 +51,13 @@ import { toast } from 'sonner'
 
 interface PlannerItem {
   id: string
-  text: string
-  done: boolean
-  isPriority: boolean
+  title: string
+  completed: boolean
+  time: string | null
+  section: string
+  order: number
   createdAt: string
-  timeLabel?: string
+  updatedAt: string
 }
 
 interface PlannerSection {
@@ -69,12 +73,6 @@ interface PlannerSection {
   hours: number[]
 }
 
-interface PlannerData {
-  date: string
-  items: PlannerItem[]
-  priorities: string[]
-}
-
 interface QuickNote {
   id: string
   text: string
@@ -83,8 +81,8 @@ interface QuickNote {
 
 /* ────────────── Constants ────────────── */
 
-const STORAGE_KEY = 'rise-daily-planner'
 const NOTES_STORAGE_KEY = 'rise-quick-notes'
+const QUICK_NOTE_TEXT_KEY = 'rise-planner-quick-note'
 
 const SECTIONS: PlannerSection[] = [
   {
@@ -186,31 +184,7 @@ function getCurrentHour() {
   return new Date().getHours()
 }
 
-/* ────────────── Storage Helpers ────────────── */
-
-function loadPlannerData(): PlannerData {
-  if (typeof window === 'undefined') {
-    return { date: getTodayStr(), items: [], priorities: [] }
-  }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as PlannerData
-      if (parsed.date === getTodayStr()) return parsed
-    }
-  } catch {
-    // ignore
-  }
-  return { date: getTodayStr(), items: [], priorities: [] }
-}
-
-function savePlannerData(data: PlannerData) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch {
-    // ignore
-  }
-}
+/* ────────────── Storage Helpers (Notes only) ────────────── */
 
 function loadNotes(): QuickNote[] {
   if (typeof window === 'undefined') return []
@@ -272,6 +246,28 @@ function EmptyState({ section }: { section: PlannerSection }) {
   )
 }
 
+/* ────────────── Loading Skeleton ────────────── */
+
+function SectionSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <Skeleton className="w-10 h-10 rounded-xl" />
+        <div className="space-y-1.5 flex-1">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+      </div>
+      <div className="h-1 rounded-full bg-muted/40" />
+      <div className="space-y-2 p-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 rounded-xl" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ────────────── Planner Item ────────────── */
 
 function PlannerItemRow({
@@ -280,19 +276,14 @@ function PlannerItemRow({
   index,
   onToggle,
   onDelete,
-  onTogglePriority,
 }: {
   item: PlannerItem
   section: PlannerSection
   index: number
   onToggle: (id: string) => void
   onDelete: (id: string) => void
-  onTogglePriority: (id: string) => void
 }) {
-  const createdHour = new Date(item.createdAt).getHours()
-  const period = createdHour < 12 ? 'ص' : 'م'
-  const displayHour = createdHour > 12 ? createdHour - 12 : createdHour === 0 ? 12 : createdHour
-  const timeStr = `${arabicNum(displayHour)}:${arabicNum(new Date(item.createdAt).getMinutes())} ${period}`
+  const timeStr = item.time || ''
 
   return (
     <motion.div
@@ -303,14 +294,16 @@ function PlannerItemRow({
       className={cn(
         'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
         'hover:bg-background/80 hover:shadow-md hover:scale-[1.005] backdrop-blur-sm',
-        item.done && 'opacity-50'
+        item.completed && 'opacity-50'
       )}
     >
       {/* Time indicator */}
-      <div className="flex items-center gap-1 shrink-0 w-12">
-        <Clock className="w-3 h-3 text-muted-foreground/40" />
-        <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">{timeStr}</span>
-      </div>
+      {timeStr && (
+        <div className="flex items-center gap-1 shrink-0 w-12">
+          <Clock className="w-3 h-3 text-muted-foreground/40" />
+          <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">{timeStr}</span>
+        </div>
+      )}
 
       {/* Drag handle (visual only) */}
       <div className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
@@ -320,11 +313,11 @@ function PlannerItemRow({
       {/* Checkbox */}
       <motion.div whileTap={{ scale: 0.9 }}>
         <Checkbox
-          checked={item.done}
+          checked={item.completed}
           onCheckedChange={() => onToggle(item.id)}
           className={cn(
             'w-[18px] h-[18px] rounded-md border-2',
-            item.done
+            item.completed
               ? 'border-emerald-accent bg-emerald-accent text-white data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
               : 'border-muted-foreground/25'
           )}
@@ -335,29 +328,11 @@ function PlannerItemRow({
       <span
         className={cn(
           'flex-1 text-sm transition-all duration-300 leading-relaxed',
-          item.done ? 'line-through text-muted-foreground' : 'text-foreground'
+          item.completed ? 'line-through text-muted-foreground' : 'text-foreground'
         )}
       >
-        {item.text}
+        {item.title}
       </span>
-
-      {/* Priority star */}
-      <motion.button
-        whileTap={{ scale: 0.85 }}
-        onClick={() => onTogglePriority(item.id)}
-        className={cn(
-          'p-1 rounded-lg transition-all duration-200',
-          item.isPriority
-            ? 'text-gold'
-            : 'text-muted-foreground/0 group-hover:text-muted-foreground/30 hover:!text-gold/60'
-        )}
-      >
-        {item.isPriority ? (
-          <Star className="w-3.5 h-3.5 fill-gold" />
-        ) : (
-          <Star className="w-3.5 h-3.5" />
-        )}
-      </motion.button>
 
       {/* Delete button */}
       <motion.button
@@ -380,9 +355,9 @@ function SectionCard({
   onAddItem,
   onToggleItem,
   onDeleteItem,
-  onTogglePriority,
   isCurrentSection,
   index,
+  loading,
 }: {
   section: PlannerSection
   items: PlannerItem[]
@@ -390,16 +365,16 @@ function SectionCard({
   onAddItem: (sectionId: string, text: string) => void
   onToggleItem: (id: string) => void
   onDeleteItem: (id: string) => void
-  onTogglePriority: (id: string) => void
   isCurrentSection: boolean
   index: number
+  loading: boolean
 }) {
   const [inputValue, setInputValue] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const completedCount = items.filter((i) => i.done).length
+  const completedCount = items.filter((i) => i.completed).length
   const totalCount = items.length
   const sectionProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
   const allDone = totalCount > 0 && completedCount === totalCount
@@ -501,7 +476,13 @@ function SectionCard({
               <CardContent className="p-3 space-y-0.5">
                 {/* Items list */}
                 <div className="min-h-[2rem]">
-                  {items.length === 0 ? (
+                  {loading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 2 }).map((_, i) => (
+                        <Skeleton key={i} className="h-10 rounded-xl" />
+                      ))}
+                    </div>
+                  ) : items.length === 0 ? (
                     <EmptyState section={section} />
                   ) : (
                     <div className="space-y-0.5">
@@ -514,7 +495,6 @@ function SectionCard({
                             index={idx}
                             onToggle={onToggleItem}
                             onDelete={onDeleteItem}
-                            onTogglePriority={onTogglePriority}
                           />
                         ))}
                       </AnimatePresence>
@@ -558,7 +538,7 @@ function SectionCard({
                 </div>
 
                 {/* Quick Suggestions */}
-                {!showSuggestions && items.length === 0 && (
+                {!showSuggestions && items.length === 0 && !loading && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -642,7 +622,6 @@ function TimelineView({
                 isNow && 'bg-emerald-accent/5 -mx-3 px-3 rounded-lg'
               )}
             >
-              {/* Now line indicator */}
               {isNow && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -682,17 +661,37 @@ function TimelineView({
 /* ────────────── Main Component ────────────── */
 
 export default function DailyPlanner() {
-  const [data, setData] = useState<PlannerData>(() => loadPlannerData())
+  const [items, setItems] = useState<PlannerItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
-  const isFirstRender = useRef(true)
   const [currentTime, setCurrentTime] = useState(new Date())
+
+  const todayStr = useMemo(() => getTodayStr(), [])
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  // Quick Notes
+  // Fetch items from API
+  const fetchItems = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/rise/planner?date=${todayStr}`)
+      const data = await res.json()
+      setItems(data.items || [])
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }, [todayStr])
+
+  useEffect(() => {
+    fetchItems()
+  }, [fetchItems])
+
+  // Quick Notes (keep in localStorage)
   const [notes, setNotes] = useState<QuickNote[]>(() => loadNotes())
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [newNoteText, setNewNoteText] = useState('')
@@ -700,99 +699,91 @@ export default function DailyPlanner() {
   const [editNoteText, setEditNoteText] = useState('')
   const [quickNoteText, setQuickNoteText] = useState(() => {
     if (typeof window === 'undefined') return ''
-    try { return localStorage.getItem('rise-planner-quick-note') || '' } catch { return '' }
+    try { return localStorage.getItem(QUICK_NOTE_TEXT_KEY) || '' } catch { return '' }
   })
-
-  // Save to localStorage on changes (skip first render)
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-    savePlannerData(data)
-  }, [data])
 
   // Auto-save quick note
   useEffect(() => {
-    try { localStorage.setItem('rise-planner-quick-note', quickNoteText) } catch { /* ignore */ }
+    try { localStorage.setItem(QUICK_NOTE_TEXT_KEY, quickNoteText) } catch { /* ignore */ }
   }, [quickNoteText])
 
-  // Derive section items from flat list using createdAt hour
+  // Derive section items from flat list
   const sectionItems = useMemo(() => {
     const morning: PlannerItem[] = []
     const noon: PlannerItem[] = []
     const evening: PlannerItem[] = []
 
-    data.items.forEach((item) => {
-      const h = new Date(item.createdAt).getHours()
-      if (h < 12) morning.push(item)
-      else if (h < 17) noon.push(item)
-      else evening.push(item)
+    items.forEach((item) => {
+      if (item.section === 'morning') morning.push(item)
+      else if (item.section === 'noon') noon.push(item)
+      else if (item.section === 'evening') evening.push(item)
     })
 
     return { morning, noon, evening }
-  }, [data.items])
+  }, [items])
 
-  const addItem = useCallback((sectionId: string, text: string) => {
-    const newItem: PlannerItem = {
-      id: generateId(),
-      text,
-      done: false,
-      isPriority: false,
+  const addItem = useCallback(async (sectionId: string, text: string) => {
+    // Optimistic
+    const tempId = generateId()
+    const timeHour = sectionId === 'morning' ? 8 : sectionId === 'noon' ? 14 : 19
+    const timeStr = `${String(timeHour).padStart(2, '0')}:00`
+    const optimistic: PlannerItem = {
+      id: tempId,
+      title: text,
+      completed: false,
+      time: timeStr,
+      section: sectionId,
+      order: 0,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
-    const adjustedItem = { ...newItem }
-    if (sectionId === 'morning') {
-      const d = new Date()
-      d.setHours(8, 0, 0, 0)
-      adjustedItem.createdAt = d.toISOString()
-    } else if (sectionId === 'noon') {
-      const d = new Date()
-      d.setHours(14, 0, 0, 0)
-      adjustedItem.createdAt = d.toISOString()
-    } else {
-      const d = new Date()
-      d.setHours(19, 0, 0, 0)
-      adjustedItem.createdAt = d.toISOString()
+    setItems((prev) => [...prev, optimistic])
+
+    try {
+      const res = await fetch('/api/rise/planner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: todayStr, section: sectionId, title: text, time: timeStr }),
+      })
+      const created = await res.json()
+      setItems((prev) => prev.map((i) => i.id === tempId ? created : i))
+    } catch {
+      setItems((prev) => prev.filter((i) => i.id !== tempId))
+      toast.error('فشل في إضافة المهمة')
     }
+  }, [todayStr])
 
-    setData((prev) => ({
-      ...prev,
-      items: [...prev.items, adjustedItem],
-    }))
-  }, [])
+  const toggleItem = useCallback(async (id: string) => {
+    const item = items.find((i) => i.id === id)
+    if (!item) return
 
-  const toggleItem = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      items: prev.items.map((item) =>
-        item.id === id ? { ...item, done: !item.done } : item
-      ),
-    }))
-  }, [])
+    const newCompleted = !item.completed
+    // Optimistic
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))
+    )
 
-  const deleteItem = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      items: prev.items.filter((item) => item.id !== id),
-      priorities: prev.priorities.filter((pid) => pid !== id),
-    }))
-  }, [])
+    try {
+      await fetch('/api/rise/planner', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, completed: newCompleted }),
+      })
+    } catch {
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
+      )
+    }
+  }, [items])
 
-  const togglePriority = useCallback((id: string) => {
-    setData((prev) => {
-      const isPriority = prev.priorities.includes(id)
-      return {
-        ...prev,
-        priorities: isPriority
-          ? prev.priorities.filter((pid) => pid !== id)
-          : [...prev.priorities, id],
-        items: prev.items.map((item) =>
-          item.id === id ? { ...item, isPriority: !isPriority } : item
-        ),
-      }
-    })
-  }, [])
+  const deleteItem = useCallback(async (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id))
+    try {
+      await fetch(`/api/rise/planner?id=${id}`, { method: 'DELETE' })
+    } catch {
+      fetchItems()
+    }
+  }, [fetchItems])
 
   // Note handlers
   const handleAddNote = () => {
@@ -827,9 +818,8 @@ export default function DailyPlanner() {
     toast.success('تم تحديث الملاحظة')
   }
 
-  const priorityItems = data.items.filter((item) => item.isPriority && !item.done)
-  const totalItems = data.items.length
-  const completedItems = data.items.filter((i) => i.done).length
+  const totalItems = items.length
+  const completedItems = items.filter((i) => i.completed).length
   const overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
 
   // Arabic clock time
@@ -920,51 +910,6 @@ export default function DailyPlanner() {
         </div>
       </motion.div>
 
-      {/* ── Priority Tasks ── */}
-      <AnimatePresence>
-        {priorityItems.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-          >
-            <Card className="overflow-hidden rounded-2xl border-0 shadow-sm gap-0">
-              <div className="px-5 pt-4 pb-2 bg-gradient-to-b from-gold/10 to-gold/5 dark:from-gold/5 dark:to-transparent">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-gold/15 flex items-center justify-center">
-                    <Flag className="w-4 h-4 text-gold" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      مهام ذات أولوية
-                      <Badge className="text-[10px] px-1.5 py-0 bg-gold/15 text-gold border-gold/20">
-                        {arabicNum(priorityItems.length)}
-                      </Badge>
-                    </h3>
-                  </div>
-                </div>
-              </div>
-              <CardContent className="p-3 pt-2 space-y-0.5">
-                <AnimatePresence mode="popLayout">
-                  {priorityItems.map((item) => (
-                    <PlannerItemRow
-                      key={item.id}
-                      item={item}
-                      section={SECTIONS[0]}
-                      index={0}
-                      onToggle={toggleItem}
-                      onDelete={deleteItem}
-                      onTogglePriority={togglePriority}
-                    />
-                  ))}
-                </AnimatePresence>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* ── Main Content: Sections or Timeline ── */}
       <AnimatePresence mode="wait">
         {activeView === 'sections' ? (
@@ -989,13 +934,13 @@ export default function DailyPlanner() {
                   onAddItem={addItem}
                   onToggleItem={toggleItem}
                   onDeleteItem={deleteItem}
-                  onTogglePriority={togglePriority}
                   isCurrentSection={
                     (section.id === 'morning' && currentHour >= 6 && currentHour < 12) ||
                     (section.id === 'noon' && currentHour >= 12 && currentHour < 17) ||
                     (section.id === 'evening' && currentHour >= 17 && currentHour <= 22)
                   }
                   index={index}
+                  loading={loading}
                 />
               </div>
             ))}
@@ -1019,7 +964,7 @@ export default function DailyPlanner() {
                 </div>
               </div>
               <CardContent className="p-4 pt-2">
-                <TimelineView items={data.items} onToggleItem={toggleItem} />
+                <TimelineView items={items} onToggleItem={toggleItem} />
               </CardContent>
             </Card>
           </motion.div>
@@ -1049,18 +994,18 @@ export default function DailyPlanner() {
             bg: 'bg-emerald-accent/10',
           },
           {
-            label: 'أولوية',
-            value: arabicNum(priorityItems.length + data.priorities.filter(p => data.items.find(i => i.id === p)?.done).length),
-            icon: Star,
+            label: 'متبقية',
+            value: arabicNum(totalItems - completedItems),
+            icon: Circle,
             color: 'text-gold',
             bg: 'bg-gold/10',
           },
           {
-            label: 'متبقية',
-            value: arabicNum(totalItems - completedItems),
-            icon: Circle,
-            color: 'text-muted-foreground',
-            bg: 'bg-muted/50',
+            label: 'التقدم',
+            value: arabicNum(overallProgress) + '٪',
+            icon: Star,
+            color: 'text-forest',
+            bg: 'bg-forest/10',
           },
         ].map((stat, i) => (
           <motion.div

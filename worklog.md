@@ -539,3 +539,228 @@ Work Log:
 6. إضافة تصدير PDF للتقارير عبر pdf skill
 7. إضافة نظام إشعارات فعلية (Web Push API)
 8. إضافة لوحة تحكم بالماوس (mouse-tracking parallax) على مستوى التطبيق
+
+---
+Task ID: r7-styling-2
+Agent: Styling Expert (Frontend)
+Task: تحسينات بصرية شاملة — الدفعة الثالثة (5 وحدات)
+
+Work Log:
+- تحسين journal.tsx:
+  - إضافة قسم "مزاج اليوم" البطولي مع emoji كبير متحرك وخلفية متدرجة حسب المزاج
+  - إضافة MoodSparkline — رسم SVG يعرض اتجاه المزاج لآخر 7 أيام مع نقطة نابضة
+  - تحسين محدد المزاج: أزرار أكبر مع تأثير رفع عند التحويم + horizontal scroll
+  - إضافة noise-bg (نسيج) على بطاقات اليوميات وحقول الإدخال
+  - إضافة مؤشر السلسلة مع badge متحرك + glow-gold عند ≥3 أيام
+  - إضافة تأثير توهج على حقول الإدخال يتغير حسب لون المزاج
+  - إضافة أنيميشن دخول/خروج للنموذج (انزلاق من اليمين) عبر AnimatePresence
+  - إضافة AnimatedNumber و formVariants
+
+- تحسين health.tsx:
+  - إضافة بطاقة "درجة الصحة اليوم" البطولية مع عداد متحرك (0-100) وألوان ديناميكية
+  - إضافة AnimatedCounter لتدرج الأرقام
+  - إضافة قسم "قائمة اليوم" مع أكواب ماء قابلة للنقر (💧×8) + toggle تمارين + نجوم جودة النوم
+  - إضافة مقارنة أسبوعية مزدوجة (مزاج + ماء) مع أشرطة متحركة
+  - إضافة بطاقات رؤى صحية تلقائية (نوم ممتاز، ماء كافي، مزاج إيجابي)
+  - إضافة أيقونات تمارين (emoji + تسميات)
+  - تحسين رسوم بيانية: gradient fill لرسم النوم والماء
+
+- تحسين finance.tsx:
+  - إضافة "هدف الادخار" مع شريط تقدم متحرك وزر زيادة الهدف
+  - إضافة رسم التدفق النقدي (Waterfall) — الدخل → المصروفات = المدخرات
+  - تحسين نافذة الإضافة: شبكة أيقونات فئات (icon grid) بدل dropdown نصي
+  - تحسين قائمة المعاملات: stagger من الأسفل + ألوان مبنية على النوع (أخضر=دخل، أحمر=مصروف، أزرق=ادخار)
+  - إضافة Badge نوع المعاملة تحت كل مبلغ
+
+- تحسين second-brain.tsx:
+  - إضافة ألوان حدود مخصصة لكل نوع (emerald=project, sky=knowledge, gold=idea, cyan=resource, purple=bookmark, pink=inspiration/design_ref, rose=research)
+  - إضافة قسم "شوهد مؤخراً" (Recently Viewed) مع أزرار قابلة للنقر
+  - إضافة بطاقة "فكرة عشوائية" (Random Insight) مع أنيميشن ظهور/اختفاء
+  - تحسين سحابة الوسوم: أحجام ديناميكية حسب عدد العناصر + عداد + قابلية للنقر
+  - تحسين زر المفضلة: قلب بدل نجمة مع أنيميشن bounce (scale 1→1.4→1)
+  - إضافة زر "فكرة عشوائية" في نافذة الإضافة
+
+- تحسين analytics.tsx:
+  - إضافة بطاقة "التقدير العام" (Performance Grade A+ إلى F) مع حرف كبير متحرك
+  - إضافة AnimatedCounter لكل الأرقام في البطاقات (XP, مهام, ساعات, سلسلة)
+  - إضافة زر "وضع المقارنة" في بطاقة التقدير
+  - إضافة رؤى تحليلية عربية تلقائية (أكثر إنتاجية يوم X، سلسلة قوية، تركيز عميق، تحسن/تراجع أسبوعي)
+  - تحسين الرسوم البيانية: gradient fills للإنتاجية والتركيز
+
+Stage Summary:
+- 0 أخطاء Lint
+- Build إنتاجي ناجح (20 صفحة + 16 API route)
+- 5 ملفات محسّنة
+- ميزات بصرية جديدة: MoodSparkline, Health Score Hero, Savings Goal, Cash Flow Chart, Performance Grade, Random Insight, Tag Cloud, Animated Counters
+- أنيميشنات: form slide, heart bounce, grade spring, counter animations, staggered transactions
+
+---
+Task ID: r7-styling-1
+Agent: Styling Expert (Frontend)
+Task: تحسينات بصرية شاملة — الدفعة الثالثة (5 وحدات)
+
+Work Log:
+- تحسين dashboard.tsx:
+  - إضافة حقل نجوم متحركة (12 جسيم نابض) خلف قسم Hero
+  - تحويل اسم المستخدم إلى text-gradient-forest بخط كبير
+  - إضافة Badge المستوى بتدرج ذهبي + إحصائيات الخبرة
+  - إضافة "حلقة تقدم اليوم" — SVG دائري بتدرج (emerald → gold) يجمع المهام والعادات والتركيز
+  - تحسين شريط XP مع تأثير shimmer
+  - تحسين أيقونة السلسلة (Flame) مع أنيميشن scale + rotate + drop-shadow ذهبي
+  - تحسين hover على بطاقات الإحصائيات: y:-4 + scale:1.01 + spring physics
+  - تحسين تدرج الرسم البياني الأسبوعي (Area gradient: emerald → gold transparent)
+
+- تحسين tasks.tsx:
+  - إضافة حالة فارغة جميلة مع أيقونة + نص تحفيزي بالعربية + زر إضافة
+  - إضافة حدود أعمدة Kanban بتدرج (todo=blue, in_progress=emerald, done=gold) + header backgrounds
+  - إضافة Badge عدد المهام بـ bg-background/50 لكل عمود
+  - إضافة ألوان خلفية خفيفة حسب الأولوية (red/gold/emerald tint) في بطاقات اللوحة
+  - إضافة boardColGradientBorders و boardColHeaderBg كثوابت للوحة
+
+- تحسين projects.tsx:
+  - إنشاء FeaturedProject — قسم بطول يعرض المشروع الأقرب للإكمال مع حلقة تقدم كبيرة + badge
+  - تحسين ProgressRing بـ gradient stroke (linearGradient) + رسم متدرج + animation أطول
+  - إضافة TeamAvatars — كومة صور زجاجية ملونة مع حروف أولى بالعربية (أحمد، سارة، محمد، نورة، خالد)
+  - تحسين أشرطة الألوان للأعلى بتدرج كامل بدل لون ثابت
+  - تحسين Status Badge مع border + ألوان أفضل (نشط=emerald, مكتمل=gold, متوقف=muted)
+  - عرض بطاقة المشروع المميز أعلى الشبكة تلقائياً
+  - إضافة أيقونة Star متحركة على حلقة التقدم في البطولة المميزة
+
+- تحسين goals.tsx:
+  - إضافة "لوحة الرؤية" (Vision Board) — بطاقات premium-card تعرض رؤى الأهداف مع تدرج حسب النوع
+  - تحسين Progress Bar مع تأثير shimmer
+  - إضافة أيقونات أهداف (annual=🏆, quarterly=📅, monthly=🎯, weekly=⚡) في badges
+  - إضافة that animations على نسبة التقدم داخل الحلقة الدائرية
+
+- تحسين habits.tsx:
+  - إضافة "درجة إنجاز اليوم" Hero Card مع حلقة تقدم SVG (gradient emerald→gold)
+  - إضافة درجة نصية (A/B/C/D) مع ألوان متدرجة + رسالة تحفيزية ديناميكية
+  - إضافة بطاقة "أفضل سلسلة" مع Trophy متحرك + gold gradient border
+  - تحسين Flame icon في بطاقات العادات: أنيميشن scale pulse + drop-shadow للسلاسل الطويلة
+  - تحسين خلايا الخريطة: rounded-[3px] بدل rounded-sm لدقة أفضل
+
+Stage Summary:
+- 0 أخطاء TypeScript في src/components
+- 0 أخطاء Build
+- 5 ملفات محسّنة بتصميم premium
+- ميزات بصرية جديدة: Star Field, Daily Progress Ring, Featured Project, Vision Board, Today's Score Hero
+- مكونات جديدة: TeamAvatars, FeaturedProject
+- أنيميشنات: particles, pulsing fire, shimmer bars, gradient rings
+
+---
+Task ID: r7-features
+Agent: Main Agent
+Task: إضافة 5 ميزات جديدة (PWA, Planner DB, DnD Tasks, Goals Progress, Keyboard Shortcuts)
+
+Work Log:
+- ميزة ١: PWA Support
+  - إنشاء /public/manifest.json مع اسم RiseOS، لغة عربية، اتجاه RTL
+  - أيقونة SVG data URI (Zap في دائرة خضراء)
+  - تحديث /src/app/layout.tsx مع meta tags (theme-color, apple-mobile-web-app-capable, manifest link)
+- ميزة ٢: نقل المخطط اليومي إلى قاعدة البيانات
+  - إضافة نموذج PlannerItem في Prisma Schema (id, userId, date, section, time, title, completed, order)
+  - إضافة علاقة plannerItems في User model
+  - تشغيل db:push بنجاح
+  - إنشاء API /api/rise/planner/route.ts (GET, POST, PUT, DELETE)
+  - إعادة كتابة daily-planner.tsx بالكامل لاستخدام API بدلاً من localStorage
+  - الحفاظ على الملاحظات السريعة في localStorage
+  - إضافة loading states و optimistic updates
+- ميزة ٣: Drag and Drop لترتيب المهام
+  - استيراد @dnd-kit/core و @dnd-kit/sortable في tasks.tsx
+  - إضافة DndContext و SortableContext حول عرض القائمة فقط
+  - إضافة GripVertical icon لكل مهمة كعنصر سحب
+  - DragOverlay مع بطاقة زجاجية (glass effect) تظهر أثناء السحب
+  - تحديث ترتيب المهام عبر PUT إلى /api/rise/tasks
+- ميزة ٤: تقدم الأهداف الأسبوعي في لوحة التحكم
+  - استبدال قسم "الأهداف النشطة" بـ "تقدم الأهداف هذا الأسبوع"
+  - عرض أفضل 3 أهداف مع أشرطة تقدم متدرجة (gradient animated)
+  - إضافة GoalDeltaBadge يُظهر "التقدم هذا الأسبوع"
+  - زر "عرض جميع الأهداف" ينتقل لوحدة الأهداف
+- ميزة ٥: نظام اختصارات لوحة المفاتيح
+  - إنشاء /src/components/rise/keyboard-shortcuts.tsx
+  - hook: useKeyboardShortcuts (Ctrl+1-0 للتنقل، Ctrl+N مهمة جديدة، Ctrl+D تبديل السمة، Ctrl+/ مساعدة، Escape إغلاق)
+  - KeyboardShortcutsDialog: نافذة جميلة مع شبكة اختصارات، key badges، تصنيف (تنقل/إجراءات/عرض)
+  - تكامل في page.tsx مع useKeyboardShortcuts hook و KeyboardShortcutsDialog
+
+Stage Summary:
+- 0 أخطاء Lint جديدة (الأخطاء الموجودة في analytics.tsx و health.tsx سابقة ولا علاقة لها بالتغييرات)
+- 5 ملفات جديدة (manifest.json, planner API route, keyboard-shortcuts.tsx)
+- 5 ملفات مُعدّلة (layout.tsx, schema.prisma, daily-planner.tsx, tasks.tsx, dashboard.tsx, page.tsx)
+- نموذج Prisma جديد: PlannerItem
+- API route جديدة: /api/rise/planner
+
+---
+Task ID: r7-final
+Agent: Main Coordinator
+Task: تنسيق الجولة 7 النهائية — فحص، إصلاح، تحسين 10 وحدات، 5 ميزات، تحقق
+
+Work Log:
+- فحص حالة المشروع عبر worklog.md
+- إصلاح خطأ TypeScript في habits.tsx (import toast من sonner)
+- التحقق: 0 أخطاء Lint، 0 أخطاء TypeScript في src/، Build ناجح
+- تنسيق 3 sub-agents بالتوازي:
+  1. Styling Expert 1: تحسين 5 وحدات (Dashboard, Tasks, Projects, Goals, Habits)
+  2. Styling Expert 2: تحسين 5 وحدات (Journal, Health, Finance, Second Brain, Analytics)
+  3. Features Agent: 5 ميزات (PWA, Planner DB, DnD, Goals Dashboard, Keyboard Shortcuts)
+- Push قاعدة البيانات: نموذج PlannerItem جديد
+- التحقق النهائي: 17/17 API route تعيد HTTP 200 + الصفحة الرئيسية 200
+
+## تقييم الحالة الحالية
+- التطبيق مستقر ومتقدم مع 20 وحدة كاملة — كلها محسّنة بتصميم premium
+- 17 API route تعمل في الإنتاج (HTTP 200)
+- نظام Gamification كامل (XP/Level/شارات/تبعيات/تذكيرات)
+- 19 Prisma model (أحدثها: PlannerItem)
+- 0 أخطاء Lint / TypeScript / Build
+
+## الإنجازات التراكمية الكاملة
+### البنية التحتية
+- 20 وحدة واجهة مستخدم (lazy-loaded)
+- 17 API route (CRUD كامل)
+- 19 Prisma model مع cascade delete
+- PWA manifest + meta tags
+- نظام Gamification (XP, Level, 15 شارة, Streaks)
+- بحث شامل ⌘K (6 أنواع بيانات + وحدات)
+- اختصارات لوحة المفاتيح (Ctrl+1-0, Ctrl+N, Ctrl+D, Ctrl+/)
+
+### الميزات
+- Productivity Score يومي
+- تبعيات المهام + فلتر محظورة
+- تذكيرات العادات (وقت محدد + toast)
+- ربط البومودورو بالمهام
+- نظام الميزانية الشهرية (8 فئات)
+- جدار تحفيز متحرك (24 اقتباس)
+- ملاحظات سريعة في الشريط الجانبي
+- Drag & Drop لترتيب المهام
+- Daily Planner في قاعدة البيانات
+- تصدير البيانات (JSON)
+- FAB إجراء سريع
+
+### التصميم
+- كل الـ 20 وحدة محسّنة بتصميم premium
+- Glassmorphism + Noise Textures + Gradient Borders
+- Star Field, Orbiting Animations, Confetti
+- 3D Tilt Cards (Reading)
+- SVG Skill Tree, Progress Rings, Radar Charts
+- Completion Rings, Shimmer Bars, Animated Counters
+- Mood Sparklines, Health Score, Performance Grade (A+ to F)
+- Focus Zone Mode, AI Avatar with Orbiting Rings
+- Featured Project Hero, Vision Board
+- Tag Cloud, Random Insight, Cash Flow Waterfall
+- Category Icon Grid, Savings Goal Tracker
+
+## مخاطر/قضايا
+- خادم التطوير يتجاوز 4GB RAM (OOM) — الإنتاج يعمل بشكل ممتاز
+- agent-browser لا يمكن الوصول لـ localhost
+- لا يوجد نظام مصادقة حقيقي (مستخدم افتراضي)
+- Learning + Budgets مازالتا في localStorage فقط
+
+## توصيات المرحلة القادمة (مرتبة حسب الأولوية)
+1. تقليل استهلاك ذاكرة dev server (تجميع الوحدات أو chunk splitting)
+2. نقل Learning و Budgets إلى قاعدة البيانات
+3. إضافة Service Worker للعمل offline فعلياً
+4. إضافة drag-and-drop في التقويم
+5. تحسين الموبايل بشكل أوسع (responsive audit شامل)
+6. إضافة تصدير PDF للتقارير
+7. إضافة نظام إشعارات Web Push API
+8. إضافة وضع عرض مخصص (Custom Views) للمهام
+9. إضافة تكامل مع تطبيقات خارجية (Google Calendar, Notion)

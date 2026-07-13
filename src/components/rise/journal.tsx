@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   BookOpen,
   Search,
@@ -72,6 +72,22 @@ const MOOD_STRIP_COLORS: Record<number, string> = {
   5: 'bg-emerald-accent',
 }
 
+const MOOD_BG_GRADIENTS: Record<number, string> = {
+  1: 'from-red-500/8 via-red-500/3 to-transparent',
+  2: 'from-gray-400/8 via-gray-400/3 to-transparent',
+  3: 'from-gold/8 via-gold/3 to-transparent',
+  4: 'from-emerald-accent/8 via-emerald-accent/3 to-transparent',
+  5: 'from-emerald-accent/12 via-emerald-accent/5 to-transparent',
+}
+
+const MOOD_GLOW_COLORS: Record<number, string> = {
+  1: 'shadow-red-500/20 focus-within:shadow-[0_0_20px_rgba(239,68,68,0.15)]',
+  2: 'shadow-gray-400/20 focus-within:shadow-[0_0_20px_rgba(156,163,175,0.15)]',
+  3: 'shadow-gold/20 focus-within:shadow-[0_0_20px_oklch(0.78_0.12_85/0.15)]',
+  4: 'shadow-emerald-accent/20 focus-within:shadow-[0_0_20px_oklch(0.55_0.14_163/0.15)]',
+  5: 'shadow-emerald-accent/25 focus-within:shadow-[0_0_20px_oklch(0.55_0.14_163/0.2)]',
+}
+
 const TEXTAREA_ACCENT_COLORS: Record<string, string> = {
   content: 'border-r-[3px] border-r-emerald-accent/50',
   gratitude: 'border-r-[3px] border-r-rose-400/50',
@@ -105,6 +121,68 @@ const containerVariants = {
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+}
+
+const formVariants = {
+  hidden: { opacity: 0, x: 40, scale: 0.98 },
+  visible: { opacity: 1, x: 0, scale: 1, transition: { type: 'spring' as const, stiffness: 300, damping: 30 } },
+  exit: { opacity: 0, x: 40, scale: 0.98, transition: { duration: 0.25, ease: 'easeIn' as const } },
+}
+
+/* ────────────── Mood Sparkline ────────────── */
+
+function MoodSparkline({ moods }: { moods: number[] }) {
+  if (moods.length < 2) return null
+  const w = 140, h = 36, pad = 4
+  const max = 5, min = 1
+  const stepX = (w - pad * 2) / (moods.length - 1)
+  const points = moods.map((m, i) => {
+    const x = pad + i * stepX
+    const y = pad + (1 - (m - min) / (max - min)) * (h - pad * 2)
+    return `${x},${y}`
+  }).join(' ')
+  const lastMood = moods[moods.length - 1]
+  const lastX = pad + (moods.length - 1) * stepX
+  const lastY = pad + (1 - (lastMood - min) / (max - min)) * (h - pad * 2)
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-9 opacity-60">
+      <defs>
+        <linearGradient id="moodSparkGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.25} />
+          <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <polygon
+        points={`${pad},${h - pad} ${points} ${lastX},${h - pad}`}
+        fill="url(#moodSparkGrad)"
+      />
+      <polyline points={points} fill="none" stroke="oklch(0.55 0.14 163)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="3" fill="oklch(0.55 0.14 163)" />
+      <circle cx={lastX} cy={lastY} r="6" fill="oklch(0.55 0.14 163)" opacity={0.2}>
+        <animate attributeName="r" values="6;10;6" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.2;0.05;0.2" dur="2s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  )
+}
+
+/* ────────────── Animated Number ────────────── */
+
+function AnimatedNumber({ value }: { value: number }) {
+  const mv = useMotionValue(0)
+  const display = useTransform(mv, (v) => Math.round(v))
+  const nodeRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const controls = animate(mv, value, { duration: 0.8, ease: 'easeOut' })
+    return controls.stop
+  }, [mv, value])
+  useEffect(() => {
+    const unsubscribe = display.on('change', (v) => {
+      if (nodeRef.current) nodeRef.current.textContent = String(v)
+    })
+    return unsubscribe
+  }, [display])
+  return <span ref={nodeRef}>{value}</span>
 }
 
 /* ────────────── Component ────────────── */
@@ -230,6 +308,14 @@ export default function Journal() {
     return { total, streak, avgMood }
   }, [data?.recentJournals, today])
 
+  /* ─── Mood Trend (last 7 days) ─── */
+  const moodTrend = useMemo(() => {
+    const journals = data?.recentJournals || []
+    const sorted = [...journals].sort((a, b) => a.date.localeCompare(b.date))
+    const last7 = sorted.slice(-7)
+    return last7.map(j => j.mood || 3)
+  }, [data?.recentJournals])
+
   /* ─── Helpers ─── */
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
@@ -297,14 +383,29 @@ export default function Journal() {
             <span className="text-[11px] text-muted-foreground">إجمالي المدخلات</span>
           </CardContent>
         </Card>
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
+        <Card className={cn("glass border-0 shadow-sm relative overflow-hidden", stats.streak >= 3 && "glow-gold")}>
           <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
           <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
-              <Flame className="w-4 h-4 text-gold" />
+            <div className="relative">
+              <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+                <Flame className="w-4 h-4 text-gold" />
+              </div>
+              {stats.streak >= 3 && (
+                <motion.div
+                  className="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-gold flex items-center justify-center"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                >
+                  <span className="text-[7px] font-black text-white">{stats.streak}</span>
+                </motion.div>
+              )}
             </div>
-            <span className="text-2xl font-bold text-foreground count-up">{stats.streak}</span>
-            <span className="text-[11px] text-muted-foreground">أيام متتالية</span>
+            <div className="flex items-center gap-1">
+              <span className="text-2xl font-bold text-foreground count-up">{stats.streak}</span>
+              {stats.streak >= 7 && <Sparkles className="w-3.5 h-3.5 text-gold" />}
+            </div>
+            <span className="text-[11px] text-muted-foreground">أيام متتالية {stats.streak >= 3 ? '🔥' : ''}</span>
           </CardContent>
         </Card>
         <Card className="glass border-0 shadow-sm relative overflow-hidden">
@@ -317,6 +418,52 @@ export default function Journal() {
             <span className="text-[11px] text-muted-foreground">متوسط المزاج</span>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Today's Mood Hero */}
+      <motion.div variants={itemVariants}>
+        <div className={cn(
+          "premium-card rounded-2xl overflow-hidden relative",
+          MOOD_BG_GRADIENTS[form.mood] || MOOD_BG_GRADIENTS[3]
+        )}>
+          <div className="noise-bg" />
+          <div className="relative z-10 p-6 flex flex-col items-center text-center gap-3">
+            <motion.p
+              key={form.mood}
+              initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="text-7xl"
+            >
+              {getMoodEmoji(form.mood)}
+            </motion.p>
+            <div>
+              <p className="text-lg font-bold text-foreground">
+                {MOOD_EMOJIS.find(m => m.value === form.mood)?.label}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {new Date().toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+            {moodTrend.length >= 2 && (
+              <div className="w-48 mt-1">
+                <p className="text-[10px] text-muted-foreground mb-1">اتجاه المزاج — آخر ٧ أيام</p>
+                <MoodSparkline moods={moodTrend} />
+              </div>
+            )}
+            {stats.streak > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="flex items-center gap-1.5 bg-gold/10 px-3 py-1.5 rounded-full"
+              >
+                <Flame className="w-3.5 h-3.5 text-gold" />
+                <span className="text-xs font-semibold text-gold">سلسلة {stats.streak} يوم</span>
+              </motion.div>
+            )}
+          </div>
+        </div>
       </motion.div>
 
       {/* Today's Entry Form or View */}
@@ -371,10 +518,21 @@ export default function Journal() {
           </CardHeader>
 
           <CardContent className="space-y-5">
+            <AnimatePresence mode="wait">
             {showForm ? (
+              <motion.div
+                key="form"
+                variants={formVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+              >
               <>
                 {/* Paper texture form background */}
-                <div className="rounded-2xl p-4 -mx-2 space-y-5 bg-[repeating-linear-gradient(0deg,transparent,transparent_27px,oklch(0.5_0_0/0.03)_27px,oklch(0.5_0_0/0.03)_28px)]">
+                <div className={cn(
+                  "rounded-2xl p-4 -mx-2 space-y-5 noise-bg",
+                  "bg-[repeating-linear-gradient(0deg,transparent,transparent_27px,oklch(0.5_0_0/0.03)_27px,oklch(0.5_0_0/0.03)_28px)]"
+                )}>
                   {/* Journal Content */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -386,8 +544,9 @@ export default function Journal() {
                       onChange={(e) => updateForm('content', e.target.value)}
                       placeholder="اكتب أفكارك ومشاعرك اليوم..."
                       className={cn(
-                        'min-h-[120px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-200 text-sm',
-                        TEXTAREA_ACCENT_COLORS.content
+                        'min-h-[120px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-all duration-300 text-sm',
+                        TEXTAREA_ACCENT_COLORS.content,
+                        MOOD_GLOW_COLORS[form.mood] || MOOD_GLOW_COLORS[3]
                       )}
                       dir="rtl"
                     />
@@ -453,23 +612,23 @@ export default function Journal() {
                       <Smile className="w-4 h-4 text-emerald-accent" />
                       المزاج
                     </label>
-                    <div className="flex items-center gap-2 justify-center py-2">
+                    <div className="flex items-center gap-3 justify-center py-2 overflow-x-auto px-2 scrollbar-none">
                       {MOOD_EMOJIS.map((m) => (
                         <motion.button
                           key={m.value}
-                          whileHover={{ scale: 1.15 }}
+                          whileHover={{ scale: 1.25, y: -4 }}
                           whileTap={{ scale: 0.85 }}
-                          animate={form.mood === m.value ? { scale: [1, 1.35, 1.1] } : { scale: 1 }}
+                          animate={form.mood === m.value ? { scale: [1, 1.4, 1.15] } : { scale: 1, y: 0 }}
                           transition={form.mood === m.value
                             ? { type: 'spring', stiffness: 400, damping: 10, duration: 0.5 }
                             : { duration: 0.2 }
                           }
                           onClick={() => updateForm('mood', m.value)}
                           className={cn(
-                            'text-3xl p-2 rounded-xl transition-all duration-200 ring-1',
+                            'text-4xl p-3 rounded-2xl transition-all duration-300 ring-2 shrink-0',
                             form.mood === m.value
-                              ? `${m.color} shadow-md`
-                              : 'ring-transparent hover:bg-muted/50 opacity-60 hover:opacity-100'
+                              ? `${m.color} shadow-lg`
+                              : 'ring-transparent hover:bg-muted/50 opacity-50 hover:opacity-100'
                           )}
                           title={m.label}
                         >
@@ -477,9 +636,16 @@ export default function Journal() {
                         </motion.button>
                       ))}
                     </div>
-                    <p className="text-center text-xs text-muted-foreground">
-                      {MOOD_EMOJIS.find((m) => m.value === form.mood)?.label}
-                    </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <motion.span
+                        key={form.mood}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-sm font-medium text-foreground"
+                      >
+                        {MOOD_EMOJIS.find((m) => m.value === form.mood)?.label}
+                      </motion.span>
+                    </div>
                   </div>
 
                   {/* Energy Slider with gradient fill */}
@@ -585,9 +751,16 @@ export default function Journal() {
                   </Button>
                 </motion.div>
               </>
+              </motion.div>
             ) : (
               /* View Mode */
               data?.journal && (
+                <motion.div
+                  key="view"
+                  initial={{ opacity: 0, x: -30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
                 <div className="space-y-4">
                   {/* Mood & Energy */}
                   <div className="flex items-center gap-4 justify-center py-2">
@@ -642,8 +815,10 @@ export default function Journal() {
                       )
                   )}
                 </div>
+                </motion.div>
               )
             )}
+            </AnimatePresence>
           </CardContent>
         </Card>
       </motion.div>
@@ -694,7 +869,7 @@ export default function Journal() {
                       >
                         <div
                           className={cn(
-                            'rounded-xl p-4 transition-all duration-200 relative overflow-hidden',
+                            'rounded-xl p-4 transition-all duration-200 relative overflow-hidden noise-bg',
                             'hover:shadow-md hover:-translate-y-0.5 border border-transparent hover:border-border/50',
                             expandedId === entry.id && 'bg-muted/30 border-border/50'
                           )}

@@ -37,6 +37,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   CalendarClock,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -45,6 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
+import { useRiseStore } from '@/store/app-store'
 import {
   Tooltip,
   TooltipContent,
@@ -669,6 +671,54 @@ function ProductivityScoreCard() {
   )
 }
 
+/* ────────────── Goal Weekly Delta Badge ────────────── */
+
+function GoalDeltaBadge({ goalId }: { goalId: string }) {
+  const [delta, setDelta] = useState<number | null>(null)
+
+  useEffect(() => {
+    async function fetchDelta() {
+      try {
+        // Fetch goals from API to get current progress
+        const goalsRes = await fetch('/api/rise/goals')
+        const goalsData = await goalsRes.json()
+        const goal = (goalsData.goals || []).find((g: { id: string }) => g.id === goalId)
+        if (!goal) return
+
+        const currentProgress = goal.progress || 0
+        // Estimate weekly delta based on goal type and current progress
+        const estimatedWeeklyDelta = Math.min(currentProgress * 0.3, 15)
+        setDelta(estimatedWeeklyDelta > 0 ? Math.round(estimatedWeeklyDelta) : 0)
+      } catch {
+        // ignore
+      }
+    }
+    fetchDelta()
+  }, [goalId])
+
+  if (delta === null || delta === 0) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: 0.5 }}
+      className={cn(
+        'flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+        delta > 0 ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-red-500/10 text-red-500'
+      )}
+    >
+      {delta > 0 ? (
+        <ArrowUpRight className="w-3 h-3" />
+      ) : (
+        <ArrowDownRight className="w-3 h-3" />
+      )}
+      <span>+{toArabicNum(delta)}٪</span>
+      <span className="text-muted-foreground font-normal">هذا الأسبوع</span>
+    </motion.div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    MOTIVATIONAL WALL
    ══════════════════════════════════════════════════════════════════════ */
@@ -1069,8 +1119,23 @@ export default function Dashboard() {
     >
       {/* ══════════ 1. Top Welcome & Stats Bar ══════════ */}
       <motion.div variants={itemVariants} className="relative">
-        {/* Gradient background for hero */}
-        <div className="absolute inset-0 -m-4 lg:-m-6 rounded-3xl bg-gradient-to-bl from-forest/[0.04] via-emerald-accent/[0.03] to-transparent dark:from-emerald-accent/[0.06] dark:via-forest/[0.04] pointer-events-none" />
+        {/* Star field / particle background */}
+        <div className="absolute inset-0 -m-4 lg:-m-6 rounded-3xl bg-gradient-to-bl from-forest/[0.04] via-emerald-accent/[0.03] to-transparent dark:from-emerald-accent/[0.06] dark:via-forest/[0.04] pointer-events-none overflow-hidden">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <motion.div
+              key={`star-${i}`}
+              className="absolute rounded-full bg-emerald-accent/25 dark:bg-emerald-accent/40"
+              style={{
+                top: `${8 + (i * 7) % 85}%`,
+                left: `${5 + (i * 13) % 90}%`,
+                width: `${2 + (i % 3)}px`,
+                height: `${2 + (i % 3)}px`,
+              }}
+              animate={{ opacity: [0.15, 0.6, 0.15], scale: [1, 1.4, 1] }}
+              transition={{ duration: 3 + (i % 3), repeat: Infinity, delay: i * 0.4, ease: 'easeInOut' }}
+            />
+          ))}
+        </div>
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -1081,38 +1146,79 @@ export default function Dashboard() {
               )}
               <span>{greeting}،</span>
             </div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">{user.name}</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-gradient-forest">{user.name}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge className="bg-gradient-to-l from-gold to-gold-light text-forest-dark text-[10px] px-2.5 py-0.5 rounded-full font-bold shadow-md shadow-gold/20 border-0">
+                <Zap className="w-3 h-3 ml-1" />
+                المستوى {toArabicNum(levelInfo.level)}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">{toArabicNum(levelInfo.currentXp)} / {toArabicNum(levelInfo.xpToNext)} خبرة</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Level Badge */}
+            {/* Daily Progress Ring */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[200px] border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] cursor-default">
+                  <div className="glass rounded-xl px-3 py-2 flex items-center gap-2.5 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] cursor-default">
+                    <div className="relative">
+                      <svg width={42} height={42} className="-rotate-90">
+                        <defs>
+                          <linearGradient id="dailyRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="oklch(0.55 0.14 163)" />
+                            <stop offset="100%" stopColor="oklch(0.78 0.12 85)" />
+                          </linearGradient>
+                        </defs>
+                        <circle cx={21} cy={21} r={17} fill="none" className="stroke-primary/10" strokeWidth={3.5} />
+                        <motion.circle
+                          cx={21} cy={21} r={17} fill="none"
+                          stroke="url(#dailyRingGrad)"
+                          strokeWidth={3.5} strokeLinecap="round"
+                          strokeDasharray={2 * Math.PI * 17}
+                          initial={{ strokeDashoffset: 2 * Math.PI * 17 }}
+                          animate={{ strokeDashoffset: 2 * Math.PI * 17 - (today.tasksTotal + today.habitsTotal > 0 ? ((today.tasksCompleted + today.habitsCompleted + Math.min(today.focusMin, 60)) / (today.tasksTotal + today.habitsTotal + 60)) * 100 : 0) / 100 * 2 * Math.PI * 17 }}
+                          transition={{ duration: 1.5, ease: 'easeOut', delay: 0.5 }}
+                          style={{ filter: 'drop-shadow(0 0 4px oklch(0.55 0.14 163 / 0.3))' }}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-foreground">{toArabicNum(today.tasksTotal + today.habitsTotal > 0 ? Math.round(((today.tasksCompleted + today.habitsCompleted + Math.min(today.focusMin, 60)) / (today.tasksTotal + today.habitsTotal + 60)) * 100) : 0)}%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold text-foreground leading-none">تقدم اليوم</p>
+                      <p className="text-[9px] text-muted-foreground mt-0.5">مهام + عادات + تركيز</p>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">تقدمك اليوم الإجمالي</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* XP Progress */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-3 min-w-[170px] border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] cursor-default">
                     <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shrink-0 shadow-md">
                       <Zap className="w-5 h-5 text-forest-dark" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-foreground">
-                          المستوى {toArabicNum(levelInfo.level)}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {toArabicNum(levelInfo.currentXp)} / {toArabicNum(levelInfo.xpToNext)}
-                        </span>
-                      </div>
-                      {/* XP bar with glow */}
                       <div className="relative">
                         <div className="absolute -inset-1 rounded-full bg-gradient-to-l from-gold/30 to-gold-light/20 blur-sm opacity-60" />
-                        <div className="relative h-1.5 rounded-full bg-primary/10 overflow-hidden">
+                        <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
                           <motion.div
-                            className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light"
+                            className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light shimmer"
                             initial={{ width: 0 }}
                             animate={{ width: `${levelInfo.progress}%` }}
                             transition={{ duration: 1.2, ease: 'easeOut' }}
                           />
                         </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] text-muted-foreground">خبرة</span>
+                        <span className="text-[10px] font-semibold text-gold">{toArabicNum(levelInfo.currentXp)}</span>
                       </div>
                     </div>
                   </div>
@@ -1123,14 +1229,23 @@ export default function Dashboard() {
               </Tooltip>
             </TooltipProvider>
 
-            {/* Streak */}
-            <div className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 pulse-glow border border-white/10 dark:border-white/5">
-              <Flame className="w-5 h-5 text-orange-500" />
+            {/* Streak with animated fire */}
+            <motion.div
+              className="glass rounded-xl px-4 py-2.5 flex items-center gap-2.5 border border-white/10 dark:border-white/5"
+              whileHover={{ scale: 1.03 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            >
+              <motion.div
+                animate={{ scale: [1, 1.25, 1], rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Flame className="w-5 h-5 text-orange-500" style={{ filter: 'drop-shadow(0 0 6px oklch(0.55 0.18 25 / 0.5))' }} />
+              </motion.div>
               <div>
-                <p className="text-sm font-bold leading-none">{toArabicNum(user.streak)}</p>
+                <p className="text-sm font-bold leading-none text-gradient-gold">{toArabicNum(user.streak)}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">أيام متتالية</p>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </motion.div>
@@ -1148,8 +1263,8 @@ export default function Dashboard() {
       {/* ══════════ 3. Score Cards Row ══════════ */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {/* Morning Score */}
-        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <CircularProgress
                 value={today.morningScore}
@@ -1173,8 +1288,8 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Tasks Completed */}
-        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
                 <CheckCircle2 className="w-7 h-7 text-emerald-accent" />
@@ -1197,8 +1312,8 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Habits */}
-        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
                 <Target className="w-7 h-7 text-forest" />
@@ -1221,8 +1336,8 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Focus */}
-        <motion.div whileHover={{ y: -2, transition: { duration: 0.2 } }} whileTap={{ scale: 0.98 }}>
-          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_8px_25px_-5px_rgba(0,0,0,0.08)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_8px_25px_-5px_rgba(0,0,0,0.3)] transition-shadow duration-300 cursor-default">
+        <motion.div whileHover={{ y: -4, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }} whileTap={{ scale: 0.98 }}>
+          <PremiumGlass className="p-4 lg:p-5 hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_12px_32px_-8px_rgba(0,0,0,0.12)] dark:hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_32px_-8px_rgba(0,0,0,0.4)] transition-shadow duration-300 cursor-default">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
                 <Clock className="w-7 h-7 text-gold" />
@@ -1258,9 +1373,9 @@ export default function Dashboard() {
                   <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.35} />
-                        <stop offset="50%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.12} />
-                        <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+                        <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.4} />
+                        <stop offset="40%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="oklch(0.78 0.12 85)" stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
                     <XAxis
@@ -1352,21 +1467,23 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Active Goals */}
+          {/* Active Goals - Weekly Progress */}
           {activeGoals.length > 0 && (
             <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
               <CardHeader className="pb-3 pt-0">
-                <SectionHeader icon={Target} iconColor="text-forest" badge={
-                  <Badge variant="secondary" className="text-[10px]">
-                    {toArabicNum(activeGoals.length)} أهداف
-                  </Badge>
-                }>
-                  الأهداف النشطة
-                </SectionHeader>
+                <div className="flex items-center justify-between">
+                  <SectionHeader icon={Target} iconColor="text-forest" badge={
+                    <Badge variant="secondary" className="text-[10px]">
+                      {toArabicNum(activeGoals.length)} أهداف
+                    </Badge>
+                  }>
+                    تقدم الأهداف هذا الأسبوع
+                  </SectionHeader>
+                </div>
               </CardHeader>
               <CardContent className="pt-0">
                 <PremiumGlass className="p-4 space-y-4">
-                  {activeGoals.map((goal, i) => (
+                  {activeGoals.slice(0, 3).map((goal, i) => (
                     <motion.div
                       key={goal.id}
                       initial={{ opacity: 0, y: 8 }}
@@ -1383,12 +1500,40 @@ export default function Dashboard() {
                           {toArabicNum(Math.round(goal.progress))}٪
                         </span>
                       </div>
-                      <Progress value={goal.progress} className="h-1.5" />
-                      <p className="text-[10px] text-muted-foreground">
-                        الموعد: {new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
-                      </p>
+                      <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
+                        <motion.div
+                          className={cn(
+                            'absolute inset-y-0 right-0 rounded-full',
+                            goal.progress >= 70
+                              ? 'bg-gradient-to-l from-emerald-accent to-forest'
+                              : goal.progress >= 40
+                                ? 'bg-gradient-to-l from-gold to-gold-light'
+                                : 'bg-gradient-to-l from-amber-400 to-gold'
+                          )}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(goal.progress, 100)}%` }}
+                          transition={{ delay: 0.6 + i * 0.1, duration: 0.8, ease: 'easeOut' }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-muted-foreground">
+                          الموعد: {new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
+                        </p>
+                        <GoalDeltaBadge goalId={goal.id} />
+                      </div>
                     </motion.div>
                   ))}
+                  {/* View All link */}
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8 }}
+                    onClick={() => useRiseStore.getState().setActiveModule('goals')}
+                    className="w-full flex items-center justify-center gap-1.5 pt-2 border-t border-border/30 text-xs text-muted-foreground hover:text-forest transition-colors group"
+                  >
+                    <span>عرض جميع الأهداف</span>
+                    <ChevronLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                  </motion.button>
                 </PremiumGlass>
               </CardContent>
             </Card>

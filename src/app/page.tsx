@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
+import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -192,6 +193,9 @@ export default function RiseOSApp() {
     () => (mountedRef.current = true, true),
     () => false
   )
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts()
 
   useEffect(() => {
     // Seed demo data on first load
@@ -502,6 +506,9 @@ export default function RiseOSApp() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {/* Keyboard Shortcuts Dialog */}
+      <KeyboardShortcutsDialog />
 
       {/* ══════════ FAB - Quick Add ══════════ */}
       <AnimatePresence>

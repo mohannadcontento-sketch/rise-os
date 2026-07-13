@@ -98,6 +98,13 @@ const TYPE_GRADIENT_OVERLAYS: Record<Goal['type'], string> = {
   weekly: 'from-chart-4/8 via-chart-4/3 to-transparent',
 }
 
+const TYPE_ICONS: Record<Goal['type'], string> = {
+  annual: '🏆',
+  quarterly: '📅',
+  monthly: '🎯',
+  weekly: '⚡',
+}
+
 const TYPE_GRADIENT_STOPS: Record<Goal['type'], { from: string; to: string }> = {
   annual: { from: 'oklch(0.78 0.12 85)', to: 'oklch(0.65 0.08 85)' },
   quarterly: { from: 'oklch(0.55 0.14 163)', to: 'oklch(0.35 0.10 160)' },
@@ -467,6 +474,51 @@ export function GoalsView() {
           </motion.div>
         </div>
 
+        {/* ── Vision Board ── */}
+        {filteredGoals.filter(g => g.vision).length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-accent" />
+              <h2 className="text-sm font-semibold">لوحة الرؤية</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredGoals.filter(g => g.vision).slice(0, 3).map((goal, i) => (
+                <motion.div
+                  key={goal.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 + i * 0.1 }}
+                  className={cn('premium-card rounded-2xl p-4 relative overflow-hidden')}
+                >
+                  <div className={cn('absolute inset-0 bg-gradient-to-br pointer-events-none', TYPE_GRADIENT_OVERLAYS[goal.type])} />
+                  <div className="relative">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">{TYPE_ICONS[goal.type]}</span>
+                      <h3 className="text-sm font-bold truncate">{goal.title}</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{goal.vision}</p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full shimmer bg-gradient-to-l from-emerald-accent to-forest"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${goal.progress}%` }}
+                          transition={{ duration: 1, ease: 'easeOut', delay: 0.5 }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-accent">{goal.progress}%</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {/* ── Filter Tabs with emerald underline ── */}
         <Tabs
           value={activeType}
@@ -657,7 +709,13 @@ function GoalCard({
               </defs>
             </svg>
             <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground">
-              {goal.progress}%
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.08 + 0.5 }}
+              >
+                {goal.progress}%
+              </motion.span>
             </span>
           </div>
 
@@ -669,14 +727,15 @@ function GoalCard({
                 variant="outline"
                 className={cn('text-[10px] px-2 py-0 rounded-full font-medium', TYPE_COLORS[goal.type])}
               >
+                <span className="ml-1">{TYPE_ICONS[goal.type]}</span>
                 {TYPE_LABELS[goal.type]}
               </Badge>
             </div>
 
-            {/* Progress bar */}
+            {/* Progress bar with shimmer */}
             <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden mb-2 max-w-xs">
               <motion.div
-                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest shimmer"
                 initial={{ width: 0 }}
                 animate={{ width: `${goal.progress}%` }}
                 transition={{ duration: 0.8, ease: 'easeOut', delay: index * 0.08 }}

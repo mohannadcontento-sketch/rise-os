@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   BarChart3,
   Zap,
@@ -23,6 +23,9 @@ import {
   AlertCircle,
   Lightbulb,
   Info,
+  BarChart3 as BarChartIcon,
+  ArrowLeftRight,
+  Medal,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -136,6 +139,38 @@ function GlassTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
+/* ────────────── Animated Counter ────────────── */
+
+function AnimatedCounter({ target, className }: { target: number; className?: string }) {
+  const mv = useMotionValue(0)
+  const display = useTransform(mv, v => Math.round(v))
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const controls = animate(mv, target, { duration: 0.8, ease: 'easeOut' })
+    return controls.stop
+  }, [mv, target])
+  useEffect(() => {
+    const unsubscribe = display.on('change', v => {
+      if (ref.current) ref.current.textContent = String(v)
+    })
+    return unsubscribe
+  }, [display])
+  return <span ref={ref} className={className}>{target}</span>
+}
+
+/* ────────────── Performance Grade ────────────── */
+
+function getGrade(score: number): { letter: string; color: string; glow: string } {
+  if (score >= 95) return { letter: 'A+', color: 'text-emerald-accent', glow: 'glow-emerald' }
+  if (score >= 85) return { letter: 'A', color: 'text-emerald-accent', glow: '' }
+  if (score >= 75) return { letter: 'B+', color: 'text-forest', glow: '' }
+  if (score >= 65) return { letter: 'B', color: 'text-forest', glow: '' }
+  if (score >= 55) return { letter: 'C+', color: 'text-gold', glow: '' }
+  if (score >= 45) return { letter: 'C', color: 'text-gold', glow: '' }
+  if (score >= 35) return { letter: 'D', color: 'text-orange-500', glow: '' }
+  return { letter: 'F', color: 'text-red-500', glow: '' }
+}
+
 /* ────────────── Component ────────────── */
 
 export default function Analytics() {
@@ -145,6 +180,17 @@ export default function Analytics() {
   const [focus, setFocus] = useState<FocusData | null>(null)
   const [health, setHealth] = useState<HealthData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [compareMode, setCompareMode] = useState(false)
+
+  // Average score for performance grade
+  const avgScore = useMemo(() => {
+    if (!dashboard?.dailyScores?.length) return 0
+    const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
+    const recent = dashboard.dailyScores.slice(-days)
+    return recent.length > 0 ? Math.round(recent.reduce((s, d) => s + d.score, 0) / recent.length) : 0
+  }, [dashboard, period])
+
+  const grade = getGrade(avgScore)
 
   useEffect(() => {
     async function load() {
@@ -481,7 +527,7 @@ export default function Analytics() {
                     <stat.icon className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
+                    <p className="text-2xl font-bold"><AnimatedCounter target={stat.value} /></p>
                     <p className="text-xs text-muted-foreground">{stat.label}</p>
                   </div>
                 </div>
@@ -490,6 +536,60 @@ export default function Analytics() {
           </motion.div>
         ))}
       </div>
+
+      {/* Performance Grade Hero */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
+        <div className={cn("premium-card rounded-2xl overflow-hidden relative", grade.glow)}>
+          <div className="noise-bg" />
+          <div className="relative z-10 p-6 flex flex-col sm:flex-row items-center gap-6">
+            <div className="flex flex-col items-center">
+              <motion.div
+                key={grade.letter}
+                initial={{ scale: 0.5, opacity: 0, rotate: -15 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              >
+                <p className={cn("text-8xl font-black", grade.color)}>{grade.letter}</p>
+              </motion.div>
+              <div className="flex items-center gap-1 mt-1">
+                <Medal className="w-3.5 h-3.5 text-gold" />
+                <p className="text-xs text-muted-foreground">التقدير العام</p>
+              </div>
+            </div>
+            <div className="flex-1 text-center sm:text-right space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">متوسط الدرجة ({periodLabels[period]})</p>
+                <p className="text-4xl font-black text-foreground">
+                  <AnimatedCounter target={avgScore} className={grade.color} />
+                  <span className="text-lg text-muted-foreground">/ ١٠٠</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-muted-foreground">الأفضل:</span>
+                  {bestDay && <span className="font-bold text-emerald-accent">{bestDay.name} ({bestDay.avg})</span>}
+                </div>
+                <span className="text-muted-foreground/30">|</span>
+                <div className="flex items-center gap-1 text-xs">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setCompareMode(!compareMode)}
+                    className={cn(
+                      "flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all",
+                      compareMode
+                        ? "bg-emerald-accent/15 text-emerald-accent border border-emerald-accent/30"
+                        : "bg-muted/30 text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <ArrowLeftRight className="w-3 h-3" />
+                    {compareMode ? 'إخفاء المقارنة' : 'وضع المقارنة'}
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Best Day with Trophy */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -646,7 +746,14 @@ export default function Analytics() {
                         dot={{ r: 3, fill: 'oklch(0.55 0.14 163)' }}
                         activeDot={{ r: 5 }}
                         name="الدرجة"
-                      />
+                      >
+                        <defs>
+                          <linearGradient id="prodLineGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.15} />
+                            <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                      </Line>
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -724,7 +831,14 @@ export default function Analytics() {
                       fill="oklch(0.55 0.14 163)"
                       radius={[6, 6, 0, 0]}
                       name="ساعات"
-                    />
+                    >
+                      <defs>
+                        <linearGradient id="focusBarGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={1} />
+                          <stop offset="100%" stopColor="oklch(0.35 0.10 160)" stopOpacity={0.6} />
+                        </linearGradient>
+                      </defs>
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -824,6 +938,76 @@ export default function Analytics() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Auto-generated Arabic insights */}
+            <div className="grid sm:grid-cols-2 gap-3 mb-4">
+              {bestDay && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="p-3.5 rounded-xl bg-emerald-accent/5 border border-emerald-accent/10"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingUp className="w-4 h-4 text-emerald-accent" />
+                    <span className="text-xs font-semibold text-emerald-accent">أكثر إنتاجية</span>
+                  </div>
+                  <p className="text-sm text-foreground">أنت أكثر إنتاجية يوم {bestDay.name} 📈</p>
+                </motion.div>
+              )}
+              {personalRecords && personalRecords.longestStreak >= 3 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="p-3.5 rounded-xl bg-gold/5 border border-gold/10"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Flame className="w-4 h-4 text-gold" />
+                    <span className="text-xs font-semibold text-gold">سلسلة قوية</span>
+                  </div>
+                  <p className="text-sm text-foreground">أطول سلسلة عادات: {personalRecords.longestStreak} يوم متتالي 🔥</p>
+                </motion.div>
+              )}
+              {personalRecords && personalRecords.longestFocus >= 30 && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="p-3.5 rounded-xl bg-sky-500/5 border border-sky-500/10"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Brain className="w-4 h-4 text-sky-500" />
+                    <span className="text-xs font-semibold text-sky-500">تركيز عميق</span>
+                  </div>
+                  <p className="text-sm text-foreground">أطول جلسة تركيز: {personalRecords.longestFocus} دقيقة 🧠</p>
+                </motion.div>
+              )}
+              {weeklyComparison && weeklyComparison.scoreChange !== 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={cn(
+                    "p-3.5 rounded-xl border",
+                    weeklyComparison.scoreChange >= 0
+                      ? "bg-emerald-accent/5 border-emerald-accent/10"
+                      : "bg-red-500/5 border-red-500/10"
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    {weeklyComparison.scoreChange >= 0
+                      ? <TrendingUp className="w-4 h-4 text-emerald-accent" />
+                      : <TrendingDown className="w-4 h-4 text-red-500" />
+                    }
+                    <span className={cn("text-xs font-semibold", weeklyComparison.scoreChange >= 0 ? "text-emerald-accent" : "text-red-500")}>
+                      {weeklyComparison.scoreChange >= 0 ? 'تحسن' : 'تراجع'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground">
+                    {weeklyComparison.scoreChange >= 0
+                      ? `أداؤك أفضل بـ ${Math.abs(weeklyComparison.scoreChange)}% هذا الأسبوع 📈`
+                      : `أداؤك انخفض بـ ${Math.abs(weeklyComparison.scoreChange)}% ⚠️`
+                    }
+                  </p>
+                </motion.div>
+              )}
+            </div>
             <div className="grid sm:grid-cols-2 gap-3">
               {insights.map((item, i) => (
                 <motion.div
