@@ -404,19 +404,56 @@ ALTER TABLE "UserAIUsage" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "UserStorage" ENABLE ROW LEVEL SECURITY;
 
 -- ==================== RLS POLICIES ====================
--- Users can only access their own data
-DO $$ 
+-- Tables with direct "userId" column — auto-generate policies
+DO $$
 DECLARE
   tbl TEXT;
-  col TEXT := 'userId';
 BEGIN
-  FOR tbl IN SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT IN ('User', 'UserAIUsage', 'UserStorage') LOOP
-    EXECUTE format('CREATE POLICY "Users can view own data" ON %I FOR SELECT USING (%I = auth.uid()::text)', tbl, col);
-    EXECUTE format('CREATE POLICY "Users can insert own data" ON %I FOR INSERT WITH CHECK (%I = auth.uid()::text)', tbl, col);
-    EXECUTE format('CREATE POLICY "Users can update own data" ON %I FOR UPDATE USING (%I = auth.uid()::text)', tbl, col);
-    EXECUTE format('CREATE POLICY "Users can delete own data" ON %I FOR DELETE USING (%I = auth.uid()::text)', tbl, col);
+  -- Only tables that actually HAVE a "userId" column
+  FOR tbl IN
+    SELECT t.table_name
+    FROM information_schema.tables t
+    JOIN information_schema.columns c ON c.table_name = t.table_name AND c.table_schema = t.table_schema
+    WHERE t.table_schema = 'public'
+      AND c.column_name = 'userId'
+      AND t.table_name NOT IN ('User', 'UserAIUsage', 'UserStorage', 'SubTask', 'Milestone', 'HabitLog')
+  LOOP
+    EXECUTE format('CREATE POLICY "Users can view own data" ON %I FOR SELECT USING ("userId" = auth.uid()::text)', tbl);
+    EXECUTE format('CREATE POLICY "Users can insert own data" ON %I FOR INSERT WITH CHECK ("userId" = auth.uid()::text)', tbl);
+    EXECUTE format('CREATE POLICY "Users can update own data" ON %I FOR UPDATE USING ("userId" = auth.uid()::text)', tbl);
+    EXECUTE format('CREATE POLICY "Users can delete own data" ON %I FOR DELETE USING ("userId" = auth.uid()::text)', tbl);
   END LOOP;
 END $$;
+
+-- SubTask: access through parent Task's userId
+CREATE POLICY "SubTask select via task owner" ON "SubTask" FOR SELECT
+  USING ("taskId" IN (SELECT "id" FROM "Task" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "SubTask insert via task owner" ON "SubTask" FOR INSERT
+  WITH CHECK ("taskId" IN (SELECT "id" FROM "Task" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "SubTask update via task owner" ON "SubTask" FOR UPDATE
+  USING ("taskId" IN (SELECT "id" FROM "Task" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "SubTask delete via task owner" ON "SubTask" FOR DELETE
+  USING ("taskId" IN (SELECT "id" FROM "Task" WHERE "userId" = auth.uid()::text));
+
+-- Milestone: access through parent Goal's userId
+CREATE POLICY "Milestone select via goal owner" ON "Milestone" FOR SELECT
+  USING ("goalId" IN (SELECT "id" FROM "Goal" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "Milestone insert via goal owner" ON "Milestone" FOR INSERT
+  WITH CHECK ("goalId" IN (SELECT "id" FROM "Goal" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "Milestone update via goal owner" ON "Milestone" FOR UPDATE
+  USING ("goalId" IN (SELECT "id" FROM "Goal" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "Milestone delete via goal owner" ON "Milestone" FOR DELETE
+  USING ("goalId" IN (SELECT "id" FROM "Goal" WHERE "userId" = auth.uid()::text));
+
+-- HabitLog: access through parent Habit's userId
+CREATE POLICY "HabitLog select via habit owner" ON "HabitLog" FOR SELECT
+  USING ("habitId" IN (SELECT "id" FROM "Habit" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "HabitLog insert via habit owner" ON "HabitLog" FOR INSERT
+  WITH CHECK ("habitId" IN (SELECT "id" FROM "Habit" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "HabitLog update via habit owner" ON "HabitLog" FOR UPDATE
+  USING ("habitId" IN (SELECT "id" FROM "Habit" WHERE "userId" = auth.uid()::text));
+CREATE POLICY "HabitLog delete via habit owner" ON "HabitLog" FOR DELETE
+  USING ("habitId" IN (SELECT "id" FROM "Habit" WHERE "userId" = auth.uid()::text));
 
 -- User table: users can read/update their own row
 CREATE POLICY "Users view own profile" ON "User" FOR SELECT USING ("id" = auth.uid()::text);
