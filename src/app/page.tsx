@@ -27,6 +27,7 @@ import type { ModuleId } from '@/store/app-store'
 import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
 import { PWAInstallPrompt, ConnectionStatus, BluetoothSharePanel, OfflineBanner } from '@/lib/pwa'
 import { LogOut, Bluetooth } from 'lucide-react'
+import { apiPost, apiGet } from '@/lib/api-fetch'
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -310,8 +311,8 @@ export default function RiseOSApp() {
   useKeyboardShortcuts()
 
   useEffect(() => {
-    if (auth) {
-      fetch('/api/rise/seed', { method: 'POST' }).catch(() => {})
+    if (auth && auth.accessToken && auth.accessToken !== 'guest') {
+      apiPost('/api/rise/seed').catch(() => {})
     }
   }, [auth])
 
@@ -347,12 +348,12 @@ export default function RiseOSApp() {
     const controller = new AbortController()
     const timer = setTimeout(() => {
       Promise.all([
-        fetch('/api/rise/tasks', { signal: controller.signal }).then(r => r.json()).catch(() => ({ tasks: [] })),
-        fetch('/api/rise/habits', { signal: controller.signal }).then(r => r.json()).catch(() => ({ habits: [] })),
-        fetch('/api/rise/goals', { signal: controller.signal }).then(r => r.json()).catch(() => ({ goals: [] })),
-        fetch('/api/rise/journal', { signal: controller.signal }).then(r => r.json()).catch(() => ({ journals: [] })),
-        fetch('/api/rise/books', { signal: controller.signal }).then(r => r.json()).catch(() => ({ books: [] })),
-        fetch('/api/rise/knowledge', { signal: controller.signal }).then(r => r.json()).catch(() => ({ items: [] })),
+        apiGet('/api/rise/tasks').then(r => r.json()).catch(() => ({ tasks: [] })),
+        apiGet('/api/rise/habits').then(r => r.json()).catch(() => ({ habits: [] })),
+        apiGet('/api/rise/goals').then(r => r.json()).catch(() => ({ goals: [] })),
+        apiGet('/api/rise/journal').then(r => r.json()).catch(() => ({ journals: [] })),
+        apiGet('/api/rise/books').then(r => r.json()).catch(() => ({ books: [] })),
+        apiGet('/api/rise/knowledge').then(r => r.json()).catch(() => ({ items: [] })),
       ]).then(([tasksData, habitsData, goalsData, journalsData, booksData, knowledgeData]) => {
         if (controller.signal.aborted) return
         setSearchResults({

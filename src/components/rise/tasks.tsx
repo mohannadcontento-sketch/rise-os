@@ -77,6 +77,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
@@ -219,7 +220,7 @@ export function Tasks() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/tasks')
+      const res = await apiFetch('/api/rise/tasks')
       const data = await res.json()
       setTasks(data.tasks || [])
       setProjects(data.projects || [])
@@ -270,14 +271,10 @@ export function Tasks() {
     const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await fetch('/api/rise/tasks', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
-      })
+      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
       if (!isDone) {
         notifyTaskComplete(task.title, task.xpReward)
-        fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+        apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
         // Check if completing this task unblocks dependent tasks
         checkUnblockedTasks(task.id)
       }
@@ -290,13 +287,9 @@ export function Tasks() {
     const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await fetch('/api/rise/tasks', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
-      })
+      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
       if (newStatus === 'done') {
-        fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: task.xpReward || 10, reason: `task:${task.id}` }) }).catch(() => {})
+        apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
         // Check if completing this task unblocks dependent tasks
         checkUnblockedTasks(task.id)
       }
@@ -308,7 +301,7 @@ export function Tasks() {
   const deleteTask = async (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
     try {
-      await fetch(`/api/rise/tasks?id=${taskId}`, { method: 'DELETE' })
+      await apiDelete(`/api/rise/tasks?id=${taskId}`)
     } catch {
       fetchData()
     }
@@ -321,13 +314,9 @@ export function Tasks() {
     }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await fetch('/api/rise/tasks', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: task.id,
-          subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
-        }),
+      await apiPut('/api/rise/tasks', {
+        id: task.id,
+        subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
       })
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
@@ -346,11 +335,7 @@ export function Tasks() {
       }
       if (formProject !== 'none') body.projectId = formProject
       if (formDependsOn.length > 0) body.dependsOn = formDependsOn.join(',')
-      await fetch('/api/rise/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      await apiPost('/api/rise/tasks', body)
       setFormTitle('')
       setFormDesc('')
       setFormPriority('medium')
@@ -452,11 +437,7 @@ export function Tasks() {
 
     try {
       await Promise.all(updates.map((u) =>
-        fetch('/api/rise/tasks', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(u),
-        })
+        apiPut('/api/rise/tasks', u)
       ))
     } catch { fetchData() }
   }, [tasks, fetchData])

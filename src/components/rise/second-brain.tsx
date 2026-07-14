@@ -51,6 +51,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -146,7 +147,7 @@ export default function SecondBrain() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/knowledge')
+      const res = await apiFetch('/api/rise/knowledge')
       const data = await res.json()
       setItems(data.items || [])
     } catch {
@@ -166,17 +167,13 @@ export default function SecondBrain() {
     if (!text) return
     setIsCapturing(true)
     try {
-      await fetch('/api/rise/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'idea',
-          title: text,
-          content: '',
-          folder: 'general',
-          tags: null,
-          source: null,
-        }),
+      await apiPost('/api/rise/knowledge', {
+        type: 'idea',
+        title: text,
+        content: '',
+        folder: 'general',
+        tags: null,
+        source: null,
       })
       setQuickCapture('')
       toast.success('تم التقاط الفكرة بسرعة!')
@@ -191,17 +188,13 @@ export default function SecondBrain() {
   const handleAdd = async () => {
     if (!newTitle.trim()) return
     try {
-      await fetch('/api/rise/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: newType,
-          title: newTitle,
-          content: newContent,
-          folder: newFolder,
-          tags: newTags ? JSON.stringify(newTags.split(',').map((t) => t.trim()).filter(Boolean)) : null,
-          source: newSource || null,
-        }),
+      await apiPost('/api/rise/knowledge', {
+        type: newType,
+        title: newTitle,
+        content: newContent,
+        folder: newFolder,
+        tags: newTags ? JSON.stringify(newTags.split(',').map((t) => t.trim()).filter(Boolean)) : null,
+        source: newSource || null,
       })
       toast.success('تمت الإضافة بنجاح')
       setNewTitle('')
@@ -217,11 +210,7 @@ export default function SecondBrain() {
 
   const handleUpdate = async (id: string, data: Partial<KnowledgeItem>) => {
     try {
-      await fetch('/api/rise/knowledge', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...data }),
-      })
+      await apiPut('/api/rise/knowledge', { id, ...data })
       fetchItems()
     } catch {
       toast.error('فشل في التحديث')
@@ -230,7 +219,7 @@ export default function SecondBrain() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/rise/knowledge?id=${id}`, { method: 'DELETE' })
+      await apiDelete(`/api/rise/knowledge?id=${id}`)
       toast.success('تم الحذف')
       fetchItems()
     } catch {

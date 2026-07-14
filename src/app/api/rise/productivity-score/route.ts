@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 import { getToday } from '@/lib/rise-utils'
 
-const USER_ID = 'rise-default-user'
-
-async function calculateScoreForDate(date: string) {
-  const [tasks, habits, habitLogs, focusSessions, morningLog] = await Promise.all([
-    db.task.findMany({ where: { userId: USER_ID } }),
-    db.habit.findMany({ where: { userId: USER_ID } }),
-    db.habitLog.findMany({ where: { habit: { userId: USER_ID }, date } }),
-    db.focusSession.findMany({
-      where: { userId: USER_ID, startedAt: { gte: new Date(date + 'T00:00:00'), lt: new Date(date + 'T23:59:59') } },
-    }),
-    db.morningLog.findFirst({ where: { userId: USER_ID, date } }),
+async function calculateScoreForDate(supabase: ReturnType<typeof getSupabase>, userId: string, date: string) {
+  const [tasksRes, habitsRes, habitLogsRes, focusSessionsRes, morningLogRes] = await Promise.all([
+    supabase.from('Task').select('*').eq('userId', userId),
+    supabase.from('Habit').select('*').eq('userId', userId),
+    supabase.from('HabitLog').select('*').eq('userId', userId).eq('date', date),
+    supabase.from('FocusSession').select('*').eq('userId', userId).gte('startedAt', date + 'T00:00:00').lt('startedAt', date + 'T23:59:59'),
+    supabase.from('MorningLog').select('*').eq('userId', userId).eq('date', date).single(),
   ])
+
+  const tasks = tasksRes.data || []
+  const habits = habitsRes.data || []
+  const habitLogs = habitLogsRes.data || []
+  const focusSessions = focusSessionsRes.data || []
+  const morningLog = morningLogRes.data
 
   const totalTasks = tasks.length
   const completedTasks = tasks.filter(
-    (t) => t.status === 'done' && t.completedAt && t.completedAt.toISOString().startsWith(date)
+    (t) => t.status === 'done' && t.completedAt?.startsWith(date)
   ).length
   const tasksScore = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
 
@@ -25,12 +28,12 @@ async function calculateScoreForDate(date: string) {
   const completedHabits = habitLogs.filter((l) => l.completed).length
   const habitsScore = totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0
 
-  const todayFocusMin = focusSessions.filter((s) => s.completed).reduce((sum, s) => sum + s.actualMin, 0)
+  const todayFocusMin = focusSessions.filter((s) => s.completed).reduce((sum, s) => sum + (s.actualMin || 0), 0)
   const focusScore = Math.min((todayFocusMin / 120) * 100, 100)
 
   const morningScore = morningLog?.score || 0
 
-  const user = await db.user.findUnique({ where: { id: USER_ID } })
+  const { data: user } = await supabase.from('User').select('streak').eq('id', userId).single()
   const streakScore = Math.min(((user?.streak || 0) / 30) * 100, 100)
 
   return Math.min(Math.round(
@@ -40,8 +43,10 @@ async function calculateScoreForDate(date: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    await ensureDb()
-    // Support fetching scores for specific dates (comma-separated)
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ score: 0, breakdown: {} })
+    const supabase = getSupabase()
+
     const { searchParams } = new URL(req.url)
     const datesParam = searchParams.get('dates')
 
@@ -49,31 +54,35 @@ export async function GET(req: NextRequest) {
       const dates = datesParam.split(',').filter(Boolean)
       const scores = await Promise.all(
         dates.map(async (date) => {
-          const score = await calculateScoreForDate(date.trim())
+          const score = await calculateScoreForDate(supabase, userId, date.trim())
           return { date: date.trim(), score }
         })
       )
       return NextResponse.json({ scores })
     }
 
-    // Default: calculate for today
+    // Default: calculate for today with breakdown
     const today = getToday()
-    const score = await calculateScoreForDate(today)
+    const score = await calculateScoreForDate(supabase, userId, today)
 
     // Recalculate breakdown for today specifically
-    const [tasks, habits, todayHabitLogs, focusSessions, morningLog] = await Promise.all([
-      db.task.findMany({ where: { userId: USER_ID } }),
-      db.habit.findMany({ where: { userId: USER_ID } }),
-      db.habitLog.findMany({ where: { habit: { userId: USER_ID }, date: today } }),
-      db.focusSession.findMany({
-        where: { userId: USER_ID, startedAt: { gte: new Date(today) } },
-      }),
-      db.morningLog.findFirst({ where: { userId: USER_ID, date: today } }),
+    const [tasksRes, habitsRes, todayHabitLogsRes, focusSessionsRes, morningLogRes] = await Promise.all([
+      supabase.from('Task').select('*').eq('userId', userId),
+      supabase.from('Habit').select('*').eq('userId', userId),
+      supabase.from('HabitLog').select('*').eq('userId', userId).eq('date', today),
+      supabase.from('FocusSession').select('*').eq('userId', userId).gte('startedAt', today + 'T00:00:00').lt('startedAt', today + 'T23:59:59'),
+      supabase.from('MorningLog').select('*').eq('userId', userId).eq('date', today).single(),
     ])
+
+    const tasks = tasksRes.data || []
+    const habits = habitsRes.data || []
+    const todayHabitLogs = todayHabitLogsRes.data || []
+    const focusSessions = focusSessionsRes.data || []
+    const morningLog = morningLogRes.data
 
     const totalTasks = tasks.length
     const completedTasksToday = tasks.filter(
-      (t) => t.status === 'done' && t.completedAt && t.completedAt.toISOString().startsWith(today)
+      (t) => t.status === 'done' && t.completedAt?.startsWith(today)
     ).length
     const tasksScore = totalTasks > 0 ? (completedTasksToday / totalTasks) * 100 : 0
 
@@ -81,12 +90,12 @@ export async function GET(req: NextRequest) {
     const completedHabitsToday = todayHabitLogs.filter((l) => l.completed).length
     const habitsScore = totalHabits > 0 ? (completedHabitsToday / totalHabits) * 100 : 0
 
-    const todayFocusMin = focusSessions.filter((s) => s.completed).reduce((sum, s) => sum + s.actualMin, 0)
+    const todayFocusMin = focusSessions.filter((s) => s.completed).reduce((sum, s) => sum + (s.actualMin || 0), 0)
     const focusScore = Math.min((todayFocusMin / 120) * 100, 100)
 
     const morningScoreVal = morningLog?.score || 0
 
-    const user = await db.user.findUnique({ where: { id: USER_ID } })
+    const { data: user } = await supabase.from('User').select('streak').eq('id', userId).single()
     const streakScore = Math.min(((user?.streak || 0) / 30) * 100, 100)
 
     let grade: string

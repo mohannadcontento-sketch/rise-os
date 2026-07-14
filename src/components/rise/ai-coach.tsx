@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { apiPost } from '@/lib/api-fetch'
 import { useRiseStore } from '@/store/app-store'
 
 /* ────────────── Types ────────────── */
@@ -206,14 +207,10 @@ export default function AICoach() {
         content: m.content,
       }))
 
-      const res = await fetch('/api/rise/ai-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          userId: auth?.userId || 'guest',
-          history: chatHistory,
-        }),
+      const res = await apiPost('/api/rise/ai-chat', {
+        message,
+        userId: auth?.userId || 'guest',
+        history: chatHistory,
       })
 
       const data = await res.json()

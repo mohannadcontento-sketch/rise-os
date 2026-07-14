@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import {
   format,
   startOfMonth,
@@ -118,10 +119,10 @@ export default function CalendarView() {
   const fetchAllData = useCallback(async () => {
     try {
       const [tasksRes, habitsRes, journalRes, focusRes] = await Promise.all([
-        fetch('/api/rise/tasks'),
-        fetch('/api/rise/habits'),
-        fetch('/api/rise/journal'),
-        fetch('/api/rise/focus'),
+        apiFetch('/api/rise/tasks'),
+        apiFetch('/api/rise/habits'),
+        apiFetch('/api/rise/journal'),
+        apiFetch('/api/rise/focus'),
       ])
       const [tasksData, habitsData, journalData, focusData] = await Promise.all([
         tasksRes.json(),

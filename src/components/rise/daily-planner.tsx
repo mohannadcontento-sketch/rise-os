@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -677,7 +678,7 @@ export default function DailyPlanner() {
   // Fetch items from API
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetch(`/api/rise/planner?date=${todayStr}`)
+      const res = await apiFetch(`/api/rise/planner?date=${todayStr}`)
       const data = await res.json()
       setItems(data.items || [])
     } catch {
@@ -740,11 +741,7 @@ export default function DailyPlanner() {
     setItems((prev) => [...prev, optimistic])
 
     try {
-      const res = await fetch('/api/rise/planner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: todayStr, section: sectionId, title: text, time: timeStr }),
-      })
+      const res = await apiPost('/api/rise/planner', { date: todayStr, section: sectionId, title: text, time: timeStr })
       const created = await res.json()
       setItems((prev) => prev.map((i) => i.id === tempId ? created : i))
     } catch {
@@ -764,11 +761,7 @@ export default function DailyPlanner() {
     )
 
     try {
-      await fetch('/api/rise/planner', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, completed: newCompleted }),
-      })
+      await apiPut('/api/rise/planner', { id, completed: newCompleted })
     } catch {
       setItems((prev) =>
         prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
@@ -779,7 +772,7 @@ export default function DailyPlanner() {
   const deleteItem = useCallback(async (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id))
     try {
-      await fetch(`/api/rise/planner?id=${id}`, { method: 'DELETE' })
+      await apiDelete(`/api/rise/planner?id=${id}`)
     } catch {
       fetchItems()
     }

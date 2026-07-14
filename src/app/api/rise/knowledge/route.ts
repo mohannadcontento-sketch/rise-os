@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
-const USER_ID = 'rise-default-user'
+export async function GET(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ items: [] })
+  const supabase = getSupabase()
 
-export async function GET() {
   try {
-    await ensureDb()
-    const items = await db.knowledgeItem.findMany({ where: { userId: USER_ID }, orderBy: { updatedAt: 'desc' } })
+    const { data: items, error } = await supabase
+      .from('KnowledgeItem')
+      .select('*')
+      .eq('userId', userId)
+      .order('updatedAt', { ascending: false })
+
+    if (error) throw error
     return NextResponse.json({ items })
   } catch (error) {
     console.error('Knowledge GET error:', error)
@@ -15,34 +23,64 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const body = await req.json()
-    const item = await db.knowledgeItem.create({ data: { userId: USER_ID, ...body } })
-    return NextResponse.json(item)
+    const { data, error } = await supabase
+      .from('KnowledgeItem')
+      .insert({ userId, ...body })
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json(data)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }
 }
 
 export async function PUT(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const { id, ...body } = await req.json()
-    const item = await db.knowledgeItem.update({ where: { id, userId: USER_ID }, data: body })
-    return NextResponse.json(item)
+    const { data, error } = await supabase
+      .from('KnowledgeItem')
+      .update(body)
+      .eq('id', id)
+      .eq('userId', userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json(data)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }
 }
 
 export async function DELETE(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
-    await db.knowledgeItem.delete({ where: { id, userId: USER_ID } })
+
+    const { error } = await supabase
+      .from('KnowledgeItem')
+      .delete()
+      .eq('id', id)
+      .eq('userId', userId)
+
+    if (error) throw error
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })

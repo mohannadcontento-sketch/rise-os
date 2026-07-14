@@ -45,6 +45,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
 import {
@@ -497,7 +498,7 @@ function ProductivityScoreCard() {
   const [prodData, setProdData] = useState<ProductivityScoreData | null>(null)
 
   useEffect(() => {
-    fetch('/api/rise/productivity-score')
+    apiFetch('/api/rise/productivity-score')
       .then((r) => r.json())
       .then((data) => setProdData(data))
       .catch(() => {})
@@ -660,7 +661,7 @@ function GoalDeltaBadge({ goalId }: { goalId: string }) {
     async function fetchDelta() {
       try {
         // Fetch goals from API to get current progress
-        const goalsRes = await fetch('/api/rise/goals')
+        const goalsRes = await apiFetch('/api/rise/goals')
         const goalsData = await goalsRes.json()
         const goal = (goalsData.goals || []).find((g: { id: string }) => g.id === goalId)
         if (!goal) return
@@ -917,7 +918,7 @@ function OnThisDayWidget() {
         const lastWeekStr = `${lastWeek.getFullYear()}-${String(lastWeek.getMonth() + 1).padStart(2, '0')}-${String(lastWeek.getDate()).padStart(2, '0')}`
         const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-${String(lastMonth.getDate()).padStart(2, '0')}`
 
-        const res = await fetch(`/api/rise/productivity-score?dates=${lastWeekStr},${lastMonthStr}`)
+        const res = await apiFetch(`/api/rise/productivity-score?dates=${lastWeekStr},${lastMonthStr}`)
         if (res.ok) {
           const json = await res.json()
           setData({
@@ -1025,7 +1026,7 @@ export default function Dashboard() {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch('/api/rise/dashboard')
+      const res = await apiFetch('/api/rise/dashboard')
       if (!res.ok) throw new Error('فشل في تحميل البيانات')
       const json = await res.json()
       setData(json)

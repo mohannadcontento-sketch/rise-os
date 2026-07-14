@@ -55,6 +55,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
@@ -323,8 +324,8 @@ export function Projects() {
   const fetchData = useCallback(async () => {
     try {
       const [projRes, taskRes] = await Promise.all([
-        fetch('/api/rise/projects'),
-        fetch('/api/rise/tasks'),
+        apiFetch('/api/rise/projects'),
+        apiFetch('/api/rise/tasks'),
       ])
       const projData = await projRes.json()
       const taskData = await taskRes.json()
@@ -387,17 +388,9 @@ export function Projects() {
     setSubmitting(true)
     try {
       if (editingProject) {
-        await fetch('/api/rise/projects', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editingProject.id, name: formName.trim(), description: formDesc.trim() || null, color: formColor }),
-        })
+        await apiPut('/api/rise/projects', { id: editingProject.id, name: formName.trim(), description: formDesc.trim() || null, color: formColor })
       } else {
-        await fetch('/api/rise/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: formName.trim(), description: formDesc.trim() || null, color: formColor }),
-        })
+        await apiPost('/api/rise/projects', { name: formName.trim(), description: formDesc.trim() || null, color: formColor })
       }
       setDialogOpen(false)
       fetchData()
@@ -412,7 +405,7 @@ export function Projects() {
     setProjects((prev) => prev.filter((p) => p.id !== id))
     if (selectedProjectId === id) setSelectedProjectId(null)
     try {
-      await fetch(`/api/rise/projects?id=${id}`, { method: 'DELETE' })
+      await apiDelete(`/api/rise/projects?id=${id}`)
     } catch {
       fetchData()
     }
@@ -422,15 +415,11 @@ export function Projects() {
     if (!newTaskTitle.trim() || !selectedProjectId) return
     setTaskSubmitting(true)
     try {
-      await fetch('/api/rise/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTaskTitle.trim(),
-          priority: newTaskPriority,
-          projectId: selectedProjectId,
-          dueDate: newTaskDueDate || null,
-        }),
+      await apiPost('/api/rise/tasks', {
+        title: newTaskTitle.trim(),
+        priority: newTaskPriority,
+        projectId: selectedProjectId,
+        dueDate: newTaskDueDate || null,
       })
       setNewTaskTitle('')
       setNewTaskPriority('medium')
@@ -450,11 +439,7 @@ export function Projects() {
     const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await fetch('/api/rise/tasks', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
-      })
+      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }
@@ -463,7 +448,7 @@ export function Projects() {
   const deleteTask = async (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
     try {
-      await fetch(`/api/rise/tasks?id=${taskId}`, { method: 'DELETE' })
+      await apiDelete(`/api/rise/tasks?id=${taskId}`)
     } catch {
       fetchData()
     }
@@ -473,11 +458,7 @@ export function Projects() {
     const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await fetch('/api/rise/tasks', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: newStatus, completedAt: optimistic.completedAt }),
-      })
+      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }

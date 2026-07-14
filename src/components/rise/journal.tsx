@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -203,7 +204,7 @@ export default function Journal() {
   /* ─── Fetch ─── */
   const fetchJournal = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/journal')
+      const res = await apiFetch('/api/rise/journal')
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -236,15 +237,11 @@ export default function Journal() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/rise/journal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await apiPost('/api/rise/journal', {
           ...form,
           tags: tagInput,
           date: today,
-        }),
-      })
+        })
       if (res.ok) {
         toast.success('تم حفظ اليوميات بنجاح ✨')
         setIsEditing(false)

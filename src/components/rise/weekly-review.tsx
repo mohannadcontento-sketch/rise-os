@@ -31,6 +31,7 @@ import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -183,8 +184,8 @@ export default function WeeklyReview() {
     setIsAutoFilling(true)
     try {
       const [tasksRes, focusRes] = await Promise.all([
-        fetch('/api/rise/tasks'),
-        fetch('/api/rise/focus'),
+        apiFetch('/api/rise/tasks'),
+        apiFetch('/api/rise/focus'),
       ])
       const tasksData = await tasksRes.json()
       const focusData = await focusRes.json()

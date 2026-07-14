@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateZhipuToken, ADMIN_EMAIL } from '@/lib/supabase'
-import { db } from '@/lib/db'
+import { getSupabase, generateZhipuToken } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 // Fallback local responses
 const fallbackResponses: Record<string, string[]> = {
@@ -75,22 +75,27 @@ async function callZhipuAI(messages: { role: string; content: string }[]): Promi
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, userId, history } = await request.json()
+    const userId = await requireAuth(request)
+    if (!userId) return NextResponse.json({ error: 'غير مصرح', offline: true }, { status: 401 })
+    const supabase = getSupabase()
 
-    if (!message || !userId) {
-      return NextResponse.json({ error: 'الرسالة ومعرف المستخدم مطلوبان' }, { status: 400 })
+    const { message, history } = await request.json()
+
+    if (!message) {
+      return NextResponse.json({ error: 'الرسالة مطلوبة' }, { status: 400 })
     }
 
     // Check AI usage limits
     const now = new Date()
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-    // Check if user has a usage record for this month
-    let usage = await db.userAIUsage.findUnique({
-      where: { userId },
-    })
+    const { data: usage } = await supabase
+      .from('UserAIUsage')
+      .select('*')
+      .eq('userId', userId)
+      .single()
 
-    const defaultLimit = 100 // Default monthly limit
+    const defaultLimit = 100
 
     if (usage && usage.monthlyLimit > 0 && usage.monthlyUsed >= usage.monthlyLimit) {
       return NextResponse.json({
@@ -103,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try ZhipuAI
-    const chatHistory = (history || []).slice(-6) // Keep last 6 messages for context
+    const chatHistory = (history || []).slice(-6)
     chatHistory.push({ role: 'user', content: message })
 
     const aiResponse = await callZhipuAI(chatHistory)
@@ -121,29 +126,34 @@ export async function POST(request: NextRequest) {
     // Track usage (only for API calls, not fallback)
     if (!isFallback) {
       if (usage) {
-        await db.userAIUsage.update({
-          where: { userId },
-          data: {
-            monthlyUsed: { increment: 1 },
-            totalUsed: { increment: 1 },
-            month: monthKey,
-          },
+        const newUsed = (usage.monthlyUsed || 0) + 1
+        const newTotal = (usage.totalUsed || 0) + 1
+        const limit = usage.monthlyLimit || defaultLimit
+
+        await supabase.from('UserAIUsage').upsert({
+          userId,
+          monthlyUsed: newUsed,
+          totalUsed: newTotal,
+          monthlyLimit: limit,
+          month: monthKey,
         })
       } else {
-        await db.userAIUsage.create({
-          data: {
-            userId,
-            monthlyUsed: 1,
-            totalUsed: 1,
-            monthlyLimit: defaultLimit,
-            month: monthKey,
-          },
+        await supabase.from('UserAIUsage').upsert({
+          userId,
+          monthlyUsed: 1,
+          totalUsed: 1,
+          monthlyLimit: defaultLimit,
+          month: monthKey,
         })
       }
     }
 
     // Get updated usage
-    const updatedUsage = await db.userAIUsage.findUnique({ where: { userId } })
+    const { data: updatedUsage } = await supabase
+      .from('UserAIUsage')
+      .select('*')
+      .eq('userId', userId)
+      .single()
 
     return NextResponse.json({
       response: responseText,

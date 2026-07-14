@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
-const USER_ID = 'rise-default-user'
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ todayLog: null, items: [{ id: "mi1", title: "الاستيقاظ مبكراً", icon: "🌅", completed: false }, { id: "mi2", title: "شرب كوب ماء", icon: "💧", completed: false }, { id: "mi3", title: "الصلاة", icon: "🤲", completed: false }, { id: "mi4", title: "تمارين رياضية", icon: "🏋️", completed: false }, { id: "mi5", title: "تأمل وتهدئة", icon: "🧘", completed: false }, { id: "mi6", title: "قراءة صفحات", icon: "📖", completed: false }, { id: "mi7", title: "تخطيط اليوم", icon: "📋", completed: false }] })
+    const supabase = getSupabase()
+
     const today = getToday()
-    const logs = await db.morningLog.findMany({
-      where: { userId: USER_ID, date: { in: getLast30Days() } },
-      orderBy: { date: 'desc' },
-    })
-    const todayLog = logs.find(l => l.date === today)
-    return NextResponse.json({ logs, todayLog })
+    const last30 = getLast30Days()
+
+    const { data: logs, error } = await supabase
+      .from('MorningLog')
+      .select('*')
+      .eq('userId', userId)
+      .in('date', last30)
+      .order('date', { ascending: false })
+
+    if (error) throw error
+
+    const todayLog = (logs || []).find((l) => l.date === today) || null
+    return NextResponse.json({ logs: logs || [], todayLog })
   } catch (error) {
     console.error('Morning GET error:', error)
     return NextResponse.json({
@@ -33,16 +42,43 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+    const supabase = getSupabase()
+
     const body = await req.json()
     const today = getToday()
-    const existing = await db.morningLog.findFirst({ where: { userId: USER_ID, date: body.date || today } })
+    const date = body.date || today
+
+    // Upsert: check if log exists for this date
+    const { data: existing } = await supabase
+      .from('MorningLog')
+      .select('id')
+      .eq('userId', userId)
+      .eq('date', date)
+      .single()
+
+    let result
     if (existing) {
-      const log = await db.morningLog.update({ where: { id: existing.id }, data: body })
-      return NextResponse.json(log)
+      const { data, error } = await supabase
+        .from('MorningLog')
+        .update(body)
+        .eq('id', existing.id)
+        .select()
+        .single()
+      if (error) throw error
+      result = data
+    } else {
+      const { data, error } = await supabase
+        .from('MorningLog')
+        .insert({ userId, date, ...body })
+        .select()
+        .single()
+      if (error) throw error
+      result = data
     }
-    const log = await db.morningLog.create({ data: { userId: USER_ID, date: today, ...body } })
-    return NextResponse.json(log)
+
+    return NextResponse.json(result)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }

@@ -57,6 +57,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -208,7 +209,7 @@ export default function Finance() {
   /* ─── Fetch ─── */
   const fetchFinance = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/finance')
+      const res = await apiFetch('/api/rise/finance')
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -232,11 +233,7 @@ export default function Finance() {
     }
     setSaving(true)
     try {
-      const res = await fetch('/api/rise/finance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
+      const res = await apiPost('/api/rise/finance', form)
       if (res.ok) {
         toast.success('تم إضافة السجل بنجاح ✨')
         // Show budget impact
@@ -269,7 +266,7 @@ export default function Finance() {
   const handleDelete = async (id: string) => {
     setDeleting(id)
     try {
-      const res = await fetch(`/api/rise/finance?id=${id}`, { method: 'DELETE' })
+      const res = await apiDelete(`/api/rise/finance?id=${id}`)
       if (res.ok) {
         toast.success('تم حذف السجل')
         fetchFinance()

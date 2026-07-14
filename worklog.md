@@ -922,3 +922,261 @@ Stage Summary:
 Unresolved:
 - Vercel preview deployment has password protection (Vercel configuration, not code)
 - Dev server crashes due to sandbox memory limits (not a production issue)
+
+---
+Task ID: 4-b
+Agent: Sub-agent
+Task: Convert /src/app/api/rise/tasks/route.ts from Prisma/SQLite to Supabase
+
+Work Log:
+- Replaced `import { db, ensureDb } from '@/lib/db'` with Supabase imports
+- Added `requireAuth` from `@/lib/auth` for user authentication
+- Added `getSupabase` from `@/lib/supabase` for data access
+- Removed hardcoded `USER_ID` constant
+- Converted GET: uses `supabase.from('Task').select('*, subtasks:SubTask(*), project:Project(name, color)')` with userId filter and order
+- Converted POST: uses `supabase.from('Task').insert({ userId, ...body })` with single select including relations
+- Converted PUT: uses `supabase.from('Task').update(body)` with id + userId eq filters
+- Converted DELETE: uses `supabase.from('Task').delete()` with id + userId eq filters
+- All methods include error logging and preserve existing fallback data in catch blocks
+- All methods use `requireAuth` pattern: check if response, cast to string
+
+Stage Summary:
+- Tasks API route fully migrated from Prisma/SQLite to Supabase
+- 4 HTTP methods (GET, POST, PUT, DELETE) converted
+- Auth-protected with requireAuth, user-scoped queries
+- Fallback data preserved for error resilience
+
+---
+Task ID: 4-e
+Agent: Sub-agent
+Task: Convert health, finance, and focus API routes from Prisma/SQLite to Supabase
+
+Work Log:
+- Converted /src/app/api/rise/health/route.ts (GET, POST)
+  - GET: Fetches HealthLog for last 30 days using getLast30Days(), filters by userId, finds todayLog
+  - POST: Upserts — checks for existing record by userId+date, updates if found, inserts otherwise
+- Converted /src/app/api/rise/finance/route.ts (GET, POST, DELETE)
+  - GET: Fetches FinanceRecord ordered by date desc, scoped to userId
+  - POST: Inserts new FinanceRecord with userId
+  - DELETE: Deletes by id + userId filter from searchParams
+- Converted /src/app/api/rise/focus/route.ts (GET, POST, PUT)
+  - GET: Fetches FocusSession ordered by startedAt desc, limit 50, scoped to userId
+  - POST: Inserts new FocusSession with userId
+  - PUT: Updates by id + userId filter, extracts id from body
+- All 3 files: replaced db/ensureDb imports with getSupabase + requireAuth
+- All 3 files: removed hardcoded USER_ID, every handler starts with requireAuth pattern
+- All 3 files: preserved existing fallback data in catch blocks
+- Lint passes clean
+
+Stage Summary:
+- 3 API route files converted from Prisma/SQLite to Supabase
+- 8 HTTP handlers total (2+3+3) all auth-protected and user-scoped
+- Consistent pattern: requireAuth → getSupabase → supabase.from().select/insert/update/delete
+
+---
+Task ID: 4-c
+Agent: Sub-agent
+Task: Convert habits, goals, and journal API routes from Prisma/SQLite to Supabase
+
+Work Log:
+- Converted /src/app/api/rise/habits/route.ts (GET, POST, PUT, DELETE)
+  - GET: Fetches Habit + HabitLog (last 30 days via getLast30Days), filters logs in JS, returns { habits, logs }
+  - POST: Inserts Habit with userId using .select().single()
+  - PUT: Updates Habit with .eq('id', id).eq('userId', userId)
+  - DELETE: Deletes Habit with .eq('id', id).eq('userId', userId)
+- Converted /src/app/api/rise/goals/route.ts (GET, POST, PUT, DELETE)
+  - GET: Fetches goals with nested milestones using `select('*, milestones:Milestone(*)')`, ordered by createdAt desc
+  - POST/PUT/DELETE: Standard CRUD with userId filter
+- Converted /src/app/api/rise/journal/route.ts (GET, POST)
+  - GET: Fetches today's journal via .eq('date', today).single() + recent 30 journals ordered by createdAt desc
+  - POST: Upsert pattern — checks for existing journal by userId+date, updates if found, inserts otherwise
+- All 3 files: replaced db/ensureDb imports with getSupabase + requireAuth
+- All 3 files: removed hardcoded USER_ID, every handler starts with requireAuth pattern
+- All 3 files: preserved existing fallback data in catch blocks
+- Lint passes clean (0 errors)
+
+Stage Summary:
+- 3 API route files converted from Prisma/SQLite to Supabase
+- 10 HTTP handlers total (4+4+2) all auth-protected and user-scoped
+- Consistent pattern: requireAuth → getSupabase → supabase.from().select/insert/update/delete
+
+---
+Task ID: 4-d
+Agent: Main
+Task: Convert 3 API routes (projects, books, knowledge) from Prisma/SQLite to Supabase
+
+Files Modified:
+- src/app/api/rise/projects/route.ts
+- src/app/api/rise/books/route.ts
+- src/app/api/rise/knowledge/route.ts
+
+Work Log:
+- Replaced `import { db, ensureDb } from '@/lib/db'` with `import { getSupabase } from '@/lib/supabase'` and `import { requireAuth } from '@/lib/auth'`
+- Removed hardcoded `USER_ID = 'rise-default-user'` from all 3 files
+- Added auth check pattern to every handler: `requireAuth(req)` → guard with NextResponse → extract `userId`
+- Added `const supabase = getSupabase()` after auth in every handler
+- Converted all Prisma queries to Supabase client queries:
+  - GET: `supabase.from('Table').select('*').eq('userId', userId).order(...)` → `{ items/books/projects }`
+  - POST: `supabase.from('Table').insert({ userId, ...body }).select().single()`
+  - PUT: `supabase.from('Table').update(body).eq('id', id).eq('userId', userId).select().single()`
+  - DELETE: `supabase.from('Table').delete().eq('id', id).eq('userId', userId)`
+- Preserved all existing fallback data in catch blocks
+- Lint passes clean (0 errors)
+
+Stage Summary:
+- 3 API route files converted from Prisma/SQLite to Supabase
+- 10 HTTP handlers total (4+3+3) all auth-protected and user-scoped
+- Consistent pattern across all files: requireAuth → getSupabase → supabase query with userId filtering
+
+---
+Task ID: 4-a
+Agent: Main
+Task: Convert `/src/app/api/rise/dashboard/route.ts` from Prisma/SQLite to Supabase
+
+Work Log:
+- Replaced `import { db, ensureDb } from '@/lib/db'` with `import { requireAuth } from '@/lib/auth'` and `import { getSupabase } from '@/lib/supabase'`
+- Added `NextRequest` param to GET handler for auth header extraction
+- Added `requireAuth` guard — returns 401 immediately if unauthenticated
+- Replaced hardcoded `USER_ID` with real authenticated `userId`
+- Converted all 12 Prisma queries to Supabase query builder:
+  - User: `.from('User').select('*').eq('id', userId).single()`
+  - Tasks: `.from('Task').select('*, project:Project(name, color)')` with join
+  - Habits: `.from('Habit').select('*')`
+  - HabitLog: `.from('HabitLog').select('*, habit:Habit(userId)').eq('habit.userId', userId).eq('date', today)`
+  - FocusSession: `.from('FocusSession').select('*').gte('startedAt', last30[0])`
+  - HealthLog/MorningLog: `.limit(1)` then take `[0]` (safe null handling)
+  - UserAchievement, DailyScore, Project, Goal, Book, Journal: standard `.eq('userId', userId)` queries
+- Removed Prisma `.toISOString()` calls — Supabase returns ISO strings directly, used `String()` wrapper for safety
+- Kept `fallbackDashboard()` function completely intact
+- Kept `export const maxDuration = 30`
+- Lint passes cleanly
+
+Stage Summary:
+- 1 API route file converted (dashboard GET — 12 parallel Supabase queries)
+- Auth-protected with `requireAuth`, user-scoped with real userId
+- Same response structure preserved; fallback data unchanged
+
+---
+Task ID: 4-f
+Agent: Main
+Task: Convert 5 API route files from Prisma/SQLite to Supabase
+
+Work Log:
+- Converted `src/app/api/rise/morning/route.ts`:
+  - GET: `supabase.from('MorningLog').select('*').eq('userId', userId).in('date', last30).order('date', { ascending: false })`
+  - POST: Check existing via `.eq('date', date).single()`, then update or insert (upsert pattern)
+  - Fallback: `{ todayLog: null, items: [7 morning items] }`
+
+- Converted `src/app/api/rise/planner/route.ts`:
+  - GET: `.from('PlannerItem').select('*').eq('userId', userId).eq('date', date).order('section').order('order')`
+  - POST: Get max order via `.order('order', { ascending: false }).limit(1).single()`, then insert
+  - PUT/DELETE: Standard with `.eq('id', id).eq('userId', userId)`
+  - Fallback: `{ items: [] }`
+
+- Converted `src/app/api/rise/productivity-score/route.ts`:
+  - Extracted `calculateScoreForDate(supabase, userId, date)` helper
+  - 5 parallel Supabase queries: Task, Habit, HabitLog, FocusSession, MorningLog
+  - Date filtering: FocusSession `.gte('startedAt', date+'T00:00:00').lt('startedAt', date+'T23:59:59')`
+  - Task completedAt filtering in JS: `tasks.filter(t => t.status === 'done' && t.completedAt?.startsWith(date))`
+  - Streak from `.from('User').select('streak')`
+  - Same scoring formula: tasks×0.25 + habits×0.25 + focus×0.20 + morning×0.20 + streak×0.10
+  - Fallback: `{ score: 0, breakdown: {} }`
+
+- Converted `src/app/api/rise/earn-xp/route.ts`:
+  - Fetch user XP data via `.from('User').select('xp, level, xpToNextLevel').eq('id', userId).single()`
+  - Level-up loop using `calculateXpForLevel()` from rise-utils
+  - Update via `.from('User').update({ xp, level, xpToNextLevel }).eq('id', userId)`
+  - Response includes `leveled` and `newLevel` flags
+  - Fallback: `{ xp: 0, leveled: false, newLevel: 1 }`
+
+- Converted `src/app/api/rise/ai-chat/route.ts`:
+  - `generateZhipuToken` now imported from `@/lib/supabase`
+  - Removed `ADMIN_EMAIL` import (unused)
+  - Usage check: `.from('UserAIUsage').select('*').eq('userId', userId).single()`
+  - Usage tracking: `.from('UserAIUsage').upsert({ userId, monthlyUsed, totalUsed, monthlyLimit, month })`
+  - Entire fallback response system preserved unchanged
+  - Fallback: `{ response: getFallbackResponse('default'), fallback: true, reason: 'error' }`
+
+- All 5 files use the common pattern: `requireAuth(req)` → `getSupabase()`
+- Lint passes cleanly (no errors)
+
+Stage Summary:
+- 5 API route files converted from Prisma/SQLite to Supabase
+- Auth-protected with `requireAuth`, user-scoped with real userId
+- Same response structures and fallback data preserved
+- No breaking changes to API contracts
+
+---
+Task ID: 5-b
+Agent: Main
+Task: Update frontend components to use `apiFetch` from `@/lib/api-fetch`
+
+Work Log:
+- Added `import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'` to 5 files
+- **projects.tsx**: Replaced 9 fetch calls (2 GET, 2 POST, 3 PUT, 2 DELETE) → apiFetch/apiPost/apiPut/apiDelete
+- **deep-work.tsx**: Replaced 5 fetch calls (2 GET, 2 POST, 1 PUT) → apiFetch/apiPost/apiPut
+- **health.tsx**: Replaced 2 fetch calls (1 GET, 1 POST) → apiFetch/apiPost
+- **finance.tsx**: Replaced 3 fetch calls (1 GET, 1 POST, 1 DELETE) → apiFetch/apiPost/apiDelete
+- **reading.tsx**: Replaced 3 fetch calls (1 GET, 1 POST, 1 PUT) → apiFetch/apiPost/apiPut
+- All redundant `'Content-Type': 'application/json'` headers removed
+- Fire-and-forget `apiPost('/api/rise/earn-xp', {...}).catch(() => {})` pattern preserved
+- Non-`/api/rise/*` fetch calls left untouched (none existed in these 5 files)
+- Verified zero remaining raw `fetch('/api/rise/...')` in all 5 files
+- Lint passes (1 pre-existing error in unrelated file)
+
+Stage Summary:
+- 22 total fetch calls replaced across 5 component files
+- All `/api/rise/*` calls now go through centralized `apiFetch` wrapper (auto auth headers)
+- No behavioral changes — same Response-based API preserved
+
+---
+Task ID: 5-a
+Agent: Main
+Task: Migrate 5 frontend components from raw `fetch` to `apiFetch` utility for `/api/rise/*` calls
+
+Work Log:
+- Read all 5 component files and identified every `fetch('/api/rise/...')` call
+- Replaced 4 fetch calls in `dashboard.tsx` → `apiFetch` (all GET)
+- Replaced 9 fetch calls in `tasks.tsx` → `apiFetch`, `apiPost`, `apiPut`, `apiDelete`
+- Replaced 6 fetch calls in `habits.tsx` → `apiFetch`, `apiPost`, `apiPut`, `apiFetch` (DELETE with body)
+- Replaced 4 fetch calls in `goals.tsx` → `apiFetch`, `apiPost`, `apiPut`, `apiFetch` (DELETE with body)
+- Replaced 2 fetch calls in `journal.tsx` → `apiFetch`, `apiPost`
+- Total: 25 fetch calls replaced across 5 files
+- Kept fire-and-forget XP earn calls as `apiPost(...).catch(() => {})` per requirements
+- DELETE with JSON body used `apiFetch(url, { method: 'DELETE', body: ... })` since `apiDelete` doesn't accept body
+- All redundant `Content-Type: application/json` headers removed
+- Verified zero remaining raw `fetch()` calls in all 5 files
+- ESLint passes cleanly on all 5 changed files (only pre-existing error in unrelated admin route)
+
+Stage Summary:
+- All `/api/rise/*` frontend calls now use centralized `apiFetch` wrapper with auto auth headers
+- No behavioral changes — same Response-based API preserved
+- Background fire-and-forget XP calls preserved as `.catch(() => {})` pattern
+
+---
+Task ID: 5-c
+Agent: Main
+Task: Update 10 frontend component files to use apiFetch from @/lib/api-fetch instead of raw fetch for /api/rise/* calls
+
+Work Log:
+- Added `import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'` to all 10 files (only needed functions imported per file)
+- morning-routine.tsx: Replaced 3 calls (1 GET, 1 POST, 1 fire-and-forget POST)
+- daily-planner.tsx: Replaced 4 calls (1 GET with query params, 1 POST, 1 PUT, 1 DELETE)
+- second-brain.tsx: Replaced 5 calls (1 GET, 2 POST, 1 PUT, 1 DELETE)
+- analytics.tsx: Replaced 4 calls (4 parallel GETs: dashboard, habits, focus, health)
+- calendar.tsx: Replaced 4 calls (4 parallel GETs: tasks, habits, journal, focus)
+- weekly-review.tsx: Replaced 2 calls (2 parallel GETs: tasks, focus)
+- monthly-review.tsx: Replaced 4 calls (4 parallel GETs: tasks, focus, habits, journal)
+- ai-coach.tsx: Replaced 1 call (POST to ai-chat)
+- settings.tsx: Replaced 6 calls (2 admin GETs, 1 admin POST, 1 admin DELETE with body, 1 dashboard GET, 1 export GET)
+- sidebar.tsx: Replaced 1 call (dashboard GET)
+- Admin DELETE with JSON body used `apiFetch(url, { method: 'DELETE', body: ... })` since apiDelete doesn't accept body
+- All redundant `Content-Type: application/json` and `Authorization` headers removed (apiFetch handles both automatically)
+- Verified zero remaining raw `fetch('/api/rise/...')` in all 10 updated files
+- Lint passes cleanly (only pre-existing error in unrelated admin route file)
+
+Stage Summary:
+- 34 total fetch calls replaced across 10 component files
+- All /api/rise/* frontend calls in the 10 assigned files now use centralized apiFetch wrapper
+- No behavioral changes — same Response-based API preserved
+- Fire-and-forget XP calls preserved as `.catch(() => {})` pattern

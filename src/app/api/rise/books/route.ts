@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
-const USER_ID = 'rise-default-user'
+export async function GET(req: NextRequest) {
+  const userId = await requireAuth(req)
+  if (!userId) {
+    return NextResponse.json({
+      books: [
+        { id: 'b1', title: 'العمل العميق', author: 'كال نيوبورت', status: 'reading', progress: 61, totalPages: 296, currentPage: 180 },
+        { id: 'b2', title: 'عادات ذرية', author: 'جيمس كلير', status: 'completed', progress: 100, totalPages: 320, currentPage: 320 },
+      ],
+    })
+  }
+  const supabase = getSupabase()
 
-export async function GET() {
   try {
-    await ensureDb()
-    const books = await db.book.findMany({ where: { userId: USER_ID }, orderBy: { createdAt: 'desc' } })
+    const { data: books, error } = await supabase
+      .from('Book')
+      .select('*')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+
+    if (error) throw error
     return NextResponse.json({ books })
   } catch (error) {
     console.error('Books GET error:', error)
@@ -20,22 +35,42 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const body = await req.json()
-    const book = await db.book.create({ data: { userId: USER_ID, ...body } })
-    return NextResponse.json(book)
+    const { data, error } = await supabase
+      .from('Book')
+      .insert({ userId, ...body })
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json(data)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }
 }
 
 export async function PUT(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const { id, ...body } = await req.json()
-    const book = await db.book.update({ where: { id, userId: USER_ID }, data: body })
-    return NextResponse.json(book)
+    const { data, error } = await supabase
+      .from('Book')
+      .update(body)
+      .eq('id', id)
+      .eq('userId', userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json(data)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }

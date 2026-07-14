@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
-
-const USER_ID = 'rise-default-user'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ items: [] })
+    const supabase = getSupabase()
+
     const { searchParams } = new URL(req.url)
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
 
-    const items = await db.plannerItem.findMany({
-      where: { userId: USER_ID, date },
-      orderBy: [{ section: 'asc' }, { order: 'asc' }],
-    })
+    const { data: items, error } = await supabase
+      .from('PlannerItem')
+      .select('*')
+      .eq('userId', userId)
+      .eq('date', date)
+      .order('section')
+      .order('order')
 
-    return NextResponse.json({ items })
+    if (error) throw error
+
+    return NextResponse.json({ items: items || [] })
   } catch (error) {
     console.error('Planner GET error:', error)
     return NextResponse.json({ items: [] })
@@ -23,28 +30,40 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+    const supabase = getSupabase()
+
     const body = await req.json()
     const { date, section, title, time } = body
 
     // Get next order for this section/date
-    const maxOrder = await db.plannerItem.findFirst({
-      where: { userId: USER_ID, date, section },
-      orderBy: { order: 'desc' },
-      select: { order: true },
-    })
-    const nextOrder = (maxOrder?.order ?? -1) + 1
+    const { data: maxItem } = await supabase
+      .from('PlannerItem')
+      .select('order')
+      .eq('userId', userId)
+      .eq('date', date)
+      .eq('section', section)
+      .order('order', { ascending: false })
+      .limit(1)
+      .single()
 
-    const item = await db.plannerItem.create({
-      data: {
-        userId: USER_ID,
+    const nextOrder = (maxItem?.order ?? -1) + 1
+
+    const { data: item, error } = await supabase
+      .from('PlannerItem')
+      .insert({
+        userId,
         date,
         section,
         title,
         time: time || null,
         order: nextOrder,
-      },
-    })
+      })
+      .select()
+      .single()
+
+    if (error) throw error
 
     return NextResponse.json(item)
   } catch (error) {
@@ -54,13 +73,21 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+    const supabase = getSupabase()
+
     const { id, ...body } = await req.json()
 
-    const item = await db.plannerItem.update({
-      where: { id, userId: USER_ID },
-      data: body,
-    })
+    const { data: item, error } = await supabase
+      .from('PlannerItem')
+      .update(body)
+      .eq('id', id)
+      .eq('userId', userId)
+      .select()
+      .single()
+
+    if (error) throw error
 
     return NextResponse.json(item)
   } catch (error) {
@@ -70,12 +97,22 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+    const supabase = getSupabase()
+
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    await db.plannerItem.delete({ where: { id, userId: USER_ID } })
+    const { error } = await supabase
+      .from('PlannerItem')
+      .delete()
+      .eq('id', id)
+      .eq('userId', userId)
+
+    if (error) throw error
+
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })

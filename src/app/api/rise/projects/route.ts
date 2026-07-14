@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
-const USER_ID = 'rise-default-user'
+export async function GET(req: NextRequest) {
+  const userId = await requireAuth(req)
+  if (!userId) {
+    return NextResponse.json({
+      projects: [
+        { id: 'p1', name: 'تطوير تطبيق الويب', color: '#059669', progress: 65, status: 'active' },
+        { id: 'p2', name: 'كتابة الكتاب', color: '#D4A853', progress: 35, status: 'active' },
+        { id: 'p3', name: 'تعلم البرمجة', color: '#6366F1', progress: 80, status: 'active' },
+      ],
+    })
+  }
+  const supabase = getSupabase()
 
-export async function GET() {
   try {
-    await ensureDb()
-    const projects = await db.project.findMany({ where: { userId: USER_ID }, orderBy: { createdAt: 'desc' } })
+    const { data: projects, error } = await supabase
+      .from('Project')
+      .select('*')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+
+    if (error) throw error
     return NextResponse.json({ projects })
   } catch (error) {
     console.error('Projects GET error:', error)
@@ -21,34 +37,64 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const body = await req.json()
-    const project = await db.project.create({ data: { userId: USER_ID, ...body } })
-    return NextResponse.json(project)
+    const { data, error } = await supabase
+      .from('Project')
+      .insert({ userId, ...body })
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json(data)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }
 }
 
 export async function PUT(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const { id, ...body } = await req.json()
-    const project = await db.project.update({ where: { id, userId: USER_ID }, data: body })
-    return NextResponse.json(project)
+    const { data, error } = await supabase
+      .from('Project')
+      .update(body)
+      .eq('id', id)
+      .eq('userId', userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return NextResponse.json(data)
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })
   }
 }
 
 export async function DELETE(req: NextRequest) {
+    const userId = await requireAuth(req)
+  if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+  const supabase = getSupabase()
+
   try {
-    await ensureDb()
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
-    await db.project.delete({ where: { id, userId: USER_ID } })
+
+    const { error } = await supabase
+      .from('Project')
+      .delete()
+      .eq('id', id)
+      .eq('userId', userId)
+
+    if (error) throw error
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: 'Operation saved locally', offline: true })

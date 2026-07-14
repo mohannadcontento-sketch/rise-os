@@ -34,6 +34,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import {
   RadarChart,
@@ -183,10 +184,10 @@ export default function MonthlyReview() {
     setAutoFilling(true)
     try {
       const [tasksRes, focusRes, habitsRes, journalRes] = await Promise.all([
-        fetch('/api/rise/tasks'),
-        fetch('/api/rise/focus'),
-        fetch('/api/rise/habits'),
-        fetch('/api/rise/journal'),
+        apiFetch('/api/rise/tasks'),
+        apiFetch('/api/rise/focus'),
+        apiFetch('/api/rise/habits'),
+        apiFetch('/api/rise/journal'),
       ])
       const [tasksData, focusData, habitsData, journalData] = await Promise.all([
         tasksRes.json(),

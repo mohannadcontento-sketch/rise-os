@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -142,7 +143,7 @@ export default function Health() {
   /* ─── Fetch ─── */
   const fetchHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/health')
+      const res = await apiFetch('/api/rise/health')
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -178,14 +179,10 @@ export default function Health() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/rise/health', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          date: today,
-          exerciseNotes,
-        }),
+      const res = await apiPost('/api/rise/health', {
+        ...form,
+        date: today,
+        exerciseNotes,
       })
       if (res.ok) {
         toast.success('تم حفظ بيانات الصحة بنجاح 💪')

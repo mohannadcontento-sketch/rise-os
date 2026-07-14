@@ -37,6 +37,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { notifyMorningComplete } from '@/lib/notifications'
 
 /* ────────────── Types ────────────── */
@@ -563,7 +564,7 @@ export default function MorningRoutine() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/rise/morning')
+        const res = await apiFetch('/api/rise/morning')
         if (res.ok) {
           const data = await res.json()
           setLogs(data.logs || [])
@@ -620,17 +621,13 @@ export default function MorningRoutine() {
       }
 
       try {
-        await fetch('/api/rise/morning', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+        await apiPost('/api/rise/morning', payload)
         if (!startedAt) setStartedAt(now)
         setTodayLog(payload)
         // Award XP when all items completed
         if (ids.size === totalCount && totalCount > 0) {
           const totalXp = SECTIONS.reduce((sum, s) => sum + s.items.reduce((isum, item) => isum + item.xp, 0), 0)
-          fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: totalXp, reason: 'morning-routine-complete' }) }).catch(() => {})
+          apiPost('/api/rise/earn-xp', { amount: totalXp, reason: 'morning-routine-complete' }).catch(() => {})
         }
       } catch {
         // silent fail

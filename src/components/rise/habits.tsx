@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
 
@@ -216,7 +217,7 @@ export function HabitsView() {
   useEffect(() => {
     async function fetchHabits() {
       try {
-        const res = await fetch('/api/rise/habits')
+        const res = await apiFetch('/api/rise/habits')
         if (res.ok) {
           const data: HabitsResponse = await res.json()
           setHabits(data.habits)
@@ -258,14 +259,10 @@ export function HabitsView() {
       }
 
       try {
-        await fetch('/api/rise/habits', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            habitId,
-            date: todayStr,
-            completed: newCompleted,
-          }),
+        await apiPut('/api/rise/habits', {
+          habitId,
+          date: todayStr,
+          completed: newCompleted,
         })
         if (newCompleted) {
           const habit = habits.find((h) => h.id === habitId)
@@ -277,7 +274,7 @@ export function HabitsView() {
             notifyHabitComplete(habit.name, streak.current)
           }
           if (!existingLog) {
-            fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: habit?.xpReward || 15, reason: `habit:${habitId}` }) }).catch(() => {})
+            apiPost('/api/rise/earn-xp', { amount: habit?.xpReward || 15, reason: `habit:${habitId}` }).catch(() => {})
           }
         }
       } catch {
@@ -303,17 +300,13 @@ export function HabitsView() {
     if (!formName.trim()) return
     setSaving(true)
     try {
-      const res = await fetch('/api/rise/habits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await apiPost('/api/rise/habits', {
           name: formName,
           icon: formIcon,
           color: formColor,
           frequency: formFrequency,
           targetCount: parseInt(formTarget) || 1,
-        }),
-      })
+        })
       if (res.ok) {
         const data: HabitsResponse = await res.json()
         setHabits((prev) => [...prev, ...data.habits])
@@ -332,11 +325,7 @@ export function HabitsView() {
   async function deleteHabit(id: string) {
     setHabits((prev) => prev.filter((h) => h.id !== id))
     try {
-      await fetch('/api/rise/habits', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
+      await apiFetch('/api/rise/habits', { method: 'DELETE', body: JSON.stringify({ id }) })
     } catch {
       // silently fail
     }
@@ -353,11 +342,7 @@ export function HabitsView() {
   /* ---- Toggle reminder time ---- */
   const handleToggleReminder = useCallback(async (habitId: string, time: string | null) => {
     try {
-      await fetch('/api/rise/habits', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: habitId, reminderTime: time }),
-      })
+      await apiPut('/api/rise/habits', { id: habitId, reminderTime: time })
       setHabits((prev) =>
         prev.map((h) => (h.id === habitId ? { ...h, reminderTime: time } : h))
       )

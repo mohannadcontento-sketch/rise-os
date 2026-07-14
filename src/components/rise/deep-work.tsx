@@ -47,6 +47,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { notifyFocusComplete } from '@/lib/notifications'
 import {
@@ -185,7 +186,7 @@ export default function DeepWork() {
   /* ─── Fetch ─── */
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/focus')
+      const res = await apiFetch('/api/rise/focus')
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -229,25 +230,21 @@ export default function DeepWork() {
     setSaving(true)
     try {
       const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
-      const res = await fetch('/api/rise/focus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          duration: selectedDuration,
-          actualMin: elapsedMin,
-          type: getDurationLabel(selectedDuration),
-          completed,
-          startedAt: sessionStartTime,
-          completedAt: completed ? new Date().toISOString() : null,
-          notes: sessionNotes,
-        }),
+      const res = await apiPost('/api/rise/focus', {
+        duration: selectedDuration,
+        actualMin: elapsedMin,
+        type: getDurationLabel(selectedDuration),
+        completed,
+        startedAt: sessionStartTime,
+        completedAt: completed ? new Date().toISOString() : null,
+        notes: sessionNotes,
       })
       if (res.ok) {
         const sessionData = await res.json()
         if (completed) {
           const xp = Math.round(elapsedMin * 2)
           notifyFocusComplete(elapsedMin, xp)
-          fetch('/api/rise/earn-xp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }) }).catch(() => {})
+          apiPost('/api/rise/earn-xp', { amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }).catch(() => {})
           // Open task linking dialog
           setLastSessionXp(xp)
           setLastSessionMin(elapsedMin)
@@ -268,7 +265,7 @@ export default function DeepWork() {
   /* ─── Task Linking ─── */
   const fetchTasksForLinking = async () => {
     try {
-      const res = await fetch('/api/rise/tasks')
+      const res = await apiFetch('/api/rise/tasks')
       if (res.ok) {
         const data = await res.json()
         const eligible = (data.tasks || []).filter(
@@ -291,11 +288,7 @@ export default function DeepWork() {
     }
     setLinkingTask(true)
     try {
-      await fetch('/api/rise/focus', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: lastSessionId, taskId: selectedTaskId }),
-      })
+      await apiPut('/api/rise/focus', { id: lastSessionId, taskId: selectedTaskId })
       const taskName = taskOptions.find((t) => t.id === selectedTaskId)?.title
       toast.success('تم ربط الجلسة بالمهمة', { description: taskName })
     } catch {

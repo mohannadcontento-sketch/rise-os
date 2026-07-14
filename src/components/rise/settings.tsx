@@ -64,6 +64,7 @@ import {
 import { useTheme } from 'next-themes'
 import { useRiseStore } from '@/store/app-store'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -141,9 +142,7 @@ function AdminPanel() {
       if (!auth?.accessToken || auth.accessToken === 'guest') return
       setLoading(true)
       try {
-        const res = await fetch('/api/rise/admin/users', {
-          headers: { 'Authorization': `Bearer ${auth.accessToken}` }
-        })
+        const res = await apiFetch('/api/rise/admin/users')
         const data = await res.json()
         if (mounted && data.users) setUsers(data.users)
       } catch (err) {
@@ -158,9 +157,7 @@ function AdminPanel() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/rise/admin/users', {
-        headers: { 'Authorization': `Bearer ${auth?.accessToken}` }
-      })
+      const res = await apiFetch('/api/rise/admin/users')
       const data = await res.json()
       if (data.users) setUsers(data.users)
     } catch (err) {
@@ -171,17 +168,10 @@ function AdminPanel() {
 
   const updateUserLimits = async (supabaseUserId: string) => {
     try {
-      await fetch('/api/rise/admin/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${auth?.accessToken}`,
-        },
-        body: JSON.stringify({
-          supabaseUserId,
-          storageLimit: parseInt(editStorageLimit) * 1024 * 1024, // MB to bytes
-          aiLimit: parseInt(editAiLimit),
-        }),
+      await apiPost('/api/rise/admin/users', {
+        supabaseUserId,
+        storageLimit: parseInt(editStorageLimit) * 1024 * 1024,
+        aiLimit: parseInt(editAiLimit),
       })
       toast.success('تم تحديث الصلاحيات')
       setEditingUser(null)
@@ -194,12 +184,8 @@ function AdminPanel() {
   const deleteUser = async (supabaseUserId: string, email: string) => {
     if (!confirm(`هل أنت متأكد من حذف المستخدم ${email}؟`)) return
     try {
-      await fetch('/api/rise/admin/users', {
+      await apiFetch('/api/rise/admin/users', {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${auth?.accessToken}`,
-        },
         body: JSON.stringify({ supabaseUserId }),
       })
       toast.success('تم حذف المستخدم')
@@ -390,7 +376,7 @@ export default function Settings() {
   const [userStats, setUserStats] = useState<{ level: number; xp: number; xpToNext: number; streak: number } | null>(null)
 
   useEffect(() => {
-    fetch('/api/rise/dashboard')
+    apiFetch('/api/rise/dashboard')
       .then(r => r.json())
       .then(data => {
         if (data.user) setUserStats(data.user)
@@ -420,7 +406,7 @@ export default function Settings() {
 
   const handleExportData = () => {
     toast.loading('جاري تصدير البيانات...', { id: 'export' })
-    fetch('/api/rise/export')
+    apiFetch('/api/rise/export')
       .then((res) => {
         if (!res.ok) throw new Error('فشل التصدير')
         return res.blob()

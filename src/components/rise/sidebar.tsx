@@ -3,6 +3,7 @@
 import { AnimatePresence } from 'framer-motion'
 import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import {
   LayoutDashboard,
   Sun,
@@ -142,7 +143,7 @@ export function Sidebar() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch('/api/rise/dashboard')
+        const res = await apiFetch('/api/rise/dashboard')
         if (res.ok) {
           const data = await res.json()
           if (data.user) {

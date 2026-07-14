@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -155,7 +156,7 @@ export default function Reading() {
 
   const fetchBooks = useCallback(async () => {
     try {
-      const res = await fetch('/api/rise/books')
+      const res = await apiFetch('/api/rise/books')
       const data = await res.json()
       setBooks(data.books || [])
     } catch {
@@ -172,16 +173,12 @@ export default function Reading() {
   const handleAddBook = async () => {
     if (!newTitle.trim()) return
     try {
-      await fetch('/api/rise/books', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle,
-          author: newAuthor || null,
-          type: newType,
-          totalPages: newTotalPages ? parseInt(newTotalPages) : null,
-          status: 'reading',
-        }),
+      await apiPost('/api/rise/books', {
+        title: newTitle,
+        author: newAuthor || null,
+        type: newType,
+        totalPages: newTotalPages ? parseInt(newTotalPages) : null,
+        status: 'reading',
       })
       toast.success('تمت إضافة الكتاب بنجاح')
       setNewTitle('')
@@ -197,11 +194,7 @@ export default function Reading() {
 
   const handleUpdateBook = async (id: string, data: Partial<Book>) => {
     try {
-      await fetch('/api/rise/books', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...data }),
-      })
+      await apiPut('/api/rise/books', { id, ...data })
       fetchBooks()
     } catch {
       toast.error('فشل في تحديث الكتاب')

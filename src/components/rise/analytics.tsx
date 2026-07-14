@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { apiFetch } from '@/lib/api-fetch'
 import {
   LineChart,
   Line,
@@ -196,10 +197,10 @@ export default function Analytics() {
     async function load() {
       try {
         const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
-          fetch('/api/rise/dashboard'),
-          fetch('/api/rise/habits'),
-          fetch('/api/rise/focus'),
-          fetch('/api/rise/health'),
+          apiFetch('/api/rise/dashboard'),
+          apiFetch('/api/rise/habits'),
+          apiFetch('/api/rise/focus'),
+          apiFetch('/api/rise/health'),
         ])
         const [dash, habit, foc, hlt] = await Promise.all([
           dashRes.json(),

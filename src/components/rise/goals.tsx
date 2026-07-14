@@ -51,6 +51,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 
 /* ────────────── Types ────────────── */
 
@@ -133,7 +134,7 @@ export function GoalsView() {
   useEffect(() => {
     async function fetchGoals() {
       try {
-        const res = await fetch('/api/rise/goals')
+        const res = await apiFetch('/api/rise/goals')
         if (res.ok) {
           const data: GoalsResponse = await res.json()
           setGoals(data.goals)
@@ -184,15 +185,11 @@ export function GoalsView() {
       if (!goal) return
       const ms = goal.milestones.find((m) => m.id === milestoneId)
       if (!ms) return
-      await fetch('/api/rise/goals', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      await apiPut('/api/rise/goals', {
           id: goalId,
           milestoneId,
           completed: !ms.completed,
-        }),
-      })
+        })
     } catch {
       // Revert on error
       setGoals((prev) =>
@@ -215,17 +212,13 @@ export function GoalsView() {
     if (!formTitle.trim()) return
     setSaving(true)
     try {
-      const res = await fetch('/api/rise/goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await apiPost('/api/rise/goals', {
           title: formTitle,
           vision: formVision,
           why: formWhy,
           type: formType,
           deadline: formDeadline,
-        }),
-      })
+        })
       if (res.ok) {
         const data: GoalsResponse = await res.json()
         setGoals((prev) => [...prev, ...data.goals])
@@ -243,11 +236,7 @@ export function GoalsView() {
   async function deleteGoal(id: string) {
     setGoals((prev) => prev.filter((g) => g.id !== id))
     try {
-      await fetch('/api/rise/goals', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
+      await apiFetch('/api/rise/goals', { method: 'DELETE', body: JSON.stringify({ id }) })
     } catch {
       // Silently fail
     }

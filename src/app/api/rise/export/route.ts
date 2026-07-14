@@ -1,44 +1,75 @@
-import { NextResponse } from 'next/server'
-import { db, ensureDb } from '@/lib/db'
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabase } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
-const USER_ID = 'rise-default-user'
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    await ensureDb()
+        const userId = await requireAuth(req)
+    if (!userId) {
+      const fb = {
+        metadata: { application: 'RiseOS', version: '1.0.0', exportDate: new Date().toISOString(), note: 'تسجيل الدخول مطلوب' },
+        المهام: [],
+        المشاريع: [],
+      }
+      return new NextResponse(JSON.stringify(fb, null, 2), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="riseos-export.json"' },
+      })
+    }
+
+    const supabase = getSupabase()
+
     const [
-      tasks,
-      projects,
-      goals,
-      habits,
-      habitLogs,
-      journals,
-      focusSessions,
-      healthLogs,
-      financeRecords,
-      books,
-      knowledgeItems,
-      morningLogs,
-      dailyScores,
-      achievements,
-      user,
+      tasksRes,
+      projectsRes,
+      goalsRes,
+      habitsRes,
+      habitLogsRes,
+      journalsRes,
+      focusSessionsRes,
+      healthLogsRes,
+      financeRecordsRes,
+      booksRes,
+      knowledgeItemsRes,
+      morningLogsRes,
+      dailyScoresRes,
+      achievementsRes,
+      userRes,
     ] = await Promise.all([
-      db.task.findMany({ where: { userId: USER_ID }, include: { subtasks: true } }),
-      db.project.findMany({ where: { userId: USER_ID } }),
-      db.goal.findMany({ where: { userId: USER_ID }, include: { milestones: true } }),
-      db.habit.findMany({ where: { userId: USER_ID } }),
-      db.habitLog.findMany({ where: { habit: { userId: USER_ID } } }),
-      db.journal.findMany({ where: { userId: USER_ID } }),
-      db.focusSession.findMany({ where: { userId: USER_ID } }),
-      db.healthLog.findMany({ where: { userId: USER_ID } }),
-      db.financeRecord.findMany({ where: { userId: USER_ID } }),
-      db.book.findMany({ where: { userId: USER_ID } }),
-      db.knowledgeItem.findMany({ where: { userId: USER_ID } }),
-      db.morningLog.findMany({ where: { userId: USER_ID } }),
-      db.dailyScore.findMany({ where: { userId: USER_ID } }),
-      db.userAchievement.findMany({ where: { userId: USER_ID } }),
-      db.user.findUnique({ where: { id: USER_ID } }),
+      supabase.from('Task').select('*, subtasks:SubTask(*)').eq('userId', userId),
+      supabase.from('Project').select('*').eq('userId', userId),
+      supabase.from('Goal').select('*, milestones:Milestone(*)').eq('userId', userId),
+      supabase.from('Habit').select('*').eq('userId', userId),
+      supabase.from('HabitLog').select('*').in('habitId',
+        (await supabase.from('Habit').select('id').eq('userId', userId)).data?.map(h => h.id) || []
+      ),
+      supabase.from('Journal').select('*').eq('userId', userId),
+      supabase.from('FocusSession').select('*').eq('userId', userId),
+      supabase.from('HealthLog').select('*').eq('userId', userId),
+      supabase.from('FinanceRecord').select('*').eq('userId', userId),
+      supabase.from('Book').select('*').eq('userId', userId),
+      supabase.from('KnowledgeItem').select('*').eq('userId', userId),
+      supabase.from('MorningLog').select('*').eq('userId', userId),
+      supabase.from('DailyScore').select('*').eq('userId', userId),
+      supabase.from('UserAchievement').select('*').eq('userId', userId),
+      supabase.from('User').select('*').eq('id', userId).single(),
     ])
+
+    const user = userRes.data
+    const tasks = tasksRes.data || []
+    const projects = projectsRes.data || []
+    const goals = goalsRes.data || []
+    const habits = habitsRes.data || []
+    const habitLogs = habitLogsRes.data || []
+    const journals = journalsRes.data || []
+    const focusSessions = focusSessionsRes.data || []
+    const healthLogs = healthLogsRes.data || []
+    const financeRecords = financeRecordsRes.data || []
+    const books = booksRes.data || []
+    const knowledgeItems = knowledgeItemsRes.data || []
+    const morningLogs = morningLogsRes.data || []
+    const dailyScores = dailyScoresRes.data || []
+    const achievements = achievementsRes.data || []
 
     const exportData = {
       metadata: {
@@ -58,44 +89,44 @@ export async function GET() {
             إجمالي_مهام_مكتملة: user.totalTasksDone,
           }
         : null,
-      المهام: tasks.map((t) => ({
+      المهام: tasks.map((t: Record<string, unknown>) => ({
         العنوان: t.title,
         الوصف: t.description,
         الحالة: t.status,
         الأولوية: t.priority,
         التاريخ_المستهدف: t.dueDate,
         مكافئة_الخبرة: t.xpReward,
-        تاريخ_الإكمال: t.completedAt?.toISOString() || null,
-        المهام_الفرعية: t.subtasks.map((s) => ({ العنوان: s.title, مكتمل: s.completed })),
+        تاريخ_الإكمال: t.completedAt ? new Date(t.completedAt as string).toISOString() : null,
+        المهام_الفرعية: (t.subtasks as Record<string, unknown>[] | undefined)?.map((s) => ({ العنوان: s.title, مكتمل: s.completed })) || [],
       })),
-      المشاريع: projects.map((p) => ({
+      المشاريع: projects.map((p: Record<string, unknown>) => ({
         الاسم: p.name,
         الوصف: p.description,
         اللون: p.color,
         التقدم: p.progress,
         الحالة: p.status,
       })),
-      الأهداف: goals.map((g) => ({
+      الأهداف: goals.map((g: Record<string, unknown>) => ({
         العنوان: g.title,
         الرؤية: g.vision,
         النوع: g.type,
         التقدم: g.progress,
         الموعد_النهائي: g.deadline,
         الحالة: g.status,
-        المحطات: g.milestones.map((m) => ({ العنوان: m.title, مكتمل: m.completed })),
+        المحطات: (g.milestones as Record<string, unknown>[] | undefined)?.map((m) => ({ العنوان: m.title, مكتمل: m.completed })) || [],
       })),
-      العادات: habits.map((h) => ({
+      العادات: habits.map((h: Record<string, unknown>) => ({
         الاسم: h.name,
         الوصف: h.description,
         التكرار: h.frequency,
         مكافئة_الخبرة: h.xpReward,
       })),
-      سجلات_العادات: habitLogs.map((l) => ({
+      سجلات_العادات: habitLogs.map((l: Record<string, unknown>) => ({
         تاريخ: l.date,
         مكتمل: l.completed,
         العدد: l.count,
       })),
-      اليوميات: journals.map((j) => ({
+      اليوميات: journals.map((j: Record<string, unknown>) => ({
         التاريخ: j.date,
         المحتوى: j.content,
         الامتنان: j.gratitude,
@@ -107,15 +138,15 @@ export async function GET() {
         خطة_الغد: j.tomorrowPlan,
         الوسوم: j.tags,
       })),
-      جلسات_التركيز: focusSessions.map((s) => ({
+      جلسات_التركيز: focusSessions.map((s: Record<string, unknown>) => ({
         المدة_المخططة: s.duration,
         المدة_الفعلية: s.actualMin,
         النوع: s.type,
         مكتمل: s.completed,
         ملاحظات: s.notes,
-        تاريخ_البدء: s.startedAt.toISOString(),
+        تاريخ_البدء: s.startedAt ? new Date(s.startedAt as string).toISOString() : null,
       })),
-      السجلات_الصحية: healthLogs.map((h) => ({
+      السجلات_الصحية: healthLogs.map((h: Record<string, unknown>) => ({
         التاريخ: h.date,
         ساعات_النوم: h.sleepHours,
         جودة_النوم: h.sleepQuality,
@@ -128,7 +159,7 @@ export async function GET() {
         نوع_التمرين: h.exerciseType,
         دقائق_التمرين: h.exerciseMin,
       })),
-      السجلات_المالية: financeRecords.map((f) => ({
+      السجلات_المالية: financeRecords.map((f: Record<string, unknown>) => ({
         النوع: f.type,
         الفئة: f.category,
         الوصف: f.description,
@@ -136,7 +167,7 @@ export async function GET() {
         التاريخ: f.date,
         متكرر: f.recurring,
       })),
-      الكتب: books.map((b) => ({
+      الكتب: books.map((b: Record<string, unknown>) => ({
         العنوان: b.title,
         المؤلف: b.author,
         النوع: b.type,
@@ -146,7 +177,7 @@ export async function GET() {
         التقدم: b.progress,
         التقييم: b.rating,
       })),
-      عناصر_المعرفة: knowledgeItems.map((k) => ({
+      عناصر_المعرفة: knowledgeItems.map((k: Record<string, unknown>) => ({
         العنوان: k.title,
         النوع: k.type,
         المحتوى: k.content,
@@ -155,13 +186,13 @@ export async function GET() {
         المصدر: k.source,
         مفضل: k.isFavorite,
       })),
-      سجلات_الصباح: morningLogs.map((m) => ({
+      سجلات_الصباح: morningLogs.map((m: Record<string, unknown>) => ({
         التاريخ: m.date,
         الدرجة: m.score,
         العناصر_المكتملة: m.completedItems,
         إجمالي_العناصر: m.totalItems,
       })),
-      الدرجات_اليومية: dailyScores.map((d) => ({
+      الدرجات_اليومية: dailyScores.map((d: Record<string, unknown>) => ({
         التاريخ: d.date,
         الدرجة: d.score,
         درجة_الصباح: d.morningScore,
@@ -169,11 +200,11 @@ export async function GET() {
         درجة_العادات: d.habitScore,
         درجة_التركيز: d.focusScore,
       })),
-      الإنجازات: achievements.map((a) => ({
+      الإنجازات: achievements.map((a: Record<string, unknown>) => ({
         الشارة: a.badgeName,
         الأيقونة: a.badgeIcon,
         الوصف: a.badgeDesc,
-        تاريخ_الحصول: a.earnedAt.toISOString(),
+        تاريخ_الحصول: a.earnedAt ? new Date(a.earnedAt as string).toISOString() : null,
       })),
     }
 
