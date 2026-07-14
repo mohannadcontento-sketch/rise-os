@@ -1,9 +1,14 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
 // Lazy singleton — avoids crashing during build when env vars are absent
 let _supabase: SupabaseClient | null = null
 
+/**
+ * Get the base Supabase client (anon key, no user context).
+ * Use this only for operations that don't need RLS (e.g., admin with service role).
+ */
 export function getSupabase(): SupabaseClient {
   if (!_supabase) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -16,12 +21,31 @@ export function getSupabase(): SupabaseClient {
   return _supabase
 }
 
-// Convenience export for direct usage (runtime only)
-export const supabase = new Proxy({} as SupabaseClient, {
-  get(_target, prop) {
-    return Reflect.get(getSupabase(), prop)
-  },
-})
+/**
+ * Get a Supabase client with the authenticated user's JWT in the auth context.
+ * This makes RLS policies work correctly on the server side.
+ * Use this in ALL API routes that handle user data.
+ */
+export function getSupabaseWithAuth(req: NextRequest): SupabaseClient {
+  const base = getSupabase()
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+
+  if (!token || token === 'guest') {
+    // No valid token — return base client (RLS will block access via anon)
+    return base
+  }
+
+  // Create client with user's JWT so RLS policies can evaluate auth.uid()
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    },
+  )
+}
 
 // Generate ZhipuAI JWT token
 export function generateZhipuToken(): string {

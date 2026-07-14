@@ -1310,3 +1310,24 @@ Stage Summary:
 - ✅ Lint: 0 errors
 - ✅ Build: نجاح كامل (25 API routes, 0 compile errors)
 - ✅ 2 حزم Prisma تم إزالتها
+
+---
+Task ID: update-auth-supabase
+Agent: Main
+Task: Update all non-admin/auth API routes to use getSupabaseWithAuth(req) for proper RLS support
+
+Work Log:
+- Updated 18 API route files to change import from `getSupabase` to `getSupabaseWithAuth`
+- Changed all `getSupabase()` calls to `getSupabaseWithAuth(req)` across GET, POST, PUT, DELETE handlers
+- Fixed special case in ai-chat/route.ts: multi-import `{ getSupabase, generateZhipuToken }` → `{ getSupabaseWithAuth, generateZhipuToken }`
+- Fixed special case in productivity-score/route.ts: type reference `ReturnType<typeof getSupabase>` → `ReturnType<typeof getSupabaseWithAuth>`
+- Verified admin/users and auth routes (login, signup, session, resend, refresh) were NOT modified
+- Ran `bun run lint` — passed with zero errors
+
+Files updated (18):
+- journal, goals, finance, morning, habits, productivity-score, projects, earn-xp, knowledge, books, focus, ai-chat, health, seed, dashboard, export, tasks, planner
+
+Stage Summary:
+- All 18 API routes now pass the request object to getSupabaseWithAuth for RLS context
+- Auth and admin routes remain unchanged
+- Lint passes cleanly

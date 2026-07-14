@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ tasks: [], projects: [] })
     }
 
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { data: tasks, error: tasksError } = await supabase
       .from('Task')
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
     const body = await req.json()
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { data, error } = await supabase
       .from('Task')
@@ -65,7 +65,7 @@ export async function PUT(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
     const { id, ...body } = await req.json()
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { data, error } = await supabase
       .from('Task')
@@ -95,7 +95,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
     const { error } = await supabase
       .from('Task')
       .delete()

@@ -319,29 +319,66 @@ CREATE TABLE IF NOT EXISTS "UserStorage" (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ==================== AUTO-UPDATE TRIGGER ====================
+-- Automatically updates "updatedAt" on every row modification
+CREATE OR REPLACE FUNCTION public.update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW."updatedAt" = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply the trigger to all tables that have an "updatedAt" column
+DO $$ 
+DECLARE
+  tbl TEXT;
+BEGIN
+  FOR tbl IN
+    SELECT table_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'updatedAt'
+  LOOP
+    EXECUTE format('
+      DROP TRIGGER IF EXISTS set_updated_at ON %I;
+      CREATE TRIGGER set_updated_at
+        BEFORE UPDATE ON %I
+        FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+    ', tbl, tbl);
+  END LOOP;
+END $$;
+
 -- ==================== INDEXES ====================
+-- Single-column indexes
 CREATE INDEX IF NOT EXISTS idx_task_userId ON "Task"("userId");
 CREATE INDEX IF NOT EXISTS idx_task_status ON "Task"("status");
 CREATE INDEX IF NOT EXISTS idx_task_projectId ON "Task"("projectId");
 CREATE INDEX IF NOT EXISTS idx_habit_userId ON "Habit"("userId");
 CREATE INDEX IF NOT EXISTS idx_habitLog_habitId ON "HabitLog"("habitId");
-CREATE INDEX IF NOT EXISTS idx_habitLog_date ON "HabitLog"("date");
 CREATE INDEX IF NOT EXISTS idx_journal_userId ON "Journal"("userId");
-CREATE INDEX IF NOT EXISTS idx_journal_date ON "Journal"("date");
 CREATE INDEX IF NOT EXISTS idx_focusSession_userId ON "FocusSession"("userId");
 CREATE INDEX IF NOT EXISTS idx_healthLog_userId ON "HealthLog"("userId");
-CREATE INDEX IF NOT EXISTS idx_healthLog_date ON "HealthLog"("date");
 CREATE INDEX IF NOT EXISTS idx_financeRecord_userId ON "FinanceRecord"("userId");
 CREATE INDEX IF NOT EXISTS idx_book_userId ON "Book"("userId");
 CREATE INDEX IF NOT EXISTS idx_knowledgeItem_userId ON "KnowledgeItem"("userId");
 CREATE INDEX IF NOT EXISTS idx_plannerItem_userId ON "PlannerItem"("userId");
-CREATE INDEX IF NOT EXISTS idx_plannerItem_date ON "PlannerItem"("date");
 CREATE INDEX IF NOT EXISTS idx_goal_userId ON "Goal"("userId");
 CREATE INDEX IF NOT EXISTS idx_project_userId ON "Project"("userId");
 CREATE INDEX IF NOT EXISTS idx_morningLog_userId ON "MorningLog"("userId");
 CREATE INDEX IF NOT EXISTS idx_dailyScore_userId ON "DailyScore"("userId");
-CREATE INDEX IF NOT EXISTS idx_dailyScore_date ON "DailyScore"("date");
 CREATE INDEX IF NOT EXISTS idx_achievement_userId ON "UserAchievement"("userId");
+
+-- Composite indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_habitLog_habitId_date ON "HabitLog"("habitId", "date");
+CREATE INDEX IF NOT EXISTS idx_journal_userId_date ON "Journal"("userId", "date");
+CREATE INDEX IF NOT EXISTS idx_healthLog_userId_date ON "HealthLog"("userId", "date");
+CREATE INDEX IF NOT EXISTS idx_plannerItem_userId_date ON "PlannerItem"("userId", "date");
+CREATE INDEX IF NOT EXISTS idx_morningLog_userId_date ON "MorningLog"("userId", "date");
+CREATE INDEX IF NOT EXISTS idx_dailyScore_userId_date ON "DailyScore"("userId", "date");
+CREATE INDEX IF NOT EXISTS idx_task_userId_status ON "Task"("userId", "status");
+CREATE INDEX IF NOT EXISTS idx_focusSession_userId_startedAt ON "FocusSession"("userId", "startedAt");
+CREATE INDEX IF NOT EXISTS idx_financeRecord_userId_date ON "FinanceRecord"("userId", "date");
+CREATE INDEX IF NOT EXISTS idx_book_userId_status ON "Book"("userId", "status");
+CREATE INDEX IF NOT EXISTS idx_plannerItem_userId_date_section ON "PlannerItem"("userId", "date", "section");
 
 -- ==================== ROW LEVEL SECURITY ====================
 ALTER TABLE "User" ENABLE ROW LEVEL SECURITY;

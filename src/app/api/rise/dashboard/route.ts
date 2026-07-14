@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
 
 // Vercel: extend serverless function timeout to 30s for cold starts
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(emptyDashboard())
     }
 
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
     const today = getToday()
     const last30 = getLast30Days()
     const weekDays = getWeekDays()

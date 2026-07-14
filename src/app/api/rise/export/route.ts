@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const [
       tasksRes,

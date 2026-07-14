@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday } from '@/lib/rise-utils'
 
-async function calculateScoreForDate(supabase: ReturnType<typeof getSupabase>, userId: string, date: string) {
+async function calculateScoreForDate(supabase: ReturnType<typeof getSupabaseWithAuth>, userId: string, date: string) {
   const [tasksRes, habitsRes, habitLogsRes, focusSessionsRes, morningLogRes] = await Promise.all([
     supabase.from('Task').select('*').eq('userId', userId),
     supabase.from('Habit').select('*').eq('userId', userId),
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ score: 0, breakdown: {} })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { searchParams } = new URL(req.url)
     const datesParam = searchParams.get('dates')

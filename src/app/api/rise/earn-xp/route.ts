@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { calculateXpForLevel } from '@/lib/rise-utils'
 
@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { amount, reason } = await req.json()
     if (!amount || amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     // Check if user already has data
     const { data: existingUser } = await supabase

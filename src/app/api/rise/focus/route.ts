@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { data: sessions } = await supabase
       .from('FocusSession')
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const body = await req.json()
     const { data: session, error } = await supabase
@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { id, ...body } = await req.json()
     const { data: session, error } = await supabase

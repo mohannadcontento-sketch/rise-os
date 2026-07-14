@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getLast30Days } from '@/lib/rise-utils'
 
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ habits: [], logs: [] })
     }
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { data: habits } = await supabase.from('Habit').select('*').eq('userId', userId)
     const last30 = getLast30Days()
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const body = await req.json()
     const { data, error } = await supabase.from('Habit').insert({ userId, ...body }).select().single()
@@ -44,7 +44,7 @@ export async function PUT(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
     const body = await req.json()
 
     // Habit log toggle (from frontend habit toggle)
@@ -99,7 +99,7 @@ export async function DELETE(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ books: [] })
   }
-  const supabase = getSupabase()
+  const supabase = getSupabaseWithAuth(req)
 
   try {
     const { data: books, error } = await supabase
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     const userId = await requireAuth(req)
   if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-  const supabase = getSupabase()
+  const supabase = getSupabaseWithAuth(req)
 
   try {
     const body = await req.json()
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
     const userId = await requireAuth(req)
   if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-  const supabase = getSupabase()
+  const supabase = getSupabaseWithAuth(req)
 
   try {
     const { id, ...body } = await req.json()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday } from '@/lib/rise-utils'
 
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ journal: null, recentJournals: [] })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const today = getToday()
     const { data: journal } = await supabase.from('Journal').select('*').eq('userId', userId).eq('date', today).single()
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const body = await req.json()
     const today = getToday()

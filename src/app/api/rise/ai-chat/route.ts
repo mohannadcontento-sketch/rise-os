@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase, generateZhipuToken } from '@/lib/supabase'
+import { getSupabaseWithAuth, generateZhipuToken } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 // Fallback local responses
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request)
     if (!userId) return NextResponse.json({ error: 'غير مصرح', offline: true }, { status: 401 })
-    const supabase = getSupabase()
+    const supabase = getSupabaseWithAuth(req)
 
     const { message, history } = await request.json()
 
