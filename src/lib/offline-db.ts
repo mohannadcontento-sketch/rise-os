@@ -34,8 +34,8 @@ export interface BluetoothShareRecord {
   receivedAt: number;
 }
 
-const DB_NAME = 'riseos-offline';
-const DB_VERSION = 1;
+const DB_NAME_PREFIX = 'riseos-offline'
+const DB_VERSION = 1
 
 const STORE_NAMES: StoreName[] = [
   'tasks',
@@ -59,8 +59,10 @@ const ALL_STORES = [...STORE_NAMES, ...META_STORES];
 export class OfflineDB {
   private _db: IDBDatabase | null = null;
   private dbReady: Promise<IDBDatabase>;
+  private dbName: string;
 
-  constructor() {
+  constructor(userId?: string) {
+    this.dbName = userId ? `${DB_NAME_PREFIX}-${userId.slice(0, 8)}` : DB_NAME_PREFIX
     this.dbReady = this.open();
   }
 
@@ -69,7 +71,7 @@ export class OfflineDB {
     if (this._db) return Promise.resolve(this._db);
 
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = indexedDB.open(this.dbName, DB_VERSION);
 
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -258,6 +260,24 @@ export class OfflineDB {
       });
     }
   }
+
+  /** Clear the offline database (call on logout) */
+  static async clearAll(userId?: string): Promise<void> {
+    const dbName = userId ? `${DB_NAME_PREFIX}-${userId.slice(0, 8)}` : DB_NAME_PREFIX
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(dbName)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+  }
+
+  /** Reset singleton (call on logout) */
+  static resetInstance(): void {
+    if (_offlineDB?._db) {
+      _offlineDB._db.close()
+    }
+    _offlineDB = null
+  }
 }
 
 // ─── Lazy Singleton (safe for SSR) ─────────────────────────────────────────
@@ -266,7 +286,17 @@ let _offlineDB: OfflineDB | null = null;
 
 export function getOfflineDB(): OfflineDB {
   if (!_offlineDB) {
-    _offlineDB = new OfflineDB();
+    let userId: string | undefined
+    try {
+      const userInfo = localStorage.getItem('rise-user-info')
+      if (userInfo) {
+        const parsed = JSON.parse(userInfo)
+        if (parsed.id && parsed.id !== 'guest') {
+          userId = parsed.id
+        }
+      }
+    } catch { /* ignore */ }
+    _offlineDB = new OfflineDB(userId)
   }
   return _offlineDB;
 }

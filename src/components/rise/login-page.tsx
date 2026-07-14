@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { apiPost } from '@/lib/api-fetch'
 
 interface LoginPageProps {
   onLogin: (data: { user: { id: string; email: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => void
@@ -193,11 +194,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                     onClick={async () => {
                       setResendLoading(true)
                       try {
-                        await fetch('/api/auth/resend', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ email }),
-                        })
+                        await apiPost('/api/auth/resend', { email })
                         setError('تم إعادة إرسال رابط التأكيد!')
                       } catch {
                         setError('فشل إعادة الإرسال')

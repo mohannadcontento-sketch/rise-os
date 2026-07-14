@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ journal: journal || null, recentJournals: recentJournals || [] })
   } catch (error) {
     console.error('Journal GET error:', error)
-    return NextResponse.json({ journals: [] })
+    return NextResponse.json({ journal: null, recentJournals: [] })
   }
 }
 

@@ -6,7 +6,7 @@ import { getToday, getLast30Days } from '@/lib/rise-utils'
 export async function GET(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ todayLog: null, items: [{ id: "mi1", title: "الاستيقاظ مبكراً", icon: "🌅", completed: false }, { id: "mi2", title: "شرب كوب ماء", icon: "💧", completed: false }, { id: "mi3", title: "الصلاة", icon: "🤲", completed: false }, { id: "mi4", title: "تمارين رياضية", icon: "🏋️", completed: false }, { id: "mi5", title: "تأمل وتهدئة", icon: "🧘", completed: false }, { id: "mi6", title: "قراءة صفحات", icon: "📖", completed: false }, { id: "mi7", title: "تخطيط اليوم", icon: "📋", completed: false }] })
+    if (!userId) return NextResponse.json({ logs: [], todayLog: null })
     const supabase = getSupabase()
 
     const today = getToday()
@@ -25,18 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ logs: logs || [], todayLog })
   } catch (error) {
     console.error('Morning GET error:', error)
-    return NextResponse.json({
-      todayLog: null,
-      items: [
-        { id: 'mi1', title: 'الاستيقاظ مبكراً', icon: '🌅', completed: false },
-        { id: 'mi2', title: 'شرب كوب ماء', icon: '💧', completed: false },
-        { id: 'mi3', title: 'الصلاة', icon: '🤲', completed: false },
-        { id: 'mi4', title: 'تمارين رياضية', icon: '🏋️', completed: false },
-        { id: 'mi5', title: 'تأمل وتهدئة', icon: '🧘', completed: false },
-        { id: 'mi6', title: 'قراءة صفحات', icon: '📖', completed: false },
-        { id: 'mi7', title: 'تخطيط اليوم', icon: '📋', completed: false },
-      ],
-    })
+    return NextResponse.json({ logs: [], todayLog: null })
   }
 }
 

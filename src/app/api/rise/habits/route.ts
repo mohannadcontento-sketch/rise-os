@@ -7,14 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) {
-      return NextResponse.json({
-        habits: [
-          { id: 'h1', name: 'شرب الماء', icon: '💧', color: '#3B82F6', frequency: 'daily', targetCount: 8, xpReward: 10 },
-          { id: 'h2', name: 'تمارين رياضية', icon: '🏋️', color: '#EF4444', frequency: 'daily', targetCount: 1, xpReward: 25 },
-          { id: 'h3', name: 'قراءة', icon: '📖', color: '#059669', frequency: 'daily', targetCount: 1, xpReward: 15 },
-        ],
-        logs: [],
-      })
+      return NextResponse.json({ habits: [], logs: [] })
     }
     const supabase = getSupabase()
 
@@ -28,14 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ habits: habits || [], logs: filteredLogs })
   } catch (error) {
     console.error('Habits GET error:', error)
-    return NextResponse.json({
-      habits: [
-        { id: 'h1', name: 'شرب الماء', icon: '💧', color: '#3B82F6', frequency: 'daily', targetCount: 8, xpReward: 10 },
-        { id: 'h2', name: 'تمارين رياضية', icon: '🏋️', color: '#EF4444', frequency: 'daily', targetCount: 1, xpReward: 25 },
-        { id: 'h3', name: 'قراءة', icon: '📖', color: '#059669', frequency: 'daily', targetCount: 1, xpReward: 15 },
-      ],
-      logs: [],
-    })
+    return NextResponse.json({ habits: [], logs: [] })
   }
 }
 
@@ -63,6 +49,16 @@ export async function PUT(req: NextRequest) {
 
     // Habit log toggle (from frontend habit toggle)
     if (body.habitId && body.date !== undefined) {
+      // Verify habit belongs to current user
+      const { data: habit } = await supabase
+        .from('Habit')
+        .select('userId')
+        .eq('id', body.habitId)
+        .single()
+      if (!habit || habit.userId !== userId) {
+        return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+      }
+
       const { data: existing } = await supabase
         .from('HabitLog')
         .select('id')

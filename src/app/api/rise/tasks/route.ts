@@ -6,16 +6,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) {
-      return NextResponse.json({
-        tasks: [
-          { id: 't1', title: 'إكمال التصميم', status: 'done', priority: 'high', xpReward: 25, createdAt: new Date().toISOString(), subtasks: [], project: null },
-          { id: 't2', title: 'كتابة الفصل الثالث', status: 'in_progress', priority: 'high', xpReward: 30, createdAt: new Date().toISOString(), subtasks: [], project: { name: 'كتابة الكتاب', color: '#D4A853' } },
-          { id: 't3', title: 'مراجعة الكود', status: 'todo', priority: 'medium', xpReward: 15, createdAt: new Date().toISOString(), subtasks: [], project: { name: 'تطوير تطبيق الويب', color: '#059669' } },
-          { id: 't4', title: 'تمرين رياضي', status: 'todo', priority: 'medium', xpReward: 20, createdAt: new Date().toISOString(), subtasks: [], project: null },
-          { id: 't5', title: 'قراءة 30 صفحة', status: 'todo', priority: 'low', xpReward: 10, createdAt: new Date().toISOString(), subtasks: [], project: null },
-        ],
-        projects: [],
-      })
+      return NextResponse.json({ tasks: [], projects: [] })
     }
 
     const supabase = getSupabase()
@@ -39,16 +30,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ tasks: tasks || [], projects: projects || [] })
   } catch (error) {
     console.error('Tasks GET error:', error)
-    return NextResponse.json({
-      tasks: [
-        { id: 't1', title: 'إكمال التصميم', status: 'done', priority: 'high', xpReward: 25, createdAt: new Date().toISOString(), subtasks: [], project: null },
-        { id: 't2', title: 'كتابة الفصل الثالث', status: 'in_progress', priority: 'high', xpReward: 30, createdAt: new Date().toISOString(), subtasks: [], project: { name: 'كتابة الكتاب', color: '#D4A853' } },
-        { id: 't3', title: 'مراجعة الكود', status: 'todo', priority: 'medium', xpReward: 15, createdAt: new Date().toISOString(), subtasks: [], project: { name: 'تطوير تطبيق الويب', color: '#059669' } },
-        { id: 't4', title: 'تمرين رياضي', status: 'todo', priority: 'medium', xpReward: 20, createdAt: new Date().toISOString(), subtasks: [], project: null },
-        { id: 't5', title: 'قراءة 30 صفحة', status: 'todo', priority: 'low', xpReward: 10, createdAt: new Date().toISOString(), subtasks: [], project: null },
-      ],
-      projects: [],
-    })
+    return NextResponse.json({ tasks: [], projects: [] })
   }
 }
 

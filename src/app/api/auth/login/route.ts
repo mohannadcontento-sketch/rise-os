@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { ADMIN_EMAIL } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       user: {
         id: data.user.id,
         email: data.user.email,
-        isAdmin: data.user.email === 'mhndsyd872@gmail.com',
+        isAdmin: data.user.email === ADMIN_EMAIL,
       },
       session: {
         access_token: data.session.access_token,

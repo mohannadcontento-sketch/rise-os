@@ -210,9 +210,7 @@ export default function RiseOSApp() {
           const user = JSON.parse(userInfo)
           if (session.access_token && session.access_token !== 'guest') {
             // Validate session with server
-            fetch('/api/auth/session', {
-              headers: { 'Authorization': `Bearer ${session.access_token}` }
-            }).then(r => r.json()).then(data => {
+            apiGet('/api/auth/session').then(r => r.json()).then(data => {
               if (data.user) {
                 setAuth({
                   isAuthenticated: true,

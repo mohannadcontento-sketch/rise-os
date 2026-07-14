@@ -1201,3 +1201,112 @@ Stage Summary:
 - Lint يمر بدون أخطاء
 - تم الرفع إلى GitHub: commit e8ce495
 - يتبقى: إصلاح المكونات التي تستخدم localStorage فقط (learning, weekly-review, monthly-review, settings) - Priority medium
+
+---
+Task ID: fix-client-sync
+Agent: Main
+Task: Fix 5 client-side issues — auth headers, per-user DB isolation, raw fetch replacements
+
+Work Log:
+- Fix 1 (sync-manager.ts): Added `import { apiFetch } from './api-fetch'`, replaced raw `fetch()` calls in `pushUnsynced()` and `pullFromServer()` with `apiFetch()` so auth headers are included automatically
+- Fix 2 (offline-db.ts): Changed `DB_NAME` constant to `DB_NAME_PREFIX`, added `userId` parameter to `OfflineDB` constructor, database name is now `riseos-offline-{userId[:8]}` for authenticated users, updated `open()` to use `this.dbName`, updated `getOfflineDB()` singleton to read userId from `localStorage('rise-user-info')`, added `OfflineDB.clearAll()` and `OfflineDB.resetInstance()` static methods for logout cleanup
+- Fix 3 (weekly-review.tsx): Added `import { apiGet } from '@/lib/api-fetch'`, replaced `fetch('/api/rise/tasks')` with `apiGet('/api/rise/tasks')` and `fetch('/api/rise/focus')` with `apiGet('/api/rise/focus')`
+- Fix 4 (page.tsx): Replaced raw `fetch('/api/auth/session', { headers: ... })` with `apiGet('/api/auth/session')` for session validation (kept `.then(r => r.json())` since apiGet returns a Response)
+- Fix 5 (login-page.tsx): Added `import { apiPost } from '@/lib/api-fetch'`, replaced raw `fetch('/api/auth/resend', { method, headers, body })` with `apiPost('/api/auth/resend', { email })`
+
+Stage Summary:
+- 5 files modified: sync-manager.ts, offline-db.ts, weekly-review.tsx, page.tsx, login-page.tsx
+- All raw `fetch()` calls in client code now use apiFetch/apiGet/apiPost with automatic auth headers
+- IndexedDB is now isolated per-user to prevent data leakage between accounts
+- Lint passes with zero errors
+
+---
+Task ID: fix-api-routes
+Agent: Main
+Task: Fix 14 API route issues — security, mock data removal, import fixes, key mismatches
+
+Work Log:
+- Fix 1 (goals/route.ts): Added milestone ownership verification in PUT handler (fetches milestone with goal join, checks userId). Replaced 3 fake goals in !userId and 3 fake goals in catch with `{ goals: [] }`.
+- Fix 2 (habits/route.ts): Added habit ownership verification in PUT handler before habit log toggle. Replaced 3 fake habits in !userId and 3 fake habits in catch with `{ habits: [], logs: [] }`.
+- Fix 3 (morning/route.ts): Replaced 7 hardcoded morning items in !userId and 7 in catch with `{ logs: [], todayLog: null }`.
+- Fix 4 (tasks/route.ts): Replaced 5 fake tasks in !userId and 5 in catch with `{ tasks: [], projects: [] }`.
+- Fix 5 (projects/route.ts): Replaced 3 fake projects in !userId and 3 in catch with `{ projects: [] }`.
+- Fix 6 (books/route.ts): Replaced 2 fake books in !userId and 2 in catch with `{ books: [] }`.
+- Fix 7 (dashboard/route.ts): Replaced entire `fallbackDashboard()` with minimal `emptyDashboard()` containing zeroed user, empty arrays, and `offline: true` flag. Updated both call sites.
+- Fix 8 (journal/route.ts): Fixed catch block from `{ journals: [] }` to `{ journal: null, recentJournals: [] }` to match success response shape.
+- Fix 9 (seed/route.ts): Changed catch from `{ success: true, message: 'Seed skipped (demo mode)' }` to `{ success: false, error: 'فشل في إنشاء البيانات التجريبية' }` with status 500.
+- Fix 10 (auth/resend/route.ts): Changed `import { supabase }` to `import { getSupabase }` and `supabase.auth.resend(...)` to `getSupabase().auth.resend(...)`.
+- Fix 11 (auth/refresh/route.ts): Changed `import { supabase }` to `import { getSupabase }` and `supabase.auth.refreshSession(...)` to `getSupabase().auth.refreshSession(...)`.
+- Fix 12 (auth/login/route.ts): Added `import { ADMIN_EMAIL } from '@/lib/supabase'`, replaced hardcoded email with `ADMIN_EMAIL`.
+- Fix 13 (auth/signup/route.ts): Added `import { ADMIN_EMAIL } from '@/lib/supabase'`, replaced hardcoded email with `ADMIN_EMAIL`.
+- Fix 14 (auth/session/route.ts): Added `import { ADMIN_EMAIL } from '@/lib/supabase'`, replaced hardcoded email with `ADMIN_EMAIL`.
+
+Stage Summary:
+- 14 files modified across rise/ and auth/ API routes
+- All hardcoded mock/demo data removed from GET fallbacks
+- Security: milestone and habit ownership verification added
+- All hardcoded admin email references replaced with ADMIN_EMAIL constant
+- Auth routes (resend, refresh) now use getSupabase() instead of stale supabase singleton
+- Journal catch block now returns correct response shape
+- Seed catch block now returns proper error instead of false success
+- Dashboard fallback includes `offline: true` flag for client-side detection
+- Lint passes with zero errors
+
+---
+Task ID: supabase-full-migration
+Agent: Main
+Task: ربط المشروع بسوبايز بشكل كامل - إزالة كل أثر لـ SQLite/Prisma
+
+Work Log:
+- Phase 1: إزالة أثار SQLite/Prisma
+  - حذف مجلد prisma/ بالكامل (schema.prisma 372 سطر)
+  - حذف مجلد db/ (custom.db 213KB)
+  - حذف src/lib/db.ts و src/lib/db-schema.ts (stubs)
+  - حذف src/app/api/route.ts (dead code hello world)
+  - إزالة @prisma/client و prisma من package.json
+  - إزالة scripts db:push, db:generate, db:migrate, db:reset
+  - تحديث .env.example لسوبايز (إزالة DATABASE_URL وSQLite)
+  - تحديث .env لإزالة DATABASE_URL
+  - إزالة /db/*.db من .gitignore
+  - bun install لإزالة الحزم (2 packages removed)
+
+- Phase 2: إصلاحات أمنية حرجة
+  - goals/route.ts: إضافة تحقق ملكية milestone قبل التعديل (منع IDOR)
+  - habits/route.ts: إضافة تحقق ملكية habit قبل تعديل سجل العادات (منع IDOR)
+  - sync-manager.ts: استبدال fetch() بـ apiFetch() لإضافة auth headers
+  - offline-db.ts: عزل البيانات لكل مستخدم (DB name = riseos-offline-{userId[:8]})
+  - إضافة static clearAll() و resetInstance() للاستخدام عند logout
+
+- Phase 3: إصلاح أنماط خاطئة
+  - auth/resend/route.ts: supabase proxy → getSupabase()
+  - auth/refresh/route.ts: supabase proxy → getSupabase()
+  - auth/login/route.ts: hardcoded email → ADMIN_EMAIL constant
+  - auth/signup/route.ts: hardcoded email → ADMIN_EMAIL constant
+  - auth/session/route.ts: hardcoded email → ADMIN_EMAIL constant
+  - page.tsx: raw fetch('/api/auth/session') → apiGet()
+  - weekly-review.tsx: raw fetch('/api/rise/tasks', '/api/rise/focus') → apiGet()
+  - login-page.tsx: raw fetch('/api/auth/resend') → apiPost()
+
+- Phase 4: إزالة كل بيانات Mock/Hardcoded من API Routes
+  - goals/route.ts: 3 أهداف مزيفة → [] 
+  - habits/route.ts: 3 عادات مزيفة → []
+  - morning/route.ts: 7 عناصر روتين صباحي مزيفة → { logs: [], todayLog: null }
+  - tasks/route.ts: 5 مهام مزيفة → { tasks: [], projects: [] }
+  - projects/route.ts: 3 مشاريع مزيفة → []
+  - books/route.ts: 2 كتب مزيفة → []
+  - dashboard/route.ts: 45 سطر بيانات مزيفة → emptyDashboard() مع offline: true flag
+  - journal/route.ts: إصلاح key mismatch (journals → journal + recentJournals)
+  - seed/route.ts: إصلاح false success على الفشل → { success: false } + 500
+
+Stage Summary:
+- ✅ صفر مراجع لـ Prisma/SQLite في src/
+- ✅ صفر raw fetch() في ملفات .tsx
+- ✅ كل API routes تستخدم getSupabase() حصرياً
+- ✅ كل الـ 18 API route تعيد بيانات فارغة عند عدم التوثيق (مش بيانات مزيفة)
+- ✅ تحقق ملكية لحماية Milestones و HabitLogs من IDOR
+- ✅ offline-db معزول لكل مستخدم
+- ✅ sync-manager يرسل auth headers
+- ✅ ADMIN_EMAIL في مكان واحد (supabase.ts)
+- ✅ Lint: 0 errors
+- ✅ Build: نجاح كامل (25 API routes, 0 compile errors)
+- ✅ 2 حزم Prisma تم إزالتها

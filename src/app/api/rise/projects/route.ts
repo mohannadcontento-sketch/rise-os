@@ -5,13 +5,7 @@ import { requireAuth } from '@/lib/auth'
 export async function GET(req: NextRequest) {
   const userId = await requireAuth(req)
   if (!userId) {
-    return NextResponse.json({
-      projects: [
-        { id: 'p1', name: 'تطوير تطبيق الويب', color: '#059669', progress: 65, status: 'active' },
-        { id: 'p2', name: 'كتابة الكتاب', color: '#D4A853', progress: 35, status: 'active' },
-        { id: 'p3', name: 'تعلم البرمجة', color: '#6366F1', progress: 80, status: 'active' },
-      ],
-    })
+    return NextResponse.json({ projects: [] })
   }
   const supabase = getSupabase()
 
@@ -26,13 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ projects })
   } catch (error) {
     console.error('Projects GET error:', error)
-    return NextResponse.json({
-      projects: [
-        { id: 'p1', name: 'تطوير تطبيق الويب', color: '#059669', progress: 65, status: 'active' },
-        { id: 'p2', name: 'كتابة الكتاب', color: '#D4A853', progress: 35, status: 'active' },
-        { id: 'p3', name: 'تعلم البرمجة', color: '#6366F1', progress: 80, status: 'active' },
-      ],
-    })
+    return NextResponse.json({ projects: [] })
   }
 }
 

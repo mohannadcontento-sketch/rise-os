@@ -280,6 +280,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, user })
   } catch (error) {
     console.error('Seed error:', error)
-    return NextResponse.json({ success: true, message: 'Seed skipped (demo mode)' })
+    return NextResponse.json({ success: false, error: 'فشل في إنشاء البيانات التجريبية' }, { status: 500 })
   }
 }

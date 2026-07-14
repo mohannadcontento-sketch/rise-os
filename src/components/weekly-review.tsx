@@ -29,6 +29,7 @@ import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { apiGet } from '@/lib/api-fetch'
 
 /* ────────────── Types ────────────── */
 
@@ -164,7 +165,7 @@ export default function WeeklyReview() {
       // Fetch tasks
       let tasksCompleted = 0
       try {
-        const tasksRes = await fetch('/api/rise/tasks')
+        const tasksRes = await apiGet('/api/rise/tasks')
         const tasksData = await tasksRes.json()
         const tasks = tasksData.tasks || []
         tasksCompleted = tasks.filter((t: { done: boolean; createdAt: string }) => {
@@ -177,7 +178,7 @@ export default function WeeklyReview() {
       // Fetch focus
       let focusMinutes = 0
       try {
-        const focusRes = await fetch('/api/rise/focus')
+        const focusRes = await apiGet('/api/rise/focus')
         const focusData = await focusRes.json()
         const sessions = focusData.sessions || []
         focusMinutes = sessions

@@ -58,7 +58,6 @@ server.log
 /tool-results/
 /download/
 /agent-ctx/
-/db/*.db
 /tauri/target/
 *.png
 !public/*.png

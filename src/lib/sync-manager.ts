@@ -3,6 +3,7 @@
 // Strategy: server-wins on conflict, periodic background sync when online.
 
 import { getOfflineDB, type StoreName, type SyncStatusRecord } from './offline-db';
+import { apiFetch } from './api-fetch';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -123,9 +124,8 @@ class SyncManager {
               ? 'DELETE'
               : 'PUT';
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method,
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
 
@@ -182,7 +182,7 @@ class SyncManager {
 
     for (const store of stores) {
       try {
-        const response = await fetch(`/api/${store}`);
+        const response = await apiFetch(`/api/${store}`);
         if (!response.ok) continue;
 
         const data = await response.json();

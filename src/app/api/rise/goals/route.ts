@@ -6,13 +6,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) {
-      return NextResponse.json({
-        goals: [
-          { id: 'g1', title: 'إكمال كتاب الإنتاجية', type: 'quarterly', progress: 35, status: 'active', deadline: '2025-12-31', milestones: [] },
-          { id: 'g2', title: 'الوصول لمستوى 10', type: 'annual', progress: 70, status: 'active', deadline: '2025-12-31', milestones: [] },
-          { id: 'g3', title: 'قراءة 24 كتاب', type: 'annual', progress: 45, status: 'active', deadline: '2025-12-31', milestones: [] },
-        ],
-      })
+      return NextResponse.json({ goals: [] })
     }
     const supabase = getSupabase()
 
@@ -26,13 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ goals: goals || [] })
   } catch (error) {
     console.error('Goals GET error:', error)
-    return NextResponse.json({
-      goals: [
-        { id: 'g1', title: 'إكمال كتاب الإنتاجية', type: 'quarterly', progress: 35, status: 'active', deadline: '2025-12-31', milestones: [] },
-        { id: 'g2', title: 'الوصول لمستوى 10', type: 'annual', progress: 70, status: 'active', deadline: '2025-12-31', milestones: [] },
-        { id: 'g3', title: 'قراءة 24 كتاب', type: 'annual', progress: 45, status: 'active', deadline: '2025-12-31', milestones: [] },
-      ],
-    })
+    return NextResponse.json({ goals: [] })
   }
 }
 
@@ -61,6 +49,16 @@ export async function PUT(req: NextRequest) {
 
     // Milestone toggle
     if (body.milestoneId) {
+      // Verify milestone belongs to user's goal
+      const { data: milestone } = await supabase
+        .from('Milestone')
+        .select('goalId, goal:Goal(userId)')
+        .eq('id', body.milestoneId)
+        .single()
+      if (!milestone || milestone.goal?.userId !== userId) {
+        return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+      }
+
       const { data, error } = await supabase
         .from('Milestone')
         .update({ completed: body.completed })
