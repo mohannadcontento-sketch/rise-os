@@ -679,6 +679,7 @@ export default function DailyPlanner() {
   const fetchItems = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/rise/planner?date=${todayStr}`)
+      if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setItems(data.items || [])
     } catch {

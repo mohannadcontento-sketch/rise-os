@@ -57,8 +57,22 @@ export async function PUT(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
     const supabase = getSupabase()
 
-    const { id, ...body } = await req.json()
-    const { data, error } = await supabase.from('Goal').update(body).eq('id', id).eq('userId', userId).select().single()
+    const body = await req.json()
+
+    // Milestone toggle
+    if (body.milestoneId) {
+      const { data, error } = await supabase
+        .from('Milestone')
+        .update({ completed: body.completed })
+        .eq('id', body.milestoneId)
+        .select()
+        .single()
+      if (error) throw error
+      return NextResponse.json(data)
+    }
+
+    const { id, ...updateBody } = body
+    const { data, error } = await supabase.from('Goal').update(updateBody).eq('id', id).eq('userId', userId).select().single()
     if (error) throw error
     return NextResponse.json(data)
   } catch (error) {

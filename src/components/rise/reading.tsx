@@ -157,6 +157,7 @@ export default function Reading() {
   const fetchBooks = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/books')
+      if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setBooks(data.books || [])
     } catch {

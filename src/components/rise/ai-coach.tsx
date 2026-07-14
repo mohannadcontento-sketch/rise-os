@@ -213,6 +213,8 @@ export default function AICoach() {
         history: chatHistory,
       })
 
+      if (!res.ok) throw new Error('Failed')
+
       const data = await res.json()
 
       if (data.usage) {

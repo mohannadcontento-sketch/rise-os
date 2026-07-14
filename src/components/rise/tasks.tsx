@@ -221,6 +221,7 @@ export function Tasks() {
   const fetchData = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/tasks')
+      if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setTasks(data.tasks || [])
       setProjects(data.projects || [])
@@ -254,7 +255,7 @@ export function Tasks() {
       if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
       return true
     })
-  }, [tasks, filterPriority, filterProject, filterStatus, filterStatus, searchQuery, isTaskBlocked])
+  }, [tasks, filterPriority, filterProject, filterStatus, searchQuery, isTaskBlocked])
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }

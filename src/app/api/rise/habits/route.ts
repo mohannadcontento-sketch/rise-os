@@ -59,9 +59,39 @@ export async function PUT(req: NextRequest) {
         const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
     const supabase = getSupabase()
+    const body = await req.json()
 
-    const { id, ...body } = await req.json()
-    const { data, error } = await supabase.from('Habit').update(body).eq('id', id).eq('userId', userId).select().single()
+    // Habit log toggle (from frontend habit toggle)
+    if (body.habitId && body.date !== undefined) {
+      const { data: existing } = await supabase
+        .from('HabitLog')
+        .select('id')
+        .eq('habitId', body.habitId)
+        .eq('date', body.date)
+        .single()
+
+      if (existing && !body.completed) {
+        // Delete the log entry when unchecking
+        await supabase.from('HabitLog').delete().eq('id', existing.id)
+        return NextResponse.json({ success: true })
+      } else if (!existing && body.completed) {
+        // Create log entry when checking
+        const habit = body.count !== undefined ? { habitId: body.habitId, date: body.date, completed: true, count: body.count } : { habitId: body.habitId, date: body.date, completed: true, count: 1 }
+        const { data, error } = await supabase.from('HabitLog').insert(habit).select().single()
+        if (error) throw error
+        return NextResponse.json(data)
+      } else if (existing && body.completed) {
+        // Update count if already exists
+        const { data, error } = await supabase.from('HabitLog').update({ completed: true, count: body.count || 1 }).eq('id', existing.id).select().single()
+        if (error) throw error
+        return NextResponse.json(data)
+      }
+      return NextResponse.json({ success: true })
+    }
+
+    // Normal habit update
+    const { id, ...updateBody } = body
+    const { data, error } = await supabase.from('Habit').update(updateBody).eq('id', id).eq('userId', userId).select().single()
     if (error) throw error
     return NextResponse.json(data)
   } catch (error) {

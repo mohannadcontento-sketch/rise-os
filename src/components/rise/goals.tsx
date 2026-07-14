@@ -51,7 +51,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { apiFetch, apiDelete, apiPost, apiPut } from '@/lib/api-fetch'
 
 /* ────────────── Types ────────────── */
 
@@ -196,7 +196,7 @@ export function GoalsView() {
         prev.map((g) => {
           if (g.id !== goalId) return g
           const reverted = g.milestones.map((m) =>
-            m.id === milestoneId ? { ...m, completed: m.completed } : m
+            m.id === milestoneId ? { ...m, completed: !m.completed } : m
           )
           const completedCount = reverted.filter((m) => m.completed).length
           const progress =
@@ -220,8 +220,8 @@ export function GoalsView() {
           deadline: formDeadline,
         })
       if (res.ok) {
-        const data: GoalsResponse = await res.json()
-        setGoals((prev) => [...prev, ...data.goals])
+        const data = await res.json()
+        setGoals((prev) => [...prev, data])
         setAddOpen(false)
         resetForm()
       }
@@ -236,7 +236,7 @@ export function GoalsView() {
   async function deleteGoal(id: string) {
     setGoals((prev) => prev.filter((g) => g.id !== id))
     try {
-      await apiFetch('/api/rise/goals', { method: 'DELETE', body: JSON.stringify({ id }) })
+      await apiDelete(`/api/rise/goals?id=${id}`)
     } catch {
       // Silently fail
     }

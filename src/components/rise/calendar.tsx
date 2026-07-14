@@ -124,17 +124,19 @@ export default function CalendarView() {
         apiFetch('/api/rise/journal'),
         apiFetch('/api/rise/focus'),
       ])
-      const [tasksData, habitsData, journalData, focusData] = await Promise.all([
-        tasksRes.json(),
-        habitsRes.json(),
-        journalRes.json(),
-        focusRes.json(),
-      ])
-      setTasks(tasksData.tasks || [])
-      setHabits(habitsData.habits || [])
-      setHabitLogs(habitsData.logs || [])
-      setJournals(journalData.recentJournals || [])
-      setFocusSessions(focusData.sessions || [])
+
+      let tasksData: any = null, habitsData: any = null, journalData: any = null, focusData: any = null
+
+      try { if (!tasksRes.ok) throw new Error(); tasksData = await tasksRes.json() } catch { /* ignore */ }
+      try { if (!habitsRes.ok) throw new Error(); habitsData = await habitsRes.json() } catch { /* ignore */ }
+      try { if (!journalRes.ok) throw new Error(); journalData = await journalRes.json() } catch { /* ignore */ }
+      try { if (!focusRes.ok) throw new Error(); focusData = await focusRes.json() } catch { /* ignore */ }
+
+      setTasks(tasksData?.tasks || [])
+      setHabits(habitsData?.habits || [])
+      setHabitLogs(habitsData?.logs || [])
+      setJournals(journalData?.recentJournals || [])
+      setFocusSessions(focusData?.sessions || [])
     } catch {
       // ignore
     } finally {

@@ -148,6 +148,7 @@ export default function SecondBrain() {
   const fetchItems = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/knowledge')
+      if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setItems(data.items || [])
     } catch {

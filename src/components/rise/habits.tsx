@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
 
@@ -308,9 +308,8 @@ export function HabitsView() {
           targetCount: parseInt(formTarget) || 1,
         })
       if (res.ok) {
-        const data: HabitsResponse = await res.json()
-        setHabits((prev) => [...prev, ...data.habits])
-        setLogs((prev) => [...prev, ...data.logs])
+        const data = await res.json()
+        setHabits((prev) => [...prev, data])
         setAddOpen(false)
         resetForm()
       }
@@ -325,7 +324,7 @@ export function HabitsView() {
   async function deleteHabit(id: string) {
     setHabits((prev) => prev.filter((h) => h.id !== id))
     try {
-      await apiFetch('/api/rise/habits', { method: 'DELETE', body: JSON.stringify({ id }) })
+      await apiDelete(`/api/rise/habits?id=${id}`)
     } catch {
       // silently fail
     }

@@ -23,7 +23,6 @@ import {
   AlertCircle,
   Lightbulb,
   Info,
-  BarChart3 as BarChartIcon,
   ArrowLeftRight,
   Medal,
 } from 'lucide-react'
@@ -202,16 +201,18 @@ export default function Analytics() {
           apiFetch('/api/rise/focus'),
           apiFetch('/api/rise/health'),
         ])
-        const [dash, habit, foc, hlt] = await Promise.all([
-          dashRes.json(),
-          habitRes.json(),
-          focusRes.json(),
-          healthRes.json(),
-        ])
-        setDashboard(dash)
-        setHabits(habit)
-        setFocus(foc)
-        setHealth(hlt)
+
+        let dash: any = null, habit: any = null, foc: any = null, hlt: any = null
+
+        try { if (!dashRes.ok) throw new Error(); dash = await dashRes.json() } catch { /* ignore */ }
+        try { if (!habitRes.ok) throw new Error(); habit = await habitRes.json() } catch { /* ignore */ }
+        try { if (!focusRes.ok) throw new Error(); foc = await focusRes.json() } catch { /* ignore */ }
+        try { if (!healthRes.ok) throw new Error(); hlt = await healthRes.json() } catch { /* ignore */ }
+
+        if (dash) setDashboard(dash)
+        if (habit) setHabits(habit)
+        if (foc) setFocus(foc)
+        if (hlt) setHealth(hlt)
       } catch {
         // ignore
       } finally {

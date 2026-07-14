@@ -107,7 +107,7 @@ function toArabicNum(n: number): string {
 }
 
 export function Sidebar() {
-  const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser } = useRiseStore()
+  const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser, auth } = useRiseStore()
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [quickNotes, setQuickNotes] = useState('')
   const notesRef = useRef<HTMLTextAreaElement>(null)
@@ -150,6 +150,9 @@ export function Sidebar() {
             const { calculateLevel } = await import('@/lib/gamification')
             const levelInfo = calculateLevel(data.user.xp)
             setUser({
+              id: auth?.userId || '',
+              email: auth?.userEmail || '',
+              isAdmin: auth?.isAdmin || false,
               name: data.user.name,
               level: levelInfo.level,
               currentXp: levelInfo.currentXp,

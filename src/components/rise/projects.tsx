@@ -327,6 +327,8 @@ export function Projects() {
         apiFetch('/api/rise/projects'),
         apiFetch('/api/rise/tasks'),
       ])
+      if (!projRes.ok) throw new Error('Failed')
+      if (!taskRes.ok) throw new Error('Failed')
       const projData = await projRes.json()
       const taskData = await taskRes.json()
       setProjects(projData.projects || [])
