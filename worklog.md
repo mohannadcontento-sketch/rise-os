@@ -1366,6 +1366,36 @@ Stage Summary:
 - ⏳ Performance optimization pending
 
 ---
+Task ID: lighthouse-perf-a11y
+Agent: Main
+Task: Fix Lighthouse performance (30/100) and accessibility (84/100) issues
+
+Work Log:
+- Analyzed Lighthouse report: Performance 30, Accessibility 84, Best Practices 100, SEO 100
+- Root cause of poor performance: framer-motion in main bundle (8.5s boot time), all components eagerly loaded
+- Root cause of a11y issues: viewport zoom disabled, icon-only buttons without aria-label, progress bars without ARIA roles
+
+Performance fixes:
+- Removed framer-motion from page.tsx (main shell) — replaced AnimatePresence/motion.div with CSS keyframes
+- Removed framer-motion from sidebar.tsx — replaced AnimatePresence with CSS animation
+- Lazy loaded: Sidebar, LoginPage, CommandDialog/Empty/Group/Input/Item/List (6), PWA (4), Keyboard shortcuts
+- Added CSS keyframes: fadeSlideIn, fadeSlideUp for lightweight transitions
+- FAB button: replaced motion.button with CSS transition + active:scale
+
+Accessibility fixes:
+- Removed maximumScale=1 and userScalable=false from viewport meta
+- Added aria-label to: sidebar toggle, bluetooth button, theme toggle, FAB button, sidebar close, notes toggle, favorite heart button
+- Added role=progressbar + aria-valuenow/min/max/label to: daily breakdown bars (x5), XP bar, goal progress bars (xN)
+
+Committed as b469e88 and pushed to GitHub.
+
+Stage Summary:
+- Initial JS bundle significantly reduced (framer-motion removed from main shell)
+- Performance score expected to improve from 30→60-70+ (framer-motion was the #1 bottleneck)
+- Accessibility score expected to improve from 84→95+ (viewport, buttons, progressbars fixed)
+- Lint: 0 errors
+
+---
 Task ID: fix-sidebar-motion
 Agent: Performance Fix Agent
 Task: Remove framer-motion from sidebar.tsx, replace with CSS animations
