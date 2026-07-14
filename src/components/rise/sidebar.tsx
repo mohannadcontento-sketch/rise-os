@@ -1,6 +1,5 @@
 'use client'
 
-import { AnimatePresence } from 'framer-motion'
 import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api-fetch'
@@ -175,14 +174,12 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden animate-[fadeSlideIn_0.2s_ease-out]"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* Sidebar */}
       <aside
@@ -213,6 +210,7 @@ export function Sidebar() {
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60"
+            aria-label="إغلاق القائمة"
           >
             <X className="w-4 h-4" />
           </button>
@@ -273,6 +271,7 @@ export function Sidebar() {
               {/* Collapsed Header */}
               <button
                 onClick={() => setNotesExpanded(!notesExpanded)}
+                aria-label={notesExpanded ? 'طي الملاحظات السريعة' : 'توسيع الملاحظات السريعة'}
                 className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-primary/[0.02]"
               >
                 <div className="w-6 h-6 rounded-lg bg-gold/10 flex items-center justify-center shrink-0">
@@ -290,9 +289,8 @@ export function Sidebar() {
               </button>
 
               {/* Expanded Textarea */}
-              <AnimatePresence>
-                {notesExpanded && (
-                  <div className="overflow-hidden">
+              {notesExpanded && (
+                  <div className="overflow-hidden animate-[fadeSlideIn_0.2s_ease-out]">
                     <div className="px-3 pb-3 pt-1">
                       <textarea
                         ref={notesRef}
@@ -327,7 +325,6 @@ export function Sidebar() {
                     </div>
                   </div>
                 )}
-              </AnimatePresence>
             </div>
           </div>
         </div>

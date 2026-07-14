@@ -1364,3 +1364,41 @@ Stage Summary:
 - ⏳ User needs to re-run supabase-schema.sql on Supabase after the fix
 - ⏳ Full E2E testing on Vercel live site pending
 - ⏳ Performance optimization pending
+
+---
+Task ID: fix-sidebar-motion
+Agent: Performance Fix Agent
+Task: Remove framer-motion from sidebar.tsx, replace with CSS animations
+
+Work Log:
+- Removed `import { AnimatePresence } from 'framer-motion'` from sidebar.tsx
+- Replaced mobile overlay `<AnimatePresence>` wrapper with simple conditional render + `animate-[fadeSlideIn_0.2s_ease-out]` CSS class
+- Replaced quick notes section `<AnimatePresence>` wrapper with simple conditional render + `animate-[fadeSlideIn_0.2s_ease-out]` CSS class
+- Verified with `bun run lint` — 0 errors
+
+Stage Summary:
+- framer-motion completely removed from sidebar.tsx
+- Two AnimatePresence blocks replaced with lightweight CSS animation keyframes (fadeSlideIn)
+- Sidebar already uses CSS `duration-200 ease-out` transition for slide-in/out
+- Lint passes cleanly
+
+---
+Task ID: fix-dashboard-a11y
+Agent: Accessibility Fix Agent
+Task: Fix progressbar roles and button accessible names in dashboard.tsx
+
+Work Log:
+- Audited dashboard.tsx for all progress bar divs and icon-only buttons
+- Found 3 custom progress bar divs (daily score breakdown bars, level XP bar, goal progress bars)
+- Added `role="progressbar"`, `aria-valuenow`, `aria-valuemin={0}`, `aria-valuemax={100}`, and descriptive `aria-label` to all 3 progress bar locations
+  - Breakdown bars (line ~635): `aria-label={\`تقدم ${item.label}\`}` with `aria-valuenow={item.value}`
+  - Level XP bar (line ~1198): `aria-label="تقدم المستوى"` with `aria-valuenow={levelInfo.progress}`
+  - Goal progress bars (line ~1496): `aria-label={\`تقدم هدف: ${goal.title}\`}` with `aria-valuenow={Math.round(goal.progress)}`
+- Found 1 icon-only button (Heart favorite toggle at line ~851)
+- Added `aria-label={isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}` to the favorite button
+- Verified with `bun run lint` — 0 errors
+
+Stage Summary:
+- 3 progress bar divs now have proper ARIA progressbar role and accessible names
+- 1 icon-only button now has a dynamic aria-label reflecting its toggle state
+- Lint passes cleanly with no new warnings

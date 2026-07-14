@@ -632,7 +632,14 @@ function ProductivityScoreCard() {
             {breakdownItems.map((item, i) => (
               <div key={item.label} className="flex items-center gap-3">
                 <span className="text-xs text-muted-foreground w-14 text-right shrink-0">{item.label}</span>
-                <div className="flex-1 h-2 rounded-full bg-primary/10 overflow-hidden">
+                <div
+                  className="flex-1 h-2 rounded-full bg-primary/10 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={item.value}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`تقدم ${item.label}`}
+                >
                   <motion.div
                     className={cn('h-full rounded-full', item.color)}
                     initial={{ width: 0 }}
@@ -848,6 +855,7 @@ function MotivationalWall() {
                 }}
                 whileTap={{ scale: 0.8 }}
                 className="absolute -top-1 left-0 z-10 p-1.5 rounded-full bg-primary/5 hover:bg-primary/10 transition-colors"
+                aria-label={isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
               >
                 <motion.div
                   animate={isFav ? { scale: [1, 1.3, 1] } : {}}
@@ -1188,7 +1196,14 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       <div className="relative">
                         <div className="absolute -inset-1 rounded-full bg-gradient-to-l from-gold/30 to-gold-light/20 blur-sm opacity-60" />
-                        <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
+                        <div
+                          className="relative h-2 rounded-full bg-primary/10 overflow-hidden"
+                          role="progressbar"
+                          aria-valuenow={levelInfo.progress}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label="تقدم المستوى"
+                        >
                           <motion.div
                             className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light shimmer"
                             initial={{ width: 0 }}
@@ -1479,7 +1494,14 @@ export default function Dashboard() {
                           {toArabicNum(Math.round(goal.progress))}٪
                         </span>
                       </div>
-                      <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
+                      <div
+                        className="relative h-2 rounded-full bg-primary/10 overflow-hidden"
+                        role="progressbar"
+                        aria-valuenow={Math.round(goal.progress)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`تقدم هدف: ${goal.title}`}
+                      >
                         <motion.div
                           className={cn(
                             'absolute inset-y-0 right-0 rounded-full',

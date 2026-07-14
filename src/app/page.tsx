@@ -2,9 +2,6 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
-import { Sidebar } from '@/components/rise/sidebar'
-import LoginPage from '@/components/rise/login-page'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target,
   LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
@@ -13,21 +10,33 @@ import {
   HeartPulse, PenLine,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
-import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
-import { PWAInstallPrompt, ConnectionStatus, BluetoothSharePanel, OfflineBanner } from '@/lib/pwa'
-import { LogOut, Bluetooth } from 'lucide-react'
 import { apiPost, apiGet } from '@/lib/api-fetch'
+
+// Heavy components — lazy loaded to reduce initial JS bundle
+const Sidebar = lazy(() => import('@/components/rise/sidebar').then(m => ({ default: m.Sidebar })))
+const LoginPage = lazy(() => import('@/components/rise/login-page'))
+const CommandDialog = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandDialog })))
+const CommandEmpty = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandEmpty })))
+const CommandGroup = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandGroup })))
+const CommandInput = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandInput })))
+const CommandItem = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandItem })))
+const CommandList = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandList })))
+// PWA components — lazy loaded
+const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
+const ConnectionStatus = lazy(() => import('@/lib/pwa').then(m => ({ default: m.ConnectionStatus })))
+const OfflineBanner = lazy(() => import('@/lib/pwa').then(m => ({ default: m.OfflineBanner })))
+const BluetoothSharePanel = lazy(() => import('@/lib/pwa').then(m => ({ default: m.BluetoothSharePanel })))
+// Keyboard shortcuts — lazy loaded (wrap hook in a component)
+const KeyboardShortcutsWrapper = lazy(() => import('@/components/rise/keyboard-shortcuts').then(m => ({
+  default: function KeyboardShortcutsWrapper() {
+    m.useKeyboardShortcuts()
+    return <m.KeyboardShortcutsDialog />
+  }
+})))
+import { LogOut, Bluetooth } from 'lucide-react'
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -306,7 +315,6 @@ export default function RiseOSApp() {
   }, [setAuth])
 
   // Keyboard shortcuts (must be before conditional return)
-  useKeyboardShortcuts()
 
   useEffect(() => {
     if (auth && auth.accessToken && auth.accessToken !== 'guest') {
@@ -387,12 +395,12 @@ export default function RiseOSApp() {
 
   // Show login if not authenticated (after all hooks)
   if (!auth) {
-    return <LoginPage onLogin={handleLogin} />
+    return <Suspense fallback={<LoadingFallback />}><LoginPage onLogin={handleLogin} /></Suspense>
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
+      <Suspense fallback={<div className="w-16 lg:w-60 h-screen bg-background" />}><Sidebar /></Suspense>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
@@ -402,6 +410,7 @@ export default function RiseOSApp() {
             size="icon"
             className="lg:hidden"
             onClick={toggleSidebar}
+            aria-label="فتح القائمة الجانبية"
           >
             <Menu className="w-5 h-5" />
           </Button>
@@ -434,7 +443,7 @@ export default function RiseOSApp() {
           </Button>
 
           {/* Connection Status */}
-          <ConnectionStatus />
+          <Suspense fallback={null}><ConnectionStatus /></Suspense>
 
           {/* Bluetooth Share */}
           <Button
@@ -442,7 +451,7 @@ export default function RiseOSApp() {
             size="icon"
             className="h-9 w-9 text-muted-foreground hover:text-blue-500"
             onClick={() => setBtPanelOpen(true)}
-            title="مشاركة بلوتوث"
+            aria-label="مشاركة بلوتوث"
           >
             <Bluetooth className="w-4 h-4" />
           </Button>
@@ -454,6 +463,7 @@ export default function RiseOSApp() {
               size="icon"
               className="h-9 w-9"
               onClick={handleThemeToggle}
+              aria-label={theme === 'dark' ? 'التبديل للوضع الفاتح' : 'التبديل للوضع الداكن'}
             >
               <span className={cn(themeRotating && 'theme-rotate', 'inline-flex')}>
                 {theme === 'dark' ? (
@@ -486,14 +496,9 @@ export default function RiseOSApp() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
+            <div
               key={activeModule}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="p-4 md:p-6"
+              className="p-4 md:p-6 animate-[fadeSlideIn_0.2s_ease-out]"
             >
               {/* Module title with accent bar & date */}
               <div className="mb-6 flex items-stretch gap-3 module-title-animate" key={`title-${activeModule}`}>
@@ -511,8 +516,7 @@ export default function RiseOSApp() {
               <Suspense fallback={<LoadingFallback />}>
                 <ActiveComponent />
               </Suspense>
-            </motion.div>
-          </AnimatePresence>
+            </div>
         </div>
       </main>
 
@@ -659,21 +663,15 @@ export default function RiseOSApp() {
       </CommandDialog>
 
       {/* Keyboard Shortcuts Dialog */}
-      <KeyboardShortcutsDialog />
+      <Suspense fallback={null}><KeyboardShortcutsWrapper /></Suspense>
 
       {/* ══════════ FAB - Quick Add ══════════ */}
-      <AnimatePresence>
         {activeModule !== 'dashboard' && activeModule !== 'settings' && (
           <div className="fixed bottom-5 right-5 z-50 flex flex-col-reverse items-center gap-3">
             {/* Action items */}
-            <AnimatePresence>
               {fabOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex flex-col gap-2 mb-2"
+                <div
+                  className="flex flex-col gap-2 mb-2 animate-[fadeSlideUp_0.15s_ease-out]"
                 >
                   {([
                     { label: 'مهمة جديدة', icon: CheckSquare, module: 'tasks' as ModuleId, color: 'text-emerald-accent' },
@@ -698,38 +696,34 @@ export default function RiseOSApp() {
                       </button>
                     )
                   })}
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
 
             {/* Main FAB button */}
-            <motion.button
-              layout
+            <button
               onClick={() => setFabOpen(!fabOpen)}
+              aria-label={fabOpen ? 'إغلاق القائمة السريعة' : 'فتح القائمة السريعة'}
               className={cn(
-                'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-xl transition-shadow',
+                'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-xl transition-all active:scale-93',
                 'bg-gradient-to-br from-emerald-accent to-forest',
                 'hover:shadow-emerald-accent/30 hover:shadow-2xl'
               )}
-              whileTap={{ scale: 0.93 }}
             >
-              <motion.span
-                animate={{ rotate: fabOpen ? 45 : 0 }}
-                transition={{ duration: 0.2 }}
+              <span
+                className={cn('transition-transform duration-200', fabOpen && 'rotate-45')}
               >
                 <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </motion.span>
-            </motion.button>
+              </span>
+            </button>
           </div>
         )}
-      </AnimatePresence>
 
       {/* PWA: install prompt, connection status, offline banner */}
-      <PWAInstallPrompt />
-      <OfflineBanner />
+      <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
+      <Suspense fallback={null}><OfflineBanner /></Suspense>
 
       {/* Bluetooth Share Panel */}
-      <BluetoothSharePanel isOpen={btPanelOpen} onClose={() => setBtPanelOpen(false)} />
+      <Suspense fallback={null}><BluetoothSharePanel isOpen={btPanelOpen} onClose={() => setBtPanelOpen(false)} /></Suspense>
     </div>
   )
 }

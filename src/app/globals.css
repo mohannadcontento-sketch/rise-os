@@ -588,6 +588,16 @@ button, a, input, textarea, select, [role="button"], .glass, .premium-card {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .module-title-animate {
   animation: fadeInRight 0.4s ease-out;
 }
