@@ -1180,3 +1180,24 @@ Stage Summary:
 - All /api/rise/* frontend calls in the 10 assigned files now use centralized apiFetch wrapper
 - No behavioral changes — same Response-based API preserved
 - Fire-and-forget XP calls preserved as `.catch(() => {})` pattern
+
+---
+Task ID: bugfix-1
+Agent: Main + 2 Sub-agents (Explore + Full-stack)
+Task: إصلاح جميع الأخطاء الحرجة والمهمة في RiseOS
+
+Work Log:
+- تأكيد أن جميع API routes تستخدم Supabase فقط (لا Prisma/SQLite)
+- إصلاح بحث الصفحة الرئيسية ليستخدم apiGet (مع توكن المصادقة)
+- إصلاح عدم تناسق استجابة habits API (todayLogs → logs)
+- تنظيف db.ts و db-schema.ts (كود Prisma الميت)
+- تدقيق شامل لجميع المكونات (43 خطأ تم اكتشافها)
+- إصلاح 7 أخطاء حرجة: dashboard fallback crash، response shape mismatches، habit toggle wrong table، delete params
+- إصلاح 11 خطأ مهم: res.ok checks في 8 مكونات، sidebar UserInfo fields، duplicate imports
+
+Stage Summary:
+- 18 خطأ تم إصلاحها (7 حرجة + 11 مهمة)
+- Build ينجح بدون أخطاء
+- Lint يمر بدون أخطاء
+- تم الرفع إلى GitHub: commit e8ce495
+- يتبقى: إصلاح المكونات التي تستخدم localStorage فقط (learning, weekly-review, monthly-review, settings) - Priority medium
