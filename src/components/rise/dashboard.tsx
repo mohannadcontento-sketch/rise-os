@@ -174,7 +174,8 @@ function getGreeting(): string {
   return 'مساء النجوم'
 }
 
-function toArabicNum(n: number): string {
+function toArabicNum(n: number | null | undefined): string {
+  if (n == null || isNaN(n)) return '٠'
   return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
 }
 
