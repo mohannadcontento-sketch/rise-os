@@ -85,6 +85,7 @@ export async function DELETE(req: NextRequest) {
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Operation saved locally', offline: true })
+    console.error('[projects] DELETE error:', error)
+    return NextResponse.json({ error: 'فشل في الحذف' }, { status: 500 })
   }
 }

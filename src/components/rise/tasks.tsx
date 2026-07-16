@@ -250,8 +250,11 @@ export function Tasks() {
     return tasks.filter((t) => {
       if (filterPriority !== 'all' && t.priority !== filterPriority) return false
       if (filterProject !== 'all' && t.projectId !== filterProject) return false
+      // 'blocked' is a virtual status — handle separately
+      if (filterStatus === 'blocked') {
+        return isTaskBlocked(t)
+      }
       if (filterStatus !== 'all' && t.status !== filterStatus) return false
-      if (filterStatus === 'blocked' && !isTaskBlocked(t)) return false
       if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
       return true
     })
@@ -300,11 +303,20 @@ export function Tasks() {
   }
 
   const deleteTask = async (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+    const prev = [...tasks]
+    setTasks((p) => p.filter((t) => t.id !== taskId))
     try {
-      await apiDelete(`/api/rise/tasks?id=${taskId}`)
-    } catch {
-      fetchData()
+      const res = await apiDelete(`/api/rise/tasks?id=${taskId}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم حذف المهمة بنجاح')
+    } catch (err) {
+      setTasks(prev)
+      toast.error('فشل حذف المهمة', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
   }
 
@@ -817,41 +829,9 @@ export function Tasks() {
     )
   }
 
-  /* ────────────── Render: Main ────────────── */
-  if (filteredTasks.length === 0 && !loading) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center justify-center py-16 text-center"
-      >
-        <div className="relative mb-6">
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-accent/15 to-forest/10 flex items-center justify-center">
-            <Inbox className="w-10 h-10 text-emerald-accent/50" />
-          </div>
-          <motion.div
-            className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-gold/20 flex items-center justify-center"
-            animate={{ y: [0, -5, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-gold" />
-          </motion.div>
-        </div>
-        <h3 className="text-lg font-bold text-foreground mb-2">لا توجد مهام بعد</h3>
-        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-          ابدأ بإضافة مهمتك الأولى ونظّم يومك بشكل أفضل. كل مهمة تُنجزها تقربك من أهدافك!
-        </p>
-        <Button
-          onClick={() => setAddOpen(true)}
-          className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
-        >
-          <Plus className="w-4 h-4 ml-1.5" />
-          أضف أول مهمة
-        </Button>
-      </motion.div>
-    )
-  }
+  const hasActiveFilter = filterStatus !== 'all' || filterPriority !== 'all' || filterProject !== 'all' || !!searchQuery
 
+  /* ────────────── Render: Main ────────────── */
   return (
     <div className="space-y-5">
       {/* Header bar */}
@@ -1177,8 +1157,49 @@ export function Tasks() {
         ))}
       </div>
 
+      {/* ── Empty State (shows WITH filters so user can change them) ── */}
+      {filteredTasks.length === 0 && !loading && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-12 text-center"
+        >
+          <div className="relative mb-5">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-accent/15 to-forest/10 flex items-center justify-center">
+              <Inbox className="w-9 h-9 text-emerald-accent/50" />
+            </div>
+          </div>
+          <h3 className="text-base font-bold text-foreground mb-1.5">
+            {hasActiveFilter ? 'لا توجد مهام تطابق الفلتر' : 'لا توجد مهام بعد'}
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+            {hasActiveFilter
+              ? 'جرّب تغيير الفلتر لرؤية مهام أخرى'
+              : 'ابدأ بإضافة مهمتك الأولى ونظّم يومك بشكل أفضل.'}
+          </p>
+          {hasActiveFilter && (
+            <Button
+              variant="outline"
+              onClick={() => { setFilterStatus('all'); setFilterPriority('all'); setFilterProject('all'); setSearchQuery('') }}
+              className="mt-4 rounded-xl text-sm"
+            >
+              إعادة ضبط الفلاتر
+            </Button>
+          )}
+          {!hasActiveFilter && (
+            <Button
+              onClick={() => setAddOpen(true)}
+              className="mt-4 rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+            >
+              <Plus className="w-4 h-4 ml-1.5" />
+              أضف أول مهمة
+            </Button>
+          )}
+        </motion.div>
+      )}
+
       {/* ── List View (with Drag & Drop) ── */}
-      {view === 'list' && (
+      {filteredTasks.length > 0 && view === 'list' && (
         <DndContext
           sensors={dragSensors}
           collisionDetection={closestCenter}
@@ -1242,7 +1263,7 @@ export function Tasks() {
       )}
 
       {/* ── Board View ── */}
-      {view === 'board' && (
+      {filteredTasks.length > 0 && view === 'board' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {statusColumns.map((col) => {
             const colTasks = groupedTasks[col.key]
@@ -1285,7 +1306,7 @@ export function Tasks() {
       )}
 
       {/* ── Calendar View ── */}
-      {view === 'calendar' && (
+      {filteredTasks.length > 0 && view === 'calendar' && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}

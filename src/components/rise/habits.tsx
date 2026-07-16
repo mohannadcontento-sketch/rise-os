@@ -322,11 +322,20 @@ export function HabitsView() {
 
   /* ---- Delete habit ---- */
   async function deleteHabit(id: string) {
-    setHabits((prev) => prev.filter((h) => h.id !== id))
+    const prev = [...habits]
+    setHabits((p) => p.filter((h) => h.id !== id))
     try {
-      await apiDelete(`/api/rise/habits?id=${id}`)
-    } catch {
-      // silently fail
+      const res = await apiDelete(`/api/rise/habits?id=${id}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم حذف العادة بنجاح')
+    } catch (err) {
+      setHabits(prev)
+      toast.error('فشل حذف العادة', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
   }
 

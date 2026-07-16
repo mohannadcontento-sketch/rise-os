@@ -270,12 +270,16 @@ export default function Finance() {
     setDeleting(id)
     try {
       const res = await apiDelete(`/api/rise/finance?id=${id}`)
-      if (res.ok) {
-        toast.success('تم حذف السجل')
-        fetchFinance()
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
       }
-    } catch {
-      toast.error('فشل في حذف السجل')
+      toast.success('تم حذف السجل')
+      fetchFinance()
+    } catch (err) {
+      toast.error('فشل في حذف السجل', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     } finally {
       setDeleting(null)
     }

@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { toast } from 'sonner'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
@@ -404,12 +405,23 @@ export function Projects() {
   }
 
   const deleteProject = async (id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id))
+    const prevProjects = [...projects]
+    const prevSelected = selectedProjectId
+    setProjects((p) => p.filter((p) => p.id !== id))
     if (selectedProjectId === id) setSelectedProjectId(null)
     try {
-      await apiDelete(`/api/rise/projects?id=${id}`)
-    } catch {
-      fetchData()
+      const res = await apiDelete(`/api/rise/projects?id=${id}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم حذف المشروع بنجاح')
+    } catch (err) {
+      setProjects(prevProjects)
+      if (prevSelected) setSelectedProjectId(prevSelected)
+      toast.error('فشل حذف المشروع', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
   }
 
@@ -448,11 +460,20 @@ export function Projects() {
   }
 
   const deleteTask = async (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+    const prevTasks = [...tasks]
+    setTasks((p) => p.filter((t) => t.id !== taskId))
     try {
-      await apiDelete(`/api/rise/tasks?id=${taskId}`)
-    } catch {
-      fetchData()
+      const res = await apiDelete(`/api/rise/tasks?id=${taskId}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم حذف المهمة بنجاح')
+    } catch (err) {
+      setTasks(prevTasks)
+      toast.error('فشل حذف المهمة', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
   }
 

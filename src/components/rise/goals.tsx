@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiDelete, apiPost, apiPut } from '@/lib/api-fetch'
+import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
 
@@ -234,11 +235,20 @@ export function GoalsView() {
 
   /* ---- Delete goal ---- */
   async function deleteGoal(id: string) {
-    setGoals((prev) => prev.filter((g) => g.id !== id))
+    const prev = [...goals]
+    setGoals((p) => p.filter((g) => g.id !== id))
     try {
-      await apiDelete(`/api/rise/goals?id=${id}`)
-    } catch {
-      // Silently fail
+      const res = await apiDelete(`/api/rise/goals?id=${id}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم حذف الهدف بنجاح')
+    } catch (err) {
+      setGoals(prev)
+      toast.error('فشل حذف الهدف', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
   }
 

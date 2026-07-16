@@ -771,13 +771,22 @@ export default function DailyPlanner() {
   }, [items])
 
   const deleteItem = useCallback(async (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id))
+    const prev = [...items]
+    setItems((p) => p.filter((i) => i.id !== id))
     try {
-      await apiDelete(`/api/rise/planner?id=${id}`)
-    } catch {
-      fetchItems()
+      const res = await apiDelete(`/api/rise/planner?id=${id}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم الحذف بنجاح')
+    } catch (err) {
+      setItems(prev)
+      toast.error('فشل الحذف', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
-  }, [fetchItems])
+  }, [items])
 
   // Note handlers
   const handleAddNote = () => {

@@ -315,9 +315,10 @@ export default function RiseOSApp() {
   // Keyboard shortcuts (must be before conditional return)
   useKeyboardShortcuts()
 
+  // Only create User profile on first login — NO auto seed data
   useEffect(() => {
     if (auth && auth.accessToken && auth.accessToken !== 'guest') {
-      apiPost('/api/rise/seed').catch(() => {})
+      apiPost('/api/rise/seed', { createProfileOnly: true }).catch(() => {})
     }
   }, [auth])
 

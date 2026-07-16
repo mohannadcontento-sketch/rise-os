@@ -10,21 +10,57 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseWithAuth(req)
 
-    // Check if user already has data
+    // Parse body to check for profileOnly flag
+    let createProfileOnly = false
+    try {
+      const body = await req.json()
+      createProfileOnly = body?.createProfileOnly === true
+    } catch { /* no body or invalid JSON — default to full seed */ }
+
+    // Check if user profile already exists
     const { data: existingUser } = await supabase
       .from('User')
       .select('id')
       .eq('id', userId)
       .single()
 
-    // Check if user has tasks already
+    // If profileOnly mode: just ensure User + UserSettings exist, no sample data
+    if (createProfileOnly) {
+      if (!existingUser) {
+        await supabase.from('User').upsert({
+          id: userId,
+          email: '',
+          name: '',
+          level: 1,
+          xp: 0,
+          streak: 0,
+          longestStreak: 0,
+          totalFocusMin: 0,
+          totalTasksDone: 0,
+        })
+        await supabase.from('UserSettings').upsert({
+          userId,
+          theme: 'system',
+          language: 'ar',
+          wakeUpTime: '06:00',
+          sleepTime: '22:00',
+          focusDuration: 50,
+          dailyWaterGoal: 8,
+          dailyReadingGoal: 30,
+          weeklyExerciseGoal: 5,
+        })
+      }
+      return NextResponse.json({ success: true, seeded: false })
+    }
+
+    // Full seed mode — check if user already has data
     const { count: taskCount } = await supabase
       .from('Task')
       .select('id', { count: 'exact', head: true })
       .eq('userId', userId)
 
     if (existingUser && taskCount && taskCount > 0) {
-      return NextResponse.json({ success: true, user: existingUser })
+      return NextResponse.json({ success: true, user: existingUser, seeded: false })
     }
 
     const today = getToday()

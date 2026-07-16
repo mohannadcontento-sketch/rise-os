@@ -220,11 +220,17 @@ export default function SecondBrain() {
 
   const handleDelete = async (id: string) => {
     try {
-      await apiDelete(`/api/rise/knowledge?id=${id}`)
-      toast.success('تم الحذف')
+      const res = await apiDelete(`/api/rise/knowledge?id=${id}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      toast.success('تم الحذف بنجاح')
       fetchItems()
-    } catch {
-      toast.error('فشل في الحذف')
+    } catch (err) {
+      toast.error('فشل في الحذف', {
+        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
+      })
     }
   }
 
