@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error) {
-    return NextResponse.json({ error: 'Operation saved locally', offline: true })
+    console.error('[morning] POST error:', error)
+    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
 }

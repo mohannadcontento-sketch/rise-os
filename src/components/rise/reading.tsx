@@ -174,13 +174,18 @@ export default function Reading() {
   const handleAddBook = async () => {
     if (!newTitle.trim()) return
     try {
-      await apiPost('/api/rise/books', {
+      const res = await apiPost('/api/rise/books', {
         title: newTitle,
         author: newAuthor || null,
         type: newType,
         totalPages: newTotalPages ? parseInt(newTotalPages) : null,
         status: 'reading',
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في إضافة الكتاب', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       toast.success('تمت إضافة الكتاب بنجاح')
       setNewTitle('')
       setNewAuthor('')
@@ -195,7 +200,13 @@ export default function Reading() {
 
   const handleUpdateBook = async (id: string, data: Partial<Book>) => {
     try {
-      await apiPut('/api/rise/books', { id, ...data })
+      const res = await apiPut('/api/rise/books', { id, ...data })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في تحديث الكتاب', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+      toast.success('تم التحديث بنجاح')
       fetchBooks()
     } catch {
       toast.error('فشل في تحديث الكتاب')

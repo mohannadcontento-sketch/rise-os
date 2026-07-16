@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(data)
   } catch (error) {
-    return NextResponse.json({ error: 'Operation saved locally', offline: true })
+    console.error('[habits] POST error:', error)
+    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
 }
 
@@ -91,7 +92,8 @@ export async function PUT(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(data)
   } catch (error) {
-    return NextResponse.json({ error: 'Operation saved locally', offline: true })
+    console.error('[habits] PUT error:', error)
+    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
 }
 

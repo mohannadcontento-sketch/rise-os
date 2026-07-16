@@ -288,7 +288,13 @@ export default function DeepWork() {
     }
     setLinkingTask(true)
     try {
-      await apiPut('/api/rise/focus', { id: lastSessionId, taskId: selectedTaskId })
+      const res = await apiPut('/api/rise/focus', { id: lastSessionId, taskId: selectedTaskId })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في ربط الجلسة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        setLinkTaskOpen(false)
+        return
+      }
       const taskName = taskOptions.find((t) => t.id === selectedTaskId)?.title
       toast.success('تم ربط الجلسة بالمهمة', { description: taskName })
     } catch {

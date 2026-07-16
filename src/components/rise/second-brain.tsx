@@ -168,7 +168,7 @@ export default function SecondBrain() {
     if (!text) return
     setIsCapturing(true)
     try {
-      await apiPost('/api/rise/knowledge', {
+      const res = await apiPost('/api/rise/knowledge', {
         type: 'idea',
         title: text,
         content: '',
@@ -176,6 +176,11 @@ export default function SecondBrain() {
         tags: null,
         source: null,
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في الحفظ', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       setQuickCapture('')
       toast.success('تم التقاط الفكرة بسرعة!')
       fetchItems()
@@ -189,7 +194,7 @@ export default function SecondBrain() {
   const handleAdd = async () => {
     if (!newTitle.trim()) return
     try {
-      await apiPost('/api/rise/knowledge', {
+      const res = await apiPost('/api/rise/knowledge', {
         type: newType,
         title: newTitle,
         content: newContent,
@@ -197,6 +202,11 @@ export default function SecondBrain() {
         tags: newTags ? JSON.stringify(newTags.split(',').map((t) => t.trim()).filter(Boolean)) : null,
         source: newSource || null,
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في الإضافة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       toast.success('تمت الإضافة بنجاح')
       setNewTitle('')
       setNewContent('')
@@ -211,7 +221,13 @@ export default function SecondBrain() {
 
   const handleUpdate = async (id: string, data: Partial<KnowledgeItem>) => {
     try {
-      await apiPut('/api/rise/knowledge', { id, ...data })
+      const res = await apiPut('/api/rise/knowledge', { id, ...data })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في التحديث', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+      toast.success('تم التحديث بنجاح')
       fetchItems()
     } catch {
       toast.error('فشل في التحديث')

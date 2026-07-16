@@ -743,6 +743,12 @@ export default function DailyPlanner() {
 
     try {
       const res = await apiPost('/api/rise/planner', { date: todayStr, section: sectionId, title: text, time: timeStr })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setItems((prev) => prev.filter((i) => i.id !== tempId))
+        toast.error('فشل في إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       const created = await res.json()
       setItems((prev) => prev.map((i) => i.id === tempId ? created : i))
     } catch {
@@ -762,7 +768,14 @@ export default function DailyPlanner() {
     )
 
     try {
-      await apiPut('/api/rise/planner', { id, completed: newCompleted })
+      const res = await apiPut('/api/rise/planner', { id, completed: newCompleted })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
+        )
+        toast.error('فشل تحديث العنصر', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+      }
     } catch {
       setItems((prev) =>
         prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))

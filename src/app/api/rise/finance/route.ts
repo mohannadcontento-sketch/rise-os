@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(record)
   } catch (error) {
-    return NextResponse.json({ error: 'Operation saved locally', offline: true })
+    console.error('[finance] POST error:', error)
+    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
 }
 

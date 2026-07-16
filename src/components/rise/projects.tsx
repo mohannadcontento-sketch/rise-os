@@ -390,15 +390,19 @@ export function Projects() {
     if (!formName.trim()) return
     setSubmitting(true)
     try {
-      if (editingProject) {
-        await apiPut('/api/rise/projects', { id: editingProject.id, name: formName.trim(), description: formDesc.trim() || null, color: formColor })
-      } else {
-        await apiPost('/api/rise/projects', { name: formName.trim(), description: formDesc.trim() || null, color: formColor })
+      const res = editingProject
+        ? await apiPut('/api/rise/projects', { id: editingProject.id, name: formName.trim(), description: formDesc.trim() || null, color: formColor })
+        : await apiPost('/api/rise/projects', { name: formName.trim(), description: formDesc.trim() || null, color: formColor })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشلت العملية', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
       }
+      toast.success(editingProject ? 'تم تحديث المشروع بنجاح' : 'تم إنشاء المشروع بنجاح')
       setDialogOpen(false)
       fetchData()
     } catch {
-      /* ignore */
+      toast.error('حدث خطأ أثناء الحفظ')
     } finally {
       setSubmitting(false)
     }
@@ -429,19 +433,25 @@ export function Projects() {
     if (!newTaskTitle.trim() || !selectedProjectId) return
     setTaskSubmitting(true)
     try {
-      await apiPost('/api/rise/tasks', {
+      const res = await apiPost('/api/rise/tasks', {
         title: newTaskTitle.trim(),
         priority: newTaskPriority,
         projectId: selectedProjectId,
         dueDate: newTaskDueDate || null,
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+      toast.success('تمت إضافة المهمة بنجاح')
       setNewTaskTitle('')
       setNewTaskPriority('medium')
       setNewTaskDueDate('')
       setAddTaskOpen(false)
       fetchData()
     } catch {
-      /* ignore */
+      toast.error('حدث خطأ أثناء الحفظ')
     } finally {
       setTaskSubmitting(false)
     }
@@ -453,7 +463,12 @@ export function Projects() {
     const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+        toast.error('فشل تحديث المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+      }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }
@@ -481,7 +496,12 @@ export function Projects() {
     const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+        toast.error('فشل تحديث المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+      }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }

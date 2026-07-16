@@ -259,11 +259,28 @@ export function HabitsView() {
       }
 
       try {
-        await apiPut('/api/rise/habits', {
+        const res = await apiPut('/api/rise/habits', {
           habitId,
           date: todayStr,
           completed: newCompleted,
         })
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          // Revert
+          if (existingLog) {
+            setLogs((prev) =>
+              prev.map((l) =>
+                l.habitId === habitId && l.date === todayStr
+                  ? { ...l, completed: existingLog.completed, count: existingLog.count }
+                  : l
+              )
+            )
+          } else {
+            setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayStr)))
+          }
+          toast.error('فشل تحديث العادة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+          return
+        }
         if (newCompleted) {
           const habit = habits.find((h) => h.id === habitId)
           if (habit) {
@@ -350,7 +367,12 @@ export function HabitsView() {
   /* ---- Toggle reminder time ---- */
   const handleToggleReminder = useCallback(async (habitId: string, time: string | null) => {
     try {
-      await apiPut('/api/rise/habits', { id: habitId, reminderTime: time })
+      const res = await apiPut('/api/rise/habits', { id: habitId, reminderTime: time })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل تحديث التذكير', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       setHabits((prev) =>
         prev.map((h) => (h.id === habitId ? { ...h, reminderTime: time } : h))
       )
@@ -360,7 +382,7 @@ export function HabitsView() {
         toast('تم إزالة التذكير')
       }
     } catch {
-      // silently fail
+      toast.error('فشل الاتصال بالخادم')
     }
   }, [])
 

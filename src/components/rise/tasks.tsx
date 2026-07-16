@@ -275,7 +275,13 @@ export function Tasks() {
     const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+        toast.error('فشل تحديث المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       if (!isDone) {
         notifyTaskComplete(task.title, task.xpReward)
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
@@ -291,7 +297,13 @@ export function Tasks() {
     const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+        toast.error('فشل تحديث المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       if (newStatus === 'done') {
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
         // Check if completing this task unblocks dependent tasks
@@ -327,10 +339,15 @@ export function Tasks() {
     }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      await apiPut('/api/rise/tasks', {
+      const res = await apiPut('/api/rise/tasks', {
         id: task.id,
         subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+        toast.error('فشل تحديث المهمة الفرعية', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+      }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
     }
@@ -348,7 +365,12 @@ export function Tasks() {
       }
       if (formProject !== 'none') body.projectId = formProject
       if (formDependsOn.length > 0) body.dependsOn = formDependsOn.join(',')
-      await apiPost('/api/rise/tasks', body)
+      const res = await apiPost('/api/rise/tasks', body)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
       setFormTitle('')
       setFormDesc('')
       setFormPriority('medium')
@@ -356,9 +378,10 @@ export function Tasks() {
       setFormDueDate('')
       setFormDependsOn([])
       setAddOpen(false)
+      toast.success('تمت إضافة المهمة بنجاح')
       fetchData()
     } catch {
-      /* ignore */
+      toast.error('حدث خطأ أثناء الحفظ')
     } finally {
       setSubmitting(false)
     }
@@ -449,9 +472,15 @@ export function Tasks() {
     })
 
     try {
-      await Promise.all(updates.map((u) =>
+      const results = await Promise.all(updates.map((u) =>
         apiPut('/api/rise/tasks', u)
       ))
+      const failed = results.find((r) => !r.ok)
+      if (failed) {
+        const errData = await failed.json().catch(() => ({}))
+        toast.error('فشل ترتيب المهام', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        fetchData()
+      }
     } catch { fetchData() }
   }, [tasks, fetchData])
 

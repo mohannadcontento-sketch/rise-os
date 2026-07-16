@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(created)
   } catch (error) {
-    return NextResponse.json({ error: 'Operation saved locally', offline: true })
+    console.error('[health] POST error:', error)
+    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
 }

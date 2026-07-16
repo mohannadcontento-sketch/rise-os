@@ -186,11 +186,28 @@ export function GoalsView() {
       if (!goal) return
       const ms = goal.milestones.find((m) => m.id === milestoneId)
       if (!ms) return
-      await apiPut('/api/rise/goals', {
+      const res = await apiPut('/api/rise/goals', {
           id: goalId,
           milestoneId,
           completed: !ms.completed,
         })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        // Revert on error
+        setGoals((prev) =>
+          prev.map((g) => {
+            if (g.id !== goalId) return g
+            const reverted = g.milestones.map((m) =>
+              m.id === milestoneId ? { ...m, completed: !m.completed } : m
+            )
+            const completedCount = reverted.filter((m) => m.completed).length
+            const progress =
+              reverted.length > 0 ? Math.round((completedCount / reverted.length) * 100) : 0
+            return { ...g, milestones: reverted, progress }
+          })
+        )
+        toast.error('فشل تحديث الهدف', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+      }
     } catch {
       // Revert on error
       setGoals((prev) =>

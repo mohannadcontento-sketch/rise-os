@@ -38,6 +38,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { toast } from 'sonner'
 import { notifyMorningComplete } from '@/lib/notifications'
 
 /* ────────────── Types ────────────── */
@@ -621,7 +622,12 @@ export default function MorningRoutine() {
       }
 
       try {
-        await apiPost('/api/rise/morning', payload)
+        const res = await apiPost('/api/rise/morning', payload)
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          toast.error('فشل في حفظ الروتين', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+          return
+        }
         if (!startedAt) setStartedAt(now)
         setTodayLog(payload)
         // Award XP when all items completed
@@ -630,7 +636,7 @@ export default function MorningRoutine() {
           apiPost('/api/rise/earn-xp', { amount: totalXp, reason: 'morning-routine-complete' }).catch(() => {})
         }
       } catch {
-        // silent fail
+        toast.error('فشل الاتصال بالخادم')
       } finally {
         setSaving(false)
       }
