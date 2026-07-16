@@ -1687,3 +1687,74 @@ Stage Summary:
 - Deep Work sounds: 8 new sound triggers covering all user interactions
 - Health API 500: Fixed by whitelisting allowed insert fields
 - All changes verified: lint clean, build successful, browser test no errors
+
+---
+Task ID: 2
+Agent: Budget Fix Agent
+Task: Fix Finance/Budget Module — API sync + remove currency
+
+Work Log:
+- Created `/src/app/api/rise/budgets/route.ts` with GET/PUT/DELETE endpoints
+  - GET: fetches UserBudget rows from Supabase (falls back to empty array if table missing)
+  - PUT: deletes all user budgets then inserts new set (upsert pattern, graceful fallback)
+  - DELETE: removes a single budget category by name
+  - All routes use `requireAuth(req)` + `getSupabaseWithAuth(req)`
+- Updated `/src/components/rise/finance.tsx`:
+  - Replaced `localStorage.getItem('rise-finance-budgets')` with `apiFetch('/api/rise/budgets')`
+  - Replaced `localStorage.setItem(...)` with `apiPut('/api/rise/budgets', { budgets: [...] })`
+  - Added `budgetsLoading` state for API fetch loading
+  - Added `apiPut` to import from `@/lib/api-fetch`
+  - Removed ALL 8 occurrences of "ر.س" (Saudi Riyal) from: budget impact alerts, total remaining display, spent/budget label, category limit buttons, savings goal display, cash flow tooltip, expense pie tooltip, monthly comparison tooltip, and group header totals
+- Verified: 0 remaining "ر.س" references, 0 remaining localStorage budget references
+- Lint passes clean (no errors)
+
+Stage Summary:
+- Budget data now syncs to Supabase via API instead of localStorage
+- All currency symbols removed — amounts display as plain numbers
+- Graceful fallback: if UserBudget table doesn't exist, defaults are used client-side
+
+---
+Task ID: 3
+Agent: MCP Server Builder
+Task: إنشاء خادم MCP لـ RiseOS
+
+Work Log:
+- دراسة جميع API routes في المشروع (dashboard, tasks, habits, goals, finance, journal, focus, health, projects, productivity-score)
+- إنشاء `mini-services/mcp-server/` كمشروع bun مستقل
+- إنشاء `package.json` مع `@modelcontextprotocol/sdk@^1.12.1`
+- إنشاء `tsconfig.json` لـ TypeScript
+- إنشاء `index.ts` (~400 سطر) يحتوي:
+  - **أداة المصادقة** (`rise_auth`): تسجيل دخول بالبريد والكلمة، يخزن الـ token في الذاكرة
+  - **أدوات القراءة** (10 أدوات):
+    - `rise_get_dashboard` - لوحة التحكم الشاملة
+    - `rise_get_tasks` - المهام مع تصفية بالحالة
+    - `rise_get_habits` - العادات مع حالة اليوم
+    - `rise_get_goals` - الأهداف مع التقدم والمعالم
+    - `rise_get_finance` - السجلات المالية والملخص مع تصفية بالشهر
+    - `rise_get_journal` - اليومية
+    - `rise_get_focus_sessions` - جلسات التركيز مع تصفية بالأيام
+    - `rise_get_health` - بيانات الصحة مع متوسطات
+    - `rise_get_projects` - المشاريع
+    - `rise_get_productivity_score` - نتيجة الإنتاجية مع تفصيل بصري
+  - **أدوات الكتابة** (5 أدوات):
+    - `rise_add_task` - إضافة مهمة
+    - `rise_toggle_habit` - تحديد/إلغاء عادة
+    - `rise_add_finance_record` - إضافة سجل مالي
+    - `rise_write_journal` - كتابة/تحديث يومية
+    - `rise_add_goal` - إضافة هدف
+  - **مصادر (Resources)**:
+    - `rise://analytics/overview` - نظرة تحليلية شاملة
+    - `rise://finance/report` - تقرير مالي مفصل
+- استخدام `stdio` transport (متوافق مع Claude Desktop)
+- جميع وصفات الأدوات بالعربية
+- معالجة الأخطاء: 401 يمسح الـ token ويطلب إعادة المصادقة
+- إنشاء `mcp-claude-config.json` لإعدادات Claude Desktop
+- تثبيت الحزم بنجاح: `@modelcontextprotocol/sdk@1.29.0` + 92 حزمة
+- التحقق من عدم وجود أخطاء: جميع الاستيرادات تعمل، الخادم يبدأ بدون أخطاء
+
+Stage Summary:
+- MCP server كامل ويعمل في `mini-services/mcp-server/`
+- 16 أداة + 2 مصدر (Resources)
+- متوافق مع Claude Desktop عبر stdio
+- إعدادات Claude Desktop في `mcp-claude-config.json`
+- API URL قابل للتعديل عبر `RISE_API_URL` env var

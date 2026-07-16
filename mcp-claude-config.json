@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "riseos": {
+      "command": "bun",
+      "args": ["run", "/home/z/my-project/mini-services/mcp-server/index.ts"],
+      "env": {
+        "RISE_API_URL": "https://rise-os-gamma.vercel.app"
+      }
+    }
+  }
+}

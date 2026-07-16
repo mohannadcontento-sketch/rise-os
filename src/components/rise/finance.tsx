@@ -57,7 +57,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiDelete, apiPut } from '@/lib/api-fetch'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -183,31 +183,51 @@ export default function Finance() {
 
   /* ─── Budget State ─── */
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>(DEFAULT_BUDGET_CATEGORIES)
+  const [budgetsLoading, setBudgetsLoading] = useState(true)
   const [editingBudget, setEditingBudget] = useState<string | null>(null)
   const budgetEditRef = useRef<HTMLInputElement>(null)
   const [budgetImpact, setBudgetImpact] = useState<{ category: string; remaining: number; over: boolean } | null>(null)
 
-  // Load budgets from localStorage
-  useEffect(() => {
+  // Load budgets from API
+  const fetchBudgets = useCallback(async () => {
     try {
-      const stored = localStorage.getItem('rise-finance-budgets')
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, number>
-        setBudgetCategories(prev =>
-          prev.map(cat => ({
-            ...cat,
-            limit: parsed[cat.name] ?? cat.limit,
-          }))
-        )
+      const res = await apiFetch('/api/rise/budgets')
+      if (res.ok) {
+        const json = await res.json()
+        const serverBudgets: { category: string; limit: number }[] = json.budgets || []
+        if (serverBudgets.length > 0) {
+          const map: Record<string, number> = {}
+          serverBudgets.forEach(b => { map[b.category] = b.limit })
+          setBudgetCategories(prev =>
+            prev.map(cat => ({
+              ...cat,
+              limit: map[cat.name] ?? cat.limit,
+            }))
+          )
+        }
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — use defaults */ }
+    finally {
+      setBudgetsLoading(false)
+    }
   }, [])
 
-  // Save budgets to localStorage
-  const saveBudgets = useCallback((categories: BudgetCategory[]) => {
-    const map: Record<string, number> = {}
-    categories.forEach(cat => { map[cat.name] = cat.limit })
-    localStorage.setItem('rise-finance-budgets', JSON.stringify(map))
+  useEffect(() => {
+    fetchBudgets()
+  }, [fetchBudgets])
+
+  // Save budgets to API
+  const saveBudgets = useCallback(async (categories: BudgetCategory[]) => {
+    try {
+      const res = await apiPut('/api/rise/budgets', {
+        budgets: categories.map(cat => ({ category: cat.name, limit: cat.limit })),
+      })
+      if (!res.ok) {
+        console.warn('Failed to save budgets to server')
+      }
+    } catch {
+      console.warn('Failed to save budgets to server')
+    }
   }, [])
 
   /* ─── Fetch ─── */
@@ -696,8 +716,8 @@ export default function Finance() {
                   )}
                   <span>
                     {budgetImpact.over
-                      ? `تجاوزت ميزانية "${budgetImpact.category}"! المتبقي: ${toArabicNum(Math.abs(budgetImpact.remaining))} ر.س`
-                      : `المتبقي من "${budgetImpact.category}": ${toArabicNum(budgetImpact.remaining)} ر.س`
+                      ? `تجاوزت ميزانية "${budgetImpact.category}"! المتبقي: ${toArabicNum(Math.abs(budgetImpact.remaining))}`
+                      : `المتبقي من "${budgetImpact.category}": ${toArabicNum(budgetImpact.remaining)}`
                     }
                   </span>
                 </motion.div>
@@ -716,10 +736,9 @@ export default function Finance() {
                     : 'text-red-500'
               )}>
                 {toArabicNum(budgetData.totalRemaining)}
-                <span className="text-sm font-normal text-muted-foreground mr-1">ر.س</span>
               </p>
               <p className="text-[10px] text-muted-foreground mt-1">
-                أنفقت {toArabicNum(budgetData.totalSpent)} من {toArabicNum(budgetData.totalBudget)} ر.س
+                أنفقت {toArabicNum(budgetData.totalSpent)} من {toArabicNum(budgetData.totalBudget)}
               </p>
             </div>
 
@@ -770,7 +789,7 @@ export default function Finance() {
                             onClick={() => setEditingBudget(item.name)}
                             className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-1.5 py-0.5 rounded hover:bg-primary/5 transition-colors"
                           >
-                            {toArabicNum(item.limit)} ر.س
+                            {toArabicNum(item.limit)}
                           </motion.button>
                         )}
                       </div>
@@ -943,7 +962,7 @@ export default function Finance() {
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                <span className="font-bold text-forest">{formatAmount(totalSavings)}</span> من <span className="font-medium">{formatAmount(savingsGoal)}</span> ر.س
+                <span className="font-bold text-forest">{formatAmount(totalSavings)}</span> من <span className="font-medium">{formatAmount(savingsGoal)}</span>
               </span>
               <span className="font-semibold text-forest">{Math.round(savingsProgress)}%</span>
             </div>
@@ -968,7 +987,7 @@ export default function Finance() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={45} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${formatAmount(Math.abs(value))} ر.س`, '']} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${formatAmount(Math.abs(value))}`, '']} />
                   <Bar dataKey="قيمة" radius={[4, 4, 0, 0]}>
                     {cashFlowData.map((entry, index) => (
                       <Cell key={index} fill={entry.fill} />
@@ -1017,7 +1036,7 @@ export default function Finance() {
                       </Pie>
                       <Tooltip
                         contentStyle={tooltipStyle}
-                        formatter={(value: number) => [`${formatAmount(value)} ر.س`, 'المبلغ']}
+                        formatter={(value: number) => [`${formatAmount(value)}`, 'المبلغ']}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -1078,7 +1097,7 @@ export default function Finance() {
                   <Tooltip
                     contentStyle={tooltipStyle}
                     formatter={(value: number, name: string) => [
-                      `${formatAmount(value)} ر.س`,
+                      `${formatAmount(value)}`,
                       name,
                     ]}
                   />
@@ -1180,7 +1199,7 @@ export default function Finance() {
                           {records.length}
                         </Badge>
                         <span className="text-xs text-muted-foreground mr-auto">
-                          {formatAmount(total)} ر.س
+                          {formatAmount(total)}
                         </span>
                       </div>
 
