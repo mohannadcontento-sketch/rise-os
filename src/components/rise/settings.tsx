@@ -38,6 +38,13 @@ import {
   Save,
   Search,
   Volume2,
+  Eye,
+  Key,
+  Copy,
+  RefreshCw,
+  ExternalLink,
+  Sparkles,
+  ChevronsUpDown,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -67,7 +74,7 @@ import {
 import { useTheme } from 'next-themes'
 import { useRiseStore } from '@/store/app-store'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 
@@ -466,6 +473,307 @@ function AdminPanel() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/* ────────────── MCP & AI Integration Section ────────────── */
+
+const MCP_BASE_URL = typeof window !== 'undefined' ? window.location.origin : ''
+
+function McpSection() {
+  const { auth } = useRiseStore()
+  const [apiKey, setApiKey] = useState<string>('')
+  const [maskedKey, setMaskedKey] = useState<string>('')
+  const [hasKey, setHasKey] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [showFull, setShowFull] = useState(false)
+
+  useEffect(() => {
+    fetchKey()
+  }, [])
+
+  async function fetchKey() {
+    try {
+      const res = await apiFetch('/api/rise/mcp/key')
+      if (res.ok) {
+        const data = await res.json()
+        setHasKey(data.hasKey)
+        setMaskedKey(data.apiKey || '')
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function generateKey() {
+    setGenerating(true)
+    try {
+      const res = await apiPost('/api/rise/mcp/key', {})
+      if (res.ok) {
+        const data = await res.json()
+        setApiKey(data.apiKey)
+        setHasKey(true)
+        setMaskedKey(data.apiKey.slice(0, 8) + '...' + data.apiKey.slice(-4))
+        playSound('success')
+        toast.success('تم إنشاء مفتاح API بنجاح ✨')
+      } else {
+        toast.error('فشل في إنشاء المفتاح')
+      }
+    } catch {
+      toast.error('فشل في الاتصال')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function revokeKey() {
+    try {
+      const res = await apiDelete('/api/rise/mcp/key')
+      if (res.ok) {
+        setApiKey('')
+        setHasKey(false)
+        setMaskedKey('')
+        playSound('delete')
+        toast.success('تم حذف مفتاح API')
+      }
+    } catch { /* ignore */ }
+  }
+
+  function copyText(text: string) {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    playSound('click')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const displayKey = showFull && apiKey ? apiKey : maskedKey
+  const endpointUrl = `${MCP_BASE_URL}/api/rise/mcp/call`
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+      <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent premium-card">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
+              <Bot className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <span>ربط الذكاء الاصطناعي (MCP)</span>
+              <p className="text-xs text-muted-foreground font-normal mt-0.5">
+                اربط RiseOS بأي ذكاء اصطناعي — Claude, ChatGPT, Qwen, وأي AI آخر
+              </p>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* ── API Key Section ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-emerald-accent" />
+                <span className="text-sm font-medium">مفتاح API</span>
+              </div>
+              {hasKey && (
+                <Badge variant="outline" className="text-emerald-accent border-emerald-accent/30 text-[10px]">
+                  <Check className="w-2.5 h-2.5 ml-1" /> نشط
+                </Badge>
+              )}
+            </div>
+
+            {hasKey ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-muted/50 rounded-lg px-3 py-2.5 font-mono text-xs text-foreground/80 select-all overflow-hidden whitespace-nowrap" dir="ltr">
+                    {displayKey}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setShowFull(!showFull)}
+                    title={showFull ? 'إخفاء' : 'إظهار كامل'}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => copyText(apiKey || maskedKey)}
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-accent" /> : <Copy className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+                <Button variant="outline" size="sm" className="text-red-500 border-red-500/30 hover:bg-red-500/10 text-xs" onClick={revokeKey}>
+                  <Trash2 className="w-3 h-3 ml-1" /> حذف المفتاح
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  أنشئ مفتاح API لربط RiseOS بأي ذكاء اصطناعي. المفتاح ده بيخلي الـ AI يقدر يقرأ ويعدل بياناتك.
+                </p>
+                <Button onClick={generateKey} disabled={generating} className="bg-gradient-to-l from-emerald-accent to-forest text-white text-xs">
+                  {generating ? <RefreshCw className="w-3.5 h-3.5 ml-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 ml-1" />}
+                  {generating ? 'جارٍ الإنشاء...' : 'إنشاء مفتاح API'}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* ── Universal HTTP API (works with ANY AI) ── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-emerald-accent" />
+              <span className="text-sm font-medium">رابط API العام</span>
+              <Badge variant="secondary" className="text-[10px]">أي AI</Badge>
+            </div>
+
+            <div className="bg-muted/40 rounded-lg p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-[11px] text-foreground/70 font-mono truncate" dir="ltr">{endpointUrl}</code>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => copyText(endpointUrl)}>
+                  <Copy className="w-3 h-3" />
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                أرسل طلب POST بهيئة JSON إلى هذا الرابط مع مفتاح API في الهيدر.
+              </p>
+            </div>
+
+            {/* Example request */}
+            <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-medium text-muted-foreground">مثال: عرض لوحة التحكم</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyText(`curl -X POST ${endpointUrl} \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"tool": "get_dashboard", "args": {}}'`)}>
+                  <Copy className="w-3 h-3" />
+                </Button>
+              </div>
+              <pre className="text-[10px] font-mono text-foreground/60 leading-relaxed overflow-x-auto" dir="ltr">{`curl -X POST ${endpointUrl} \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"tool": "get_dashboard", "args": {}}'`}</pre>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* ── Step-by-step guides ── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <ChevronsUpDown className="w-4 h-4 text-emerald-accent" />
+              <span className="text-sm font-medium">طرق الربط خطوة بخطوة</span>
+            </div>
+
+            <div className="space-y-2.5">
+              {/* Claude Desktop */}
+              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🟣</span>
+                  <span className="text-xs font-semibold">Claude Desktop</span>
+                </div>
+                <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
+                  <li>أنشئ مفتاح API من أعلى</li>
+                  <li>افتح ملف الإعدادات: <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">claude_desktop_config.json</code></li>
+                  <li>أضف الإعدادات دي:</li>
+                </ol>
+                <pre className="text-[10px] font-mono text-foreground/50 mt-2 p-2 bg-muted/30 rounded leading-relaxed" dir="ltr">{`{
+  "mcpServers": {
+    "riseos": {
+      "command": "npx",
+      "args": ["-y", "riseos-mcp@latest"],
+      "env": {
+        "RISE_API_URL": "${MCP_BASE_URL}",
+        "RISE_API_KEY": "rise_YOUR_KEY"
+      }
+    }
+  }
+}`}</pre>
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">أعد تشغيل Claude Desktop — هيظهر "MCP connected" ✅</p>
+              </div>
+
+              {/* ChatGPT / Qwen / Any AI */}
+              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🟢</span>
+                  <span className="text-xs font-semibold">ChatGPT · Qwen · Gemini · أي AI آخر</span>
+                </div>
+                <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
+                  <li>أنشئ مفتاح API من أعلى</li>
+                  <li>انسخ الرابط: <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">{endpointUrl}</code></li>
+                  <li>في محادثة الـ AI، قولو:</li>
+                </ol>
+                <div className="mt-2 p-2.5 bg-muted/30 rounded-lg border border-dashed border-emerald-accent/30">
+                  <p className="text-[11px] text-foreground/70 leading-relaxed italic">
+                    "عندي API لموقع RiseOS. الرابط: <code dir="ltr" className="text-emerald-accent text-[10px]">{endpointUrl}</code> والمفتاح: <code dir="ltr" className="text-emerald-accent text-[10px]">rise_xxxx</code>. ابعت طلب POST بهيئة JSON: <code dir="ltr" className="text-emerald-accent text-[10px]">{'{{ "tool": "get_dashboard", "args": {{}} }}'}</code> وهاتلي النتيجة."
+                  </p>
+                </div>
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+                  💡 طلب POST مع <code className="font-mono">Authorization: Bearer rise_xxxx</code> في الهيدر
+                </p>
+              </div>
+
+              {/* Cursor / VS Code */}
+              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🔵</span>
+                  <span className="text-xs font-semibold">Cursor IDE · VS Code</span>
+                </div>
+                <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
+                  <li>أنشئ مفتاح API من أعلى</li>
+                  <li>في Cursor: <code className="text-foreground/50 font-mono text-[10px]">Settings → MCP → Add Server</code></li>
+                  <li>اختر <code className="font-mono text-[10px]">stdio</code> وضبط:</li>
+                </ol>
+                <pre className="text-[10px] font-mono text-foreground/50 mt-2 p-2 bg-muted/30 rounded leading-relaxed" dir="ltr">{`Command: bun
+Args: run /path/to/rise-os/mini-services/mcp-server/index.ts
+Env: RISE_API_URL=${MCP_BASE_URL}
+     RISE_API_KEY=rise_YOUR_KEY_HERE`}</pre>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* ── Available Tools ── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-accent" />
+              <span className="text-sm font-medium">الأدوات المتاحة (16 أداة)</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {[
+                { name: 'get_dashboard', label: 'لوحة التحكم' },
+                { name: 'get_tasks', label: 'عرض المهام' },
+                { name: 'add_task', label: 'إضافة مهمة' },
+                { name: 'get_habits', label: 'عرض العادات' },
+                { name: 'toggle_habit', label: 'تسجيل عادة' },
+                { name: 'get_goals', label: 'عرض الأهداف' },
+                { name: 'add_goal', label: 'إضافة هدف' },
+                { name: 'get_finance', label: 'عرض المالية' },
+                { name: 'add_finance', label: 'إضافة سجل مالي' },
+                { name: 'get_journal', label: 'عرض اليوميات' },
+                { name: 'write_journal', label: 'كتابة يوميات' },
+                { name: 'get_focus', label: 'جلسات التركيز' },
+                { name: 'get_health', label: 'البيانات الصحية' },
+                { name: 'get_projects', label: 'المشروعات' },
+                { name: 'get_score', label: 'نتيجة الإنتاجية' },
+                { name: 'list_tools', label: 'قائمة الأدوات' },
+              ].map((tool) => (
+                <div key={tool.name} className="bg-muted/30 rounded-md px-2.5 py-1.5 flex items-center gap-1.5">
+                  <div className="w-1 h-1 rounded-full bg-emerald-accent shrink-0" />
+                  <span className="text-[10px] font-mono text-foreground/50" dir="ltr">{tool.name}</span>
+                  <span className="text-[10px] text-muted-foreground mr-auto">{tool.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 
@@ -1200,6 +1508,9 @@ export default function Settings() {
           </div>
         </div>
       </motion.div>
+
+      {/* ══════════ MCP & AI Integration ══════════ */}
+      <McpSection />
 
       {/* ── Gradient Divider ── */}
       <div className="h-[2px] bg-gradient-to-l from-transparent via-muted-foreground/20 to-transparent" />

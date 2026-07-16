@@ -14,9 +14,10 @@ import { z } from "zod";
 
 // ─── Configuration ───────────────────────────────────────────────
 const RISE_API_URL = process.env.RISE_API_URL || "http://localhost:3000";
+const RISE_API_KEY = process.env.RISE_API_KEY || null;
 
 // ─── Auth State ──────────────────────────────────────────────────
-let authToken: string | null = null;
+let authToken: string | null = RISE_API_KEY; // Pre-set from env if provided
 
 function getAuthHeaders(): Record<string, string> {
   if (!authToken) {
@@ -40,6 +41,33 @@ async function apiFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<{ data: unknown; error?: string }> {
+  // If using API key, route through the universal MCP endpoint
+  if (authToken?.startsWith("rise_")) {
+    try {
+      const bodyObj = options.body ? JSON.parse(options.body as string) : {};
+      const toolName = path.replace("/api/rise/", "").replace(/\//g, "_");
+      const response = await fetch(`${RISE_API_URL}/api/rise/mcp/call`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tool: toolName, args: bodyObj }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { data: json, error: json?.error || `HTTP ${response.status}` };
+      }
+      return { data: json.data || json };
+    } catch (err) {
+      return {
+        data: null,
+        error: `فشل الاتصال بخادم RiseOS (${RISE_API_URL}).`,
+      };
+    }
+  }
+
+  // Standard JWT auth flow
   const url = `${RISE_API_URL}${path}`;
   const headers = options.headers
     ? { ...getAuthHeaders(), ...(options.headers as Record<string, string>) }

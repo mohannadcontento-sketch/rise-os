@@ -1758,3 +1758,31 @@ Stage Summary:
 - متوافق مع Claude Desktop عبر stdio
 - إعدادات Claude Desktop في `mcp-claude-config.json`
 - API URL قابل للتعديل عبر `RISE_API_URL` env var
+
+---
+Task ID: 1-2
+Agent: Backend Builder
+Task: Create API Key System + Universal MCP HTTP Endpoint
+
+Work Log:
+- إنشاء `/api/rise/mcp/key/route.ts`:
+  - POST: توليد مفتاح API جديد (`rise_` + 32 hex chars) وتخزينه في جدول UserApiKey (مع fallback إذا الجدول غير موجود)
+  - GET: عرض المفتاح الحالي مخفي (أول 8 أحرف + آخر 4)
+  - DELETE: حذف مفتاح API المستخدم
+- إنشاء `/api/rise/mcp/call/route.ts`:
+  - GET: عرض قائمة الأدوات المتاحة بدون مصادقة
+  - POST: تنفيذ أداة معينة مع مصادقة عبر API key أو JWT
+  - `resolveUserId()`: يدعم `rise_` API keys + Supabase JWT
+  - 16 أداة مُنفذة: list_tools, get_dashboard, get_tasks, add_task, get_habits, toggle_habit, get_goals, add_goal, get_finance, add_finance, get_journal, write_journal, get_focus, get_health, get_projects, get_score
+  - كل أداة تستعلم Supabase مباشرة بنمط `.eq('userId', userId)`
+  - أوصاف الأدوات بالعربية
+  - معالجة أخطاء شاملة مع رسائل عربية
+- Lint: يمر بدون أخطاء
+- TypeScript: لا توجد أخطاء جديدة (الأخطاء الموجودة سابقة)
+
+Stage Summary:
+- نظام API Key كامل مع توليد + عرض + حذف
+- نقطة نهاية HTTP موحدة لأي AI (Claude, ChatGPT, Qwen, etc.)
+- المصادقة تدعم API keys و JWT
+- 16 أداة تعمل عبر POST إلى `/api/rise/mcp/call`
+- GET `/api/rise/mcp/call` يعرض كتالوج الأدوات
