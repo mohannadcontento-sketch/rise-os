@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useCallback, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Keyboard,
   LayoutDashboard,
@@ -156,16 +155,14 @@ export function KeyboardShortcutsDialog() {
               {NAVIGATION_SHORTCUTS.map((s) => {
                 const Icon = s.icon
                 return (
-                  <motion.button
+                  <button
                     key={s.keys}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleAction(s)}
                     className={cn(
                       'flex items-center justify-between gap-2 p-3 rounded-xl text-right',
                       'glass border transition-all duration-200',
                       CATEGORY_COLORS[s.category],
-                      'hover:bg-accent/50 cursor-pointer'
+                      'hover:bg-accent/50 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
                     )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -173,7 +170,7 @@ export function KeyboardShortcutsDialog() {
                       <span className="text-xs font-medium text-foreground truncate">{s.label}</span>
                     </div>
                     <KeyBadge keys={s.keys} />
-                  </motion.button>
+                  </button>
                 )
               })}
             </div>
@@ -189,16 +186,14 @@ export function KeyboardShortcutsDialog() {
               {ACTION_SHORTCUTS.map((s) => {
                 const Icon = s.icon
                 return (
-                  <motion.button
+                  <button
                     key={s.keys}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleAction(s)}
                     className={cn(
                       'flex items-center justify-between gap-2 p-3 rounded-xl text-right',
                       'glass border transition-all duration-200',
                       CATEGORY_COLORS[s.category],
-                      'hover:bg-accent/50 cursor-pointer'
+                      'hover:bg-accent/50 hover:scale-[1.01] active:scale-[0.98] cursor-pointer'
                     )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -209,7 +204,7 @@ export function KeyboardShortcutsDialog() {
                       </div>
                     </div>
                     <KeyBadge keys={s.keys} />
-                  </motion.button>
+                  </button>
                 )
               })}
             </div>
@@ -225,16 +220,14 @@ export function KeyboardShortcutsDialog() {
               {VIEW_SHORTCUTS.map((s) => {
                 const Icon = s.icon
                 return (
-                  <motion.button
+                  <button
                     key={s.keys}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleAction(s)}
                     className={cn(
                       'flex items-center justify-between gap-2 p-3 rounded-xl text-right',
                       'glass border transition-all duration-200',
                       CATEGORY_COLORS[s.category],
-                      s.keys === 'Ctrl+/' ? 'cursor-default' : 'hover:bg-accent/50 cursor-pointer'
+                      s.keys === 'Ctrl+/' ? 'cursor-default' : 'hover:bg-accent/50 hover:scale-[1.01] active:scale-[0.98] cursor-pointer'
                     )}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -245,7 +238,7 @@ export function KeyboardShortcutsDialog() {
                       </div>
                     </div>
                     <KeyBadge keys={s.keys} />
-                  </motion.button>
+                  </button>
                 )
               })}
             </div>

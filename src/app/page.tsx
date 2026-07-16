@@ -5,9 +5,9 @@ import { useRiseStore } from '@/store/app-store'
 import {
   CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target,
   LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
-  Brain, GraduationCap, Heart, Wallet, Calendar as CalendarIcon, Network, BarChart3,
-  Sparkles, Settings as SettingsIcon, Zap,
-  HeartPulse, PenLine,
+  Brain, GraduationCap, Heart, HeartPulse, LogOut, PenLine,
+  Wallet, Calendar as CalendarIcon, Network, BarChart3,
+  Sparkles, Settings as SettingsIcon, Zap, Bluetooth,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -15,28 +15,25 @@ import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { apiPost, apiGet } from '@/lib/api-fetch'
 
+// Keyboard shortcuts (uses a hook — must be eagerly imported)
+import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+
 // Heavy components — lazy loaded to reduce initial JS bundle
 const Sidebar = lazy(() => import('@/components/rise/sidebar').then(m => ({ default: m.Sidebar })))
 const LoginPage = lazy(() => import('@/components/rise/login-page'))
-const CommandDialog = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandDialog })))
-const CommandEmpty = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandEmpty })))
-const CommandGroup = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandGroup })))
-const CommandInput = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandInput })))
-const CommandItem = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandItem })))
-const CommandList = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandList })))
 // PWA components — lazy loaded
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
 const ConnectionStatus = lazy(() => import('@/lib/pwa').then(m => ({ default: m.ConnectionStatus })))
 const OfflineBanner = lazy(() => import('@/lib/pwa').then(m => ({ default: m.OfflineBanner })))
 const BluetoothSharePanel = lazy(() => import('@/lib/pwa').then(m => ({ default: m.BluetoothSharePanel })))
-// Keyboard shortcuts — lazy loaded (wrap hook in a component)
-const KeyboardShortcutsWrapper = lazy(() => import('@/components/rise/keyboard-shortcuts').then(m => ({
-  default: function KeyboardShortcutsWrapper() {
-    m.useKeyboardShortcuts()
-    return <m.KeyboardShortcutsDialog />
-  }
-})))
-import { LogOut, Bluetooth } from 'lucide-react'
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -315,6 +312,7 @@ export default function RiseOSApp() {
   }, [setAuth])
 
   // Keyboard shortcuts (must be before conditional return)
+  useKeyboardShortcuts()
 
   useEffect(() => {
     if (auth && auth.accessToken && auth.accessToken !== 'guest') {
@@ -663,7 +661,7 @@ export default function RiseOSApp() {
       </CommandDialog>
 
       {/* Keyboard Shortcuts Dialog */}
-      <Suspense fallback={null}><KeyboardShortcutsWrapper /></Suspense>
+      <KeyboardShortcutsDialog />
 
       {/* ══════════ FAB - Quick Add ══════════ */}
         {activeModule !== 'dashboard' && activeModule !== 'settings' && (
