@@ -139,7 +139,12 @@ export function GoalsView() {
         const res = await apiFetch('/api/rise/goals')
         if (res.ok) {
           const data: GoalsResponse = await res.json()
-          setGoals(data.goals)
+          // Ensure goals is always an array, and each goal has a milestones array
+          const safeGoals = (Array.isArray(data.goals) ? data.goals : []).map((g: Goal) => ({
+            ...g,
+            milestones: Array.isArray(g.milestones) ? g.milestones : [],
+          }))
+          setGoals(safeGoals)
         }
       } catch {
         // Use empty state
@@ -171,10 +176,11 @@ export function GoalsView() {
     const goal = goals.find((g) => g.id === goalId)
     let willComplete = false
     if (goal) {
-      const ms = goal.milestones.find((m) => m.id === milestoneId)
+      const milestones = goal.milestones || []
+      const ms = milestones.find((m) => m.id === milestoneId)
       if (ms && !ms.completed) {
-        const completedCount = goal.milestones.filter((m) => m.completed).length + 1
-        willComplete = completedCount === goal.milestones.length
+        const completedCount = milestones.filter((m) => m.completed).length + 1
+        willComplete = milestones.length > 0 && completedCount === milestones.length
       }
     }
     if (willComplete) playSound('complete')
@@ -197,7 +203,7 @@ export function GoalsView() {
     try {
       const goal = goals.find((g) => g.id === goalId)
       if (!goal) return
-      const ms = goal.milestones.find((m) => m.id === milestoneId)
+      const ms = (goal.milestones || []).find((m) => m.id === milestoneId)
       if (!ms) return
       const res = await apiPut('/api/rise/goals', {
           id: goalId,
@@ -667,8 +673,9 @@ function GoalCard({
   getDeadlineInfo,
 }: GoalCardProps) {
   const deadlineInfo = getDeadlineInfo(goal.deadline)
-  const completedMilestones = goal.milestones.filter((m) => m.completed).length
-  const totalMilestones = goal.milestones.length
+  const milestones = goal.milestones || []
+  const completedMilestones = milestones.filter((m) => m.completed).length
+  const totalMilestones = milestones.length
 
   const gradientStops = TYPE_GRADIENT_STOPS[goal.type]
   const gradId = `goalGrad-${goal.id}`
