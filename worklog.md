@@ -1664,3 +1664,26 @@ Stage Summary:
 - Sounds system is comprehensive with 14 sound types across 14 components
 - App compiles and renders correctly
 - Per-module error boundary prevents whole-app crashes
+
+---
+Task ID: Bug Fix Session 2
+Agent: Main
+Task: Fix React error #130 in Monthly Review, add Deep Work sounds, fix health API 500, fix SVG circle r="undefined"
+
+Work Log:
+- Diagnosed React #130 in monthly-review.tsx: `cat.icon` (React component function) was stripped by JSON.stringify when saving to localStorage, becoming `undefined` on reload
+- Created `CATEGORY_ICONS` map and `hydrateCategories()` function to re-attach icon components after deserialization
+- Added defensive guards: `typeof c.score === 'number' && !isNaN(c.score)` for all numeric renders
+- Added `safeScore` variable for `review.score` rendering with typeof/isNaN guards
+- Fixed previous reviews click to also hydrate categories before setting state
+- Fixed radarData to defensively validate category names and scores for Recharts
+- Added 8 playSound() calls to deep-work.tsx: start (click), pause (toggle), resume (click), reset (click), stop (save/click), duration select (navigate), ambient toggle (toggle), task link (complete), timer complete (achievement after timer-done)
+- Fixed health API 500: added ALLOWED_FIELDS whitelist to prevent extra fields causing Supabase errors, better error handling
+- Lint passes clean, build succeeds, page loads in browser with no console errors
+
+Stage Summary:
+- Monthly Review React #130: ROOT CAUSE was icon functions lost during JSON serialization. Fixed with hydration pattern.
+- SVG circle r="undefined": Likely a side effect of React #130 corrupting Recharts data. Fixed by adding defensive data validation to radarData.
+- Deep Work sounds: 8 new sound triggers covering all user interactions
+- Health API 500: Fixed by whitelisting allowed insert fields
+- All changes verified: lint clean, build successful, browser test no errors

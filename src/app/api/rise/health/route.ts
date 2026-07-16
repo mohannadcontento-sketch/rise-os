@@ -3,39 +3,58 @@ import { getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
+/** Fields allowed to be stored in HealthLog */
+const ALLOWED_FIELDS = [
+  'sleepHours', 'sleepQuality', 'water', 'exercise', 'exerciseType',
+  'mood', 'energy', 'weight', 'notes', 'steps',
+] as const
+
 export async function GET(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ logs: [], todayLog: null })
     const supabase = getSupabaseWithAuth(req)
 
     const today = getToday()
     const last30 = getLast30Days()
 
-    const { data: logs } = await supabase
+    const { data: logs, error } = await supabase
       .from('HealthLog')
       .select('*')
       .eq('userId', userId)
       .in('date', last30)
       .order('date', { ascending: false })
 
+    if (error) {
+      console.error('[health] GET Supabase error:', error.message)
+      return NextResponse.json({ logs: [], todayLog: null })
+    }
+
     const todayLog = logs?.find(l => l.date === today) || null
     return NextResponse.json({ logs: logs || [], todayLog })
   } catch (error) {
     console.error('Health GET error:', error)
-    return NextResponse.json({ healthLog: null, recentLogs: [] })
+    return NextResponse.json({ logs: [], todayLog: null })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ error: 'unauthorized', offline: true }, { status: 401 })
     const supabase = getSupabaseWithAuth(req)
 
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
     const today = getToday()
     const targetDate = body.date || today
+
+    // Only keep allowed fields
+    const cleanData: Record<string, unknown> = { userId, date: targetDate }
+    for (const field of ALLOWED_FIELDS) {
+      if (body[field] !== undefined) {
+        cleanData[field] = body[field]
+      }
+    }
 
     const { data: existing } = await supabase
       .from('HealthLog')
@@ -47,20 +66,26 @@ export async function POST(req: NextRequest) {
     if (existing) {
       const { data: updated, error } = await supabase
         .from('HealthLog')
-        .update(body)
+        .update(cleanData)
         .eq('id', existing.id)
         .select()
         .single()
-      if (error) throw error
+      if (error) {
+        console.error('[health] UPDATE error:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
       return NextResponse.json(updated)
     }
 
     const { data: created, error } = await supabase
       .from('HealthLog')
-      .insert({ userId, date: today, ...body })
+      .insert(cleanData)
       .select()
       .single()
-    if (error) throw error
+    if (error) {
+      console.error('[health] INSERT error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
     return NextResponse.json(created)
   } catch (error) {
     console.error('[health] POST error:', error)

@@ -215,6 +215,7 @@ export default function DeepWork() {
             setSessionCompleted(true)
             setCelebrateKey((k) => k + 1)
             playSound('timer-done')
+            setTimeout(() => playSound('achievement'), 400)
             return 0
           }
           return prev - 1
@@ -299,6 +300,7 @@ export default function DeepWork() {
       }
       const taskName = taskOptions.find((t) => t.id === selectedTaskId)?.title
       toast.success('تم ربط الجلسة بالمهمة', { description: taskName })
+      playSound('complete')
     } catch {
       toast.error('فشل في ربط الجلسة')
     } finally {
@@ -316,14 +318,17 @@ export default function DeepWork() {
     setIsRunning(true)
     setIsPaused(false)
     setSessionCompleted(false)
+    playSound('click')
   }
 
   const handlePause = () => {
     setIsPaused(true)
+    playSound('toggle')
   }
 
   const handleResume = () => {
     setIsPaused(false)
+    playSound('click')
   }
 
   const handleReset = () => {
@@ -332,6 +337,7 @@ export default function DeepWork() {
     setSessionCompleted(false)
     setTimeRemaining(selectedDuration * 60)
     setSessionStartTime(null)
+    playSound('click')
   }
 
   const handleStop = () => {
@@ -340,6 +346,9 @@ export default function DeepWork() {
     const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
     if (elapsedMin > 0) {
       saveSession(false)
+      playSound('save')
+    } else {
+      playSound('click')
     }
     setTimeRemaining(selectedDuration * 60)
     setSessionStartTime(null)
@@ -351,6 +360,7 @@ export default function DeepWork() {
     setTimeRemaining(min * 60)
     setSessionCompleted(false)
     setSessionStartTime(null)
+    playSound('navigate')
   }
 
   const toggleSound = (label: string) => {
@@ -360,6 +370,7 @@ export default function DeepWork() {
       else next.add(label)
       return next
     })
+    playSound('toggle')
   }
 
   /* ─── Computed ─── */

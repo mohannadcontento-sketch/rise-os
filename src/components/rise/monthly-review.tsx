@@ -80,6 +80,15 @@ interface AutoFillData {
 
 const STORAGE_KEY = 'rise-monthly-review'
 
+/* Icon map — used to re-attach icons after localStorage deserialization */
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  health: Heart,
+  finance: Wallet,
+  learning: GraduationCap,
+  relationships: Users,
+  career: Briefcase,
+}
+
 const defaultCategories: CategoryReview[] = [
   { id: 'health', name: 'الصحة', icon: Heart, color: 'text-rose-500', score: 5, notes: '' },
   { id: 'finance', name: 'المالية', icon: Wallet, color: 'text-amber-500', score: 5, notes: '' },
@@ -87,6 +96,17 @@ const defaultCategories: CategoryReview[] = [
   { id: 'relationships', name: 'العلاقات', icon: Users, color: 'text-purple-500', score: 5, notes: '' },
   { id: 'career', name: 'المهنة', icon: Briefcase, color: 'text-emerald-accent', score: 5, notes: '' },
 ]
+
+/** Restore icon functions lost during JSON serialization */
+function hydrateCategories(categories: CategoryReview[]): CategoryReview[] {
+  return categories.map((c) => ({
+    ...c,
+    icon: CATEGORY_ICONS[c.id] || Heart,
+    score: typeof c.score === 'number' && !isNaN(c.score) ? c.score : 5,
+    notes: typeof c.notes === 'string' ? c.notes : '',
+    name: typeof c.name === 'string' ? c.name : c.id,
+  }))
+}
 
 const emptyReview = (): MonthlyReview => ({
   id: crypto.randomUUID(),
@@ -135,7 +155,10 @@ export default function MonthlyReview() {
     if (typeof window === 'undefined') return []
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) return JSON.parse(stored) as MonthlyReview[]
+      if (stored) {
+        const parsed: MonthlyReview[] = JSON.parse(stored)
+        return parsed.map((r) => ({ ...r, categories: hydrateCategories(r.categories || []) }))
+      }
     } catch { /* ignore */ }
     return []
   })
@@ -146,7 +169,7 @@ export default function MonthlyReview() {
       if (stored) {
         const parsed: MonthlyReview[] = JSON.parse(stored)
         const thisMonth = parsed.find((r) => r.month === new Date().toISOString().slice(0, 7))
-        if (thisMonth) return thisMonth
+        if (thisMonth) return { ...thisMonth, categories: hydrateCategories(thisMonth.categories || []) }
       }
     } catch { /* ignore */ }
     return emptyReview()
@@ -250,12 +273,15 @@ export default function MonthlyReview() {
   }, [])
 
   const radarData = review.categories.map((c) => ({
-    category: c.name,
-    score: c.score,
+    category: typeof c.name === 'string' ? c.name : c.id,
+    score: typeof c.score === 'number' && !isNaN(c.score) ? c.score : 5,
     fullMark: 10,
   }))
 
-  const avgScore = Math.round(review.categories.reduce((s, c) => s + c.score, 0) / review.categories.length)
+  const safeScore = typeof review.score === 'number' && !isNaN(review.score) ? review.score : 5
+  const avgScore = review.categories.length > 0
+    ? Math.round(review.categories.reduce((s, c) => s + (typeof c.score === 'number' ? c.score : 5), 0) / review.categories.length)
+    : 5
   const motivation = getMotivationalMessage(avgScore)
   const monthName = new Date().toLocaleDateString('ar', { month: 'long', year: 'numeric' })
 
@@ -411,7 +437,7 @@ export default function MonthlyReview() {
             <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-5 h-full flex flex-col justify-center">
               <p className="text-sm text-muted-foreground mb-1">درجة الشهر</p>
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-5xl font-bold text-emerald-accent">{review.score}</span>
+                <span className="text-5xl font-bold text-emerald-accent">{safeScore}</span>
                 <span className="text-xl text-muted-foreground">/ 10</span>
               </div>
               <div className="flex items-center gap-1">
@@ -421,7 +447,7 @@ export default function MonthlyReview() {
                     onClick={() => setReview((prev) => ({ ...prev, score: s }))}
                     className={cn(
                       'flex-1 h-2 rounded-full transition-all',
-                      s <= review.score ? 'bg-emerald-accent' : 'bg-muted/50'
+                      s <= safeScore ? 'bg-emerald-accent' : 'bg-muted/50'
                     )}
                   />
                 ))}
@@ -687,11 +713,11 @@ export default function MonthlyReview() {
                     <div
                       key={r.id}
                       className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => setReview(r)}
+                      onClick={() => setReview({ ...r, categories: hydrateCategories(r.categories || []) })}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
-                          <span className="text-lg font-bold text-emerald-accent">{r.score}</span>
+                          <span className="text-lg font-bold text-emerald-accent">{typeof r.score === 'number' ? r.score : 5}</span>
                         </div>
                         <div>
                           <p className="text-xs font-medium">مراجعة الشهر</p>
