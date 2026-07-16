@@ -491,11 +491,12 @@ export default function MonthlyReview() {
                       fill="oklch(0.55 0.14 163)"
                       fillOpacity={0.25}
                       strokeWidth={2.5}
+                      dot={false}
                       label={{
                         position: 'top',
                         fill: 'oklch(0.45 0.01 160)',
                         fontSize: 10,
-                        formatter: (value: number) => `${value}`,
+                        formatter: (value: number) => `${typeof value === 'number' ? value : ''}`,
                       }}
                     />
                   </RadarChart>

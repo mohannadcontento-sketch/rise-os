@@ -34,6 +34,7 @@ import {
   Target,
   Sparkles,
   Star,
+  Check,
   CheckCircle2,
   Maximize2,
   Minimize2,
@@ -132,6 +133,443 @@ const FOCUS_QUOTES = [
   '« الأشخاص الناجحون لا يفعلون أشياء مختلفة — إنهم يفعلون الأشياء بشكل مختلف. »',
 ]
 
+/* ────────────── Ambient Sound System (Web Audio API) ────────────── */
+
+interface AmbientSoundNodes {
+  sources: AudioNode[]
+  gain: GainNode
+  timers: ReturnType<typeof setTimeout>[]
+  intervals: ReturnType<typeof setInterval>[]
+}
+
+function readSoundSettings(): { sounds: boolean; soundVolume: number } {
+  try {
+    const raw = localStorage.getItem('rise-settings')
+    if (raw) {
+      const data = JSON.parse(raw)
+      return { sounds: data.sounds ?? true, soundVolume: data.soundVolume ?? 0.5 }
+    }
+  } catch { /* ignore */ }
+  return { sounds: true, soundVolume: 0.5 }
+}
+
+function getOrCreateCtx(): AudioContext {
+  return new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+}
+
+function generateBrownNoise(ctx: AudioContext, duration: number = 4): AudioBuffer {
+  const sr = ctx.sampleRate
+  const len = sr * duration
+  const buf = ctx.createBuffer(2, len, sr)
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch)
+    let lastOut = 0
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1
+      lastOut = (lastOut + 0.02 * white) / 1.02
+      d[i] = lastOut * 3.5 // boost amplitude
+    }
+  }
+  return buf
+}
+
+function generateWhiteNoise(ctx: AudioContext, duration: number = 4): AudioBuffer {
+  const sr = ctx.sampleRate
+  const len = sr * duration
+  const buf = ctx.createBuffer(2, len, sr)
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch)
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
+  }
+  return buf
+}
+
+function generatePinkNoise(ctx: AudioContext, duration: number = 4): AudioBuffer {
+  const sr = ctx.sampleRate
+  const len = sr * duration
+  const buf = ctx.createBuffer(2, len, sr)
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch)
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1
+      b0 = 0.99886 * b0 + white * 0.0555179
+      b1 = 0.99332 * b1 + white * 0.0750759
+      b2 = 0.96900 * b2 + white * 0.1538520
+      b3 = 0.86650 * b3 + white * 0.3104856
+      b4 = 0.55000 * b4 + white * 0.5329522
+      b5 = -0.7616 * b5 - white * 0.0168980
+      d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11
+      b6 = white * 0.115926
+    }
+  }
+  return buf
+}
+
+function createLoopingSource(ctx: AudioContext, buffer: AudioBuffer): AudioBufferSourceNode {
+  const src = ctx.createBufferSource()
+  src.buffer = buffer
+  src.loop = true
+  return src
+}
+
+function stopAndDisconnect(nodes: AmbientSoundNodes) {
+  nodes.timers.forEach(clearTimeout)
+  nodes.intervals.forEach(clearInterval)
+  try { nodes.gain.disconnect() } catch { /* ok */ }
+  nodes.sources.forEach((s) => { try { s.disconnect() } catch { /* ok */ } })
+  // Stop buffer sources
+  nodes.sources.forEach((s) => {
+    if (s instanceof AudioBufferSourceNode) {
+      try { s.stop() } catch { /* ok */ }
+    }
+  })
+}
+
+/** Create rain sound: brown noise through lowpass filter */
+function createRainSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.5, ctx.currentTime + 1)
+
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(800, ctx.currentTime)
+  filter.Q.setValueAtTime(0.7, ctx.currentTime)
+
+  const src = createLoopingSource(ctx, generateBrownNoise(ctx, 4))
+  src.connect(filter).connect(gain).connect(masterGain)
+  src.start()
+
+  return { sources: [src, filter], gain, timers: [], intervals: [] }
+}
+
+/** Create forest sound: pink noise base + occasional bird chirps */
+function createForestSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.3, ctx.currentTime + 1)
+
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'bandpass'
+  filter.frequency.setValueAtTime(600, ctx.currentTime)
+  filter.Q.setValueAtTime(0.5, ctx.currentTime)
+
+  const src = createLoopingSource(ctx, generatePinkNoise(ctx, 4))
+  src.connect(filter).connect(gain).connect(masterGain)
+  src.start()
+
+  // Bird chirps
+  const chirpSources: AudioNode[] = [src, filter]
+  const timers: ReturnType<typeof setTimeout>[] = []
+
+  const scheduleChirp = () => {
+    const delay = 3000 + Math.random() * 8000 // 3-11s between chirps
+    const t = setTimeout(() => {
+      if (gain.context.state === 'closed') return
+      const osc = ctx.createOscillator()
+      const oscGain = ctx.createGain()
+      const freq = 1800 + Math.random() * 2400
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, ctx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(freq * (1.1 + Math.random() * 0.3), ctx.currentTime + 0.08)
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.9, ctx.currentTime + 0.15)
+      oscGain.gain.setValueAtTime(0, ctx.currentTime)
+      oscGain.gain.linearRampToValueAtTime(volume * 0.08, ctx.currentTime + 0.02)
+      oscGain.gain.linearRampToValueAtTime(volume * 0.12, ctx.currentTime + 0.06)
+      oscGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.18)
+      osc.connect(oscGain).connect(gain)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.2)
+      chirpSources.push(osc, oscGain)
+      scheduleChirp()
+    }, delay)
+    timers.push(t)
+  }
+  scheduleChirp()
+
+  return { sources: chirpSources, gain, timers, intervals: [] }
+}
+
+/** Create coffee sound: warm low rumble + subtle crackling */
+function createCoffeeSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 1)
+
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(300, ctx.currentTime)
+  filter.Q.setValueAtTime(0.8, ctx.currentTime)
+
+  const src = createLoopingSource(ctx, generateBrownNoise(ctx, 4))
+  src.connect(filter).connect(gain).connect(masterGain)
+  src.start()
+
+  // Subtle crackling
+  const crackleSources: AudioNode[] = [src, filter]
+  const timers: ReturnType<typeof setTimeout>[] = []
+
+  const scheduleCrackle = () => {
+    const delay = 500 + Math.random() * 2000
+    const t = setTimeout(() => {
+      if (gain.context.state === 'closed') return
+      // Short burst of filtered noise
+      const crackleBuf = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate)
+      const cd = crackleBuf.getChannelData(0)
+      for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (cd.length * 0.15))
+      const cs = ctx.createBufferSource()
+      cs.buffer = crackleBuf
+      const cf = ctx.createBiquadFilter()
+      cf.type = 'highpass'
+      cf.frequency.setValueAtTime(2000, ctx.currentTime)
+      const cg = ctx.createGain()
+      cg.gain.setValueAtTime(volume * 0.15, ctx.currentTime)
+      cs.connect(cf).connect(cg).connect(gain)
+      cs.start()
+      crackleSources.push(cs, cf, cg)
+      scheduleCrackle()
+    }, delay)
+    timers.push(t)
+  }
+  scheduleCrackle()
+
+  return { sources: crackleSources, gain, timers, intervals: [] }
+}
+
+/** Create ocean sound: slowly modulated noise like waves */
+function createOceanSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.4, ctx.currentTime + 2)
+
+  // LFO for wave-like modulation
+  const lfo = ctx.createOscillator()
+  lfo.type = 'sine'
+  lfo.frequency.setValueAtTime(0.1, ctx.currentTime) // Very slow wave cycle
+
+  const lfoGain = ctx.createGain()
+  lfoGain.gain.setValueAtTime(volume * 0.25, ctx.currentTime)
+
+  lfo.connect(lfoGain).connect(gain.gain)
+  lfo.start()
+
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(500, ctx.currentTime)
+  filter.Q.setValueAtTime(0.5, ctx.currentTime)
+
+  const src = createLoopingSource(ctx, generateBrownNoise(ctx, 4))
+  src.connect(filter).connect(gain).connect(masterGain)
+  src.start()
+
+  return { sources: [src, filter, lfo, lfoGain], gain, timers: [], intervals: [] }
+}
+
+/** Create fire sound: crackling noise + low rumble */
+function createFireSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 1)
+
+  // Low rumble
+  const rumbleFilter = ctx.createBiquadFilter()
+  rumbleFilter.type = 'lowpass'
+  rumbleFilter.frequency.setValueAtTime(200, ctx.currentTime)
+  rumbleFilter.Q.setValueAtTime(1.0, ctx.currentTime)
+
+  const rumbleSrc = createLoopingSource(ctx, generateBrownNoise(ctx, 4))
+  rumbleSrc.connect(rumbleFilter).connect(gain).connect(masterGain)
+  rumbleSrc.start()
+
+  // Frequent crackling
+  const allSources: AudioNode[] = [rumbleSrc, rumbleFilter]
+  const timers: ReturnType<typeof setTimeout>[] = []
+
+  const scheduleCrackle = () => {
+    const delay = 100 + Math.random() * 600
+    const t = setTimeout(() => {
+      if (gain.context.state === 'closed') return
+      const crackleDur = 0.01 + Math.random() * 0.05
+      const crackleBuf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * crackleDur)), ctx.sampleRate)
+      const cd = crackleBuf.getChannelData(0)
+      for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (cd.length * 0.2))
+      const cs = ctx.createBufferSource()
+      cs.buffer = crackleBuf
+      const cf = ctx.createBiquadFilter()
+      cf.type = 'bandpass'
+      cf.frequency.setValueAtTime(1000 + Math.random() * 4000, ctx.currentTime)
+      cf.Q.setValueAtTime(0.8, ctx.currentTime)
+      const cg = ctx.createGain()
+      cg.gain.setValueAtTime(volume * (0.08 + Math.random() * 0.12), ctx.currentTime)
+      cs.connect(cf).connect(cg).connect(gain)
+      cs.start()
+      allSources.push(cs, cf, cg)
+      scheduleCrackle()
+    }, delay)
+    timers.push(t)
+  }
+  scheduleCrackle()
+
+  return { sources: allSources, gain, timers, intervals: [] }
+}
+
+/** Create wind sound: very low frequency modulated noise */
+function createWindSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 2)
+
+  // Slow LFO for wind gusts
+  const lfo = ctx.createOscillator()
+  lfo.type = 'sine'
+  lfo.frequency.setValueAtTime(0.15, ctx.currentTime)
+
+  const lfoGain = ctx.createGain()
+  lfoGain.gain.setValueAtTime(volume * 0.2, ctx.currentTime)
+
+  lfo.connect(lfoGain).connect(gain.gain)
+  lfo.start()
+
+  // Second LFO for variation
+  const lfo2 = ctx.createOscillator()
+  lfo2.type = 'sine'
+  lfo2.frequency.setValueAtTime(0.07, ctx.currentTime)
+
+  const lfo2Gain = ctx.createGain()
+  lfo2Gain.gain.setValueAtTime(volume * 0.1, ctx.currentTime)
+
+  lfo2.connect(lfo2Gain).connect(gain.gain)
+  lfo2.start()
+
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(250, ctx.currentTime)
+  filter.Q.setValueAtTime(0.3, ctx.currentTime)
+
+  // Modulate filter frequency for more natural wind
+  const filterLfo = ctx.createOscillator()
+  filterLfo.type = 'sine'
+  filterLfo.frequency.setValueAtTime(0.08, ctx.currentTime)
+  const filterLfoGain = ctx.createGain()
+  filterLfoGain.gain.setValueAtTime(150, ctx.currentTime)
+  filterLfo.connect(filterLfoGain).connect(filter.frequency)
+  filterLfo.start()
+
+  const src = createLoopingSource(ctx, generateWhiteNoise(ctx, 4))
+  src.connect(filter).connect(gain).connect(masterGain)
+  src.start()
+
+  return { sources: [src, filter, lfo, lfoGain, lfo2, lfo2Gain, filterLfo, filterLfoGain], gain, timers: [], intervals: [] }
+}
+
+const AMBIENT_SOUND_CREATORS: Record<string, (ctx: AudioContext, master: GainNode, vol: number) => AmbientSoundNodes> = {
+  'مطر': createRainSound,
+  'غابة': createForestSound,
+  'قهوة': createCoffeeSound,
+  'محيط': createOceanSound,
+  'نار': createFireSound,
+  'رياح': createWindSound,
+}
+
+function useAmbientSounds() {
+  const ctxRef = useRef<AudioContext | null>(null)
+  const masterGainRef = useRef<GainNode | null>(null)
+  const activeNodesRef = useRef<Map<string, AmbientSoundNodes>>(new Map())
+
+  const getCtx = useCallback(() => {
+    if (!ctxRef.current || ctxRef.current.state === 'closed') {
+      const ctx = getOrCreateCtx()
+      if (ctx.state === 'suspended') ctx.resume()
+      ctxRef.current = ctx
+      const master = ctx.createGain()
+      const settings = readSoundSettings()
+      master.gain.setValueAtTime(settings.soundVolume * 0.6, ctx.currentTime)
+      master.connect(ctx.destination)
+      masterGainRef.current = master
+    }
+    if (ctxRef.current.state === 'suspended') ctxRef.current.resume()
+    return ctxRef.current
+  }, [])
+
+  const startSound = useCallback((label: string) => {
+    const settings = readSoundSettings()
+    if (!settings.sounds) return
+
+    const ctx = getCtx()
+    if (!masterGainRef.current) return
+
+    // Update master volume from settings
+    masterGainRef.current.gain.setValueAtTime(settings.soundVolume * 0.6, ctx.currentTime)
+
+    const creator = AMBIENT_SOUND_CREATORS[label]
+    if (!creator) return
+
+    // Stop existing if any
+    const existing = activeNodesRef.current.get(label)
+    if (existing) {
+      stopAndDisconnect(existing)
+    }
+
+    const nodes = creator(ctx, masterGainRef.current, settings.soundVolume)
+    activeNodesRef.current.set(label, nodes)
+  }, [getCtx])
+
+  const stopSound = useCallback((label: string) => {
+    const nodes = activeNodesRef.current.get(label)
+    if (!nodes) return
+
+    const ctx = ctxRef.current
+    if (ctx && ctx.state !== 'closed') {
+      nodes.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5)
+      setTimeout(() => {
+        stopAndDisconnect(nodes)
+        activeNodesRef.current.delete(label)
+      }, 600)
+    } else {
+      stopAndDisconnect(nodes)
+      activeNodesRef.current.delete(label)
+    }
+  }, [])
+
+  const updateVolume = useCallback(() => {
+    const settings = readSoundSettings()
+    if (masterGainRef.current && ctxRef.current && ctxRef.current.state !== 'closed') {
+      masterGainRef.current.gain.linearRampToValueAtTime(settings.soundVolume * 0.6, ctxRef.current.currentTime + 0.1)
+    }
+  }, [])
+
+  // Listen for storage changes to update volume
+  useEffect(() => {
+    const handler = () => { updateVolume() }
+    window.addEventListener('storage', handler)
+    // Also poll occasionally for same-tab updates
+    const interval = setInterval(updateVolume, 2000)
+    return () => {
+      window.removeEventListener('storage', handler)
+      clearInterval(interval)
+    }
+  }, [updateVolume])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      activeNodesRef.current.forEach((nodes) => stopAndDisconnect(nodes))
+      activeNodesRef.current.clear()
+      if (masterGainRef.current) {
+        try { masterGainRef.current.disconnect() } catch { /* ok */ }
+        masterGainRef.current = null
+      }
+      if (ctxRef.current && ctxRef.current.state !== 'closed') {
+        ctxRef.current.close()
+        ctxRef.current = null
+      }
+    }
+  }, [])
+
+  return { startSound, stopSound }
+}
+
 /* ────────────── Helper ────────────── */
 
 function getSessionQuote(): string {
@@ -163,11 +601,29 @@ export default function DeepWork() {
   const [isPaused, setIsPaused] = useState(false)
   const [sessionCompleted, setSessionCompleted] = useState(false)
   const [sessionStartTime, setSessionStartTime] = useState<string | null>(null)
-  const [sessionNotes, setSessionNotes] = useState('')
+  const QUICK_NOTES_KEY = 'rise-deep-work-quick-notes'
+  const [sessionNotes, setSessionNotes] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    try { return localStorage.getItem(QUICK_NOTES_KEY) || '' } catch { return '' }
+  })
+  const [notesSaved, setNotesSaved] = useState(true)
+
+  // Auto-save notes to localStorage with debounce
+  const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleNotesChange = (val: string) => {
+    setSessionNotes(val)
+    setNotesSaved(false)
+    if (notesTimerRef.current) clearTimeout(notesTimerRef.current)
+    notesTimerRef.current = setTimeout(() => {
+      try { localStorage.setItem(QUICK_NOTES_KEY, val) } catch { /* ignore */ }
+      setNotesSaved(true)
+    }, 500)
+  }
   const [celebrateKey, setCelebrateKey] = useState(0)
 
-  // Ambient sounds (visual only)
+  // Ambient sounds (real Web Audio)
   const [activeSounds, setActiveSounds] = useState<Set<string>>(new Set())
+  const { startSound, stopSound } = useAmbientSounds()
   // Focus zone mode
   const [focusZone, setFocusZone] = useState(false)
   // Motivational quote
@@ -366,8 +822,13 @@ export default function DeepWork() {
   const toggleSound = (label: string) => {
     setActiveSounds((prev) => {
       const next = new Set(prev)
-      if (next.has(label)) next.delete(label)
-      else next.add(label)
+      if (next.has(label)) {
+        next.delete(label)
+        stopSound(label)
+      } else {
+        next.add(label)
+        startSound(label)
+      }
       return next
     })
     playSound('toggle')
@@ -753,30 +1214,37 @@ export default function DeepWork() {
         )}
       </motion.div>
 
-      {/* Session Notes */}
-      {(isRunning || sessionCompleted) && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md mx-auto"
-        >
-          <Card className="glass border-0 shadow-sm">
-            <CardContent className="p-4">
-              <label className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+      {/* Quick Notes — always visible, auto-saved */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md mx-auto"
+      >
+        <Card className="glass border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <StickyNote className="w-4 h-4 text-gold" />
-                ملاحظات الجلسة
+                ملاحظات سريعة
               </label>
-              <Textarea
-                value={sessionNotes}
-                onChange={(e) => setSessionNotes(e.target.value)}
-                placeholder="اكتب ملاحظاتك عن الجلسة..."
-                className="min-h-[80px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
-                dir="rtl"
-              />
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+              {notesSaved ? (
+                <span className="text-[10px] text-emerald-accent/60 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> محفوظ
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-500/60">جاري الحفظ...</span>
+              )}
+            </div>
+            <Textarea
+              value={sessionNotes}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              placeholder="اكتب ملاحظاتك وأفكارك هنا..."
+              className="min-h-[100px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
+              dir="rtl"
+            />
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Ambient Sounds with unique colors and wave animation */}
       <motion.div variants={itemVariants}>

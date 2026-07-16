@@ -721,7 +721,7 @@ export default function Learning() {
                                 fill="oklch(0.55 0.14 163)"
                                 fillOpacity={0.2}
                                 strokeWidth={2}
-                                dot={{ r: 4, fill: 'oklch(0.55 0.14 163)' }}
+                                dot={false}
                               />
                             </RadarChart>
                           </ResponsiveContainer>
