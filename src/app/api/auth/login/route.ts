@@ -16,8 +16,7 @@ export async function POST(request: NextRequest) {
       supabaseClient = getSupabase()
     } catch {
       return NextResponse.json({
-        error: 'خدمة تسجيل الدخول غير متوفرة حالياً. استخدم وضع الضيف للمتابعة.',
-        guestFallback: true,
+        error: 'خدمة تسجيل الدخول غير متوفرة حالياً. حاول لاحقاً.',
       }, { status: 503 })
     }
 
@@ -53,8 +52,7 @@ export async function POST(request: NextRequest) {
     })
   } catch {
     return NextResponse.json({
-      error: 'خدمة تسجيل الدخول غير متوفرة حالياً. استخدم وضع الضيف.',
-      guestFallback: true,
+      error: 'خدمة تسجيل الدخول غير متوفرة حالياً. حاول لاحقاً.',
     }, { status: 503 })
   }
 }

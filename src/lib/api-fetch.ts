@@ -10,7 +10,7 @@ function getAuthHeaders(): Record<string, string> {
     const stored = localStorage.getItem('rise-auth')
     if (!stored) return {}
     const session = JSON.parse(stored)
-    if (session.access_token && session.access_token !== 'guest') {
+    if (session.access_token) {
       return { 'Authorization': `Bearer ${session.access_token}` }
     }
   } catch { /* ignore parse errors */ }

@@ -43,15 +43,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       const data = await res.json()
 
       if (!res.ok) {
-        // If Supabase not configured, auto-switch to guest
-        if (data.guestFallback) {
-          const guestSession = { access_token: 'guest', refresh_token: 'guest', expires_at: 9999999999 }
-          const guestUser = { id: 'guest', email: 'ضيف', isAdmin: false }
-          localStorage.setItem('rise-auth', JSON.stringify(guestSession))
-          localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
-          onLogin({ user: guestUser, session: guestSession })
-          return
-        }
         setError(data.error || 'حدث خطأ')
         setLoading(false)
         return
@@ -240,39 +231,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               )}
             </Button>
           </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-5 sm:my-6">
-            <div className="flex-1 h-px bg-border/50" />
-            <span className="text-xs text-muted-foreground">أو</span>
-            <div className="flex-1 h-px bg-border/50" />
-          </div>
-
-          {/* Guest mode */}
-          <Button
-            variant="ghost"
-            className="w-full h-10 rounded-xl text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              const guestSession = {
-                access_token: 'guest',
-                refresh_token: 'guest',
-                expires_at: 9999999999,
-              }
-              const guestUser = {
-                id: 'guest',
-                email: 'ضيف',
-                isAdmin: false,
-              }
-              localStorage.setItem('rise-auth', JSON.stringify(guestSession))
-              localStorage.setItem('rise-user-info', JSON.stringify(guestUser))
-              onLogin({ user: guestUser, session: guestSession })
-            }}
-          >
-            <span className="flex items-center gap-2">
-              <Zap className="w-4 h-4" />
-              متابعة كضيف
-            </span>
-          </Button>
         </div>
 
         {/* Footer */}

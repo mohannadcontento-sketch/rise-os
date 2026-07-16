@@ -559,13 +559,13 @@ export default function Settings() {
   }
 
   const handleResetData = () => {
-    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-'))
+    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-') && k !== 'rise-auth' && k !== 'rise-user-info')
     allKeys.forEach((key) => localStorage.removeItem(key))
     setSettings(defaultSettings)
     setResetDialogOpen(false)
     setConfirmText('')
     setStorageSize({ used: 0, total: 5 * 1024 * 1024 })
-    toast.success('تم إعادة تعيين جميع البيانات')
+    toast.success('تم إعادة تعيين البيانات المحلية (تم الاحتفاظ بجلسة الدخول)')
   }
 
   const themes = [
