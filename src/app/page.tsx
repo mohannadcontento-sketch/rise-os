@@ -1,5 +1,21 @@
 'use client'
 
+/* ─────────────────────────────────────────────────────────────
+   Global SVG fix: Recharts internally calls setAttribute('r', undefined)
+   which causes "Expected length, undefined" errors in the browser.
+   This patch converts undefined/null/NaN r values to '0'.
+   ───────────────────────────────────────────────────────────── */
+if (typeof window !== 'undefined' && typeof SVGElement !== 'undefined') {
+  const _origSetAttr = SVGElement.prototype.setAttribute
+  SVGElement.prototype.setAttribute = function (name: string, value: any) {
+    if (name === 'r' && (value === undefined || value === null || (typeof value === 'number' && isNaN(value)))) {
+      _origSetAttr.call(this, name, '0')
+    } else {
+      _origSetAttr.call(this, name, value)
+    }
+  }
+}
+
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import {

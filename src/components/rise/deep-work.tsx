@@ -492,27 +492,42 @@ function useAmbientSounds() {
     return ctxRef.current
   }, [])
 
-  const startSound = useCallback((label: string) => {
-    const settings = readSoundSettings()
-    if (!settings.sounds) return
+  const startSound = useCallback(async (label: string) => {
+    try {
+      const settings = readSoundSettings()
+      if (!settings.sounds) {
+        console.warn('[ambient] sounds disabled in settings')
+        return
+      }
 
-    const ctx = getCtx()
-    if (!masterGainRef.current) return
+      const ctx = getCtx()
+      if (!masterGainRef.current) return
 
-    // Update master volume from settings
-    masterGainRef.current.gain.setValueAtTime(settings.soundVolume * 0.6, ctx.currentTime)
+      // Resume AudioContext if suspended (needs user gesture)
+      if (ctx.state === 'suspended') {
+        await ctx.resume()
+      }
 
-    const creator = AMBIENT_SOUND_CREATORS[label]
-    if (!creator) return
+      // Update master volume from settings
+      masterGainRef.current.gain.setValueAtTime(settings.soundVolume * 0.6, ctx.currentTime)
 
-    // Stop existing if any
-    const existing = activeNodesRef.current.get(label)
-    if (existing) {
-      stopAndDisconnect(existing)
+      const creator = AMBIENT_SOUND_CREATORS[label]
+      if (!creator) {
+        console.warn('[ambient] no creator for:', label)
+        return
+      }
+
+      // Stop existing if any
+      const existing = activeNodesRef.current.get(label)
+      if (existing) {
+        stopAndDisconnect(existing)
+      }
+
+      const nodes = creator(ctx, masterGainRef.current, settings.soundVolume)
+      activeNodesRef.current.set(label, nodes)
+    } catch (err) {
+      console.error('[ambient] startSound error:', err)
     }
-
-    const nodes = creator(ctx, masterGainRef.current, settings.soundVolume)
-    activeNodesRef.current.set(label, nodes)
   }, [getCtx])
 
   const stopSound = useCallback((label: string) => {
