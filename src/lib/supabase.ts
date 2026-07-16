@@ -65,5 +65,5 @@ export function generateZhipuToken(): string {
   return signInput + '.' + signature
 }
 
-// Admin email
-export const ADMIN_EMAIL = 'mhndsyd872@gmail.com'
+// Admin email — read from env to avoid exposing in source
+export const ADMIN_EMAIL: string = process.env.ADMIN_EMAIL || ''

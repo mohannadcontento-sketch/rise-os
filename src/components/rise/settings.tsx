@@ -36,6 +36,7 @@ import {
   Bot,
   Database,
   Save,
+  Search,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -135,132 +136,198 @@ function AdminPanel() {
   const [editingUser, setEditingUser] = useState<string | null>(null)
   const [editStorageLimit, setEditStorageLimit] = useState('')
   const [editAiLimit, setEditAiLimit] = useState('')
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<{ id: string; email: string; name: string } | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [lastError, setLastError] = useState('')
 
-  useEffect(() => {
-    let mounted = true
-    const load = async () => {
-      if (!auth?.accessToken || auth.accessToken === 'guest') return
-      setLoading(true)
-      try {
-        const res = await apiFetch('/api/rise/admin/users')
-        const data = await res.json()
-        if (mounted && data.users) setUsers(data.users)
-      } catch (err) {
-        console.error('Failed to fetch users:', err)
-      }
-      if (mounted) setLoading(false)
-    }
-    load()
-    return () => { mounted = false }
-  }, [auth?.accessToken])
-
-  const fetchUsers = async () => {
-    setLoading(true)
+  const loadUsers = useCallback(async (showLoading = true) => {
+    if (!auth?.accessToken || auth.accessToken === 'guest') return
+    if (showLoading) setLoading(true)
+    setLastError('')
     try {
       const res = await apiFetch('/api/rise/admin/users')
+      if (!res.ok) {
+        setLastError(`خطأ ${res.status}: فشل في تحميل المستخدمين`)
+        return
+      }
       const data = await res.json()
       if (data.users) setUsers(data.users)
     } catch (err) {
-      console.error('Failed to fetch users:', err)
+      setLastError('فشل الاتصال بالخادم')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [auth?.accessToken])
+
+  useEffect(() => {
+    loadUsers()
+  }, [loadUsers])
 
   const updateUserLimits = async (supabaseUserId: string) => {
+    const storageMB = parseInt(editStorageLimit)
+    const aiLim = parseInt(editAiLimit)
+    if (isNaN(storageMB) || isNaN(aiLim)) {
+      toast.error('يرجى إدخال أرقام صحيحة')
+      return
+    }
     try {
-      await apiPost('/api/rise/admin/users', {
+      const res = await apiPost('/api/rise/admin/users', {
         supabaseUserId,
-        storageLimit: parseInt(editStorageLimit) * 1024 * 1024,
-        aiLimit: parseInt(editAiLimit),
+        storageLimit: storageMB * 1024 * 1024,
+        aiLimit: aiLim,
       })
-      toast.success('تم تحديث الصلاحيات')
+      if (!res.ok) {
+        toast.error('فشل تحديث الصلاحيات')
+        return
+      }
+      toast.success('تم تحديث الصلاحيات بنجاح')
       setEditingUser(null)
-      fetchUsers()
+      loadUsers(false)
     } catch {
-      toast.error('فشل التحديث')
+      toast.error('فشل الاتصال بالخادم')
     }
   }
 
-  const deleteUser = async (supabaseUserId: string, email: string) => {
-    if (!confirm(`هل أنت متأكد من حذف المستخدم ${email}؟`)) return
+  const confirmDeleteUser = async () => {
+    if (!deleteConfirmUser) return
     try {
-      await apiFetch('/api/rise/admin/users', {
+      const res = await apiFetch('/api/rise/admin/users', {
         method: 'DELETE',
-        body: JSON.stringify({ supabaseUserId }),
+        body: JSON.stringify({ supabaseUserId: deleteConfirmUser.id }),
       })
-      toast.success('تم حذف المستخدم')
-      fetchUsers()
+      if (!res.ok) {
+        toast.error('فشل حذف المستخدم')
+        return
+      }
+      toast.success(`تم حذف المستخدم: ${deleteConfirmUser.email}`)
+      setDeleteConfirmUser(null)
+      loadUsers(false)
     } catch {
-      toast.error('فشل الحذف')
+      toast.error('فشل الاتصال بالخادم')
     }
   }
 
-  const formatMB = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  const formatMB = (bytes: number | null | undefined) => {
+    if (!bytes) return '0 MB'
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—'
+    try {
+      return new Date(dateStr).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })
+    } catch {
+      return '—'
+    }
+  }
+
+  const filteredUsers = users.filter((u: any) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+  })
+
+  const totalStorage = users.reduce((acc: number, u: any) => acc + (u.storageUsed || 0), 0)
+  const totalAI = users.reduce((acc: number, u: any) => acc + (u.aiUsed || 0), 0)
+  const activeUsers = users.filter((u: any) => u.email).length
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.4 }}
-      className="space-y-4"
+    <div
+      className="space-y-4 animate-[fadeSlideIn_0.3s_ease-out]"
     >
       <div className="h-[2px] bg-gradient-to-l from-transparent via-gold/30 to-transparent" />
 
-      <Card className="glass border border-gold/20 overflow-hidden border-r-4 border-r-gold/50 premium-card">
+      <Card className="glass border border-gold/20 overflow-hidden">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-gold" />
-            </div>
-            <div>
-              <span>لوحة تحكم الأدمن</span>
-              <Badge className="mr-2 bg-gold/20 text-gold text-[10px] px-2 py-0.5">Admin</Badge>
-            </div>
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
+                <Shield className="w-4 h-4 text-gold" />
+              </div>
+              <div>
+                <span>لوحة تحكم الأدمن</span>
+                <Badge className="mr-2 bg-gold/20 text-gold text-[10px] px-2 py-0.5">Admin</Badge>
+              </div>
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => loadUsers(true)}
+              disabled={loading}
+            >
+              <span className={cn(loading && 'animate-spin inline-block')}>
+                <Save className="w-3.5 h-3.5" />
+              </span>
+              تحديث
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 rounded-xl bg-muted/30 text-center">
-              <Users className="w-5 h-5 mx-auto mb-1 text-emerald-accent" />
+              <Users className="w-5 h-5 mx-auto mb-1.5 text-emerald-accent" />
               <p className="text-lg font-bold">{users.length}</p>
-              <p className="text-[10px] text-muted-foreground">مستخدم</p>
+              <p className="text-[10px] text-muted-foreground">إجمالي المستخدمين</p>
             </div>
             <div className="p-3 rounded-xl bg-muted/30 text-center">
-              <Bot className="w-5 h-5 mx-auto mb-1 text-gold" />
-              <p className="text-lg font-bold">
-                {users.reduce((acc: number, u: any) => acc + (u.aiUsed || 0), 0)}
-              </p>
-              <p className="text-[10px] text-muted-foreground">رسائل AI</p>
+              <User className="w-5 h-5 mx-auto mb-1.5 text-forest" />
+              <p className="text-lg font-bold">{activeUsers}</p>
+              <p className="text-[10px] text-muted-foreground">مستخدم نشط</p>
             </div>
             <div className="p-3 rounded-xl bg-muted/30 text-center">
-              <Database className="w-5 h-5 mx-auto mb-1 text-forest" />
-              <p className="text-lg font-bold">
-                {formatMB(users.reduce((acc: number, u: any) => acc + (u.storageUsed || 0), 0))}
-              </p>
-              <p className="text-[10px] text-muted-foreground">تخزين</p>
+              <Bot className="w-5 h-5 mx-auto mb-1.5 text-gold" />
+              <p className="text-lg font-bold">{totalAI}</p>
+              <p className="text-[10px] text-muted-foreground">رسائل AI هذا الشهر</p>
+            </div>
+            <div className="p-3 rounded-xl bg-muted/30 text-center">
+              <Database className="w-5 h-5 mx-auto mb-1.5 text-forest" />
+              <p className="text-lg font-bold">{formatMB(totalStorage)}</p>
+              <p className="text-[10px] text-muted-foreground">إجمالي التخزين</p>
             </div>
           </div>
 
-          {/* Users list */}
-          <div className="space-y-2 max-h-80 overflow-y-auto">
+          {/* Error */}
+          {lastError && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive/5 border border-destructive/10 text-destructive text-xs">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{lastError}</span>
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="بحث عن مستخدم بالاسم أو البريد..."
+              className="pr-9 h-9 text-sm"
+              dir="rtl"
+            />
+          </div>
+
+          {/* Users List */}
+          <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <motion.div
-                  className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
               </div>
-            ) : users.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-8">لا يوجد مستخدمين بعد</p>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center py-12">
+                <Users className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">
+                  {searchQuery ? 'لا توجد نتائج للبحث' : 'لا يوجد مستخدمين بعد'}
+                </p>
+              </div>
             ) : (
-              users.map((user: any) => (
+              filteredUsers.map((user: any) => (
                 <div
                   key={user.id}
                   className="flex items-center gap-3 p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors group"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shrink-0">
                     <span className="text-xs font-bold text-white">
                       {(user.name || user.email || '؟').charAt(0).toUpperCase()}
                     </span>
@@ -269,33 +336,40 @@ function AdminPanel() {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{user.name || 'مستخدم'}</p>
                       {user.isAdmin && (
-                        <Badge className="bg-gold/20 text-gold text-[9px] px-1.5 py-0">أدمن</Badge>
+                        <Badge className="bg-gold/20 text-gold text-[9px] px-1.5 py-0 shrink-0">أدمن</Badge>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{user.email || '—'}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{formatDate(user.createdAt)}</p>
                   </div>
 
                   {editingUser === user.id ? (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Input
-                        type="number"
-                        value={editStorageLimit}
-                        onChange={(e) => setEditStorageLimit(e.target.value)}
-                        placeholder="MB"
-                        className="w-16 h-7 text-xs text-center"
-                        dir="ltr"
-                      />
-                      <Input
-                        type="number"
-                        value={editAiLimit}
-                        onChange={(e) => setEditAiLimit(e.target.value)}
-                        placeholder="AI"
-                        className="w-16 h-7 text-xs text-center"
-                        dir="ltr"
-                      />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-muted-foreground w-6">MB</span>
+                          <Input
+                            type="number"
+                            value={editStorageLimit}
+                            onChange={(e) => setEditStorageLimit(e.target.value)}
+                            className="w-16 h-6 text-[11px] text-center"
+                            dir="ltr"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-muted-foreground w-6">AI</span>
+                          <Input
+                            type="number"
+                            value={editAiLimit}
+                            onChange={(e) => setEditAiLimit(e.target.value)}
+                            className="w-16 h-6 text-[11px] text-center"
+                            dir="ltr"
+                          />
+                        </div>
+                      </div>
                       <Button
                         size="sm"
-                        className="h-7 px-2 bg-emerald-accent hover:bg-emerald-accent/90"
+                        className="h-7 w-7 p-0 bg-emerald-accent hover:bg-emerald-accent/90"
                         onClick={() => updateUserLimits(user.id)}
                       >
                         <Check className="w-3 h-3" />
@@ -303,27 +377,30 @@ function AdminPanel() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2"
+                        className="h-7 w-7 p-0"
                         onClick={() => setEditingUser(null)}
                       >
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-lg" dir="ltr">
-                        {formatMB(user.storageLimit)} | {user.aiLimit} AI
-                      </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-1 rounded-lg hidden sm:flex items-center gap-2" dir="ltr">
+                        <span>{formatMB(user.storageLimit)}</span>
+                        <span className="text-border">|</span>
+                        <span>{user.aiLimit || 100} AI</span>
+                      </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0"
+                        className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => {
                           setEditingUser(user.id)
-                          setEditStorageLimit(String(Math.round(user.storageLimit / (1024 * 1024))))
-                          setEditAiLimit(String(user.aiLimit))
+                          setEditStorageLimit(String(Math.round((user.storageLimit || 10485760) / (1024 * 1024))))
+                          setEditAiLimit(String(user.aiLimit || 100))
                         }}
                         title="تعديل الصلاحيات"
+                        aria-label="تعديل صلاحيات المستخدم"
                       >
                         <Pencil className="w-3 h-3" />
                       </Button>
@@ -331,9 +408,10 @@ function AdminPanel() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 w-7 p-0 hover:text-destructive"
-                          onClick={() => deleteUser(user.id, user.email)}
+                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+                          onClick={() => setDeleteConfirmUser({ id: user.id, email: user.email, name: user.name })}
                           title="حذف المستخدم"
+                          aria-label="حذف المستخدم"
                         >
                           <Trash2 className="w-3 h-3" />
                         </Button>
@@ -346,7 +424,41 @@ function AdminPanel() {
           </div>
         </CardContent>
       </Card>
-    </motion.div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmUser} onOpenChange={(open) => !open && setDeleteConfirmUser(null)}>
+        <DialogContent className="sm:max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              تأكيد الحذف
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              هل أنت متأكد من حذف هذا المستخدم؟ هذا الإجراء <span className="text-destructive font-semibold">لا يمكن التراجع عنه</span>.
+            </p>
+            <div className="p-3 rounded-xl bg-muted/30 space-y-1">
+              <p className="text-sm font-medium">{deleteConfirmUser?.name || 'مستخدم'}</p>
+              <p className="text-xs text-muted-foreground">{deleteConfirmUser?.email}</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteConfirmUser(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteUser}
+              className="gap-1.5"
+            >
+              <Trash2 className="w-4 h-4" />
+              حذف نهائياً
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 

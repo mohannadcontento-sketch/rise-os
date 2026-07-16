@@ -34,6 +34,7 @@ const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.
 const ConnectionStatus = lazy(() => import('@/lib/pwa').then(m => ({ default: m.ConnectionStatus })))
 const OfflineBanner = lazy(() => import('@/lib/pwa').then(m => ({ default: m.OfflineBanner })))
 const BluetoothSharePanel = lazy(() => import('@/lib/pwa').then(m => ({ default: m.BluetoothSharePanel })))
+const Onboarding = lazy(() => import('@/components/rise/onboarding'))
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -719,6 +720,9 @@ export default function RiseOSApp() {
       {/* PWA: install prompt, connection status, offline banner */}
       <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
       <Suspense fallback={null}><OfflineBanner /></Suspense>
+
+      {/* Onboarding for first-time users */}
+      <Suspense fallback={null}><Onboarding /></Suspense>
 
       {/* Bluetooth Share Panel */}
       <Suspense fallback={null}><BluetoothSharePanel isOpen={btPanelOpen} onClose={() => setBtPanelOpen(false)} /></Suspense>

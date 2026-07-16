@@ -1432,3 +1432,69 @@ Stage Summary:
 - 3 progress bar divs now have proper ARIA progressbar role and accessible names
 - 1 icon-only button now has a dynamic aria-label reflecting its toggle state
 - Lint passes cleanly with no new warnings
+
+---
+Task ID: onboarding-modal
+Agent: Fullstack Developer
+Task: إنشاء مكون onboarding/welcome modal مع 5 خطوات بالعربية RTL
+
+Work Log:
+- أنشأ `/src/components/rise/onboarding.tsx` — مكون onboarding كامل بـ 5 خطوات
+- الخطوة 1: ترحيب مع رسم أيقونات متحركة (float animation) وشبكة 3×3 تعرض وحدات التطبيق
+- الخطوة 2: 6 وحدات أساسية في شبكة (لوحة التحكم، المهام، الأهداف، العادات، اليوميات، العمل العميق)
+- الخطوة 3: 6 أدوات نمو (القراءة، التعلم، الصحة، المالية، التقويم، الدماغ الثاني)
+- الخطوة 4: ميزات ذكية (AI Coach، التحليلات، المراجعات، روتين الصباح) + نظام اللعب (XP، مستويات، سلاسل، شارات)
+- الخطوة 5: نصائح سريعة (Ctrl+K، Esc) + دعم PWA + زر "ابدأ الآن"
+- استخدم `useRef` بدل `useState` للمتابعة mount لتجنب lint error `react-hooks/set-state-in-effect`
+- صمّم `useOnboarding()` hook يعيد `{ showOnboarding, dismissOnboarding }` مع localStorage
+- استخدم Dialog من shadcn/ui مع `showCloseButton={false}` و `dir="rtl"`
+- أضاف step indicator dots متحركة مع emerald glow
+- أضاف أزرار التنقل (سابق/تالي) + زر تخطي + gradient per step
+- كل خطوة تستخدم `animate-[fadeSlideIn_0.3s_ease-out]` مع staggered delays
+- Mobile responsive مع شبكة 2 أعمدة على الجوال و 3 على الشاشات الكبيرة
+- أضاف sonner toast عند إغلاق الـ onboarding
+
+Stage Summary:
+- مكون onboarding premium جاهز بـ 5 خطوات
+- يظهر تلقائياً عند أول تسجيل دخول (localStorage key: `rise-onboarding-done`)
+- Lint يمر بنجاح بدون أخطاء
+- يُستخدم عبر lazy import: `lazy(() => import('@/components/rise/onboarding'))`
+
+---
+Task ID: fix-all-bugs-onboarding-admin
+Agent: Main Agent
+Task: Fix all reported bugs, add onboarding, improve admin panel based on user security audit
+
+Work Log:
+- Moved ADMIN_EMAIL from hardcoded source code to environment variable (.env)
+- Updated all 4 files that imported ADMIN_EMAIL (supabase.ts, session route, login route, signup route, admin route)
+- Created src/app/error.tsx — Client-side error boundary with retry button and RTL Arabic design
+- Created src/app/global-error.tsx — Global error boundary with inline styles (no CSS deps) for fatal errors
+- Fixed .toString() crash in dashboard.tsx: Made toArabicNum handle string/undefined types, added null guards
+- Fixed getDayLabel to handle null/undefined dates safely
+- Added defensive destructuring for all dashboard data fields (user, today, tasks, habits, etc.)
+- Added null guards to all .map() calls over API data in dashboard
+- Fixed goal.deadline null reference in dashboard
+- Fixed data.projects and data.recentFocus references after destructuring change
+- Applied same toArabicNum fix to sidebar.tsx and finance.tsx
+- Created src/components/rise/onboarding.tsx — 5-step onboarding wizard (600+ lines)
+- Integrated Onboarding component into page.tsx via lazy import
+- Completely rewrote AdminPanel in settings.tsx with:
+  - Search/filter users
+  - Proper Dialog-based delete confirmation (replaced window.confirm)
+  - Error handling with visual feedback
+  - 4 stats cards (total users, active users, AI usage, storage)
+  - Date formatting for user creation dates
+  - Input validation before saving
+  - Refresh button
+  - aria-labels for accessibility
+  - CSS animation instead of framer-motion for the container
+
+Stage Summary:
+- Security: ADMIN_EMAIL no longer exposed in source code (moved to process.env)
+- Stability: Error boundaries prevent white screen crashes
+- Bug Fix: .toString() crash fixed with comprehensive null guards
+- UX: First-time onboarding wizard explains all 20 modules
+- Admin: Professional admin panel with search, proper confirmations, error handling
+- Lint: All changes pass ESLint (0 errors)
+- Compilation: All routes compile successfully (confirmed via dev.log 200 status)

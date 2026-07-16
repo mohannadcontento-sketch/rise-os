@@ -174,14 +174,18 @@ function getGreeting(): string {
   return 'مساء النجوم'
 }
 
-function toArabicNum(n: number | null | undefined): string {
-  if (n == null || isNaN(n)) return '٠'
-  return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+function toArabicNum(n: number | null | undefined | string): string {
+  if (n == null || n === undefined) return '٠'
+  const num = typeof n === 'string' ? parseFloat(n) : n
+  if (isNaN(num)) return '٠'
+  return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
 }
 
-function getDayLabel(dateStr: string): string {
+function getDayLabel(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
   try {
     const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return ''
     const dayEN = d.toLocaleDateString('en-US', { weekday: 'short' })
     return ARABIC_DAYS[dayEN] || dayEN
   } catch {
@@ -1071,7 +1075,17 @@ export default function Dashboard() {
     )
   }
 
-  const { user, today, tasks, habits, health, achievements, dailyScores, goals, books } = data
+  const user = data.user || { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0 }
+  const today = data.today || { tasksCompleted: 0, tasksTotal: 0, habitsCompleted: 0, habitsTotal: 0, focusMin: 0, morningScore: 0 }
+  const tasks = data.tasks || []
+  const habits = data.habits || []
+  const health = data.health || null
+  const achievements = data.achievements || []
+  const dailyScores = data.dailyScores || []
+  const goals = data.goals || []
+  const books = data.books || []
+  const recentFocus = data.recentFocus || []
+  const projects = data.projects || []
   const greeting = getGreeting()
 
   const levelInfo = calculateLevel(user.xp)
@@ -1084,20 +1098,21 @@ export default function Dashboard() {
     journalStreak: 0,
   }
 
-  const upcomingTasks = tasks.filter((t) => !t.done).slice(0, 5)
-  const activeGoals = goals.slice(0, 4)
-  const activeBooks = books.filter((b) => b.status === 'reading' || b.progress > 0).slice(0, 3)
+  const upcomingTasks = (tasks || []).filter((t: any) => !t.done).slice(0, 5)
+  const activeGoals = (goals || []).slice(0, 4)
+  const activeBooks = (books || []).filter((b: any) => b.status === 'reading' || (b.progress || 0) > 0).slice(0, 3)
 
-  const chartData = dailyScores.map((d) => ({
+  const chartData = (dailyScores || []).map((d: any) => ({
     ...d,
     dayLabel: getDayLabel(d.date),
+    score: typeof d.score === 'number' ? d.score : 0,
   }))
 
   // Sparkline data derived from daily scores
-  const morningTrend = dailyScores.map(d => d.morningScore)
-  const taskTrend = dailyScores.map(d => d.taskScore)
-  const habitTrend = dailyScores.map(d => d.habitScore)
-  const focusTrend = dailyScores.map(d => d.focusScore)
+  const morningTrend = (dailyScores || []).map((d: any) => d.morningScore || 0)
+  const taskTrend = (dailyScores || []).map((d: any) => d.taskScore || 0)
+  const habitTrend = (dailyScores || []).map((d: any) => d.habitScore || 0)
+  const focusTrend = (dailyScores || []).map((d: any) => d.focusScore || 0)
 
   return (
     <motion.div
@@ -1519,7 +1534,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] text-muted-foreground">
-                          الموعد: {new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
+                          الموعد: {goal.deadline ? new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' }) : '—'}
                         </p>
                         <GoalDeltaBadge goalId={goal.id} />
                       </div>
@@ -1782,7 +1797,7 @@ export default function Dashboard() {
       </motion.div>
 
       {/* ══════════ Recent Focus Sessions ══════════ */}
-      {data.recentFocus.length > 0 && (
+      {recentFocus.length > 0 && (
         <motion.div variants={itemVariants}>
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
@@ -1792,7 +1807,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                {data.recentFocus.map((session, i) => (
+                {recentFocus.map((session: any, i) => (
                   <motion.div
                     key={i}
                     initial={{ opacity: 0, x: 12 }}
@@ -1815,13 +1830,13 @@ export default function Dashboard() {
       )}
 
       {/* ══════════ Projects Overview ══════════ */}
-      {data.projects.length > 0 && (
+      {projects.length > 0 && (
         <motion.div variants={itemVariants}>
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
               <SectionHeader icon={FolderKanban} iconColor="text-emerald-accent" badge={
                 <Badge variant="secondary" className="text-[10px]">
-                  {toArabicNum(data.projects.length)} مشاريع
+                  {toArabicNum(projects.length)} مشاريع
                 </Badge>
               }>
                 المشاريع
@@ -1829,7 +1844,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {data.projects.slice(0, 6).map((project, i) => (
+                {projects.slice(0, 6).map((project: any, i) => (
                   <motion.div
                     key={project.id}
                     initial={{ opacity: 0, y: 10 }}
