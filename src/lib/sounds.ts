@@ -16,6 +16,10 @@ export type SoundName =
   | 'timer-done'
   | 'delete'
   | 'message'
+  | 'navigate'
+  | 'save'
+  | 'toggle'
+  | 'complete'
 
 /* ────────────── Audio Context (lazy) ────────────── */
 
@@ -171,6 +175,29 @@ const soundFns: Record<SoundName, (audioCtx: AudioContext, master: GainNode, now
   'message': (ac, m, t) => {
     createOsc(ac, 'sine', FREQ.D4, t, t + 0.1, 0.15, m)
     createOsc(ac, 'sine', FREQ.A4, t + 0.08, t + 0.2, 0.15, m)
+  },
+
+  /** Soft navigation blip — very subtle */
+  'navigate': (ac, m, t) => {
+    createOsc(ac, 'sine', 880, t, t + 0.05, 0.06, m)
+  },
+
+  /** Save confirmation — soft ascending */
+  'save': (ac, m, t) => {
+    createOsc(ac, 'sine', FREQ.G4, t, t + 0.12, 0.15, m)
+    createOsc(ac, 'sine', FREQ.C5, t + 0.06, t + 0.2, 0.15, m)
+  },
+
+  /** Toggle switch — quick tick */
+  'toggle': (ac, m, t) => {
+    createOsc(ac, 'sine', 1200, t, t + 0.03, 0.06, m)
+  },
+
+  /** Generic completion — pleasant ding */
+  'complete': (ac, m, t) => {
+    createOsc(ac, 'sine', FREQ.E5, t, t + 0.18, 0.2, m)
+    createOsc(ac, 'sine', FREQ.G5, t + 0.1, t + 0.28, 0.2, m)
+    createOsc(ac, 'sine', FREQ.C5 * 2, t + 0.18, t + 0.35, 0.1, m)
   },
 }
 

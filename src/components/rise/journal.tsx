@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -244,6 +245,7 @@ export default function Journal() {
         })
       if (res.ok) {
         toast.success('تم حفظ اليوميات بنجاح ✨')
+        playSound('save')
         setIsEditing(false)
         fetchJournal()
       } else {

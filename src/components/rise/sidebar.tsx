@@ -2,6 +2,7 @@
 
 import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
+import { playSound } from '@/lib/sounds'
 import { apiFetch } from '@/lib/api-fetch'
 import {
   LayoutDashboard,
@@ -237,7 +238,7 @@ export function Sidebar() {
                   return (
                     <button
                       key={item.id}
-                      onClick={() => setActiveModule(item.id)}
+                      onClick={() => { playSound('navigate'); setActiveModule(item.id) }}
                       className={cn(
                         'w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium',
                         'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',

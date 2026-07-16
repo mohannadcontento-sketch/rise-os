@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { apiPost, apiGet } from '@/lib/api-fetch'
+import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 
 // Keyboard shortcuts (uses a hook — must be eagerly imported)
 import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
@@ -465,7 +466,9 @@ export default function RiseOSApp() {
                 </div>
               </div>
               <Suspense fallback={<LoadingFallback />}>
-                <ActiveComponent />
+                <ModuleErrorBoundary moduleName={moduleNames[activeModule]}>
+                  <ActiveComponent />
+                </ModuleErrorBoundary>
               </Suspense>
             </div>
         </div>

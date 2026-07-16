@@ -1193,7 +1193,7 @@ export default function Dashboard() {
               )}
               <span>{greeting}،</span>
             </div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-gradient-forest">{user.name}</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-gradient-forest">{typeof user.name === 'string' ? user.name : 'مستخدم'}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge className="bg-gradient-to-l from-gold to-gold-light text-forest-dark text-[10px] px-2.5 py-0.5 rounded-full font-bold shadow-md shadow-gold/20 border-0">
                 <Zap className="w-3 h-3 ml-1" />

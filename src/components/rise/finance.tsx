@@ -58,6 +58,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -239,6 +240,7 @@ export default function Finance() {
       const res = await apiPost('/api/rise/finance', form)
       if (res.ok) {
         toast.success('تم إضافة السجل بنجاح ✨')
+        playSound('save')
         // Show budget impact
         if (form.type === 'مصروف' && form.category && form.amount > 0) {
           const budgetItem = budgetData.items.find(b => b.name === form.category)
@@ -267,6 +269,7 @@ export default function Finance() {
 
   /* ─── Delete Record ─── */
   const handleDelete = async (id: string) => {
+    playSound('delete')
     setDeleting(id)
     try {
       const res = await apiDelete(`/api/rise/finance?id=${id}`)

@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
 import { format } from 'date-fns'
@@ -399,6 +400,7 @@ export function Projects() {
         return
       }
       toast.success(editingProject ? 'تم تحديث المشروع بنجاح' : 'تم إنشاء المشروع بنجاح')
+      playSound('save')
       setDialogOpen(false)
       fetchData()
     } catch {
@@ -409,6 +411,7 @@ export function Projects() {
   }
 
   const deleteProject = async (id: string) => {
+    playSound('delete')
     const prevProjects = [...projects]
     const prevSelected = selectedProjectId
     setProjects((p) => p.filter((p) => p.id !== id))

@@ -47,6 +47,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -225,6 +226,8 @@ export default function Reading() {
       status,
       endDate: progress >= 100 ? new Date().toISOString().split('T')[0] : undefined,
     })
+    if (progress >= 100) playSound('complete')
+    else playSound('save')
     toast.success(progress >= 100 ? '🎉 أنهيت الكتاب!' : `صفحة ${arabicNum(newPage)}`)
   }
 
@@ -240,6 +243,8 @@ export default function Reading() {
       status,
       endDate: progress >= 100 ? new Date().toISOString().split('T')[0] : undefined,
     })
+    if (progress >= 100) playSound('complete')
+    else playSound('save')
     setEditPage((prev) => {
       const next = { ...prev }
       delete next[bookId]

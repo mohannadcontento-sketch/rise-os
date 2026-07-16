@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiDelete, apiPost, apiPut } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -166,6 +167,18 @@ export function GoalsView() {
 
   /* ---- Toggle milestone ---- */
   async function toggleMilestone(goalId: string, milestoneId: string) {
+    // Check if this toggle will complete the goal
+    const goal = goals.find((g) => g.id === goalId)
+    let willComplete = false
+    if (goal) {
+      const ms = goal.milestones.find((m) => m.id === milestoneId)
+      if (ms && !ms.completed) {
+        const completedCount = goal.milestones.filter((m) => m.completed).length + 1
+        willComplete = completedCount === goal.milestones.length
+      }
+    }
+    if (willComplete) playSound('complete')
+
     setGoals((prev) =>
       prev.map((g) => {
         if (g.id !== goalId) return g
@@ -242,6 +255,7 @@ export function GoalsView() {
         setGoals((prev) => [...prev, data])
         setAddOpen(false)
         resetForm()
+        playSound('save')
       }
     } catch {
       // Silently fail
@@ -252,6 +266,7 @@ export function GoalsView() {
 
   /* ---- Delete goal ---- */
   async function deleteGoal(id: string) {
+    playSound('delete')
     const prev = [...goals]
     setGoals((p) => p.filter((g) => g.id !== id))
     try {

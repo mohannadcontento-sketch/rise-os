@@ -46,6 +46,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -751,6 +752,7 @@ export default function DailyPlanner() {
       }
       const created = await res.json()
       setItems((prev) => prev.map((i) => i.id === tempId ? created : i))
+      playSound('save')
     } catch {
       setItems((prev) => prev.filter((i) => i.id !== tempId))
       toast.error('فشل في إضافة المهمة')
@@ -762,6 +764,7 @@ export default function DailyPlanner() {
     if (!item) return
 
     const newCompleted = !item.completed
+    if (newCompleted) playSound('task-complete')
     // Optimistic
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))

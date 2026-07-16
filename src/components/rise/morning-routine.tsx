@@ -38,6 +38,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { notifyMorningComplete } from '@/lib/notifications'
 
@@ -632,6 +633,7 @@ export default function MorningRoutine() {
         setTodayLog(payload)
         // Award XP when all items completed
         if (ids.size === totalCount && totalCount > 0) {
+          playSound('achievement')
           const totalXp = SECTIONS.reduce((sum, s) => sum + s.items.reduce((isum, item) => isum + item.xp, 0), 0)
           apiPost('/api/rise/earn-xp', { amount: totalXp, reason: 'morning-routine-complete' }).catch(() => {})
         }
@@ -647,6 +649,8 @@ export default function MorningRoutine() {
   const handleToggle = useCallback(
     (id: string) => {
       setCompletedIds((prev) => {
+        const isChecking = !prev.has(id)
+        if (isChecking) playSound('habit-check')
         const next = new Set(prev)
         if (next.has(id)) {
           next.delete(id)
