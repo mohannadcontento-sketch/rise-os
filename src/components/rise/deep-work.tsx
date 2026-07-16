@@ -229,8 +229,7 @@ function stopAndDisconnect(nodes: AmbientSoundNodes) {
 /** Create rain sound: brown noise through lowpass filter */
 function createRainSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(volume * 0.5, ctx.currentTime + 1)
+  gain.gain.setValueAtTime(volume * 0.8, ctx.currentTime)
 
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
@@ -247,8 +246,7 @@ function createRainSound(ctx: AudioContext, masterGain: GainNode, volume: number
 /** Create forest sound: pink noise base + occasional bird chirps */
 function createForestSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(volume * 0.3, ctx.currentTime + 1)
+  gain.gain.setValueAtTime(volume * 0.5, ctx.currentTime)
 
   const filter = ctx.createBiquadFilter()
   filter.type = 'bandpass'
@@ -275,8 +273,8 @@ function createForestSound(ctx: AudioContext, masterGain: GainNode, volume: numb
       osc.frequency.exponentialRampToValueAtTime(freq * (1.1 + Math.random() * 0.3), ctx.currentTime + 0.08)
       osc.frequency.exponentialRampToValueAtTime(freq * 0.9, ctx.currentTime + 0.15)
       oscGain.gain.setValueAtTime(0, ctx.currentTime)
-      oscGain.gain.linearRampToValueAtTime(volume * 0.08, ctx.currentTime + 0.02)
-      oscGain.gain.linearRampToValueAtTime(volume * 0.12, ctx.currentTime + 0.06)
+      oscGain.gain.linearRampToValueAtTime(volume * 0.15, ctx.currentTime + 0.02)
+      oscGain.gain.linearRampToValueAtTime(volume * 0.2, ctx.currentTime + 0.06)
       oscGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.18)
       osc.connect(oscGain).connect(gain)
       osc.start(ctx.currentTime)
@@ -294,8 +292,7 @@ function createForestSound(ctx: AudioContext, masterGain: GainNode, volume: numb
 /** Create coffee sound: warm low rumble + subtle crackling */
 function createCoffeeSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 1)
+  gain.gain.setValueAtTime(volume * 0.6, ctx.currentTime)
 
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
@@ -324,7 +321,7 @@ function createCoffeeSound(ctx: AudioContext, masterGain: GainNode, volume: numb
       cf.type = 'highpass'
       cf.frequency.setValueAtTime(2000, ctx.currentTime)
       const cg = ctx.createGain()
-      cg.gain.setValueAtTime(volume * 0.15, ctx.currentTime)
+      cg.gain.setValueAtTime(volume * 0.25, ctx.currentTime)
       cs.connect(cf).connect(cg).connect(gain)
       cs.start()
       crackleSources.push(cs, cf, cg)
@@ -340,8 +337,7 @@ function createCoffeeSound(ctx: AudioContext, masterGain: GainNode, volume: numb
 /** Create ocean sound: slowly modulated noise like waves */
 function createOceanSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(volume * 0.4, ctx.currentTime + 2)
+  gain.gain.setValueAtTime(volume * 0.7, ctx.currentTime)
 
   // LFO for wave-like modulation
   const lfo = ctx.createOscillator()
@@ -349,7 +345,7 @@ function createOceanSound(ctx: AudioContext, masterGain: GainNode, volume: numbe
   lfo.frequency.setValueAtTime(0.1, ctx.currentTime) // Very slow wave cycle
 
   const lfoGain = ctx.createGain()
-  lfoGain.gain.setValueAtTime(volume * 0.25, ctx.currentTime)
+  lfoGain.gain.setValueAtTime(volume * 0.4, ctx.currentTime)
 
   lfo.connect(lfoGain).connect(gain.gain)
   lfo.start()
@@ -369,8 +365,7 @@ function createOceanSound(ctx: AudioContext, masterGain: GainNode, volume: numbe
 /** Create fire sound: crackling noise + low rumble */
 function createFireSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 1)
+  gain.gain.setValueAtTime(volume * 0.6, ctx.currentTime)
 
   // Low rumble
   const rumbleFilter = ctx.createBiquadFilter()
@@ -401,7 +396,7 @@ function createFireSound(ctx: AudioContext, masterGain: GainNode, volume: number
       cf.frequency.setValueAtTime(1000 + Math.random() * 4000, ctx.currentTime)
       cf.Q.setValueAtTime(0.8, ctx.currentTime)
       const cg = ctx.createGain()
-      cg.gain.setValueAtTime(volume * (0.08 + Math.random() * 0.12), ctx.currentTime)
+      cg.gain.setValueAtTime(volume * (0.15 + Math.random() * 0.2), ctx.currentTime)
       cs.connect(cf).connect(cg).connect(gain)
       cs.start()
       allSources.push(cs, cf, cg)
@@ -417,8 +412,7 @@ function createFireSound(ctx: AudioContext, masterGain: GainNode, volume: number
 /** Create wind sound: very low frequency modulated noise */
 function createWindSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
   const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 2)
+  gain.gain.setValueAtTime(volume * 0.6, ctx.currentTime)
 
   // Slow LFO for wind gusts
   const lfo = ctx.createOscillator()
@@ -477,45 +471,38 @@ function useAmbientSounds() {
   const masterGainRef = useRef<GainNode | null>(null)
   const activeNodesRef = useRef<Map<string, AmbientSoundNodes>>(new Map())
 
-  const getCtx = useCallback(() => {
+  const getCtx = useCallback((): AudioContext => {
     if (!ctxRef.current || ctxRef.current.state === 'closed') {
       const ctx = getOrCreateCtx()
-      if (ctx.state === 'suspended') ctx.resume()
       ctxRef.current = ctx
       const master = ctx.createGain()
       const settings = readSoundSettings()
-      master.gain.setValueAtTime(settings.soundVolume * 0.6, ctx.currentTime)
+      master.gain.setValueAtTime(settings.soundVolume, ctx.currentTime)
       master.connect(ctx.destination)
       masterGainRef.current = master
     }
-    if (ctxRef.current.state === 'suspended') ctxRef.current.resume()
-    return ctxRef.current
+    return ctxRef.current!
   }, [])
 
-  const startSound = useCallback(async (label: string) => {
+  const startSound = useCallback((label: string) => {
     try {
-      const settings = readSoundSettings()
-      if (!settings.sounds) {
-        console.warn('[ambient] sounds disabled in settings')
+      const creator = AMBIENT_SOUND_CREATORS[label]
+      if (!creator) {
+        console.warn('[ambient] no creator for:', label)
         return
       }
 
       const ctx = getCtx()
       if (!masterGainRef.current) return
 
-      // Resume AudioContext if suspended (needs user gesture)
+      // Resume AudioContext synchronously in user gesture context
       if (ctx.state === 'suspended') {
-        await ctx.resume()
+        ctx.resume() // Fire-and-forget is fine — browser processes it in click context
       }
 
       // Update master volume from settings
-      masterGainRef.current.gain.setValueAtTime(settings.soundVolume * 0.6, ctx.currentTime)
-
-      const creator = AMBIENT_SOUND_CREATORS[label]
-      if (!creator) {
-        console.warn('[ambient] no creator for:', label)
-        return
-      }
+      const settings = readSoundSettings()
+      masterGainRef.current.gain.setValueAtTime(settings.soundVolume, ctx.currentTime)
 
       // Stop existing if any
       const existing = activeNodesRef.current.get(label)
@@ -525,6 +512,7 @@ function useAmbientSounds() {
 
       const nodes = creator(ctx, masterGainRef.current, settings.soundVolume)
       activeNodesRef.current.set(label, nodes)
+      console.log('[ambient] started:', label)
     } catch (err) {
       console.error('[ambient] startSound error:', err)
     }
@@ -550,7 +538,7 @@ function useAmbientSounds() {
   const updateVolume = useCallback(() => {
     const settings = readSoundSettings()
     if (masterGainRef.current && ctxRef.current && ctxRef.current.state !== 'closed') {
-      masterGainRef.current.gain.linearRampToValueAtTime(settings.soundVolume * 0.6, ctxRef.current.currentTime + 0.1)
+      masterGainRef.current.gain.linearRampToValueAtTime(settings.soundVolume, ctxRef.current.currentTime + 0.1)
     }
   }, [])
 
@@ -835,17 +823,22 @@ export default function DeepWork() {
   }
 
   const toggleSound = (label: string) => {
-    setActiveSounds((prev) => {
-      const next = new Set(prev)
-      if (next.has(label)) {
+    const isActive = activeSounds.has(label)
+    if (isActive) {
+      stopSound(label)
+      setActiveSounds((prev) => {
+        const next = new Set(prev)
         next.delete(label)
-        stopSound(label)
-      } else {
+        return next
+      })
+    } else {
+      startSound(label)
+      setActiveSounds((prev) => {
+        const next = new Set(prev)
         next.add(label)
-        startSound(label)
-      }
-      return next
-    })
+        return next
+      })
+    }
     playSound('toggle')
   }
 
