@@ -3,14 +3,14 @@ import { getSupabase } from '@/lib/supabase'
 
 /**
  * Extract authenticated user ID from request.
- * Returns null for guest/unauthenticated users.
+ * Returns null for unauthenticated users.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
     const authHeader = req.headers.get('Authorization') || ''
     const token = authHeader.replace('Bearer ', '')
 
-    if (!token || token === 'guest') {
+    if (!token) {
       return null
     }
 

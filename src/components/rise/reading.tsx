@@ -284,8 +284,8 @@ export default function Reading() {
   const readingBooks = books.filter((b) => b.status === 'reading')
   const completedBooks = books.filter((b) => b.status === 'completed')
   const totalBooks = books.length
-  const totalPagesRead = completedBooks.reduce((sum, b) => sum + (b.totalPages || 0), 0) +
-    readingBooks.reduce((sum, b) => sum + (b.currentPage || 0), 0)
+  const totalPagesRead = completedBooks.reduce((sum, b) => sum + (typeof b.totalPages === 'number' ? b.totalPages : 0), 0) +
+    readingBooks.reduce((sum, b) => sum + (typeof b.currentPage === 'number' ? b.currentPage : 0), 0)
 
   const filteredBooks = books
     .filter((b) => b.status === activeTab)
@@ -436,9 +436,9 @@ export default function Reading() {
 
               {/* Featured active book (first one with most progress) */}
               {(() => {
-                const featured = readingBooks.sort((a, b) => b.progress - a.progress)[0]
+                const featured = readingBooks.sort((a, b) => (typeof b.progress === 'number' ? b.progress : 0) - (typeof a.progress === 'number' ? a.progress : 0))[0]
                 if (!featured) return null
-                const pagesRemaining = (featured.totalPages || 0) - featured.currentPage
+                const pagesRemaining = (typeof featured.totalPages === 'number' ? featured.totalPages : 0) - (typeof featured.currentPage === 'number' ? featured.currentPage : 0)
                 const estDate = getEstimatedCompletion(featured)
 
                 return (

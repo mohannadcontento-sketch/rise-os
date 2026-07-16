@@ -101,3 +101,37 @@ export const goalTypeLabels: Record<string, string> = {
   weekly: 'أسبوعي',
   daily: 'يومي',
 }
+
+/**
+ * Safely coerce any value to a number. Returns 0 for non-numeric inputs.
+ * Prevents React #130 when API returns objects instead of numbers.
+ */
+export function safeNum(v: unknown): number {
+  if (typeof v === 'number' && !isNaN(v)) return v
+  if (typeof v === 'string') {
+    const n = parseFloat(v)
+    return isNaN(n) ? 0 : n
+  }
+  return 0
+}
+
+/**
+ * Safely coerce any value to a string. Returns '' for objects/null/undefined.
+ * Prevents React #130 when API returns objects instead of strings.
+ */
+export function safeStr(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  return ''
+}
+
+/**
+ * Convert a number to Arabic numerals. Handles objects, null, undefined, NaN.
+ */
+export function toArabicNum(n: unknown): string {
+  if (n == null || typeof n === 'object') return '٠'
+  const num = typeof n === 'string' ? parseFloat(n) : typeof n === 'number' ? n : 0
+  if (isNaN(num)) return '٠'
+  return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+}

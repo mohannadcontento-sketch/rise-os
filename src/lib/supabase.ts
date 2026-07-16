@@ -30,7 +30,7 @@ export function getSupabaseWithAuth(req: NextRequest): SupabaseClient {
   const base = getSupabase()
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
 
-  if (!token || token === 'guest') {
+  if (!token) {
     // No valid token — return base client (RLS will block access via anon)
     return base
   }

@@ -116,7 +116,7 @@ const itemVariants = {
 /* ────────────── Progress Ring Component ────────────── */
 
 function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progress: number; size?: number; strokeWidth?: number; color: string }) {
-  const radius = (size - strokeWidth) / 2
+  const radius = Math.max(1, (size - strokeWidth) / 2)
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (progress / 100) * circumference
   const isHighProgress = progress > 75

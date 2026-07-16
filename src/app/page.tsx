@@ -214,7 +214,7 @@ export default function RiseOSApp() {
         const userInfo = localStorage.getItem('rise-user-info')
         if (stored && userInfo) {
           const session = JSON.parse(stored)
-          if (session.access_token && session.access_token !== 'guest') {
+          if (session.access_token) {
             // Validate session with server
             apiGet('/api/auth/session').then(r => r.json()).then(data => {
               if (data.user) {
@@ -237,7 +237,7 @@ export default function RiseOSApp() {
               localStorage.removeItem('rise-user-info')
             })
           } else {
-            // Invalid/guest token — clear and show login
+            // Invalid token — clear and show login
             localStorage.removeItem('rise-auth')
             localStorage.removeItem('rise-user-info')
           }

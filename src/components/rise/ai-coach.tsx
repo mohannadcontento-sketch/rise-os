@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { apiPost } from '@/lib/api-fetch'
 import { useRiseStore } from '@/store/app-store'
+import { playSound } from '@/lib/sounds'
 
 /* ────────────── Types ────────────── */
 
@@ -197,10 +198,6 @@ export default function AICoach() {
   }, [messages, isTyping])
 
   const sendToAI = useCallback(async (message: string, history: ChatMessage[]) => {
-    if (auth?.accessToken === 'guest') {
-      return { response: generateFallbackResponse(message), fallback: true }
-    }
-
     try {
       const chatHistory = history.slice(-6).map(m => ({
         role: m.role,
@@ -209,7 +206,7 @@ export default function AICoach() {
 
       const res = await apiPost('/api/rise/ai-chat', {
         message,
-        userId: auth?.userId || 'guest',
+        userId: auth?.userId || '',
         history: chatHistory,
       })
 
@@ -237,6 +234,7 @@ export default function AICoach() {
     const delay = isFallback ? Math.min(content.length * 5, 1000) : 1500
     setTimeout(() => {
       setIsTyping(false)
+      playSound('message')
       setMessages((prev) => [
         ...prev,
         {
@@ -286,6 +284,7 @@ export default function AICoach() {
     setIsTyping(true)
     const { response, fallback } = await sendToAI(userMessage, messages)
     setIsTyping(false)
+    playSound('message')
 
     setMessages(prev => [
       ...prev,
@@ -412,6 +411,7 @@ export default function AICoach() {
                       setIsTyping(true)
                       sendToAI(prompt.text, [...messages, msg]).then(({ response, fallback }) => {
                         setIsTyping(false)
+                        playSound('message')
                         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'ai', content: response, timestamp: Date.now(), isFallback: fallback }])
                       })
                     }}

@@ -49,6 +49,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { toast } from 'sonner'
+import { playSound } from '@/lib/sounds'
 import { notifyFocusComplete } from '@/lib/notifications'
 import {
   Dialog,
@@ -213,6 +214,7 @@ export default function DeepWork() {
             setIsPaused(false)
             setSessionCompleted(true)
             setCelebrateKey((k) => k + 1)
+            playSound('timer-done')
             return 0
           }
           return prev - 1

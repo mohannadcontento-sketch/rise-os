@@ -275,7 +275,7 @@ export default function Journal() {
   const stats = useMemo(() => {
     const journals = data?.recentJournals || []
     const total = journals.length
-    const moods = journals.filter((j) => j.mood).map((j) => j.mood)
+    const moods = journals.filter((j) => typeof j.mood === 'number').map((j) => j.mood)
     const avgMood = moods.length
       ? (moods.reduce((a, b) => a + b, 0) / moods.length).toFixed(1)
       : '—'

@@ -44,7 +44,7 @@ async function calculateScoreForDate(supabase: ReturnType<typeof getSupabaseWith
 export async function GET(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ score: 0, breakdown: {} })
+    if (!userId) return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
     const supabase = getSupabaseWithAuth(req)
 
     const { searchParams } = new URL(req.url)
@@ -118,6 +118,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Productivity score error:', error)
-    return NextResponse.json({ score: 0, breakdown: {} })
+    return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
   }
 }

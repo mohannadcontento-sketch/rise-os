@@ -291,7 +291,7 @@ export function getOfflineDB(): OfflineDB {
       const userInfo = localStorage.getItem('rise-user-info')
       if (userInfo) {
         const parsed = JSON.parse(userInfo)
-        if (parsed.id && parsed.id !== 'guest') {
+        if (parsed.id) {
           userId = parsed.id
         }
       }

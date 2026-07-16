@@ -373,7 +373,7 @@ function RoutineTimeline() {
 function CompletionRing({ score }: { score: number }) {
   const size = 64
   const strokeWidth = 5
-  const radius = (size - strokeWidth) / 2
+  const radius = Math.max(1, (size - strokeWidth) / 2)
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (score / 100) * circumference
 

@@ -37,6 +37,7 @@ import {
   Database,
   Save,
   Search,
+  Volume2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,6 +47,7 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Slider } from '@/components/ui/slider'
 import {
   Dialog,
   DialogContent,
@@ -67,6 +69,7 @@ import { useRiseStore } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { toast } from 'sonner'
+import { playSound } from '@/lib/sounds'
 
 /* ────────────── Types ────────────── */
 
@@ -86,6 +89,8 @@ interface SettingsData {
     prayer: boolean
     sleep: boolean
   }
+  sounds: boolean
+  soundVolume: number
 }
 
 const STORAGE_KEY = 'rise-settings'
@@ -107,6 +112,8 @@ const defaultSettings: SettingsData = {
     prayer: true,
     sleep: true,
   },
+  sounds: true,
+  soundVolume: 0.5,
 }
 
 /* ────────────── Helpers ────────────── */
@@ -141,7 +148,7 @@ function AdminPanel() {
   const [lastError, setLastError] = useState('')
 
   const loadUsers = useCallback(async (showLoading = true) => {
-    if (!auth?.accessToken || auth.accessToken === 'guest') return
+    if (!auth?.accessToken) return
     if (showLoading) setLoading(true)
     setLastError('')
     try {
@@ -870,6 +877,65 @@ export default function Settings() {
                 {group.title !== notifGroups[notifGroups.length - 1].title && <Separator className="mt-3" />}
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ── Gradient Divider ── */}
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-sky-500/30 to-transparent" />
+
+      {/* Sounds */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-sky-600 dark:border-r-sky-400">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <Volume2 className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+              الأصوات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-center justify-between py-2 px-1">
+              <div>
+                <span className="text-sm font-medium block">تأثيرات صوتية</span>
+                <span className="text-[11px] text-muted-foreground">أصوات تفاعلية للمهام والعادات والإشعارات</span>
+              </div>
+              <Switch
+                checked={settings.sounds}
+                onCheckedChange={(v) => {
+                  setSettings((prev) => ({ ...prev, sounds: v }))
+                  if (v) playSound('success')
+                }}
+                className="data-[state=checked]:bg-sky-600 data-[state=checked]:border-sky-600"
+              />
+            </div>
+            {settings.sounds && (
+              <div className="space-y-3 px-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm text-muted-foreground">مستوى الصوت</Label>
+                  <span className="text-xs font-mono text-muted-foreground">{Math.round(settings.soundVolume * 100)}%</span>
+                </div>
+                <Slider
+                  value={[settings.soundVolume]}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onValueChange={([v]) => {
+                    setSettings((prev) => ({ ...prev, soundVolume: v }))
+                    playSound('click')
+                  }}
+                  className="w-full"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs w-full rounded-xl"
+                  onClick={() => playSound('task-complete')}
+                >
+                  <Volume2 className="w-3.5 h-3.5 ml-1.5" />
+                  اختبار الصوت
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

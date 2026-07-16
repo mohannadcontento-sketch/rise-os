@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
 
-    if (!token || token === 'guest') {
+    if (!token) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 

@@ -101,8 +101,8 @@ const navGroups: NavGroup[] = [
   },
 ]
 
-function toArabicNum(n: number | null | undefined | string): string {
-  if (n == null || n === undefined) return '٠'
+function toArabicNum(n: number | null | undefined | string | object): string {
+  if (n == null || n === undefined || typeof n === 'object') return '٠'
   const num = typeof n === 'string' ? parseFloat(n) : n
   if (isNaN(num)) return '٠'
   return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])

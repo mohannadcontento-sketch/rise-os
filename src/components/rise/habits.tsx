@@ -46,6 +46,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
+import { playSound } from '@/lib/sounds'
 import { cn } from '@/lib/utils'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { notifyHabitComplete } from '@/lib/notifications'
@@ -282,6 +283,7 @@ export function HabitsView() {
           return
         }
         if (newCompleted) {
+          playSound('habit-check')
           const habit = habits.find((h) => h.id === habitId)
           if (habit) {
             const streak = calcStreak(
@@ -341,6 +343,7 @@ export function HabitsView() {
   async function deleteHabit(id: string) {
     const prev = [...habits]
     setHabits((p) => p.filter((h) => h.id !== id))
+    playSound('delete')
     try {
       const res = await apiDelete(`/api/rise/habits?id=${id}`)
       if (!res.ok) {

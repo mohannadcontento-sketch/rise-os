@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api-fetch'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
+import { playSound } from '@/lib/sounds'
 import {
   Tooltip,
   TooltipContent,
@@ -174,11 +175,26 @@ function getGreeting(): string {
   return 'مساء النجوم'
 }
 
-function toArabicNum(n: number | null | undefined | string): string {
-  if (n == null || n === undefined) return '٠'
+function toArabicNum(n: number | null | undefined | string | object): string {
+  if (n == null || n === undefined || typeof n === 'object') return '٠'
   const num = typeof n === 'string' ? parseFloat(n) : n
   if (isNaN(num)) return '٠'
   return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+}
+
+/** Safely coerce a value to a number, returning 0 for any non-numeric input. */
+function safeNum(v: unknown): number {
+  if (typeof v === 'number' && !isNaN(v)) return v
+  if (typeof v === 'string') { const n = parseFloat(v); return isNaN(n) ? 0 : n }
+  return 0
+}
+
+/** Safely coerce a value to a string, returning '' for objects/null/undefined. */
+function safeStr(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v == null) return ''
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  return ''
 }
 
 function getDayLabel(dateStr: string | null | undefined): string {
@@ -351,7 +367,7 @@ function CircularProgress({
   strokeWidth?: number
   color?: string
 }) {
-  const radius = (size - strokeWidth) / 2
+  const radius = Math.max(1, (size - strokeWidth) / 2)
   const circumference = radius * 2 * Math.PI
   const offset = circumference - (value / 100) * circumference
 
@@ -504,8 +520,25 @@ function ProductivityScoreCard() {
 
   useEffect(() => {
     apiFetch('/api/rise/productivity-score')
-      .then((r) => r.json())
-      .then((data) => setProdData(data))
+      .then((r) => {
+        if (!r.ok) return null
+        return r.json()
+      })
+      .then((data) => {
+        if (!data) return
+        // Validate and sanitize the API response shape
+        const score = typeof data.score === 'number' ? data.score : 0
+        const rawBreakdown = data.breakdown && typeof data.breakdown === 'object' ? data.breakdown : {}
+        const breakdown = {
+          tasks: typeof rawBreakdown.tasks === 'number' ? rawBreakdown.tasks : 0,
+          habits: typeof rawBreakdown.habits === 'number' ? rawBreakdown.habits : 0,
+          focus: typeof rawBreakdown.focus === 'number' ? rawBreakdown.focus : 0,
+          morning: typeof rawBreakdown.morning === 'number' ? rawBreakdown.morning : 0,
+          streak: typeof rawBreakdown.streak === 'number' ? rawBreakdown.streak : 0,
+        }
+        const grade = typeof data.grade === 'string' ? data.grade : '—'
+        setProdData({ score, breakdown, grade })
+      })
       .catch(() => {})
   }, [])
 
@@ -528,7 +561,7 @@ function ProductivityScoreCard() {
   const { score, breakdown, grade } = prodData
   const size = 130
   const strokeWidth = 10
-  const radius = (size - strokeWidth) / 2
+  const radius = Math.max(1, (size - strokeWidth) / 2)
   const circumference = radius * 2 * Math.PI
   const offset = circumference - (score / 100) * circumference
 
@@ -557,11 +590,11 @@ function ProductivityScoreCard() {
   }
 
   const breakdownItems = [
-    { label: 'المهام', value: breakdown.tasks, color: 'bg-emerald-accent' },
-    { label: 'العادات', value: breakdown.habits, color: 'bg-forest' },
-    { label: 'التركيز', value: breakdown.focus, color: 'bg-gold' },
-    { label: 'الصباح', value: breakdown.morning, color: 'bg-amber-400' },
-    { label: 'السلسلة', value: breakdown.streak, color: 'bg-orange-500' },
+    { label: 'المهام', value: safeNum(breakdown.tasks), color: 'bg-emerald-accent' },
+    { label: 'العادات', value: safeNum(breakdown.habits), color: 'bg-forest' },
+    { label: 'التركيز', value: safeNum(breakdown.focus), color: 'bg-gold' },
+    { label: 'الصباح', value: safeNum(breakdown.morning), color: 'bg-amber-400' },
+    { label: 'السلسلة', value: safeNum(breakdown.streak), color: 'bg-orange-500' },
   ]
 
   return (
@@ -1054,6 +1087,15 @@ export default function Dashboard() {
     fetchDashboard()
   }, [fetchDashboard])
 
+  // Play achievement sound on first load if there are achievements
+  const achievementSoundPlayed = useRef(false)
+  useEffect(() => {
+    if (data?.achievements?.length > 0 && !achievementSoundPlayed.current) {
+      achievementSoundPlayed.current = true
+      playSound('achievement')
+    }
+  }, [data])
+
   if (loading) return <DashboardSkeleton />
 
   if (error || !data) {
@@ -1077,15 +1119,15 @@ export default function Dashboard() {
 
   const user = data.user || { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0 }
   const today = data.today || { tasksCompleted: 0, tasksTotal: 0, habitsCompleted: 0, habitsTotal: 0, focusMin: 0, morningScore: 0 }
-  const tasks = data.tasks || []
-  const habits = data.habits || []
-  const health = data.health || null
-  const achievements = data.achievements || []
-  const dailyScores = data.dailyScores || []
-  const goals = data.goals || []
-  const books = data.books || []
-  const recentFocus = data.recentFocus || []
-  const projects = data.projects || []
+  const tasks = Array.isArray(data.tasks) ? data.tasks : []
+  const habits = Array.isArray(data.habits) ? data.habits : []
+  const health = data.health && typeof data.health === 'object' ? data.health : null
+  const achievements = Array.isArray(data.achievements) ? data.achievements : []
+  const dailyScores = Array.isArray(data.dailyScores) ? data.dailyScores : []
+  const goals = Array.isArray(data.goals) ? data.goals : []
+  const books = Array.isArray(data.books) ? data.books : []
+  const recentFocus = Array.isArray(data.recentFocus) ? data.recentFocus : []
+  const projects = Array.isArray(data.projects) ? data.projects : []
   const greeting = getGreeting()
 
   const levelInfo = calculateLevel(user.xp)
@@ -1723,19 +1765,19 @@ export default function Dashboard() {
                   {/* Sleep */}
                   <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
                     <Moon className="w-5 h-5 mx-auto text-indigo-400" />
-                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.sleepHours)}</p>
+                    <p className="text-lg font-bold text-foreground">{toArabicNum(safeNum(health.sleepHours))}</p>
                     <p className="text-[10px] text-muted-foreground">ساعات نوم</p>
                   </div>
                   {/* Water */}
                   <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
                     <Droplets className="w-5 h-5 mx-auto text-blue-400" />
-                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.waterGlasses)}</p>
+                    <p className="text-lg font-bold text-foreground">{toArabicNum(safeNum(health.waterGlasses))}</p>
                     <p className="text-[10px] text-muted-foreground">كوب ماء</p>
                   </div>
                   {/* Steps */}
                   <div className="bg-primary/[0.03] rounded-xl p-3 text-center space-y-1.5">
                     <Footprints className="w-5 h-5 mx-auto text-emerald-accent" />
-                    <p className="text-lg font-bold text-foreground">{toArabicNum(health.steps)}</p>
+                    <p className="text-lg font-bold text-foreground">{toArabicNum(safeNum(health.steps))}</p>
                     <p className="text-[10px] text-muted-foreground">خطوة</p>
                   </div>
                   {/* Mood & Energy */}

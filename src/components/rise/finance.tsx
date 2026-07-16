@@ -162,8 +162,8 @@ const DEFAULT_BUDGET_CATEGORIES: BudgetCategory[] = [
   { name: 'أخرى', limit: 500, icon: Receipt },
 ]
 
-function toArabicNum(n: number | null | undefined | string): string {
-  if (n == null || n === undefined) return '٠'
+function toArabicNum(n: number | null | undefined | string | object): string {
+  if (n == null || n === undefined || typeof n === 'object') return '٠'
   const num = typeof n === 'string' ? parseFloat(n) : n
   if (isNaN(num)) return '٠'
   return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])

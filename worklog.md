@@ -1545,3 +1545,60 @@ Stage Summary:
 - كل دوال الحذف (7 مكونات + 7 API routes) مُصلحة
 - حسابات جديدة تبدأ فارغة
 - فلتر المحظور يعمل بشكل صحيح
+
+---
+Task ID: 4
+Agent: sounds-agent
+Task: Add comprehensive sound effects system to RiseOS
+
+Work Log:
+- Created /home/z/my-project/src/lib/sounds.ts with Web Audio API sound generation
+- Added 10 sound effects (task-complete, habit-check, success, error, click, notification, achievement, timer-done, delete, message)
+- All sounds generated programmatically using oscillators (no external audio files)
+- Added `sounds: boolean` and `soundVolume: number` fields to SettingsData interface in settings.tsx
+- Added "الأصوات" (Sounds) settings section with toggle switch, volume slider, and test button
+- Integrated sounds into tasks.tsx (task-complete on check, delete on remove)
+- Integrated sounds into habits.tsx (habit-check on toggle, delete on remove)
+- Integrated sounds into deep-work.tsx (timer-done when focus session ends)
+- Integrated sounds into ai-coach.tsx (message when AI responds via all 3 code paths)
+- Integrated sounds into dashboard.tsx (achievement on first load with achievements)
+- Build compiles successfully, ESLint passes with 0 errors
+
+Stage Summary:
+- Full Web Audio API sound system implemented with lazy AudioContext creation
+- Pentatonic/C major scale frequencies for pleasant, modern sounds
+- ADSR envelope on all oscillators for natural sound
+- Settings integration with toggle and volume control (0-100%)
+- Sounds respect user preferences from localStorage 'rise-settings'
+- Minimal, focused changes across 7 files
+
+---
+Task ID: 3b
+Agent: bugfix-agent
+Task: Find and fix React error #130 (objects not valid as React child)
+
+Work Log:
+- Audited all 13+ component files under src/components/rise/ for object-as-React-child patterns
+- **dashboard.tsx — ProductivityScoreCard**: Added `r.ok` check before parsing response. Added full validation/sanitization of `score`, `breakdown`, and `grade` fields from API. Each breakdown field is now type-checked with `typeof === 'number'` guard.
+- **dashboard.tsx — Main data destructuring**: Changed `data.X || []` to `Array.isArray(data.X) ? data.X : []` for tasks, habits, achievements, dailyScores, goals, books, recentFocus, projects. Added `typeof data.health === 'object'` guard.
+- **dashboard.tsx — Health rendering**: Wrapped `health.sleepHours`, `health.waterGlasses`, `health.steps` in `safeNum()` before passing to `toArabicNum()`.
+- **dashboard.tsx — toArabicNum**: Added `typeof n === 'object'` early return to prevent `num.toString()` crash on objects.
+- **dashboard.tsx — Added `safeNum()` and `safeStr()` helper functions** for defensive type coercion.
+- **finance.tsx — toArabicNum**: Added `typeof n === 'object'` early return guard.
+- **sidebar.tsx — toArabicNum**: Added `typeof n === 'object'` early return guard.
+- **learning.tsx — ProgressRing**: Added `safeLevel` guard (`typeof level === 'number'` check) before using `level` in SVG calculations and rendering `{level}` in `<text>`.
+- **learning.tsx — Skill graph**: Wrapped `{skill.level}` in SVG `<text>` with `typeof skill.level === 'number' ? skill.level : 0` guard.
+- **analytics.tsx — GlassTooltip**: Wrapped `{entry.value}` with `typeof entry.value === 'number' ? entry.value : '—'` guard.
+- **goals.tsx — Stats computation**: Added `typeof g.progress === 'number'` guard in reduce for avgProgress calculation.
+- **journal.tsx — Mood stats**: Changed `j.mood` filter to `typeof j.mood === 'number'` to prevent string concatenation in mood average.
+- **reading.tsx — Page stats**: Added `typeof b.totalPages === 'number'` and `typeof b.currentPage === 'number'` guards in totalPagesRead reduce.
+- **reading.tsx — Featured book sort**: Added type guards for `b.progress` in sort comparison and `pagesRemaining` calculation.
+- **rise-utils.ts — Added shared utilities**: `safeNum()`, `safeStr()`, and `toArabicNum()` as exported functions for reuse across components.
+
+Stage Summary:
+- 10 files modified: dashboard.tsx, finance.tsx, sidebar.tsx, learning.tsx, analytics.tsx, goals.tsx, journal.tsx, reading.tsx, rise-utils.ts
+- Core fix: ProductivityScoreCard now validates API response shape before rendering (prevents the most likely #130 crash path)
+- All 3 `toArabicNum()` local copies now reject objects with `typeof n === 'object'` guard
+- All API numeric fields used in JSX rendering now have `typeof === 'number'` type guards
+- All `.reduce()` accumulations on API data now check value types before adding
+- Lint passes with 0 errors

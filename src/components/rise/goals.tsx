@@ -160,7 +160,7 @@ export function GoalsView() {
     const total = goals.length
     const completed = goals.filter((g) => g.status === 'completed').length
     const avgProgress =
-      total > 0 ? Math.round(goals.reduce((s, g) => s + g.progress, 0) / total) : 0
+      total > 0 ? Math.round(goals.reduce((s, g) => s + (typeof g.progress === 'number' ? g.progress : 0), 0) / total) : 0
     return { total, completed, avgProgress }
   }, [goals])
 

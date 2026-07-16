@@ -132,7 +132,7 @@ function GlassTooltip({ active, payload, label }: { active?: boolean; payload?: 
               {ARABIC_LABELS[entry.dataKey || entry.name] || entry.name}
             </span>
           </div>
-          <span className={cn('font-bold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{entry.value}</span>
+          <span className={cn('font-bold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{typeof entry.value === 'number' ? entry.value : '—'}</span>
         </div>
       ))}
     </div>

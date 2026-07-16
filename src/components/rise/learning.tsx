@@ -132,9 +132,10 @@ function EmptyState({ icon: Icon, title, desc }: { icon: React.ElementType; titl
 /* ────────────── Progress Ring ────────────── */
 
 function ProgressRing({ level, color, size = 48, strokeWidth = 3 }: { level: number; color: string; size?: number; strokeWidth?: number }) {
-  const radius = (size - strokeWidth) / 2
+  const safeLevel = typeof level === 'number' && !isNaN(level) ? level : 0
+  const radius = Math.max(1, (size - strokeWidth) / 2)
   const circumference = 2 * Math.PI * radius
-  const progress = (level / 5) * circumference
+  const progress = (safeLevel / 5) * circumference
   const gradId = `rg-${color.replace(/[^a-z0-9]/g, '')}-${size}`
   return (
     <svg width={size} height={size} className="-rotate-90">
@@ -153,7 +154,7 @@ function ProgressRing({ level, color, size = 48, strokeWidth = 3 }: { level: num
         animate={{ strokeDashoffset: circumference - progress }}
         transition={{ duration: 0.8, ease: 'easeOut' }}
       />
-      <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" className="fill-foreground text-xs font-bold" style={{ transform: 'rotate(90deg)', transformOrigin: 'center' }}>{level}</text>
+      <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" className="fill-foreground text-xs font-bold" style={{ transform: 'rotate(90deg)', transformOrigin: 'center' }}>{safeLevel}</text>
     </svg>
   )
 }
@@ -773,7 +774,7 @@ export default function Learning() {
                             {data.skills.map((skill, i) => {
                               const x = 60 + i * (480 / Math.max(data.skills.length - 1, 1))
                               const nodeColor = skillDotColors[i % skillDotColors.length]
-                              const radius = 12 + skill.level * 3
+                              const radius = Math.max(1, 12 + (skill.level || 0) * 3)
                               return (
                                 <motion.g
                                   key={skill.id}
@@ -784,7 +785,7 @@ export default function Learning() {
                                   <circle cx={x} cy={60} r={radius + 4} fill={nodeColor} opacity="0.1" />
                                   <circle cx={x} cy={60} r={radius} fill={nodeColor} opacity="0.8" />
                                   <circle cx={x} cy={60} r={radius - 3} fill={nodeColor} />
-                                  <text x={x} y={60} textAnchor="middle" dominantBaseline="central" fill="white" fontSize="11" fontWeight="bold">{skill.level}</text>
+                                  <text x={x} y={60} textAnchor="middle" dominantBaseline="central" fill="white" fontSize="11" fontWeight="bold">{typeof skill.level === 'number' ? skill.level : 0}</text>
                                   <text x={x} y={95} textAnchor="middle" fill="oklch(0.45 0.01 160)" fontSize="10" fontWeight="500">{skill.name.length > 10 ? skill.name.slice(0, 10) + '…' : skill.name}</text>
                                 </motion.g>
                               )
