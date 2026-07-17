@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bun --hot index.ts",
-    "start": "bun index.ts"
+    "dev": "TRANSPORT=http bun --hot index.ts",
+    "dev:stdio": "bun --hot index.ts",
+    "start": "TRANSPORT=http bun index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "express": "^5.2.1",
     "zod": "^3.24.0"
   }
 }

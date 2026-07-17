@@ -1835,3 +1835,30 @@ Stage Summary:
 - Server no longer crashes on unhandled rejections
 - All 17 MCP tools tested and working
 - Pushed to GitHub: d41d064
+
+---
+Task ID: mcp-sse-fix
+Agent: Main
+Task: إصلاح خطأ SSE واضافة دعم Streamable HTTP transport لخادم MCP
+
+Work Log:
+- تحليل المشكلة: خادم MCP كان يدعم stdio فقط، المستخدم يحاول الاتصال عبر SSE
+- دراسة أنواع Transport في MCP SDK: stdio, SSE (deprecated), Streamable HTTP (recommended)
+- محاولة استخدام Express مع createMcpExpressApp — فشل بسبب تعارض مع Bun
+- استخدام WebStandardStreamableHTTPServerTransport مع Bun.serve() — نجح
+- حل مشكلة استهلاك body في Request (Bun clone() غير موثوق)
+- اختبار شامل: Initialize, tools/list, rise_set_api_key, rise_get_dashboard
+- اضافة اعدادات SSE/Streamable HTTP في صفحة الاعدادات
+
+Stage Summary:
+- MCP Server v2.0.0 يعمل على HTTP (بورت 3003) مع SSE Stream
+- يدعم 3 transports: stdio, Streamable HTTP, SSE
+- Content-Type: text/event-stream يعمل بشكل صحيح
+- 15 أداة مسجلة وكلها تعمل
+- Session management يعمل (initialize → reuse session)
+- اعدادات Claude Desktop SSE مضافة في الواجهة
+
+الاكتشافات المهمة:
+- MCP SDK v1.12+ يفضل WebStandardStreamableHTTPServerTransport لـ Bun/Deno/Cloudflare
+- Express مع Bun غير مستقر — Bun.serve() هو الحل الأفضل
+- يجب ارسال Accept: application/json, text/event-stream و MCP-Protocol-Version: 2025-03-26

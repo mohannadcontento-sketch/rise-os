@@ -5,19 +5,31 @@
  * خادم MCP (Model Context Protocol) لـ RiseOS
  * يتيح لنماذج الذكاء الاصطناعي مثل Claude التعامل مع بيانات ومهام RiseOS
  *
- * Transport: stdio (متوافق مع Claude Desktop)
+ * Transports:
+ *   - stdio (الافتراضي - متوافق مع Claude Desktop)
+ *   - HTTP+SSE + Streamable HTTP (TRANSPORT=http)
+ *
+ * Usage:
+ *   TRANSPORT=stdio  bun index.ts          # Claude Desktop (stdin/stdout)
+ *   TRANSPORT=http   bun index.ts          # HTTP server on PORT
+ *   bun index.ts                            # defaults to stdio
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 
 // ─── Configuration ───────────────────────────────────────────────
 const RISE_API_URL = process.env.RISE_API_URL || "http://localhost:3000";
 const RISE_API_KEY = process.env.RISE_API_KEY || null;
+const TRANSPORT_MODE = process.env.TRANSPORT || "stdio"; // "stdio" | "http"
+const PORT = parseInt(process.env.PORT || "3003", 10);
 
 // ─── Auth State ──────────────────────────────────────────────────
-let authToken: string | null = RISE_API_KEY; // Pre-set from env if provided
+let authToken: string | null = RISE_API_KEY;
 let authMethod: "api_key" | "jwt" | null = RISE_API_KEY?.startsWith("rise_") ? "api_key" : RISE_API_KEY ? "jwt" : null;
 
 function getAuthHeaders(): Record<string, string> {
@@ -66,7 +78,6 @@ function resolveToolName(
   baseName: string,
   hasBody: boolean,
 ): string {
-  // If there's a request body, it's a write operation
   if (hasBody && WRITE_TOOL_MAP[baseName]) {
     return WRITE_TOOL_MAP[baseName];
   }
@@ -78,18 +89,14 @@ async function apiFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<{ data: unknown; error?: string }> {
-  // If using API key, route through the universal MCP endpoint
   if (authToken?.startsWith("rise_")) {
     try {
       const bodyObj = options.body ? JSON.parse(options.body as string) : {};
-      // Strip query params from path for tool name, but merge them into args
       const [cleanPath, queryString] = path.split("?");
       const baseName = cleanPath.replace("/api/rise/", "").replace(/\//g, "_");
       const toolName = resolveToolName(baseName, !!options.body);
-      // Parse query params (e.g. ?dates=2025-01&status=pending) into args
       if (queryString) {
         for (const [key, val] of new URLSearchParams(queryString)) {
-          // Don't overwrite body fields
           if (!(key in bodyObj)) {
             bodyObj[key] = val;
           }
@@ -116,7 +123,6 @@ async function apiFetch(
     }
   }
 
-  // Standard JWT auth flow
   const url = `${RISE_API_URL}${path}`;
   const headers = options.headers
     ? { ...getAuthHeaders(), ...(options.headers as Record<string, string>) }
@@ -156,775 +162,943 @@ function getToday(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-// ─── Server Creation ─────────────────────────────────────────────
-const server = new McpServer({
-  name: "riseos",
-  version: "1.0.0",
-  description: "خادم RiseOS - نظام إدارة الحياة الشامل. يتيح قراءة وكتابة المهام والعادات والأهداف والمالية واليوميات والصحة والتركيز والمزيد.",
-});
-
 // ═══════════════════════════════════════════════════════════════════
-// AUTH TOOL
+// SERVER FACTORY - Creates a new McpServer with all tools registered
 // ═══════════════════════════════════════════════════════════════════
 
-server.tool(
-  "rise_auth",
-  "المصادقة مع RiseOS باستخدام البريد الإلكتروني وكلمة المرور. بديل: استخدم rise_set_api_key إذا عندك مفتاح API.",
-  {
-    email: z.string().email().describe("البريد الإلكتروني المسجل في RiseOS"),
-    password: z.string().describe("كلمة المرور"),
-  },
-  async ({ email, password }) => {
-    const url = `${RISE_API_URL}/api/auth/login`;
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-    } catch {
-      return {
-        content: [{ type: "text" as const, text: `فشل الاتصال بخادم RiseOS (${RISE_API_URL}). تأكد أن التطبيق يعمل.` }],
-        isError: true,
-      };
-    }
+function createRiseOsServer(): McpServer {
+  const server = new McpServer({
+    name: "riseos",
+    version: "2.0.0",
+    description: "خادم RiseOS - نظام إدارة الحياة الشامل. يتيح قراءة وكتابة المهام والعادات والأهداف والمالية واليوميات والصحة والتركيز والمزيد.",
+  });
 
-    const json = await response.json().catch(() => null);
+  // ═══════════════════════════════════════════════════════════════
+  // AUTH TOOLS
+  // ═══════════════════════════════════════════════════════════════
 
-    if (!response.ok) {
-      authToken = null;
-      authMethod = null;
-      const msg = json?.error || `فشل تسجيل الدخول (HTTP ${response.status})`;
-      return {
-        content: [{ type: "text" as const, text: `❌ فشل المصادقة: ${msg}` }],
-        isError: true,
-      };
-    }
-
-    authToken = json.session?.access_token;
-    authMethod = "jwt";
-    const userName = json.user?.email || email;
-
-    return {
-      content: [{
-        type: "text" as const,
-        text: `✅ تم المصادقة بنجاح!\nالمستخدم: ${userName}\nطريقة المصادقة: JWT (تسجيل دخول)\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
-      }],
-    };
-  }
-);
-
-// ═══════════════════════════════════════════════════════════════════
-// API KEY AUTH TOOL
-// ═══════════════════════════════════════════════════════════════════
-
-server.tool(
-  "rise_set_api_key",
-  "تعيين مفتاح API للمصادقة (البديل لتسجيل الدخول). احصل على المفتاح من إعدادات RiseOS > MCP.",
-  {
-    api_key: z.string().describe("مفتاح API يبدأ بـ rise_ (مثل: rise_abc123def456...)")
-  },
-  async ({ api_key }) => {
-    if (!api_key.startsWith("rise_")) {
-      return {
-        content: [{ type: "text" as const, text: "❌ مفتاح API غير صالح. يجب أن يبدأ بـ rise_" }],
-        isError: true,
-      };
-    }
-
-    // Verify the key works by calling list_tools
-    try {
-      const response = await fetch(`${RISE_API_URL}/api/rise/mcp/call`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${api_key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ tool: "list_tools", args: {} }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => null);
+  server.tool(
+    "rise_auth",
+    "المصادقة مع RiseOS باستخدام البريد الإلكتروني وكلمة المرور. بديل: استخدم rise_set_api_key إذا عندك مفتاح API.",
+    {
+      email: z.string().email().describe("البريد الإلكتروني المسجل في RiseOS"),
+      password: z.string().describe("كلمة المرور"),
+    },
+    async ({ email, password }) => {
+      const url = `${RISE_API_URL}/api/auth/login`;
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+      } catch {
         return {
-          content: [{
-            type: "text" as const,
-            text: `❌ مفتاح API غير صالح أو منتهي الصلاحية.${err?.error ? "\n" + err.error : ""}\n\nاحصل على مفتاح جديد من: إعدادات RiseOS > MCP > إنشاء مفتاح`,
-          }],
+          content: [{ type: "text" as const, text: `فشل الاتصال بخادم RiseOS (${RISE_API_URL}). تأكد أن التطبيق يعمل.` }],
           isError: true,
         };
       }
 
-      authToken = api_key;
-      authMethod = "api_key";
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        authToken = null;
+        authMethod = null;
+        const msg = json?.error || `فشل تسجيل الدخول (HTTP ${response.status})`;
+        return {
+          content: [{ type: "text" as const, text: `❌ فشل المصادقة: ${msg}` }],
+          isError: true,
+        };
+      }
+
+      authToken = json.session?.access_token;
+      authMethod = "jwt";
+      const userName = json.user?.email || email;
+
       return {
         content: [{
           type: "text" as const,
-          text: `✅ تم تعيين مفتاح API بنجاح!\nطريقة المصادقة: API Key\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
+          text: `✅ تم المصادقة بنجاح!\nالمستخدم: ${userName}\nطريقة المصادقة: JWT (تسجيل دخول)\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
         }],
       };
-    } catch {
+    }
+  );
+
+  server.tool(
+    "rise_set_api_key",
+    "تعيين مفتاح API للمصادقة (البديل لتسجيل الدخول). احصل على المفتاح من إعدادات RiseOS > MCP.",
+    {
+      api_key: z.string().describe("مفتاح API يبدأ بـ rise_ (مثل: rise_abc123def456...)")
+    },
+    async ({ api_key }) => {
+      if (!api_key.startsWith("rise_")) {
+        return {
+          content: [{ type: "text" as const, text: "❌ مفتاح API غير صالح. يجب أن يبدأ بـ rise_" }],
+          isError: true,
+        };
+      }
+
+      try {
+        const response = await fetch(`${RISE_API_URL}/api/rise/mcp/call`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${api_key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ tool: "list_tools", args: {} }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => null);
+          return {
+            content: [{
+              type: "text" as const,
+              text: `❌ مفتاح API غير صالح أو منتهي الصلاحية: ${err?.error || `HTTP ${response.status}`}`,
+            }],
+            isError: true,
+          };
+        }
+
+        authToken = api_key;
+        authMethod = "api_key";
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `✅ تم تعيين مفتاح API بنجاح!\nطريقة المصادقة: API Key\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
+          }],
+        };
+      } catch {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `❌ فشل الاتصال بخادم RiseOS (${RISE_API_URL}). تأكد أن التطبيق يعمل.`,
+          }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // READ / ANALYTICS TOOLS
+  // ═══════════════════════════════════════════════════════════════
+
+  // 1. Dashboard
+  server.tool(
+    "rise_get_dashboard",
+    "الحصول على نظرة عامة شاملة على لوحة التحكم: المهام والعادات والتركيز والإنجازات والنتيجة اليومية والمالية والمشاريع والأهداف",
+    {},
+    async () => {
+      const { data, error } = await apiFetch("/api/rise/dashboard");
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as Record<string, unknown>;
+      const user = d.user as Record<string, unknown> | undefined;
+      const today = d.today as Record<string, unknown> | undefined;
+
+      const summary = [
+        "📊 لوحة تحكم RiseOS",
+        "═".repeat(40),
+        `👤 المستخدم: ${user?.name || "غير معروف"}`,
+        `🔥 المستوى: ${user?.level || 1} | XP: ${user?.xp || 0}`,
+        `⚡ السلسلة: ${user?.streak || 0} يوم`,
+        `🏆 أطول سلسلة: ${user?.longestStreak || 0} يوم`,
+        "",
+        "📋 اليوم:",
+        `  • مهام مكتملة: ${today?.tasksCompleted || 0} من ${today?.tasksTotal || 0}`,
+        `  • عادات مكتملة: ${today?.habitsCompleted || 0} من ${today?.habitsTotal || 0}`,
+        `  • تركيز: ${today?.focusMin || 0} دقيقة`,
+        `  • نتيجة الصباح: ${today?.morningScore || 0}`,
+        "",
+        `📝 المهام الأخيرة: ${JSON.stringify((d.tasks as unknown[])?.slice(0, 5) || [])}`,
+        `🎯 الأهداف النشطة: ${JSON.stringify((d.goals as unknown[]) || [])}`,
+      ].join("\n");
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 2. Tasks
+  server.tool(
+    "rise_get_tasks",
+    "الحصول على جميع المهام مع إمكانية التصفية حسب الحالة",
+    {
+      status: z.enum(["pending", "in_progress", "completed"]).optional()
+        .describe("تصفية حسب الحالة: pending (معلقة) أو in_progress (قيد التنفيذ) أو completed (مكتملة)"),
+    },
+    async ({ status }) => {
+      const statusMap: Record<string, string> = {
+        pending: "pending",
+        in_progress: "in_progress",
+        completed: "done",
+      };
+      const serverStatus = status ? statusMap[status] : undefined;
+      const queryPath = serverStatus ? `/api/rise/tasks?status=${serverStatus}` : "/api/rise/tasks";
+
+      const { data, error } = await apiFetch(queryPath);
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { tasks?: Array<Record<string, unknown>> };
+      const tasks = d.tasks || [];
+
+      if (tasks.length === 0) {
+        return { content: [{ type: "text" as const, text: status ? `لا توجد مهام بحالة "${status}"` : "لا توجد مهام حالياً" }] };
+      }
+
+      const list = tasks.map((t, i) => {
+        const priority = t.priority ? ` [${t.priority}]` : "";
+        const project = t.projectName ? ` 📁${t.projectName}` : "";
+        const done = t.status === "done" ? " ✅" : "";
+        return `  ${i + 1}. ${t.title}${priority}${project}${done}`;
+      }).join("\n");
+
+      const summary = `📋 المهام (${tasks.length}):\n${list}`;
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 3. Habits
+  server.tool(
+    "rise_get_habits",
+    "الحصول على جميع العادات مع حالة الإكمال لليوم",
+    {},
+    async () => {
+      const { data, error } = await apiFetch("/api/rise/habits");
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { habits?: Array<Record<string, unknown>>; logs?: Array<Record<string, unknown>> };
+      const habits = d.habits || [];
+      const logs = d.logs || [];
+      const today = getToday();
+
+      if (habits.length === 0) {
+        return { content: [{ type: "text" as const, text: "لا توجد عادات مسجلة" }] };
+      }
+
+      const completedCount = logs.filter(
+        (l) => l.date === today && l.completed
+      ).length;
+
+      const list = habits.map((h, i) => {
+        const todayLog = logs.find((l) => l.habitId === h.id && l.date === today);
+        const done = todayLog?.completed ? " ✅" : " ⬜";
+        const icon = h.icon || "📌";
+        return `  ${i + 1}. ${icon} ${h.name}${done} - ${h.description || ""}`;
+      }).join("\n");
+
+      const summary = [
+        `🔄 العادات (${completedCount}/${habits.length} مكتملة اليوم):`,
+        list,
+        "",
+        `📅 تاريخ اليوم: ${today}`,
+      ].join("\n");
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 4. Goals
+  server.tool(
+    "rise_get_goals",
+    "الحصول على جميع الأهداف مع التقدم والمعالم",
+    {},
+    async () => {
+      const { data, error } = await apiFetch("/api/rise/goals");
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { goals?: Array<Record<string, unknown>> };
+      const goals = d.goals || [];
+
+      if (goals.length === 0) {
+        return { content: [{ type: "text" as const, text: "لا توجد أهداف مسجلة" }] };
+      }
+
+      const list = goals.map((g, i) => {
+        const status = g.status === "completed" ? " ✅" : g.status === "paused" ? " ⏸️" : " 🟢";
+        const category = g.category ? ` [${g.category}]` : "";
+        const target = g.targetDate ? ` 📅${g.targetDate}` : "";
+        const milestones = g.milestones as Array<Record<string, unknown>> | undefined;
+        const milestoneText = milestones?.length
+          ? `\n     المعالم: ${milestones.filter(m => m.completed).length}/${milestones.length}`
+          : "";
+        return `  ${i + 1}. 🎯 ${g.title}${category}${status}${target}${milestoneText}`;
+      }).join("\n");
+
+      const summary = `🎯 الأهداف (${goals.length}):\n${list}`;
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 5. Finance
+  server.tool(
+    "rise_get_finance",
+    "الحصول على السجلات المالية والملخص (إيرادات ومصروفات ورصيد)",
+    {
+      month: z.string().optional()
+        .describe("تصفية حسب الشهر بصيغة YYYY-MM مثل 2025-01"),
+    },
+    async ({ month }) => {
+      const queryPath = month ? `/api/rise/finance?month=${month}` : "/api/rise/finance";
+      const { data, error } = await apiFetch(queryPath);
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { records?: Array<Record<string, unknown>> };
+      const records = d.records || [];
+
+      const income = records
+        .filter((r) => r.type === "دخل")
+        .reduce((sum, r) => sum + (r.amount as number || 0), 0);
+      const expense = records
+        .filter((r) => r.type === "مصروف")
+        .reduce((sum, r) => sum + (r.amount as number || 0), 0);
+      const savings = records
+        .filter((r) => r.type === "ادخار")
+        .reduce((sum, r) => sum + (r.amount as number || 0), 0);
+      const investment = records
+        .filter((r) => r.type === "استثمار")
+        .reduce((sum, r) => sum + (r.amount as number || 0), 0);
+
+      if (records.length === 0) {
+        return { content: [{ type: "text" as const, text: month ? `لا توجد سجلات مالية لشهر ${month}` : "لا توجد سجلات مالية" }] };
+      }
+
+      const recent = records.slice(0, 10).map((r) => {
+        const emoji = r.type === "دخل" ? "💚" : r.type === "مصروف" ? "🔴" : r.type === "ادخار" ? "🏦" : "📈";
+        return `  ${emoji} ${r.description || r.category} - ${r.amount} ر.س (${r.type}) ${r.date || ""}`;
+      }).join("\n");
+
+      const summary = [
+        `💰 التقرير المالي${month ? ` - ${month}` : ""}`,
+        "═".repeat(40),
+        `  💚 الإيرادات: ${income} ر.س`,
+        `  🔴 المصروفات: ${expense} ر.س`,
+        `  🏦 الادخار: ${savings} ر.س`,
+        `  📈 الاستثمار: ${investment} ر.س`,
+        `  📊 صافي التدفق: ${income - expense} ر.س`,
+        "",
+        `📋 آخر السجلات (${Math.min(records.length, 10)} من ${records.length}):`,
+        recent,
+      ].join("\n");
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 6. Journal
+  server.tool(
+    "rise_get_journal",
+    "الحصول على يومية يوم معين (الافتراضي: اليوم)",
+    {
+      date: z.string().optional()
+        .describe("التاريخ بصيغة YYYY-MM-DD. إذا لم يتم تحديده، يُرجع يومية اليوم"),
+    },
+    async ({ date }) => {
+      const journalDate = date || getToday();
+      const { data, error } = await apiFetch("/api/rise/journal");
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { journal?: Record<string, unknown> | null; recentJournals?: Array<Record<string, unknown>> };
+      const journal = d.journal;
+
+      if (!journal) {
+        return { content: [{ type: "text" as const, text: `📝 لا توجد يومية لـ ${journalDate}` }] };
+      }
+
+      const summary = [
+        `📝 اليومية - ${journalDate}`,
+        "═".repeat(40),
+        `😊 المزاج: ${journal.mood ?? "غير محدد"} / 10`,
+        journal.gratitude ? `\n🙏 الامتنان:\n  ${journal.gratitude}` : "",
+        journal.highlights ? `\n✨ أبرز اللحظات:\n  ${journal.highlights}` : "",
+        journal.lessons ? `\n📚 الدروس المستفادة:\n  ${journal.lessons}` : "",
+        journal.tomorrow ? `\n🚀 خطط الغد:\n  ${journal.tomorrow}` : "",
+      ].filter(Boolean).join("\n");
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 7. Focus Sessions
+  server.tool(
+    "rise_get_focus_sessions",
+    "الحصول على سجل جلسات التركيز والعمل العميق",
+    {
+      days: z.number().optional().describe("عدد الأيام الأخيرة لعرض الجلسات (الافتراضي: 7)"),
+    },
+    async ({ days }) => {
+      const n = days || 7;
+      const { data, error } = await apiFetch(`/api/rise/focus?days=${n}`);
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { sessions?: Array<Record<string, unknown>> };
+      const sessions = d.sessions || [];
+
+      const totalMin = sessions
+        .filter((s) => s.completed)
+        .reduce((sum, s) => sum + (s.actualMin as number || 0), 0);
+      const completedCount = sessions.filter((s) => s.completed).length;
+
+      if (sessions.length === 0) {
+        return { content: [{ type: "text" as const, text: `🧘 لا توجد جلسات تركيز في آخر ${n} أيام` }] };
+      }
+
+      const list = sessions.slice(0, 10).map((s, i) => {
+        const done = s.completed ? "✅" : "⏹️";
+        const date = (s.startedAt as string)?.split("T")[0] || "";
+        const min = s.actualMin || s.plannedMin || 0;
+        return `  ${i + 1}. ${done} ${s.title || "جلسة تركيز"} - ${min} دقيقة (${date})`;
+      }).join("\n");
+
+      const summary = [
+        `🧘 جلسات التركيز (آخر ${n} أيام)`,
+        "═".repeat(40),
+        `  📊 إجمالي الجلسات: ${sessions.length}`,
+        `  ✅ جلسات مكتملة: ${completedCount}`,
+        `  ⏱️ إجمالي الوقت: ${totalMin} دقيقة (${Math.round(totalMin / 60 * 10) / 10} ساعة)`,
+        "",
+        list,
+      ].join("\n");
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 8. Health
+  server.tool(
+    "rise_get_health",
+    "الحصول على بيانات الصحة واللياقة (نوم، ماء، رياضة، مزاج، طاقة)",
+    {
+      days: z.number().optional().describe("عدد الأيام الأخيرة (الافتراضي: 7)"),
+    },
+    async ({ days }) => {
+      const { data, error } = await apiFetch("/api/rise/health");
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { logs?: Array<Record<string, unknown>>; todayLog?: Record<string, unknown> | null };
+      const todayLog = d.todayLog;
+      const logs = d.logs || [];
+      const n = days || 7;
+
+      const recentLogs = logs.slice(0, n);
+
+      if (!todayLog && recentLogs.length === 0) {
+        return { content: [{ type: "text" as const, text: "🏥 لا توجد بيانات صحية مسجلة" }] };
+      }
+
+      let summary = "🏥 بيانات الصحة\n" + "═".repeat(40) + "\n";
+
+      if (todayLog) {
+        summary += `\n📋 سجل اليوم (${getToday()}):`;
+        if (todayLog.sleepHours) summary += `\n  😴 النوم: ${todayLog.sleepHours} ساعات`;
+        if (todayLog.sleepQuality) summary += ` (جودة: ${todayLog.sleepQuality}/10)`;
+        if (todayLog.water) summary += `\n  💧 الماء: ${todayLog.water} أكواب`;
+        if (todayLog.exercise) summary += `\n  🏃 الرياضة: ${todayLog.exerciseType || "تمارين"} - ${todayLog.exercise} دقيقة`;
+        if (todayLog.mood) summary += `\n  😊 المزاج: ${todayLog.mood}/10`;
+        if (todayLog.energy) summary += `\n  ⚡ الطاقة: ${todayLog.energy}/10`;
+        if (todayLog.steps) summary += `\n  👟 الخطوات: ${todayLog.steps}`;
+        if (todayLog.weight) summary += `\n  ⚖️ الوزن: ${todayLog.weight} كجم`;
+      }
+
+      if (recentLogs.length > 0) {
+        const avgSleep = recentLogs
+          .filter((l) => l.sleepHours)
+          .reduce((s, l) => s + (l.sleepHours as number), 0) / Math.max(recentLogs.filter((l) => l.sleepHours).length, 1);
+        const avgMood = recentLogs
+          .filter((l) => l.mood)
+          .reduce((s, l) => s + (l.mood as number), 0) / Math.max(recentLogs.filter((l) => l.mood).length, 1);
+
+        summary += `\n\n📊 متوسطات آخر ${recentLogs.length} أيام:`;
+        summary += `\n  😴 متوسط النوم: ${avgSleep.toFixed(1)} ساعات`;
+        summary += `\n  😊 متوسط المزاج: ${avgMood.toFixed(1)}/10`;
+      }
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 9. Projects
+  server.tool(
+    "rise_get_projects",
+    "الحصول على جميع المشاريع",
+    {},
+    async () => {
+      const { data, error } = await apiFetch("/api/rise/projects");
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const d = data as { projects?: Array<Record<string, unknown>> };
+      const projects = d.projects || [];
+
+      if (projects.length === 0) {
+        return { content: [{ type: "text" as const, text: "📁 لا توجد مشاريع" }] };
+      }
+
+      const list = projects.map((p, i) => {
+        const status = p.status === "completed" ? " ✅" : p.status === "archived" ? " 📦" : " 🟢";
+        const color = p.color ? ` (${p.color})` : "";
+        const desc = p.description ? `\n     ${p.description}` : "";
+        return `  ${i + 1}. 📁 ${p.name}${color}${status}${desc}`;
+      }).join("\n");
+
+      const summary = `📁 المشاريع (${projects.length}):\n${list}`;
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // 10. Productivity Score
+  server.tool(
+    "rise_get_productivity_score",
+    "الحصول على نتيجة الإنتاجية والتقييم اليومي مع تفصيل النقاط",
+    {
+      date: z.string().optional()
+        .describe("التاريخ بصيغة YYYY-MM-DD. الافتراضي: اليوم"),
+    },
+    async ({ date }) => {
+      const dateStr = date || getToday();
+      const { data, error } = await apiFetch(`/api/rise/productivity-score?dates=${dateStr}`);
+      if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+
+      const { data: detailData } = await apiFetch("/api/rise/productivity-score");
+      const detail = detailData as Record<string, unknown> | null;
+
+      const d = data as { scores?: Array<{ date: string; score: number }> };
+      const scoreEntry = d.scores?.[0];
+
+      if (!scoreEntry) {
+        return { content: [{ type: "text" as const, text: `📊 لا توجد بيانات إنتاجية لـ ${dateStr}` }] };
+      }
+
+      const breakdown = detail?.breakdown as Record<string, number> | undefined;
+      const grade = detail?.grade as string | undefined;
+
+      const bar = (val: number) => "█".repeat(Math.round(val / 10)) + "░".repeat(10 - Math.round(val / 10));
+
+      const summary = [
+        `📊 نتيجة الإنتاجية - ${dateStr}`,
+        "═".repeat(40),
+        `  النتيجة الإجمالية: ${scoreEntry.score}/100 ${bar(scoreEntry.score)}`,
+        grade ? `  التقييم: ${grade}` : "",
+        "",
+        breakdown ? "  التفصيل:" : "",
+        breakdown ? `  📋 المهام:    ${breakdown.tasks}% ${bar(breakdown.tasks)}` : "",
+        breakdown ? `  🔄 العادات:   ${breakdown.habits}% ${bar(breakdown.habits)}` : "",
+        breakdown ? `  🧘 التركيز:   ${breakdown.focus}% ${bar(breakdown.focus)}` : "",
+        breakdown ? `  🌅 الصباح:    ${breakdown.morning}% ${bar(breakdown.morning)}` : "",
+        breakdown ? `  ⚡ السلسلة:   ${breakdown.streak}% ${bar(breakdown.streak)}` : "",
+      ].filter(Boolean).join("\n");
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // WRITE / ACTION TOOLS
+  // ═══════════════════════════════════════════════════════════════
+
+  // 11. Add Task
+  server.tool(
+    "rise_add_task",
+    "إضافة مهمة جديدة",
+    {
+      title: z.string().describe("عنوان المهمة"),
+      description: z.string().optional().describe("وصف المهمة"),
+      priority: z.enum(["low", "medium", "high"]).optional().describe("الأولوية: low (منخفضة) أو medium (متوسطة) أو high (عالية)"),
+      dueDate: z.string().optional().describe("تاريخ الاستحقاق بصيغة YYYY-MM-DD"),
+      projectId: z.string().optional().describe("معرف المشروع المرتبط بالمهمة"),
+    },
+    async ({ title, description, priority, dueDate, projectId }) => {
+      const body: Record<string, unknown> = {
+        title,
+        status: "pending",
+      };
+      if (description) body.description = description;
+      if (priority) body.priority = priority;
+      if (dueDate) body.dueDate = dueDate;
+      if (projectId) body.projectId = projectId;
+
+      const { data, error } = await apiFetch("/api/rise/tasks", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `❌ فشل إضافة المهمة: ${error}` }], isError: true };
+
       return {
         content: [{
           type: "text" as const,
-          text: `❌ فشل الاتصال بخادم RiseOS (${RISE_API_URL}). تأكد أن التطبيق يعمل.`,
+          text: `✅ تم إضافة المهمة: "${title}"${priority ? ` [${priority}]` : ""}${dueDate ? ` - استحقاق: ${dueDate}` : ""}`,
         }],
-        isError: true,
       };
     }
-  }
-);
+  );
 
-// ═══════════════════════════════════════════════════════════════════
-// READ / ANALYTICS TOOLS
-// ═══════════════════════════════════════════════════════════════════
+  // 12. Toggle Habit
+  server.tool(
+    "rise_toggle_habit",
+    "تحديد عادة كمكتملة أو غير مكتملة لليوم",
+    {
+      habitId: z.string().describe("معرف العادة"),
+      completed: z.boolean().describe("true لإكمال العادة، false لإلغاء الإكمال"),
+    },
+    async ({ habitId, completed }) => {
+      const today = getToday();
 
-// 1. Dashboard
-server.tool(
-  "rise_get_dashboard",
-  "الحصول على نظرة عامة شاملة على لوحة التحكم: المهام والعادات والتركيز والإنجازات والنتيجة اليومية والمالية والمشاريع والأهداف",
-  {},
-  async () => {
-    const { data, error } = await apiFetch("/api/rise/dashboard");
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
+      const { data, error } = await apiFetch("/api/rise/habits", {
+        method: "PUT",
+        body: JSON.stringify({ habitId, date: today, completed }),
+      });
 
-    const d = data as Record<string, unknown>;
-    const user = d.user as Record<string, unknown> | undefined;
-    const today = d.today as Record<string, unknown> | undefined;
+      if (error) return { content: [{ type: "text" as const, text: `❌ فشل تحديث العادة: ${error}` }], isError: true };
 
-    const summary = [
-      "📊 لوحة تحكم RiseOS",
-      "═".repeat(40),
-      `👤 المستخدم: ${user?.name || "غير معروف"}`,
-      `🔥 المستوى: ${user?.level || 1} | XP: ${user?.xp || 0}`,
-      `⚡ السلسلة: ${user?.streak || 0} يوم`,
-      `🏆 أطول سلسلة: ${user?.longestStreak || 0} يوم`,
-      "",
-      "📋 اليوم:",
-      `  • مهام مكتملة: ${today?.tasksCompleted || 0} من ${today?.tasksTotal || 0}`,
-      `  • عادات مكتملة: ${today?.habitsCompleted || 0} من ${today?.habitsTotal || 0}`,
-      `  • تركيز: ${today?.focusMin || 0} دقيقة`,
-      `  • نتيجة الصباح: ${today?.morningScore || 0}`,
-      "",
-      `📝 المهام الأخيرة: ${JSON.stringify((d.tasks as unknown[])?.slice(0, 5) || [])}`,
-      `🎯 الأهداف النشطة: ${JSON.stringify((d.goals as unknown[]) || [])}`,
-    ].join("\n");
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 2. Tasks
-server.tool(
-  "rise_get_tasks",
-  "الحصول على جميع المهام مع إمكانية التصفية حسب الحالة",
-  {
-    status: z.enum(["pending", "in_progress", "completed"]).optional()
-      .describe("تصفية حسب الحالة: pending (معلقة) أو in_progress (قيد التنفيذ) أو completed (مكتملة)"),
-  },
-  async ({ status }) => {
-    // Pass status filter server-side via query param (works in both JWT and API key modes)
-    const statusMap: Record<string, string> = {
-      pending: "pending",
-      in_progress: "in_progress",
-      completed: "done",
-    };
-    const serverStatus = status ? statusMap[status] : undefined;
-    const queryPath = serverStatus ? `/api/rise/tasks?status=${serverStatus}` : "/api/rise/tasks";
-
-    const { data, error } = await apiFetch(queryPath);
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { tasks?: Array<Record<string, unknown>> };
-    const tasks = d.tasks || [];
-
-    if (tasks.length === 0) {
-      return { content: [{ type: "text" as const, text: status ? `لا توجد مهام بحالة "${status}"` : "لا توجد مهام حالياً" }] };
+      const msg = completed ? "تم تحديد العادة كمكتملة ✅" : "تم إلغاء إكمال العادة ⬜";
+      return { content: [{ type: "text" as const, text: msg }] };
     }
-
-    const list = tasks.map((t, i) => {
-      const priority = t.priority ? ` [${t.priority}]` : "";
-      const project = t.projectName ? ` 📁${t.projectName}` : "";
-      const done = t.status === "done" ? " ✅" : "";
-      return `  ${i + 1}. ${t.title}${priority}${project}${done}`;
-    }).join("\n");
-
-    const summary = `📋 المهام (${tasks.length}):\n${list}`;
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 3. Habits
-server.tool(
-  "rise_get_habits",
-  "الحصول على جميع العادات مع حالة الإكمال لليوم",
-  {},
-  async () => {
-    const { data, error } = await apiFetch("/api/rise/habits");
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { habits?: Array<Record<string, unknown>>; logs?: Array<Record<string, unknown>> };
-    const habits = d.habits || [];
-    const logs = d.logs || [];
-    const today = getToday();
-
-    if (habits.length === 0) {
-      return { content: [{ type: "text" as const, text: "لا توجد عادات مسجلة" }] };
-    }
-
-    const completedCount = logs.filter(
-      (l) => l.date === today && l.completed
-    ).length;
-
-    const list = habits.map((h, i) => {
-      const todayLog = logs.find((l) => l.habitId === h.id && l.date === today);
-      const done = todayLog?.completed ? " ✅" : " ⬜";
-      const icon = h.icon || "📌";
-      return `  ${i + 1}. ${icon} ${h.name}${done} - ${h.description || ""}`;
-    }).join("\n");
-
-    const summary = [
-      `🔄 العادات (${completedCount}/${habits.length} مكتملة اليوم):`,
-      list,
-      "",
-      `📅 تاريخ اليوم: ${today}`,
-    ].join("\n");
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 4. Goals
-server.tool(
-  "rise_get_goals",
-  "الحصول على جميع الأهداف مع التقدم والمعالم",
-  {},
-  async () => {
-    const { data, error } = await apiFetch("/api/rise/goals");
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { goals?: Array<Record<string, unknown>> };
-    const goals = d.goals || [];
-
-    if (goals.length === 0) {
-      return { content: [{ type: "text" as const, text: "لا توجد أهداف مسجلة" }] };
-    }
-
-    const list = goals.map((g, i) => {
-      const status = g.status === "completed" ? " ✅" : g.status === "paused" ? " ⏸️" : " 🟢";
-      const category = g.category ? ` [${g.category}]` : "";
-      const target = g.targetDate ? ` 📅${g.targetDate}` : "";
-      const milestones = g.milestones as Array<Record<string, unknown>> | undefined;
-      const milestoneText = milestones?.length
-        ? `\n     المعالم: ${milestones.filter(m => m.completed).length}/${milestones.length}`
-        : "";
-      return `  ${i + 1}. 🎯 ${g.title}${category}${status}${target}${milestoneText}`;
-    }).join("\n");
-
-    const summary = `🎯 الأهداف (${goals.length}):\n${list}`;
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 5. Finance
-server.tool(
-  "rise_get_finance",
-  "الحصول على السجلات المالية والملخص (إيرادات ومصروفات ورصيد)",
-  {
-    month: z.string().optional()
-      .describe("تصفية حسب الشهر بصيغة YYYY-MM مثل 2025-01"),
-  },
-  async ({ month }) => {
-    // Pass month filter server-side
-    const queryPath = month ? `/api/rise/finance?month=${month}` : "/api/rise/finance";
-    const { data, error } = await apiFetch(queryPath);
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { records?: Array<Record<string, unknown>> };
-    const records = d.records || [];
-
-    const income = records
-      .filter((r) => r.type === "دخل")
-      .reduce((sum, r) => sum + (r.amount as number || 0), 0);
-    const expense = records
-      .filter((r) => r.type === "مصروف")
-      .reduce((sum, r) => sum + (r.amount as number || 0), 0);
-    const savings = records
-      .filter((r) => r.type === "ادخار")
-      .reduce((sum, r) => sum + (r.amount as number || 0), 0);
-    const investment = records
-      .filter((r) => r.type === "استثمار")
-      .reduce((sum, r) => sum + (r.amount as number || 0), 0);
-
-    if (records.length === 0) {
-      return { content: [{ type: "text" as const, text: month ? `لا توجد سجلات مالية لشهر ${month}` : "لا توجد سجلات مالية" }] };
-    }
-
-    const recent = records.slice(0, 10).map((r) => {
-      const emoji = r.type === "دخل" ? "💚" : r.type === "مصروف" ? "🔴" : r.type === "ادخار" ? "🏦" : "📈";
-      return `  ${emoji} ${r.description || r.category} - ${r.amount} ر.س (${r.type}) ${r.date || ""}`;
-    }).join("\n");
-
-    const summary = [
-      `💰 التقرير المالي${month ? ` - ${month}` : ""}`,
-      "═".repeat(40),
-      `  💚 الإيرادات: ${income} ر.س`,
-      `  🔴 المصروفات: ${expense} ر.س`,
-      `  🏦 الادخار: ${savings} ر.س`,
-      `  📈 الاستثمار: ${investment} ر.س`,
-      `  📊 صافي التدفق: ${income - expense} ر.س`,
-      "",
-      `📋 آخر السجلات (${Math.min(records.length, 10)} من ${records.length}):`,
-      recent,
-    ].join("\n");
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 6. Journal
-server.tool(
-  "rise_get_journal",
-  "الحصول على يومية يوم معين (الافتراضي: اليوم)",
-  {
-    date: z.string().optional()
-      .describe("التاريخ بصيغة YYYY-MM-DD. إذا لم يتم تحديده، يُرجع يومية اليوم"),
-  },
-  async ({ date }) => {
-    const journalDate = date || getToday();
-    const { data, error } = await apiFetch("/api/rise/journal");
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { journal?: Record<string, unknown> | null; recentJournals?: Array<Record<string, unknown>> };
-    const journal = d.journal;
-
-    if (!journal) {
-      return { content: [{ type: "text" as const, text: `📝 لا توجد يومية لـ ${journalDate}` }] };
-    }
-
-    const summary = [
-      `📝 اليومية - ${journalDate}`,
-      "═".repeat(40),
-      `😊 المزاج: ${journal.mood ?? "غير محدد"} / 10`,
-      journal.gratitude ? `\n🙏 الامتنان:\n  ${journal.gratitude}` : "",
-      journal.highlights ? `\n✨ أبرز اللحظات:\n  ${journal.highlights}` : "",
-      journal.lessons ? `\n📚 الدروس المستفادة:\n  ${journal.lessons}` : "",
-      journal.tomorrow ? `\n🚀 خطط الغد:\n  ${journal.tomorrow}` : "",
-    ].filter(Boolean).join("\n");
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 7. Focus Sessions
-server.tool(
-  "rise_get_focus_sessions",
-  "الحصول على سجل جلسات التركيز والعمل العميق",
-  {
-    days: z.number().optional().describe("عدد الأيام الأخيرة لعرض الجلسات (الافتراضي: 7)"),
-  },
-  async ({ days }) => {
-    // Pass days filter server-side
-    const n = days || 7;
-    const { data, error } = await apiFetch(`/api/rise/focus?days=${n}`);
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { sessions?: Array<Record<string, unknown>> };
-    const sessions = d.sessions || [];
-
-    const totalMin = sessions
-      .filter((s) => s.completed)
-      .reduce((sum, s) => sum + (s.actualMin as number || 0), 0);
-    const completedCount = sessions.filter((s) => s.completed).length;
-
-    if (sessions.length === 0) {
-      return { content: [{ type: "text" as const, text: `🧘 لا توجد جلسات تركيز في آخر ${n} أيام` }] };
-    }
-
-    const list = sessions.slice(0, 10).map((s, i) => {
-      const done = s.completed ? "✅" : "⏹️";
-      const date = (s.startedAt as string)?.split("T")[0] || "";
-      const min = s.actualMin || s.plannedMin || 0;
-      return `  ${i + 1}. ${done} ${s.title || "جلسة تركيز"} - ${min} دقيقة (${date})`;
-    }).join("\n");
-
-    const summary = [
-      `🧘 جلسات التركيز (آخر ${n} أيام)`,
-      "═".repeat(40),
-      `  📊 إجمالي الجلسات: ${sessions.length}`,
-      `  ✅ جلسات مكتملة: ${completedCount}`,
-      `  ⏱️ إجمالي الوقت: ${totalMin} دقيقة (${Math.round(totalMin / 60 * 10) / 10} ساعة)`,
-      "",
-      list,
-    ].join("\n");
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 8. Health
-server.tool(
-  "rise_get_health",
-  "الحصول على بيانات الصحة واللياقة (نوم، ماء، رياضة، مزاج، طاقة)",
-  {
-    days: z.number().optional().describe("عدد الأيام الأخيرة (الافتراضي: 7)"),
-  },
-  async ({ days }) => {
-    const { data, error } = await apiFetch("/api/rise/health");
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { logs?: Array<Record<string, unknown>>; todayLog?: Record<string, unknown> | null };
-    const todayLog = d.todayLog;
-    const logs = d.logs || [];
-    const n = days || 7;
-
-    const recentLogs = logs.slice(0, n);
-
-    if (!todayLog && recentLogs.length === 0) {
-      return { content: [{ type: "text" as const, text: "🏥 لا توجد بيانات صحية مسجلة" }] };
-    }
-
-    let summary = "🏥 بيانات الصحة\n" + "═".repeat(40) + "\n";
-
-    if (todayLog) {
-      summary += `\n📋 سجل اليوم (${getToday()}):`;
-      if (todayLog.sleepHours) summary += `\n  😴 النوم: ${todayLog.sleepHours} ساعات`;
-      if (todayLog.sleepQuality) summary += ` (جودة: ${todayLog.sleepQuality}/10)`;
-      if (todayLog.water) summary += `\n  💧 الماء: ${todayLog.water} أكواب`;
-      if (todayLog.exercise) summary += `\n  🏃 الرياضة: ${todayLog.exerciseType || "تمارين"} - ${todayLog.exercise} دقيقة`;
-      if (todayLog.mood) summary += `\n  😊 المزاج: ${todayLog.mood}/10`;
-      if (todayLog.energy) summary += `\n  ⚡ الطاقة: ${todayLog.energy}/10`;
-      if (todayLog.steps) summary += `\n  👟 الخطوات: ${todayLog.steps}`;
-      if (todayLog.weight) summary += `\n  ⚖️ الوزن: ${todayLog.weight} كجم`;
-    }
-
-    if (recentLogs.length > 0) {
-      const avgSleep = recentLogs
-        .filter((l) => l.sleepHours)
-        .reduce((s, l) => s + (l.sleepHours as number), 0) / Math.max(recentLogs.filter((l) => l.sleepHours).length, 1);
-      const avgMood = recentLogs
-        .filter((l) => l.mood)
-        .reduce((s, l) => s + (l.mood as number), 0) / Math.max(recentLogs.filter((l) => l.mood).length, 1);
-
-      summary += `\n\n📊 متوسطات آخر ${recentLogs.length} أيام:`;
-      summary += `\n  😴 متوسط النوم: ${avgSleep.toFixed(1)} ساعات`;
-      summary += `\n  😊 متوسط المزاج: ${avgMood.toFixed(1)}/10`;
-    }
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 9. Projects
-server.tool(
-  "rise_get_projects",
-  "الحصول على جميع المشاريع",
-  {},
-  async () => {
-    const { data, error } = await apiFetch("/api/rise/projects");
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    const d = data as { projects?: Array<Record<string, unknown>> };
-    const projects = d.projects || [];
-
-    if (projects.length === 0) {
-      return { content: [{ type: "text" as const, text: "📁 لا توجد مشاريع" }] };
-    }
-
-    const list = projects.map((p, i) => {
-      const status = p.status === "completed" ? " ✅" : p.status === "archived" ? " 📦" : " 🟢";
-      const color = p.color ? ` (${p.color})` : "";
-      const desc = p.description ? `\n     ${p.description}` : "";
-      return `  ${i + 1}. 📁 ${p.name}${color}${status}${desc}`;
-    }).join("\n");
-
-    const summary = `📁 المشاريع (${projects.length}):\n${list}`;
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// 10. Productivity Score
-server.tool(
-  "rise_get_productivity_score",
-  "الحصول على نتيجة الإنتاجية والتقييم اليومي مع تفصيل النقاط",
-  {
-    date: z.string().optional()
-      .describe("التاريخ بصيغة YYYY-MM-DD. الافتراضي: اليوم"),
-  },
-  async ({ date }) => {
-    const dateStr = date || getToday();
-    const { data, error } = await apiFetch(`/api/rise/productivity-score?dates=${dateStr}`);
-    if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
-
-    // Also get the detailed breakdown for today
-    const { data: detailData } = await apiFetch("/api/rise/productivity-score");
-    const detail = detailData as Record<string, unknown> | null;
-
-    const d = data as { scores?: Array<{ date: string; score: number }> };
-    const scoreEntry = d.scores?.[0];
-
-    if (!scoreEntry) {
-      return { content: [{ type: "text" as const, text: `📊 لا توجد بيانات إنتاجية لـ ${dateStr}` }] };
-    }
-
-    const breakdown = detail?.breakdown as Record<string, number> | undefined;
-    const grade = detail?.grade as string | undefined;
-
-    const bar = (val: number) => "█".repeat(Math.round(val / 10)) + "░".repeat(10 - Math.round(val / 10));
-
-    const summary = [
-      `📊 نتيجة الإنتاجية - ${dateStr}`,
-      "═".repeat(40),
-      `  النتيجة الإجمالية: ${scoreEntry.score}/100 ${bar(scoreEntry.score)}`,
-      grade ? `  التقييم: ${grade}` : "",
-      "",
-      breakdown ? "  التفصيل:" : "",
-      breakdown ? `  📋 المهام:    ${breakdown.tasks}% ${bar(breakdown.tasks)}` : "",
-      breakdown ? `  🔄 العادات:   ${breakdown.habits}% ${bar(breakdown.habits)}` : "",
-      breakdown ? `  🧘 التركيز:   ${breakdown.focus}% ${bar(breakdown.focus)}` : "",
-      breakdown ? `  🌅 الصباح:    ${breakdown.morning}% ${bar(breakdown.morning)}` : "",
-      breakdown ? `  ⚡ السلسلة:   ${breakdown.streak}% ${bar(breakdown.streak)}` : "",
-    ].filter(Boolean).join("\n");
-
-    return { content: [{ type: "text" as const, text: summary }] };
-  }
-);
-
-// ═══════════════════════════════════════════════════════════════════
-// WRITE / ACTION TOOLS
-// ═══════════════════════════════════════════════════════════════════
-
-// 11. Add Task
-server.tool(
-  "rise_add_task",
-  "إضافة مهمة جديدة",
-  {
-    title: z.string().describe("عنوان المهمة"),
-    description: z.string().optional().describe("وصف المهمة"),
-    priority: z.enum(["low", "medium", "high"]).optional().describe("الأولوية: low (منخفضة) أو medium (متوسطة) أو high (عالية)"),
-    dueDate: z.string().optional().describe("تاريخ الاستحقاق بصيغة YYYY-MM-DD"),
-    projectId: z.string().optional().describe("معرف المشروع المرتبط بالمهمة"),
-  },
-  async ({ title, description, priority, dueDate, projectId }) => {
-    const body: Record<string, unknown> = {
-      title,
-      status: "pending",
-    };
-    if (description) body.description = description;
-    if (priority) body.priority = priority;
-    if (dueDate) body.dueDate = dueDate;
-    if (projectId) body.projectId = projectId;
-
-    const { data, error } = await apiFetch("/api/rise/tasks", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    if (error) return { content: [{ type: "text" as const, text: `❌ فشل إضافة المهمة: ${error}` }], isError: true };
-
-    return {
-      content: [{
-        type: "text" as const,
-        text: `✅ تم إضافة المهمة: "${title}"${priority ? ` [${priority}]` : ""}${dueDate ? ` - استحقاق: ${dueDate}` : ""}`,
-      }],
-    };
-  }
-);
-
-// 12. Toggle Habit
-server.tool(
-  "rise_toggle_habit",
-  "تحديد عادة كمكتملة أو غير مكتملة لليوم",
-  {
-    habitId: z.string().describe("معرف العادة"),
-    completed: z.boolean().describe("true لإكمال العادة، false لإلغاء الإكمال"),
-  },
-  async ({ habitId, completed }) => {
-    const today = getToday();
-
-    const { data, error } = await apiFetch("/api/rise/habits", {
-      method: "PUT",
-      body: JSON.stringify({ habitId, date: today, completed }),
-    });
-
-    if (error) return { content: [{ type: "text" as const, text: `❌ فشل تحديث العادة: ${error}` }], isError: true };
-
-    const msg = completed ? "تم تحديد العادة كمكتملة ✅" : "تم إلغاء إكمال العادة ⬜";
-    return { content: [{ type: "text" as const, text: msg }] };
-  }
-);
-
-// 13. Add Finance Record
-server.tool(
-  "rise_add_finance_record",
-  "إضافة سجل مالي جديد (دخل أو مصروف أو ادخار أو استثمار)",
-  {
-    type: z.enum(["دخل", "مصروف", "ادخار", "استثمار"]).describe("نوع السجل"),
-    category: z.string().describe("التصنيف (مثل: طعام، مواصلات، راتب)"),
-    description: z.string().describe("وصف السجل"),
-    amount: z.number().describe("المبلغ بالريال"),
-  },
-  async ({ type, category, description, amount }) => {
-    const body = {
-      type,
-      category,
-      description,
-      amount,
-      date: getToday(),
-    };
-
-    const { data, error } = await apiFetch("/api/rise/finance", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    if (error) return { content: [{ type: "text" as const, text: `❌ فشل إضافة السجل المالي: ${error}` }], isError: true };
-
-    const emoji = type === "دخل" ? "💚" : type === "مصروف" ? "🔴" : type === "ادخار" ? "🏦" : "📈";
-    return {
-      content: [{
-        type: "text" as const,
-        text: `✅ ${emoji} تم إضافة ${type}: ${description} - ${amount} ر.س (${category})`,
-      }],
-    };
-  }
-);
-
-// 14. Write Journal
-server.tool(
-  "rise_write_journal",
-  "كتابة أو تحديث يومية اليوم (المزاج، الامتنان، أبرز اللحظات، الدروس، خطط الغد)",
-  {
-    mood: z.number().min(1).max(10).optional().describe("المزاج من 1 إلى 10"),
-    gratitude: z.string().optional().describe("ما أنت ممتن له اليوم"),
-    highlights: z.string().optional().describe("أبرز لحظات اليوم"),
-    lessons: z.string().optional().describe("الدروس المستفادة"),
-    tomorrow: z.string().optional().describe("خطط وأهداف الغد"),
-  },
-  async ({ mood, gratitude, highlights, lessons, tomorrow }) => {
-    const body: Record<string, unknown> = {};
-    if (mood !== undefined) body.mood = mood;
-    if (gratitude) body.gratitude = gratitude;
-    if (highlights) body.highlights = highlights;
-    if (lessons) body.lessons = lessons;
-    if (tomorrow) body.tomorrow = tomorrow;
-
-    if (Object.keys(body).length === 0) {
-      return { content: [{ type: "text" as const, text: "⚠️ لم يتم تحديد أي بيانات لكتابتها في اليومية" }], isError: true };
-    }
-
-    const { data, error } = await apiFetch("/api/rise/journal", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    if (error) return { content: [{ type: "text" as const, text: `❌ فشل حفظ اليومية: ${error}` }], isError: true };
-
-    return { content: [{ type: "text" as const, text: "✅ تم حفظ اليومية بنجاح 📝" }] };
-  }
-);
-
-// 15. Add Goal
-server.tool(
-  "rise_add_goal",
-  "إضافة هدف جديد",
-  {
-    title: z.string().describe("عنوان الهدف"),
-    description: z.string().optional().describe("وصف الهدف"),
-    category: z.string().optional().describe("تصنيف الهدف (مثل: صحة، مهنية، مالية)"),
-    targetDate: z.string().optional().describe("تاريخ التحقيق المستهدف بصيغة YYYY-MM-DD"),
-  },
-  async ({ title, description, category, targetDate }) => {
-    const body: Record<string, unknown> = {
-      title,
-      status: "active",
-    };
-    if (description) body.description = description;
-    if (category) body.category = category;
-    if (targetDate) body.targetDate = targetDate;
-
-    const { data, error } = await apiFetch("/api/rise/goals", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    if (error) return { content: [{ type: "text" as const, text: `❌ فشل إضافة الهدف: ${error}` }], isError: true };
-
-    return {
-      content: [{
-        type: "text" as const,
-        text: `✅ تم إضافة الهدف: "${title}"${category ? ` [${category}]` : ""}${targetDate ? ` - مستهدف: ${targetDate}` : ""}`,
-      }],
-    };
-  }
-);
-
-// ═══════════════════════════════════════════════════════════════════
-// RESOURCE TEMPLATES
-// ═══════════════════════════════════════════════════════════════════
-
-// Resource: Analytics Overview
-server.resource(
-  "analytics-overview",
-  "rise://analytics/overview",
-  async (uri) => {
-    const { data, error } = await apiFetch("/api/rise/dashboard");
-    if (error) {
+  );
+
+  // 13. Add Finance Record
+  server.tool(
+    "rise_add_finance_record",
+    "إضافة سجل مالي جديد (دخل أو مصروف أو ادخار أو استثمار)",
+    {
+      type: z.enum(["دخل", "مصروف", "ادخار", "استثمار"]).describe("نوع السجل"),
+      category: z.string().describe("التصنيف (مثل: طعام، مواصلات، راتب)"),
+      description: z.string().describe("وصف السجل"),
+      amount: z.number().describe("المبلغ بالريال"),
+    },
+    async ({ type, category, description, amount }) => {
+      const body = {
+        type,
+        category,
+        description,
+        amount,
+        date: getToday(),
+      };
+
+      const { data, error } = await apiFetch("/api/rise/finance", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `❌ فشل إضافة السجل المالي: ${error}` }], isError: true };
+
+      const emoji = type === "دخل" ? "💚" : type === "مصروف" ? "🔴" : type === "ادخار" ? "🏦" : "📈";
       return {
-        contents: [{ uri: "rise://analytics/overview", mimeType: "application/json", text: JSON.stringify({ error }) }],
+        content: [{
+          type: "text" as const,
+          text: `✅ ${emoji} تم إضافة ${type}: ${description} - ${amount} ر.س (${category})`,
+        }],
       };
     }
-    return {
-      contents: [{ uri: "rise://analytics/overview", mimeType: "application/json", text: JSON.stringify(data, null, 2) }],
-    };
-  }
-);
+  );
 
-// Resource: Finance Report
-server.resource(
-  "finance-report",
-  "rise://finance/report",
-  async (uri) => {
-    const { data, error } = await apiFetch("/api/rise/finance");
-    if (error) {
+  // 14. Write Journal
+  server.tool(
+    "rise_write_journal",
+    "كتابة أو تحديث يومية اليوم (المزاج، الامتنان، أبرز اللحظات، الدروس، خطط الغد)",
+    {
+      mood: z.number().min(1).max(10).optional().describe("المزاج من 1 إلى 10"),
+      gratitude: z.string().optional().describe("ما أنت ممتن له اليوم"),
+      highlights: z.string().optional().describe("أبرز لحظات اليوم"),
+      lessons: z.string().optional().describe("الدروس المستفادة"),
+      tomorrow: z.string().optional().describe("خطط وأهداف الغد"),
+    },
+    async ({ mood, gratitude, highlights, lessons, tomorrow }) => {
+      const body: Record<string, unknown> = {};
+      if (mood !== undefined) body.mood = mood;
+      if (gratitude) body.gratitude = gratitude;
+      if (highlights) body.highlights = highlights;
+      if (lessons) body.lessons = lessons;
+      if (tomorrow) body.tomorrow = tomorrow;
+
+      if (Object.keys(body).length === 0) {
+        return { content: [{ type: "text" as const, text: "⚠️ لم يتم تحديد أي بيانات لكتابتها في اليومية" }], isError: true };
+      }
+
+      const { data, error } = await apiFetch("/api/rise/journal", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `❌ فشل حفظ اليومية: ${error}` }], isError: true };
+
+      return { content: [{ type: "text" as const, text: "✅ تم حفظ اليومية بنجاح 📝" }] };
+    }
+  );
+
+  // 15. Add Goal
+  server.tool(
+    "rise_add_goal",
+    "إضافة هدف جديد",
+    {
+      title: z.string().describe("عنوان الهدف"),
+      description: z.string().optional().describe("وصف الهدف"),
+      category: z.string().optional().describe("تصنيف الهدف (مثل: صحة، مهنية، مالية)"),
+      targetDate: z.string().optional().describe("تاريخ التحقيق المستهدف بصيغة YYYY-MM-DD"),
+    },
+    async ({ title, description, category, targetDate }) => {
+      const body: Record<string, unknown> = {
+        title,
+        status: "active",
+      };
+      if (description) body.description = description;
+      if (category) body.category = category;
+      if (targetDate) body.targetDate = targetDate;
+
+      const { data, error } = await apiFetch("/api/rise/goals", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `❌ فشل إضافة الهدف: ${error}` }], isError: true };
+
       return {
-        contents: [{ uri: "rise://finance/report", mimeType: "application/json", text: JSON.stringify({ error }) }],
+        content: [{
+          type: "text" as const,
+          text: `✅ تم إضافة الهدف: "${title}"${category ? ` [${category}]` : ""}${targetDate ? ` - مستهدف: ${targetDate}` : ""}`,
+        }],
       };
     }
+  );
 
-    const d = data as { records?: Array<Record<string, unknown>> };
-    const records = d.records || [];
+  // ═══════════════════════════════════════════════════════════════
+  // RESOURCE TEMPLATES
+  // ═══════════════════════════════════════════════════════════════
 
-    const income = records.filter((r) => r.type === "دخل").reduce((s, r) => s + (r.amount as number || 0), 0);
-    const expense = records.filter((r) => r.type === "مصروف").reduce((s, r) => s + (r.amount as number || 0), 0);
-    const savings = records.filter((r) => r.type === "ادخار").reduce((s, r) => s + (r.amount as number || 0), 0);
-    const investment = records.filter((r) => r.type === "استثمار").reduce((s, r) => s + (r.amount as number || 0), 0);
+  server.resource(
+    "analytics-overview",
+    "rise://analytics/overview",
+    async (uri) => {
+      const { data, error } = await apiFetch("/api/rise/dashboard");
+      if (error) {
+        return {
+          contents: [{ uri: "rise://analytics/overview", mimeType: "application/json", text: JSON.stringify({ error }) }],
+        };
+      }
+      return {
+        contents: [{ uri: "rise://analytics/overview", mimeType: "application/json", text: JSON.stringify(data, null, 2) }],
+      };
+    }
+  );
 
-    const report = {
-      generatedAt: new Date().toISOString(),
-      summary: { income, expense, savings, investment, netFlow: income - expense },
-      totalRecords: records.length,
-      records,
-    };
+  server.resource(
+    "finance-report",
+    "rise://finance/report",
+    async (uri) => {
+      const { data, error } = await apiFetch("/api/rise/finance");
+      if (error) {
+        return {
+          contents: [{ uri: "rise://finance/report", mimeType: "application/json", text: JSON.stringify({ error }) }],
+        };
+      }
 
-    return {
-      contents: [{ uri: "rise://finance/report", mimeType: "application/json", text: JSON.stringify(report, null, 2) }],
-    };
-  }
-);
+      const d = data as { records?: Array<Record<string, unknown>> };
+      const records = d.records || [];
+
+      const income = records.filter((r) => r.type === "دخل").reduce((s, r) => s + (r.amount as number || 0), 0);
+      const expense = records.filter((r) => r.type === "مصروف").reduce((s, r) => s + (r.amount as number || 0), 0);
+      const savings = records.filter((r) => r.type === "ادخار").reduce((s, r) => s + (r.amount as number || 0), 0);
+      const investment = records.filter((r) => r.type === "استثمار").reduce((s, r) => s + (r.amount as number || 0), 0);
+
+      const report = {
+        generatedAt: new Date().toISOString(),
+        summary: { income, expense, savings, investment, netFlow: income - expense },
+        totalRecords: records.length,
+        records,
+      };
+
+      return {
+        contents: [{ uri: "rise://finance/report", mimeType: "application/json", text: JSON.stringify(report, null, 2) }],
+      };
+    }
+  );
+
+  return server;
+}
 
 // ═══════════════════════════════════════════════════════════════════
-// START SERVER
+// TRANSPORT LAYER
 // ═══════════════════════════════════════════════════════════════════
 
-async function main() {
-  // Prevent unhandled rejections from crashing the process
-  process.on('unhandledRejection', (reason) => {
-    console.error('[MCP] Unhandled rejection:', reason);
-  });
-  
+async function startStdioTransport() {
+  const server = createRiseOsServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.error("[MCP] Stdio transport active");
+}
+
+async function startHttpTransport() {
+  const transports: Record<string, WebStandardStreamableHTTPServerTransport> = {};
+
+  const httpServer = Bun.serve({
+    port: PORT,
+    hostname: "127.0.0.1",
+    async fetch(req: Request): Promise<Response> {
+      const url = new URL(req.url);
+      const path = url.pathname;
+      const method = req.method;
+
+      // ─── Health check ──────────────────────────────────────────
+      if (method === "GET" && path === "/health") {
+        return Response.json({
+          status: "ok",
+          server: "riseos-mcp",
+          version: "2.0.0",
+          transport: "streamable-http",
+          activeSessions: Object.keys(transports).length,
+        });
+      }
+
+      // ─── MCP endpoint (Streamable HTTP / SSE) ─────────────────
+      if (path === "/mcp" || path === "/sse") {
+        try {
+          console.log(`[MCP] ${method} ${path}`);
+          const sessionId = req.headers.get("mcp-session-id") || undefined;
+
+          // Existing session — reuse transport
+          if (sessionId && transports[sessionId]) {
+            console.log(`[MCP] Reusing session: ${sessionId}`);
+            try {
+              return await transports[sessionId].handleRequest(req);
+            } catch (err) {
+              console.error(`[MCP] Error handling request for session ${sessionId}:`, err);
+              return Response.json({
+                jsonrpc: "2.0",
+                error: { code: -32603, message: `Transport error: ${err}` },
+                id: null,
+              }, { status: 500 });
+            }
+          }
+
+          // New session — only on POST with initialize request
+          if (method === "POST" && !sessionId) {
+            // Read body ourselves since Bun's clone() can be unreliable
+            let bodyText: string;
+            try {
+              bodyText = await req.text();
+            } catch {
+              return Response.json({
+                jsonrpc: "2.0",
+                error: { code: -32700, message: "Parse error" },
+                id: null,
+              }, { status: 400 });
+            }
+
+            let body: any;
+            try {
+              body = JSON.parse(bodyText);
+            } catch {
+              return Response.json({
+                jsonrpc: "2.0",
+                error: { code: -32700, message: "Parse error: invalid JSON" },
+                id: null,
+              }, { status: 400 });
+            }
+
+            if (isInitializeRequest(body)) {
+              console.log("[MCP] New initialization request — creating transport");
+
+              const transport = new WebStandardStreamableHTTPServerTransport({
+                sessionIdGenerator: () => randomUUID(),
+                enableJsonResponse: false,
+                onsessioninitialized: (sid: string) => {
+                  console.log(`[MCP] Session initialized: ${sid}`);
+                  transports[sid] = transport;
+                },
+                onsessionclosed: (sid: string) => {
+                  console.log(`[MCP] Session closed: ${sid}`);
+                  delete transports[sid];
+                },
+              });
+
+              transport.onclose = () => {
+                const sid = transport.sessionId;
+                if (sid && transports[sid]) {
+                  delete transports[sid];
+                }
+              };
+
+              const mcpServer = createRiseOsServer();
+              await mcpServer.connect(transport);
+
+              // Create a fresh Request with the body we already read
+              const freshReq = new Request(req.url, {
+                method: req.method,
+                headers: req.headers,
+                body: bodyText,
+              });
+
+              return await transport.handleRequest(freshReq);
+            }
+          }
+
+          // GET /mcp or GET /sse without session — return info
+          if (method === "GET") {
+            return Response.json({
+              jsonrpc: "2.0",
+              error: {
+                code: -32000,
+                message: "No active session. Send a POST /mcp with initialize request first.",
+              },
+              id: null,
+            }, { status: 400 });
+          }
+
+          return Response.json({
+            jsonrpc: "2.0",
+            error: { code: -32000, message: "Bad Request" },
+            id: null,
+          }, { status: 400 });
+
+        } catch (error) {
+          console.error("[MCP] Error:", error);
+          return Response.json({
+            jsonrpc: "2.0",
+            error: { code: -32603, message: `Internal server error: ${error}` },
+            id: null,
+          }, { status: 500 });
+        }
+      }
+
+      return new Response("Not Found", { status: 404 });
+    },
+  });
+
+  console.log(`\n${"═".repeat(60)}`);
+  console.log(`  RiseOS MCP Server v2.0.0 — HTTP Mode (Bun native)`);
+  console.log(`  Port: ${PORT}`);
+  console.log(`${"═".repeat(60)}`);
+  console.log(``);
+  console.log(`  📡 Streamable HTTP + SSE: /mcp`);
+  console.log(`     POST /mcp   → Initialize + send requests`);
+  console.log(`     GET  /mcp   → Open SSE stream (after init)`);
+  console.log(`     DELETE /mcp → Close session`);
+  console.log(``);
+  console.log(`  📡 SSE (alias): /sse → same as /mcp`);
+  console.log(`  ❤️  Health: GET /health`);
+  console.log(`${"═".repeat(60)}\n`);
+
+  // Bun.serve() keeps the process alive natively — no extra keepalive needed
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[MCP] Unhandled rejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[MCP] Uncaught exception:", err);
+});
+
+async function main() {
+  if (TRANSPORT_MODE === "http") {
+    await startHttpTransport();
+  } else {
+    await startStdioTransport();
+  }
 }
 
 main().catch((error) => {

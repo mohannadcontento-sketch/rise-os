@@ -547,6 +547,8 @@ function McpSection() {
 
   const displayKey = showFull && apiKey ? apiKey : maskedKey
   const endpointUrl = `${MCP_BASE_URL}/api/rise/mcp/call`
+  const mcpSseUrl = `${MCP_BASE_URL}/?XTransformPort=3003/sse`
+  const mcpStreamUrl = `${MCP_BASE_URL}/?XTransformPort=3003/mcp`
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
@@ -694,6 +696,56 @@ function McpSection() {
   }
 }`}</pre>
                 <p className="text-[10px] text-muted-foreground/60 mt-1.5">أعد تشغيل Claude Desktop — هيظهر "MCP connected" ✅</p>
+              </div>
+
+              {/* Claude Desktop — SSE / Remote */}
+              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🟣</span>
+                  <span className="text-xs font-semibold">Claude Desktop — اتصال عن بُعد (SSE)</span>
+                  <Badge variant="secondary" className="text-[10px]">جديد</Badge>
+                </div>
+                <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
+                  <li>تأكد إن خادم MCP شغال على البورت 3003</li>
+                  <li>افتح <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">claude_desktop_config.json</code></li>
+                  <li>أضف الإعدادات دي:</li>
+                </ol>
+                <pre className="text-[10px] font-mono text-foreground/50 mt-2 p-2 bg-muted/30 rounded leading-relaxed" dir="ltr">{`{
+  "mcpServers": {
+    "riseos": {
+      "url": "${mcpSseUrl}",
+      "headers": {
+        "Authorization": "Bearer rise_YOUR_KEY"
+      }
+    }
+  }
+}`}</pre>
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+                  💡 تستخدم Streamable HTTP transport — مش محتاج تثبت حاجة
+                </p>
+              </div>
+
+              {/* Any MCP Client — Streamable HTTP */}
+              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🔗</span>
+                  <span className="text-xs font-semibold">أي عميل MCP — Streamable HTTP</span>
+                </div>
+                <div className="bg-muted/40 rounded-lg p-2.5 space-y-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground shrink-0">Endpoint:</span>
+                    <code className="flex-1 text-[10px] text-foreground/70 font-mono truncate" dir="ltr">{mcpStreamUrl}</code>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => copyText(mcpStreamUrl)}>
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  اربط بأي عميل MCP يدعم <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">streamable-http</code> أو <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">sse</code> transport.
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+                  أرسل <code className="font-mono text-[10px]">Accept: application/json, text/event-stream</code> و <code className="font-mono text-[10px]">MCP-Protocol-Version: 2025-03-26</code> في الهيدر
+                </p>
               </div>
 
               {/* ChatGPT / Qwen / Any AI */}
