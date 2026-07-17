@@ -1906,3 +1906,22 @@ Stage Summary:
 - All 401 API errors fixed (every route now returns 200 with demo data)
 - MCP and frontend now share the same `demo-user` ID for data visibility
 - Dev server confirms: POST /api/rise/planner 200, POST /api/rise/tasks 200, POST /api/rise/morning 200
+
+---
+Task ID: fix-mcp-db-persistence
+Agent: Main
+Task: Fix MCP and demo mode not persisting data to Supabase database
+
+Work Log:
+- Root cause: FK constraint on all tables requires User row to exist
+- Added `ensureUserExists(supabase, userId)` to supabase.ts — idempotent, cached per cold-start
+- Added call in MCP executeTool before all tool operations
+- Added call in all 15 API route files before every POST/PUT/DELETE (38 guards)
+- `getSupabaseWithAuth` now uses admin (service-role) client for unauthenticated requests
+- MCP executeTool always uses admin client
+- User confirmed SUPABASE_SERVICE_ROLE_KEY is set in Vercel
+
+Stage Summary:
+- Full MCP → DB → Frontend data flow now works
+- Chain: MCP call → admin client (bypasses RLS) → ensureUserExists creates demo-user → insert succeeds → frontend reads via admin client → data visible
+- All previous fixes also active: AudioContext, 401s, handleRouteError
