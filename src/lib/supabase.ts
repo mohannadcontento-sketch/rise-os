@@ -106,3 +106,51 @@ export function handleRouteError(error: unknown, route: string): NextResponse {
   // Always return mock success so the frontend doesn't break
   return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
 }
+
+// Track which user IDs have already been ensured (per-cold-start cache)
+const _ensuredUsers = new Set<string>()
+
+/**
+ * Ensure a user row exists in the User table.
+ * Uses admin client to bypass RLS. Safe to call multiple times (idempotent).
+ * This is critical for demo-mode and MCP — the FK constraint requires a real User row.
+ */
+export async function ensureUserExists(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  // Already checked in this serverless instance
+  if (_ensuredUsers.has(userId)) return true
+
+  try {
+    const { data } = await supabase
+      .from('User')
+      .select('id')
+      .eq('id', userId)
+      .single()
+
+    if (!data) {
+      // User doesn't exist — create them
+      const isDemo = userId === 'demo-user'
+      const { error: insertErr } = await supabase
+        .from('User')
+        .upsert({
+          id: userId,
+          name: isDemo ? 'مستخدم تجريبي' : 'مستخدم RiseOS',
+          email: `${userId}@rise-os.local`,
+          level: 1,
+          xp: 0,
+          streak: 0,
+        }, { onConflict: 'id' })
+
+      if (insertErr) {
+        console.error(`[ensureUserExists] upsert error for ${userId}:`, insertErr.message)
+        return false
+      }
+      console.log(`[ensureUserExists] created user: ${userId}`)
+    }
+
+    _ensuredUsers.add(userId)
+    return true
+  } catch (err) {
+    console.error(`[ensureUserExists] error for ${userId}:`, err)
+    return false
+  }
+}

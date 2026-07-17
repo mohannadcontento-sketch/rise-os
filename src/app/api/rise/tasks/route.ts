@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
 
     const { data, error } = await supabase
       .from('Task')
@@ -64,6 +65,7 @@ export async function PUT(req: NextRequest) {
 
     const { id, ...body } = await req.json()
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
 
     const { data, error } = await supabase
       .from('Task')
@@ -93,6 +95,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
     const { error } = await supabase
       .from('Task')
       .delete()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
 
     const body = await req.json()
     const { data, error } = await supabase.from('Goal').insert({ userId, ...body }).select().single()
@@ -42,6 +43,7 @@ export async function PUT(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
 
     const body = await req.json()
 
@@ -80,6 +82,7 @@ export async function DELETE(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')

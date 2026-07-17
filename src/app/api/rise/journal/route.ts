@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday } from '@/lib/rise-utils'
 
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
     const supabase = getSupabaseWithAuth(req)
+    await ensureUserExists(supabase, userId)
 
     const body = await req.json()
     const today = getToday()

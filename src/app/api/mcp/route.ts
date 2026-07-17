@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase, getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabase, getSupabaseAdmin, ensureUserExists } from '@/lib/supabase'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /* ------------------------------------------------------------------ */
@@ -276,6 +276,11 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
 
   // Supabase tool execution — with fallback on error
   let result: unknown
+
+  // Ensure the user exists in the DB (fixes FK constraint for demo-user)
+  if (supabase) {
+    await ensureUserExists(supabase, userId)
+  }
 
   try {
     switch (tool) {
