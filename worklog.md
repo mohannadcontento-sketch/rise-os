@@ -1862,3 +1862,19 @@ Stage Summary:
 - MCP SDK v1.12+ يفضل WebStandardStreamableHTTPServerTransport لـ Bun/Deno/Cloudflare
 - Express مع Bun غير مستقر — Bun.serve() هو الحل الأفضل
 - يجب ارسال Accept: application/json, text/event-stream و MCP-Protocol-Version: 2025-03-26
+
+---
+Task ID: fix-cors-401
+Agent: Main
+Task: إصلاح مشاكل CORS على manifest.json وخطأ 401 على /api/auth/session
+
+Work Log:
+- إنشاء `/src/app/api/manifest/route.ts` — يخدم ملف manifest.json مع CORS headers صحيحة
+- تعديل `/src/app/api/auth/session/route.ts` — يُرجع 200 مع `{user: null}` بدل 401 عند عدم وجود توكن
+- تعديل `layout.tsx` — تغيير مسار manifest من `/manifest.json` إلى `/api/manifest` وإزالة الرابط المكرر
+- اختبار بالـ agent-browser — لا أخطاء في الـ console، جميع الطلبات 200
+
+Stage Summary:
+- مشكلة CORS على manifest.json تم حلها بإنشاء API route يخدم الملف مع headers صحيحة
+- مشكلة 401 على session تم حلها بإرجاع session فارغ بدل خطأ
+- الصفحة تعمل بدون أي أخطاء
