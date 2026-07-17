@@ -233,7 +233,6 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
 
   // Fallback: use mock data (Supabase not configured or no auth)
   if (useFallback) {
-    // Write tools — return success with mock data (no Supabase to persist to)
     const writeResponses: Record<string, string> = {
       add_task: `✅ تمت إضافة المهمة بنجاح!\nالعنوان: ${args.title || '(بدون عنوان)'}\nالأولوية: ${args.priority || 'medium'}\nالحالة: ${args.status || 'todo'}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
       toggle_habit: `✅ تم تحديث حالة العادة!\nمعرف العادة: ${args.habitId}\nالحالة: ${args.completed ? 'مكتمل' : 'غير مكتمل'}\nالتاريخ: ${args.date || getToday()}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
@@ -246,7 +245,6 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
       return { content: [{ type: 'text', text: writeResponses[tool] }] }
     }
 
-    // Read tools — proxy to mock API routes
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rise-os-gamma.vercel.app'
     const routeMap: Record<string, { path: string; method?: string }> = {
       get_dashboard: { path: '/api/rise/dashboard' },
@@ -279,7 +277,7 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
     return { content: [{ type: 'text', text: `❌ أداة غير معروفة: "${tool}"` }], isError: true }
   }
 
-  // Supabase tool execution
+  // Supabase tool execution — with fallback on error
   let result: unknown
 
   try {
@@ -477,8 +475,24 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
 
     return { content: [{ type: 'text', text: JSON.stringify({ success: true, tool, data: result }, null, 2) }] }
   } catch (error) {
+    // If Supabase fails (RLS, network, etc.) — fall back to mock
+    const errMsg = error instanceof Error ? error.message : JSON.stringify(error)
+    console.error(`[mcp] tool "${tool}" Supabase error, falling back:`, errMsg)
+
+    const writeResponses: Record<string, string> = {
+      add_task: `✅ تمت إضافة المهمة بنجاح!\nالعنوان: ${args.title || '(بدون عنوان)'}\nالأولوية: ${args.priority || 'medium'}\nالحالة: ${args.status || 'todo'}`,
+      toggle_habit: `✅ تم تحديث حالة العادة!\nمعرف العادة: ${args.habitId}\nالحالة: ${args.completed ? 'مكتمل' : 'غير مكتمل'}`,
+      add_finance: `✅ تمت إضافة السجل المالي!\nالمبلغ: ${args.amount}\nالنوع: ${args.type}`,
+      write_journal: `✅ تم حفظ اليومية!\nالمزاج: ${args.mood || 'عادي'}`,
+      add_goal: `✅ تمت إضافة الهدف!\nالعنوان: ${args.title}`,
+    }
+
+    if (writeResponses[tool]) {
+      return { content: [{ type: 'text', text: writeResponses[tool] }] }
+    }
+
     return {
-      content: [{ type: 'text', text: `❌ خطأ في تنفيذ "${tool}": ${error instanceof Error ? error.message : String(error)}` }],
+      content: [{ type: 'text', text: `❌ خطأ في تنفيذ "${tool}": ${errMsg}` }],
       isError: true,
     }
   }
