@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase, getSupabaseAdmin } from '@/lib/supabase'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, resolveDefaultUserId } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /* ------------------------------------------------------------------ */
@@ -32,7 +32,7 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
     // Fallback: check local env-allowed keys (for dev/self-hosted)
     const allowedKeys = (process.env.RISE_ALLOWED_API_KEYS || '').split(',').filter(Boolean)
     if (allowedKeys.includes(token)) {
-      return process.env.RISE_DEFAULT_USER_ID || 'demo-user'
+      return process.env.RISE_DEFAULT_USER_ID || undefined
     }
     return null
   }

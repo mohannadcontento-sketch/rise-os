@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase, getSupabaseAdmin, ensureUserExists } from '@/lib/supabase'
+import { resolveDefaultUserId } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /* ------------------------------------------------------------------ */
@@ -40,7 +41,7 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
     } catch { /* Supabase not configured */ }
     const allowedKeys = (process.env.RISE_ALLOWED_API_KEYS || '').split(',').filter(Boolean)
     if (allowedKeys.includes(token)) {
-      return process.env.RISE_DEFAULT_USER_ID || 'dev-user'
+      return process.env.RISE_DEFAULT_USER_ID || undefined
     }
     return null
   }
@@ -699,13 +700,14 @@ async function handleSingleMessage(msg: any, req: NextRequest, sessionId: string
 
     // For tool calls, resolve the user ID from the request
     // Pass the API key as a hidden arg for internal use
-    const userId = await resolveUserId(req)
+    let userId = await resolveUserId(req)
     if (!userId) {
-      // No auth — all tools use fallback/mock data (works for MCP clients)
+      // No API key — resolve default user from env/DB
+      userId = await resolveDefaultUserId()
       toolArgs.__token = req.headers.get('Authorization')?.replace('Bearer ', '') || ''
     }
 
-    const effectiveUserId = userId || 'demo-user'
+    const effectiveUserId = userId
     const toolResult = await executeTool(toolName, toolArgs, effectiveUserId)
 
     return jsonRpcResult(reqId, {
