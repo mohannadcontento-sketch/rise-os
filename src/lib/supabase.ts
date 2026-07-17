@@ -2,8 +2,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
-// Lazy singleton — avoids crashing during build when env vars are absent
+// Lazy singletons — avoids crashing during build when env vars are absent
 let _supabase: SupabaseClient | null = null
+let _supabaseAdmin: SupabaseClient | null = null
 
 /**
  * Get the base Supabase client (anon key, no user context).
@@ -19,6 +20,20 @@ export function getSupabase(): SupabaseClient {
     _supabase = createClient(url, key)
   }
   return _supabase
+}
+
+/**
+ * Get a Supabase client with the service role key (bypasses RLS).
+ * Use this in server-side flows where you've already authenticated the user
+ * via a custom mechanism (e.g., API key) and need full data access.
+ */
+export function getSupabaseAdmin(): SupabaseClient | null {
+  if (_supabaseAdmin) return _supabaseAdmin
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return null
+  _supabaseAdmin = createClient(url, serviceKey)
+  return _supabaseAdmin
 }
 
 /**

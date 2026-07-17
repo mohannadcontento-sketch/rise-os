@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, getSupabaseWithAuth } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import crypto from 'crypto'
 
@@ -18,14 +18,17 @@ export async function POST(req: NextRequest) {
     const apiKey = generateApiKey()
     const createdAt = new Date().toISOString()
 
-    // Try to store in Supabase — if the table doesn't exist, that's OK
+    // Use auth-aware client so RLS can evaluate auth.uid()
     try {
-      const supabase = getSupabase()
-      await supabase
+      const supabase = getSupabaseWithAuth(req)
+      const { error } = await supabase
         .from('UserApiKey')
         .insert({ userId, key: apiKey, createdAt })
-    } catch {
-      // Table might not exist — still return the key
+      if (error) {
+        console.error('[mcp/key] Supabase insert error:', error.message)
+      }
+    } catch (err) {
+      console.error('[mcp/key] Supabase not available:', err)
     }
 
     return NextResponse.json({ apiKey, createdAt })
@@ -47,8 +50,8 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const supabase = getSupabase()
-      const { data } = await supabase
+      const supabase = getSupabaseWithAuth(req)
+      const { data, error } = await supabase
         .from('UserApiKey')
         .select('key')
         .eq('userId', userId)
@@ -56,13 +59,15 @@ export async function GET(req: NextRequest) {
         .limit(1)
         .single()
 
-      if (data?.key) {
+      if (error) {
+        console.error('[mcp/key] Supabase select error:', error.message)
+      } else if (data?.key) {
         const key = data.key as string
         const masked = key.slice(0, 8) + '...' + key.slice(-4)
         return NextResponse.json({ apiKey: masked, hasKey: true })
       }
-    } catch {
-      // Table might not exist
+    } catch (err) {
+      console.error('[mcp/key] Supabase not available:', err)
     }
 
     return NextResponse.json({ apiKey: null, hasKey: false })
@@ -81,10 +86,13 @@ export async function DELETE(req: NextRequest) {
     }
 
     try {
-      const supabase = getSupabase()
-      await supabase.from('UserApiKey').delete().eq('userId', userId)
-    } catch {
-      // Table might not exist — that's fine
+      const supabase = getSupabaseWithAuth(req)
+      const { error } = await supabase.from('UserApiKey').delete().eq('userId', userId)
+      if (error) {
+        console.error('[mcp/key] Supabase delete error:', error.message)
+      }
+    } catch (err) {
+      console.error('[mcp/key] Supabase not available:', err)
     }
 
     return NextResponse.json({ success: true })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, getSupabaseAdmin } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
@@ -198,10 +198,17 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Get Supabase client (may not be configured) — fall back to mock routes
+    // When authed via API key, prefer service role to bypass RLS
+    // (we already verified the key, so RLS would block anon client)
     let supabase: ReturnType<typeof getSupabase> | null = null
     let useFallback = false
+    const isApiKeyAuth = req.headers.get('Authorization')?.replace('Bearer ', '').startsWith('rise_')
     try {
-      supabase = getSupabase()
+      if (isApiKeyAuth) {
+        supabase = getSupabaseAdmin() || getSupabase()
+      } else {
+        supabase = getSupabase()
+      }
     } catch {
       useFallback = true
     }
