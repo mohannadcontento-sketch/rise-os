@@ -39,21 +39,17 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 /**
  * Get authenticated user ID.
  * - If authenticated → returns real user ID
- * - If Supabase not configured (Vercel demo) → returns demo user ID
- * - If Supabase configured but no auth → returns null (real auth required)
+ * - If no auth → returns demo user ID (app works in demo mode)
+ *
+ * This never returns null — the app is always usable.
  */
 export async function requireAuth(req: NextRequest): Promise<string | null> {
   // Try real auth first
   const userId = await getUserId(req)
   if (userId) return userId
 
-  // Supabase not configured → return demo user so the app works as a demo
-  if (!isSupabaseConfigured()) {
-    return DEMO_USER_ID
-  }
-
-  // Supabase IS configured but user isn't authed → return null
-  return null
+  // No auth → use demo user so the app always works
+  return DEMO_USER_ID
 }
 
 /** Alias for requireAuth — returns null for unauthenticated users. */

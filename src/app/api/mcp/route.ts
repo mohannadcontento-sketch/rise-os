@@ -703,7 +703,7 @@ async function handleSingleMessage(msg: any, req: NextRequest, sessionId: string
       toolArgs.__token = req.headers.get('Authorization')?.replace('Bearer ', '') || ''
     }
 
-    const effectiveUserId = userId || 'dev-user'
+    const effectiveUserId = userId || 'demo-user'
     const toolResult = await executeTool(toolName, toolArgs, effectiveUserId)
 
     return jsonRpcResult(reqId, {

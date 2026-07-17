@@ -32,7 +32,7 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
     // Fallback: check local env-allowed keys (for dev/self-hosted)
     const allowedKeys = (process.env.RISE_ALLOWED_API_KEYS || '').split(',').filter(Boolean)
     if (allowedKeys.includes(token)) {
-      return process.env.RISE_DEFAULT_USER_ID || 'dev-user'
+      return process.env.RISE_DEFAULT_USER_ID || 'demo-user'
     }
     return null
   }

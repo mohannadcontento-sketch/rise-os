@@ -21,15 +21,42 @@ export type SoundName =
   | 'toggle'
   | 'complete'
 
-/* ────────────── Audio Context (lazy) ────────────── */
+/* ────────────── Audio Context (lazy + user-gesture gate) ────────────── */
 
 let ctx: AudioContext | null = null
+let hasUserInteracted = false
 
-function getCtx(): AudioContext {
-  if (!ctx) {
-    ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+// Listen for the very first user gesture so we can safely resume AudioContext
+if (typeof window !== 'undefined') {
+  const unlock = () => {
+    hasUserInteracted = true
+    // Resume if already created
+    if (ctx && ctx.state === 'suspended') ctx.resume()
+    window.removeEventListener('pointerdown', unlock)
+    window.removeEventListener('keydown', unlock)
+    window.removeEventListener('click', unlock)
+    window.removeEventListener('touchstart', unlock)
   }
-  if (ctx.state === 'suspended') ctx.resume()
+  window.addEventListener('pointerdown', unlock, { once: true })
+  window.addEventListener('keydown', unlock, { once: true })
+  window.addEventListener('click', unlock, { once: true })
+  window.addEventListener('touchstart', unlock, { once: true })
+}
+
+function getCtx(): AudioContext | null {
+  // Don't even create the context until the user has interacted
+  if (!hasUserInteracted) return null
+
+  if (!ctx) {
+    try {
+      ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    } catch {
+      return null
+    }
+  }
+  if (ctx.state === 'suspended') {
+    ctx.resume() // fire-and-forget — safe because we already had a gesture
+  }
   return ctx
 }
 
@@ -214,6 +241,8 @@ export function playSound(name: SoundName): void {
 
   try {
     const ac = getCtx()
+    if (!ac) return // No user gesture yet — skip silently
+
     const master = ac.createGain()
     master.gain.setValueAtTime(s.soundVolume * 0.6, ac.currentTime)
     master.connect(ac.destination)
