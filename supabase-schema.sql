@@ -467,6 +467,24 @@ CREATE POLICY "Users update own AI usage" ON "UserAIUsage" FOR UPDATE USING ("us
 -- UserStorage: users view their own
 CREATE POLICY "Users view own storage" ON "UserStorage" FOR SELECT USING ("userId" = auth.uid()::text);
 
+-- ==================== USER API KEYS (for MCP/AI integration) ====================
+CREATE TABLE IF NOT EXISTS "UserApiKey" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+  "key" TEXT UNIQUE NOT NULL,
+  "name" TEXT DEFAULT 'MCP Key',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "lastUsedAt" TIMESTAMPTZ
+);
+
+CREATE INDEX idx_user_api_key_key ON "UserApiKey"("key");
+CREATE INDEX idx_user_api_key_userId ON "UserApiKey"("userId");
+
+-- UserApiKey: users manage their own keys
+CREATE POLICY "Users view own API keys" ON "UserApiKey" FOR SELECT USING ("userId" = auth.uid()::text);
+CREATE POLICY "Users insert own API keys" ON "UserApiKey" FOR INSERT WITH CHECK ("userId" = auth.uid()::text);
+CREATE POLICY "Users delete own API keys" ON "UserApiKey" FOR DELETE USING ("userId" = auth.uid()::text);
+
 -- Service role can do everything
 DO $$ 
 DECLARE

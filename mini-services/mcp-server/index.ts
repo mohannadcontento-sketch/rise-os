@@ -18,10 +18,14 @@ const RISE_API_KEY = process.env.RISE_API_KEY || null;
 
 // ─── Auth State ──────────────────────────────────────────────────
 let authToken: string | null = RISE_API_KEY; // Pre-set from env if provided
+let authMethod: "api_key" | "jwt" | null = RISE_API_KEY?.startsWith("rise_") ? "api_key" : RISE_API_KEY ? "jwt" : null;
 
 function getAuthHeaders(): Record<string, string> {
   if (!authToken) {
-    throw new MCPAuthError("لم تتم المصادقة بعد. استخدم أداة rise_auth أولاً للمصادقة ببريدك الإلكتروني وكلمة المرور.");
+    const hint = authMethod === null
+      ? "\n\nاستخدم rise_auth (للمصادقة بالبريد) أو rise_set_api_key (لمفتاح API)."
+      : "";
+    throw new MCPAuthError(`لم تتم المصادقة بعد.${hint}`);
   }
   return {
     "Authorization": `Bearer ${authToken}`,
@@ -120,7 +124,7 @@ const server = new McpServer({
 
 server.tool(
   "rise_auth",
-  "المصادقة مع RiseOS باستخدام البريد الإلكتروني وكلمة المرور. يجب استدعاء هذه الأداة أولاً قبل استخدام أي أداة أخرى.",
+  "المصادقة مع RiseOS باستخدام البريد الإلكتروني وكلمة المرور. بديل: استخدم rise_set_api_key إذا عندك مفتاح API.",
   {
     email: z.string().email().describe("البريد الإلكتروني المسجل في RiseOS"),
     password: z.string().describe("كلمة المرور"),
@@ -145,6 +149,7 @@ server.tool(
 
     if (!response.ok) {
       authToken = null;
+      authMethod = null;
       const msg = json?.error || `فشل تسجيل الدخول (HTTP ${response.status})`;
       return {
         content: [{ type: "text" as const, text: `❌ فشل المصادقة: ${msg}` }],
@@ -153,14 +158,75 @@ server.tool(
     }
 
     authToken = json.session?.access_token;
+    authMethod = "jwt";
     const userName = json.user?.email || email;
 
     return {
       content: [{
         type: "text" as const,
-        text: `✅ تم المصادقة بنجاح!\nالمستخدم: ${userName}\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
+        text: `✅ تم المصادقة بنجاح!\nالمستخدم: ${userName}\nطريقة المصادقة: JWT (تسجيل دخول)\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
       }],
     };
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// API KEY AUTH TOOL
+// ═══════════════════════════════════════════════════════════════════
+
+server.tool(
+  "rise_set_api_key",
+  "تعيين مفتاح API للمصادقة (البديل لتسجيل الدخول). احصل على المفتاح من إعدادات RiseOS > MCP.",
+  {
+    api_key: z.string().describe("مفتاح API يبدأ بـ rise_ (مثل: rise_abc123def456...)")
+  },
+  async ({ api_key }) => {
+    if (!api_key.startsWith("rise_")) {
+      return {
+        content: [{ type: "text" as const, text: "❌ مفتاح API غير صالح. يجب أن يبدأ بـ rise_" }],
+        isError: true,
+      };
+    }
+
+    // Verify the key works by calling list_tools
+    try {
+      const response = await fetch(`${RISE_API_URL}/api/rise/mcp/call`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${api_key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tool: "list_tools", args: {} }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        return {
+          content: [{
+            type: "text" as const,
+            text: `❌ مفتاح API غير صالح أو منتهي الصلاحية.${err?.error ? "\n" + err.error : ""}\n\nاحصل على مفتاح جديد من: إعدادات RiseOS > MCP > إنشاء مفتاح`,
+          }],
+          isError: true,
+        };
+      }
+
+      authToken = api_key;
+      authMethod = "api_key";
+      return {
+        content: [{
+          type: "text" as const,
+          text: `✅ تم تعيين مفتاح API بنجاح!\nطريقة المصادقة: API Key\nيمكنك الآن استخدام جميع أدوات RiseOS.`,
+        }],
+      };
+    } catch {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `❌ فشل الاتصال بخادم RiseOS (${RISE_API_URL}). تأكد أن التطبيق يعمل.`,
+        }],
+        isError: true,
+      };
+    }
   }
 );
 

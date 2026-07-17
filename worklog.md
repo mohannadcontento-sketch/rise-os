@@ -1786,3 +1786,27 @@ Stage Summary:
 - المصادقة تدعم API keys و JWT
 - 16 أداة تعمل عبر POST إلى `/api/rise/mcp/call`
 - GET `/api/rise/mcp/call` يعرض كتالوج الأدوات
+
+---
+Task ID: mcp-test-fix
+Agent: Main
+Task: اختبار MCP وإصلاح الأخطاء المكتشفة
+
+Work Log:
+- فحص ملفات MCP: mini-services/mcp-server/index.ts, src/app/api/rise/mcp/call/route.ts, src/app/api/rise/mcp/key/route.ts
+- اكتشاف أن @modelcontextprotocol/sdk لم يكن مثبتاً → تم تثبيته بـ bun install
+- اختبار MCP stdio server → يعمل بشكل صحيح (initialize + tools/list + tools/call)
+- اختبار HTTP endpoint /api/rise/mcp/call → يعمل (GET returns 16 tools)
+- اكتشاف ثغرة أمنية: أي مفتاح يبدأ بـ rise_ كان مقبولاً لأن catch block كان يرجع 'api-key-user'
+- إصلاح الثغرة: الآن المفاتيح تُفحص ضد Supabase أولاً، ثم RISE_ALLOWED_API_KEYS env
+- إضافة جدول UserApiKey لـ supabase-schema.sql (مع indexes و RLS policies)
+- إضافة معالجة أخطاء لطيفة عندما Supabase غير مهيأ (503 بدلاً من 500)
+- إضافة أداة rise_set_api_key جديدة لـ MCP stdio server (البديل لتسجيل الدخول)
+- تحسين رسائل الخطأ في MCP server لتوضح طريقتي المصادقة المتاحتين
+
+Stage Summary:
+- MCP HTTP endpoint: ✅ يعمل (16 أداة، مصادقة صحيحة، رفض مفاتيح مزيفة)
+- MCP stdio server: ✅ يعمل (17 أداة مع rise_set_api_key الجديدة)
+- أمان: ✅ تم إصلاح الثغرة (لم يعد أي مفتاح rise_ مقبولاً)
+- Schema: ✅ جدول UserApiKey مضاف لـ supabase-schema.sql
+- ملاحظة: Supabase غير مهيأ في البيئة الحالية → أدوات البيانات ستعيد خطأ 503 واضح

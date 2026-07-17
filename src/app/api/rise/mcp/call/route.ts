@@ -197,8 +197,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: TOOLS })
     }
 
-    // 3. Execute tool
-    const supabase = getSupabase()
+    // 3. Get Supabase client (may not be configured)
+    let supabase: ReturnType<typeof getSupabase> | null = null
+    try {
+      supabase = getSupabase()
+    } catch {
+      return NextResponse.json(
+        { error: 'قاعدة البيانات غير مهيأة. تأكد من إعداد متغيرات Supabase في .env', hint: 'شاهد ملف .env.example للتعليمات' },
+        { status: 503 },
+      )
+    }
+
     let result: unknown
 
     switch (tool) {
