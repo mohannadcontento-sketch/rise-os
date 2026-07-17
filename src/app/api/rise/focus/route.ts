@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(session)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[focus] POST error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
@@ -59,6 +63,10 @@ export async function PUT(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(session)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[focus] PUT error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }

@@ -54,6 +54,10 @@ export async function POST(req: NextRequest) {
       newLevel,
     })
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ xp: 0, leveled: false, newLevel: 1, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('Earn XP error:', error)
     return NextResponse.json({ xp: 0, leveled: false, newLevel: 1 })
   }

@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(data)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[goals] POST error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
@@ -75,6 +79,10 @@ export async function PUT(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(data)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[goals] PUT error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
@@ -93,6 +101,10 @@ export async function DELETE(req: NextRequest) {
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[goals] DELETE error:', error)
     return NextResponse.json({ error: 'فشل في الحذف' }, { status: 500 })
   }

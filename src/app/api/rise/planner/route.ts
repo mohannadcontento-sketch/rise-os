@@ -67,6 +67,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(item)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[planner] POST error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
@@ -92,6 +96,10 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(item)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[planner] PUT error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
@@ -117,6 +125,10 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[planner] DELETE error:', error)
     return NextResponse.json({ error: 'فشل في الحذف' }, { status: 500 })
   }

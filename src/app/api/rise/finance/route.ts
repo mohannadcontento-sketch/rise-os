@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json(record)
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[finance] POST error:', error)
     return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
   }
@@ -60,6 +64,10 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[finance] DELETE error:', error)
     return NextResponse.json({ error: 'فشل في الحذف' }, { status: 500 })
   }

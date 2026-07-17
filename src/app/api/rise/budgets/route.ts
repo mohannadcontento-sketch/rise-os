@@ -62,6 +62,10 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ budgets: data || [] })
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, budgets: [], id: 'mock-' + Date.now() })
+    }
     console.error('[budgets] PUT error:', error)
     return NextResponse.json({ error: 'فشل في حفظ الميزانية' }, { status: 500 })
   }
@@ -93,6 +97,10 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    // If Supabase not configured, return mock success (demo mode)
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
+    }
     console.error('[budgets] DELETE error:', error)
     return NextResponse.json({ error: 'فشل في حذف الميزانية' }, { status: 500 })
   }
