@@ -1,36 +1,44 @@
 import { NextRequest } from 'next/server'
 import { getSupabase, getSupabaseAdmin } from '@/lib/supabase'
 
-const DEMO_USER_ID = 'demo-user'
-
-// Cache the resolved default user ID per cold-start
-let _resolvedDefaultUserId: string | null | undefined = undefined // undefined = not resolved yet
+// Cache the resolved app user ID per cold-start
+let _appUserId: string | null | undefined = undefined // undefined = not resolved yet
 
 /**
- * Resolve the default user ID for demo/MCP mode.
- * Priority:
- * 1. RISE_DEFAULT_USER_ID env var (real Supabase user UUID)
- * 2. User table with isDefault = true column
- * 3. First user in User table (fallback)
- * 4. 'demo-user' (last resort)
+ * Get or create the app user via Supabase RPC.
+ * This calls get_or_create_app_user() which:
+ * 1. Checks AppConfig table for stored user ID
+ * 2. Checks User table for isDefault = true
+ * 3. Falls back to first user in User table
+ * 4. Creates a new user if none exists
+ *
+ * Zero configuration needed — works out of the box.
  */
-export async function resolveDefaultUserId(): Promise<string> {
-  // Return cached value if already resolved
-  if (_resolvedDefaultUserId !== undefined) return _resolvedDefaultUserId as string
+export async function resolveAppUserId(): Promise<string> {
+  if (_appUserId !== undefined) return _appUserId as string
 
-  // 1. Check env var first (highest priority — set in Vercel)
-  const envUserId = process.env.RISE_DEFAULT_USER_ID
-  if (envUserId && envUserId !== 'demo-user' && envUserId !== 'dev-user') {
-    _resolvedDefaultUserId = envUserId
-    console.log(`[auth] Default user from env: ${envUserId}`)
-    return envUserId
-  }
-
-  // 2. Try to find from database
   try {
     const admin = getSupabaseAdmin()
     if (admin) {
-      // Try isDefault column first
+      // Call the stored function — it handles everything
+      const { data, error } = await admin.rpc('get_or_create_app_user')
+
+      if (!error && data) {
+        _appUserId = data as string
+        console.log(`[auth] App user resolved: ${_appUserId}`)
+        return _appUserId!
+      }
+      console.error('[auth] RPC get_or_create_app_user error:', error)
+    }
+  } catch (err) {
+    console.error('[auth] resolveAppUserId error:', err)
+  }
+
+  // Fallback: query directly (if RPC not available yet / migration not run)
+  try {
+    const admin = getSupabaseAdmin()
+    if (admin) {
+      // Try isDefault
       const { data: defaultUser } = await admin
         .from('User')
         .select('id')
@@ -39,12 +47,12 @@ export async function resolveDefaultUserId(): Promise<string> {
         .single()
 
       if (defaultUser?.id) {
-        _resolvedDefaultUserId = defaultUser.id as string
-        console.log(`[auth] Default user from DB (isDefault): ${defaultUser.id}`)
-        return defaultUser.id as string
+        _appUserId = defaultUser.id as string
+        console.log(`[auth] App user from DB (isDefault): ${_appUserId}`)
+        return _appUserId!
       }
 
-      // 3. Fallback: first user in the table
+      // Try first user
       const { data: firstUser } = await admin
         .from('User')
         .select('id')
@@ -52,48 +60,37 @@ export async function resolveDefaultUserId(): Promise<string> {
         .single()
 
       if (firstUser?.id) {
-        _resolvedDefaultUserId = firstUser.id as string
-        console.log(`[auth] Default user from DB (first): ${firstUser.id}`)
-        return firstUser.id as string
+        _appUserId = firstUser.id as string
+        console.log(`[auth] App user from DB (first): ${_appUserId}`)
+        return _appUserId!
       }
     }
   } catch (err) {
-    console.error('[auth] resolveDefaultUserId DB error:', err)
+    console.error('[auth] fallback user lookup error:', err)
   }
 
-  // 4. Last resort
-  _resolvedDefaultUserId = DEMO_USER_ID
-  console.log('[auth] Default user: demo-user (no real user found)')
-  return DEMO_USER_ID
+  // Absolute last resort
+  _appUserId = 'demo-user'
+  console.log('[auth] WARNING: Using demo-user fallback (run supabase-migration-api-users.sql)')
+  return _appUserId
 }
 
 /**
- * Check if Supabase is configured and available.
- */
-function isSupabaseConfigured(): boolean {
-  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-}
-
-/**
- * Extract authenticated user ID from request.
- * Returns null for unauthenticated users.
+ * Extract authenticated user ID from request (real JWT).
+ * Returns null for unauthenticated requests.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
     const authHeader = req.headers.get('Authorization') || ''
     const token = authHeader.replace('Bearer ', '')
 
-    if (!token) {
-      return null
-    }
+    if (!token) return null
+    if (token.startsWith('rise_')) return null // API key, not JWT
 
     const supabase = getSupabase()
     const { data, error } = await supabase.auth.getUser(token)
 
-    if (error || !data.user) {
-      return null
-    }
-
+    if (error || !data.user) return null
     return data.user.id
   } catch {
     return null
@@ -101,20 +98,28 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 }
 
 /**
- * Get authenticated user ID.
- * - If authenticated → returns real user ID
- * - If no auth → resolves the default user ID (from env, DB, or demo-user)
+ * Get the effective user ID for a request.
+ * - Real JWT → use that user
+ * - No auth → resolve app user from DB (auto-created if needed)
  *
- * This never returns null — the app is always usable.
+ * This never returns null — the app always has a user.
  */
 export async function requireAuth(req: NextRequest): Promise<string | null> {
-  // Try real auth first
+  // 1. Real auth
   const userId = await getUserId(req)
   if (userId) return userId
 
-  // No auth → resolve default user (env var > DB isDefault > first user > demo-user)
-  return resolveDefaultUserId()
+  // 2. API-managed user (auto-created on first call)
+  return resolveAppUserId()
 }
 
-/** Alias for requireAuth — returns null for unauthenticated users. */
+/** Alias */
 export const optionalAuth = requireAuth
+
+/**
+ * Resolve default user ID (for MCP compatibility).
+ * Same as resolveAppUserId.
+ */
+export async function resolveDefaultUserId(): Promise<string> {
+  return resolveAppUserId()
+}
