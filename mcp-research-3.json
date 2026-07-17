@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/janhq/jan/issues/7787",
+    "name": "MCP server loses connection after 2-3 turns - \"Transport closed\" error",
+    "snippet": "Restarting the server temporarily fixes the issue, This appears to be a stdio transport issue specific to Windows. Manually restart MCP … fix: ... Missing: troubleshooting | Show results with: troubleshooting",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/79615852/why-does-connection-closed-happen-with-stdioservertransport-even-though-it-work",
+    "name": "Why does Connection closed happen with StdioServerTransport, even",
+    "snippet": "I'm working on a tool using ModelContextProtocol in C# (.NET 8), and I'm hitting a frustrating issue when trying to run my MCP server from JetBrains Rider. The Python MCP server with STDIO transport throws an 'Error python - MCP connection fails silently - Stack Overflow More results from stackoverflow.com Missing: debug | Show results with: debug",
+    "host_name": "stackoverflow.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.tamirdresher.com/blog/2025/12/15/debugging-mcp-servers-with-stdio-proxy",
+    "name": "Debugging MCP Servers: Building a stdio Proxy to Solve the Unsolvable",
+    "snippet": "... MCP error -32001: Request timed out. That's it. No stack trace from the server. No ... problem while trying to use the Playwright MCP server ... Missing: connection | Show results with: connection",
+    "host_name": "www.tamirdresher.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://fast.io/resources/mcp-server-debugging",
+    "name": "How to Debug MCP Server Issues - Complete Guide - Fastio",
+    "snippet": "Debug MCP server connection failures, tool errors, and transport issues using the MCP Inspector. Proven troubleshooting methods with real error examples.",
+    "host_name": "fast.io",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.openai.com/t/mcp-servers-all-time-out-narrowed-it-down-to-stdio-bug/1363658",
+    "name": "MCP servers all time out, narrowed it down to stdio bug - Codex CLI",
+    "snippet": "Hi there,. I believe this should be fixed now! Engineering addressed the stdio-handshake issue that was causing MCP servers to time out. Missing: debug | Show results with: debug",
+    "host_name": "community.openai.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.rapidevelopers.com/mcp-tutorial/how-to-debug-mcp-server-connection-issues",
+    "name": "Debug MCP Connection Issues | Tutorial | RapidDev",
+    "snippet": "Debug MCP server connection issues systematically: first test the server manually in your terminal, then use MCP Inspector to verify the protocol layer, check ...",
+    "host_name": "www.rapidevelopers.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://openclaw-ai.net/en/troubleshoot/mcp-server-connection",
+    "name": "MCP Server Connection Troubleshooting — Diagnosis & Fix",
+    "snippet": "Verify MCP server binary and dependencies. Ensure the MCP server executable exists, has correct permissions, and all runtime dependencies are installed. # Check ...",
+    "host_name": "openclaw-ai.net",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/thedailyagent/5-mcp-server-mistakes-that-waste-your-ai-agents-time-and-how-to-fix-them-18m5",
+    "name": "5 MCP Server Mistakes That Waste Your AI Agent's Time (And How to",
+    "snippet": "This is the single most common reason MCP servers \"just disconnect\" with no useful error message. When you run an MCP server over stdio ...",
+    "host_name": "dev.to",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/modelcontextprotocol/inspector/issues/106",
+    "name": "MCP Inspector Fails to Connect with stdio Transport and - GitHub",
+    "snippet": "The connection error is likely due to the Python virtual environment not being applied properly when launching from the inspector.",
+    "host_name": "github.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://forum.cursor.com/t/mcp-feature-client-closed-fix/54651?page=3",
+    "name": "MCP Feature \"Client Closed\" Fix - Page 3 - Bug Reports - Cursor",
+    "snippet": "Try to run the command and args in the mcp.json and you will find that it has some issues running command. Debug the problem with packages and relaunch the ...",
+    "host_name": "forum.cursor.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
