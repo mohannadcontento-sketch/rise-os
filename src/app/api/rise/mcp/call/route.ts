@@ -340,7 +340,11 @@ export async function POST(req: NextRequest) {
 
       /* ---- FINANCE ---- */
       case 'get_finance': {
-        const { data } = await supabase.from('FinanceRecord').select('*').eq('userId', userId).order('date', { ascending: false })
+        let query = supabase.from('FinanceRecord').select('*').eq('userId', userId).order('date', { ascending: false })
+        if (args.month) {
+          query = query.like('date', `${args.month as string}%`)
+        }
+        const { data } = await query
         result = { records: data || [] }
         break
       }
@@ -395,7 +399,17 @@ export async function POST(req: NextRequest) {
 
       /* ---- FOCUS ---- */
       case 'get_focus': {
-        const { data } = await supabase.from('FocusSession').select('*').eq('userId', userId).order('startedAt', { ascending: false }).limit(50)
+        const days = (args.days as number) || 30
+        const cutoff = new Date()
+        cutoff.setDate(cutoff.getDate() - days)
+        const cutoffStr = cutoff.toISOString()
+        const { data } = await supabase
+          .from('FocusSession')
+          .select('*')
+          .eq('userId', userId)
+          .gte('startedAt', cutoffStr)
+          .order('startedAt', { ascending: false })
+          .limit(100)
         result = { sessions: data || [] }
         break
       }

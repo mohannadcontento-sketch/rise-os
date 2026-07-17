@@ -49,7 +49,18 @@ async function apiFetch(
   if (authToken?.startsWith("rise_")) {
     try {
       const bodyObj = options.body ? JSON.parse(options.body as string) : {};
-      const toolName = path.replace("/api/rise/", "").replace(/\//g, "_");
+      // Strip query params from path for tool name, but merge them into args
+      const [cleanPath, queryString] = path.split("?");
+      const toolName = cleanPath.replace("/api/rise/", "").replace(/\//g, "_");
+      // Parse query params (e.g. ?dates=2025-01&status=pending) into args
+      if (queryString) {
+        for (const [key, val] of new URLSearchParams(queryString)) {
+          // Don't overwrite body fields
+          if (!(key in bodyObj)) {
+            bodyObj[key] = val;
+          }
+        }
+      }
       const response = await fetch(`${RISE_API_URL}/api/rise/mcp/call`, {
         method: "POST",
         headers: {
@@ -278,20 +289,20 @@ server.tool(
       .describe("تصفية حسب الحالة: pending (معلقة) أو in_progress (قيد التنفيذ) أو completed (مكتملة)"),
   },
   async ({ status }) => {
-    const { data, error } = await apiFetch("/api/rise/tasks");
+    // Pass status filter server-side via query param (works in both JWT and API key modes)
+    const statusMap: Record<string, string> = {
+      pending: "pending",
+      in_progress: "in_progress",
+      completed: "done",
+    };
+    const serverStatus = status ? statusMap[status] : undefined;
+    const queryPath = serverStatus ? `/api/rise/tasks?status=${serverStatus}` : "/api/rise/tasks";
+
+    const { data, error } = await apiFetch(queryPath);
     if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
     const d = data as { tasks?: Array<Record<string, unknown>> };
-    let tasks = d.tasks || [];
-
-    if (status) {
-      const statusMap: Record<string, string> = {
-        pending: "pending",
-        in_progress: "in_progress",
-        completed: "done",
-      };
-      tasks = tasks.filter((t) => t.status === statusMap[status]);
-    }
+    const tasks = d.tasks || [];
 
     if (tasks.length === 0) {
       return { content: [{ type: "text" as const, text: status ? `لا توجد مهام بحالة "${status}"` : "لا توجد مهام حالياً" }] };
@@ -390,18 +401,13 @@ server.tool(
       .describe("تصفية حسب الشهر بصيغة YYYY-MM مثل 2025-01"),
   },
   async ({ month }) => {
-    const { data, error } = await apiFetch("/api/rise/finance");
+    // Pass month filter server-side
+    const queryPath = month ? `/api/rise/finance?month=${month}` : "/api/rise/finance";
+    const { data, error } = await apiFetch(queryPath);
     if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
     const d = data as { records?: Array<Record<string, unknown>> };
-    let records = d.records || [];
-
-    if (month) {
-      records = records.filter((r) => {
-        const dateStr = r.date as string;
-        return dateStr?.startsWith(month);
-      });
-    }
+    const records = d.records || [];
 
     const income = records
       .filter((r) => r.type === "دخل")
@@ -484,21 +490,13 @@ server.tool(
     days: z.number().optional().describe("عدد الأيام الأخيرة لعرض الجلسات (الافتراضي: 7)"),
   },
   async ({ days }) => {
-    const { data, error } = await apiFetch("/api/rise/focus");
+    // Pass days filter server-side
+    const n = days || 7;
+    const { data, error } = await apiFetch(`/api/rise/focus?days=${n}`);
     if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
     const d = data as { sessions?: Array<Record<string, unknown>> };
-    let sessions = d.sessions || [];
-    const n = days || 7;
-
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - n);
-    const cutoffStr = cutoff.toISOString().split("T")[0];
-
-    sessions = sessions.filter((s) => {
-      const dateStr = (s.startedAt as string)?.split("T")[0];
-      return dateStr >= cutoffStr;
-    });
+    const sessions = d.sessions || [];
 
     const totalMin = sessions
       .filter((s) => s.completed)
@@ -835,8 +833,7 @@ server.tool(
 server.resource(
   "analytics-overview",
   "rise://analytics/overview",
-  "نظرة عامة شاملة على جميع بيانات RiseOS التحليلية",
-  async () => {
+  async (uri) => {
     const { data, error } = await apiFetch("/api/rise/dashboard");
     if (error) {
       return {
@@ -853,8 +850,7 @@ server.resource(
 server.resource(
   "finance-report",
   "rise://finance/report",
-  "تقرير مالي شامل مع ملخص الإيرادات والمصروفات",
-  async () => {
+  async (uri) => {
     const { data, error } = await apiFetch("/api/rise/finance");
     if (error) {
       return {
