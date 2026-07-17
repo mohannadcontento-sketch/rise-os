@@ -512,10 +512,36 @@ const CORS_HEADERS = {
 }
 
 /* ------------------------------------------------------------------ */
-/*  GET — Health check / SSE endpoint for clients that expect it       */
+/*  GET — SSE endpoint (for Claude Desktop & SSE clients)               */
+/*        Falls back to JSON health check for browsers/other clients    */
 /* ------------------------------------------------------------------ */
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const accept = req.headers.get('Accept') || ''
+
+  // If client expects SSE, return proper MCP SSE stream
+  if (accept.includes('text/event-stream')) {
+    const sessionId = generateSessionId()
+    const postEndpoint = `/api/mcp`
+
+    const body = `event: endpoint
+data: ${postEndpoint}?sessionId=${sessionId}
+
+`
+
+    return new NextResponse(body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'mcp-session-id': sessionId,
+        ...CORS_HEADERS,
+      },
+    })
+  }
+
+  // Otherwise return JSON health info
   return NextResponse.json({
     status: 'ok',
     server: 'riseos-mcp',
@@ -536,12 +562,14 @@ export async function OPTIONS() {
 
 /* ------------------------------------------------------------------ */
 /*  POST — Handle MCP JSON-RPC requests (stateless)                    */
+/*          Returns SSE if client expects it, JSON otherwise            */
 /* ------------------------------------------------------------------ */
 
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   const sessionId = generateSessionId()
+  const wantsSSE = (req.headers.get('Accept') || '').includes('text/event-stream')
 
   try {
     // Parse JSON-RPC request
@@ -549,27 +577,42 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json()
     } catch {
-      return NextResponse.json(
-        jsonRpcError(null, -32700, 'Parse error: invalid JSON'),
-        { status: 400, headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } },
-      )
+      const errResp = jsonRpcError(null, -32700, 'Parse error: invalid JSON')
+      return wantsSSE ? sseResponse(errResp, sessionId) : NextResponse.json(errResp, { status: 400, headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
     }
 
     // Handle batch requests (array of requests)
     if (Array.isArray(body)) {
       const results = await Promise.all(body.map(async (msg: any) => handleSingleMessage(msg, req, sessionId)))
-      return NextResponse.json(results, { headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
+      return wantsSSE ? sseResponse(results, sessionId) : NextResponse.json(results, { headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
     }
 
     // Single request
     const result = await handleSingleMessage(body, req, sessionId)
-    return NextResponse.json(result, { headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
+    return wantsSSE ? sseResponse(result, sessionId) : NextResponse.json(result, { headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
   } catch (error) {
-    return NextResponse.json(
-      jsonRpcError(null, -32603, `Internal error: ${error instanceof Error ? error.message : String(error)}`),
-      { status: 500, headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } },
-    )
+    const errResp = jsonRpcError(null, -32603, `Internal error: ${error instanceof Error ? error.message : String(error)}`)
+    return wantsSSE ? sseResponse(errResp, sessionId) : NextResponse.json(errResp, { status: 500, headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  SSE response helper                                                 */
+/* ------------------------------------------------------------------ */
+
+function sseResponse(data: unknown, sessionId: string): NextResponse {
+  const jsonStr = JSON.stringify(data)
+  const body = `data: ${jsonStr}\n\n`
+  return new NextResponse(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'mcp-session-id': sessionId,
+      ...CORS_HEADERS,
+    },
+  })
 }
 
 /* ------------------------------------------------------------------ */
