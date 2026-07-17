@@ -40,6 +40,39 @@ class MCPAuthError extends Error {
   }
 }
 
+// ─── Tool-name mapping (path-based names → backend MCP tool names) ──
+const READ_TOOL_MAP: Record<string, string> = {
+  dashboard: "get_dashboard",
+  tasks: "get_tasks",
+  habits: "get_habits",
+  goals: "get_goals",
+  journal: "get_journal",
+  health: "get_health",
+  projects: "get_projects",
+  finance: "get_finance",
+  productivity_score: "get_score",
+  focus: "get_focus",
+};
+
+const WRITE_TOOL_MAP: Record<string, string> = {
+  tasks: "add_task",
+  habits: "toggle_habit",
+  finance: "add_finance",
+  journal: "write_journal",
+  goals: "add_goal",
+};
+
+function resolveToolName(
+  baseName: string,
+  hasBody: boolean,
+): string {
+  // If there's a request body, it's a write operation
+  if (hasBody && WRITE_TOOL_MAP[baseName]) {
+    return WRITE_TOOL_MAP[baseName];
+  }
+  return READ_TOOL_MAP[baseName] || baseName;
+}
+
 // ─── API Helper ──────────────────────────────────────────────────
 async function apiFetch(
   path: string,
@@ -51,7 +84,8 @@ async function apiFetch(
       const bodyObj = options.body ? JSON.parse(options.body as string) : {};
       // Strip query params from path for tool name, but merge them into args
       const [cleanPath, queryString] = path.split("?");
-      const toolName = cleanPath.replace("/api/rise/", "").replace(/\//g, "_");
+      const baseName = cleanPath.replace("/api/rise/", "").replace(/\//g, "_");
+      const toolName = resolveToolName(baseName, !!options.body);
       // Parse query params (e.g. ?dates=2025-01&status=pending) into args
       if (queryString) {
         for (const [key, val] of new URLSearchParams(queryString)) {
@@ -884,6 +918,11 @@ server.resource(
 // ═══════════════════════════════════════════════════════════════════
 
 async function main() {
+  // Prevent unhandled rejections from crashing the process
+  process.on('unhandledRejection', (reason) => {
+    console.error('[MCP] Unhandled rejection:', reason);
+  });
+  
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

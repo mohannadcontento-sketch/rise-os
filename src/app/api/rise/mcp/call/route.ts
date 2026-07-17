@@ -197,14 +197,63 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: TOOLS })
     }
 
-    // 3. Get Supabase client (may not be configured)
+    // 3. Get Supabase client (may not be configured) — fall back to mock routes
     let supabase: ReturnType<typeof getSupabase> | null = null
+    let useFallback = false
     try {
       supabase = getSupabase()
     } catch {
+      useFallback = true
+    }
+
+    // ── Fallback: proxy to mock API routes when Supabase is unavailable ──
+    if (useFallback) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const routeMap: Record<string, { path: string; method?: string }> = {
+        get_dashboard: { path: '/api/rise/dashboard' },
+        get_tasks: { path: '/api/rise/tasks' },
+        get_habits: { path: '/api/rise/habits' },
+        get_goals: { path: '/api/rise/goals' },
+        get_journal: { path: '/api/rise/journal' },
+        get_health: { path: '/api/rise/health' },
+        get_projects: { path: '/api/rise/projects' },
+        get_finance: { path: '/api/rise/finance' },
+        get_score: { path: '/api/rise/productivity-score' },
+        get_focus: { path: '/api/rise/focus' },
+        add_task: { path: '/api/rise/tasks', method: 'POST' },
+        toggle_habit: { path: '/api/rise/habits', method: 'POST' },
+        add_finance: { path: '/api/rise/finance', method: 'POST' },
+        write_journal: { path: '/api/rise/journal', method: 'POST' },
+        add_goal: { path: '/api/rise/goals', method: 'POST' },
+      }
+      const mapping = routeMap[tool]
+      if (mapping) {
+        const qs = new URLSearchParams()
+        if (args.status) qs.set('status', String(args.status))
+        if (args.month) qs.set('month', String(args.month))
+        if (args.date) qs.set('date', String(args.date))
+        if (args.days) qs.set('days', String(args.days))
+        const qsStr = qs.toString()
+        const url = `${baseUrl}${mapping.path}${qsStr ? '?' + qsStr : ''}`
+        try {
+          const fetchOpts: RequestInit = { headers: { 'Content-Type': 'application/json' } }
+          if (mapping.method === 'POST' && Object.keys(args).length > 0) {
+            fetchOpts.method = 'POST'
+            fetchOpts.body = JSON.stringify(args)
+          }
+          const res = await fetch(url, fetchOpts)
+          const data = await res.json()
+          return NextResponse.json({ success: true, tool, data })
+        } catch (err) {
+          return NextResponse.json(
+            { error: 'فشل في الوصول لبيانات التجربة', details: err instanceof Error ? err.message : String(err) },
+            { status: 503 },
+          )
+        }
+      }
       return NextResponse.json(
-        { error: 'قاعدة البيانات غير مهيأة. تأكد من إعداد متغيرات Supabase في .env', hint: 'شاهد ملف .env.example للتعليمات' },
-        { status: 503 },
+        { error: `أداة غير معروفة: "${tool}". Supabase غير مهيأ والأداة ليس لها بديل محلي.` },
+        { status: 400 },
       )
     }
 
