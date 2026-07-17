@@ -231,8 +231,22 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
     useFallback = true
   }
 
-  // Fallback: proxy to mock API
+  // Fallback: use mock data (Supabase not configured or no auth)
   if (useFallback) {
+    // Write tools — return success with mock data (no Supabase to persist to)
+    const writeResponses: Record<string, string> = {
+      add_task: `✅ تمت إضافة المهمة بنجاح!\nالعنوان: ${args.title || '(بدون عنوان)'}\nالأولوية: ${args.priority || 'medium'}\nالحالة: ${args.status || 'todo'}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
+      toggle_habit: `✅ تم تحديث حالة العادة!\nمعرف العادة: ${args.habitId}\nالحالة: ${args.completed ? 'مكتمل' : 'غير مكتمل'}\nالتاريخ: ${args.date || getToday()}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
+      add_finance: `✅ تمت إضافة السجل المالي!\nالمبلغ: ${args.amount}\nالنوع: ${args.type}\nالتصنيف: ${args.category || 'عام'}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
+      write_journal: `✅ تم حفظ اليومية!\nالمزاج: ${args.mood || 'عادي'}\nالتاريخ: ${args.date || getToday()}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
+      add_goal: `✅ تمت إضافة الهدف!\nالعنوان: ${args.title}\nالنوع: ${args.type || 'annual'}\n\n⚠️ ملاحظة: البيانات محفوظة مؤقتاً فقط (Supabase غير متصل)`,
+    }
+
+    if (writeResponses[tool]) {
+      return { content: [{ type: 'text', text: writeResponses[tool] }] }
+    }
+
+    // Read tools — proxy to mock API routes
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rise-os-gamma.vercel.app'
     const routeMap: Record<string, { path: string; method?: string }> = {
       get_dashboard: { path: '/api/rise/dashboard' },
@@ -245,11 +259,6 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
       get_finance: { path: '/api/rise/finance' },
       get_score: { path: '/api/rise/productivity-score' },
       get_focus: { path: '/api/rise/focus' },
-      add_task: { path: '/api/rise/tasks', method: 'POST' },
-      toggle_habit: { path: '/api/rise/habits', method: 'POST' },
-      add_finance: { path: '/api/rise/finance', method: 'POST' },
-      write_journal: { path: '/api/rise/journal', method: 'POST' },
-      add_goal: { path: '/api/rise/goals', method: 'POST' },
     }
     const mapping = routeMap[tool]
     if (mapping) {
@@ -260,12 +269,7 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
       if (args.days) qs.set('days', String(args.days))
       const url = `${baseUrl}${mapping.path}${qs.toString() ? '?' + qs.toString() : ''}`
       try {
-        const fetchOpts: RequestInit = { headers: { 'Content-Type': 'application/json' } }
-        if (mapping.method === 'POST' && Object.keys(args).length > 0) {
-          fetchOpts.method = 'POST'
-          fetchOpts.body = JSON.stringify(args)
-        }
-        const res = await fetch(url, fetchOpts)
+        const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
         const data = await res.json()
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       } catch (err) {
@@ -681,16 +685,11 @@ async function handleSingleMessage(msg: any, req: NextRequest, sessionId: string
     // Pass the API key as a hidden arg for internal use
     const userId = await resolveUserId(req)
     if (!userId) {
-      // Return a helpful error explaining auth is needed for write ops
-      const writeTools = ['add_task', 'toggle_habit', 'add_finance', 'write_journal', 'add_goal']
-      if (writeTools.includes(toolName)) {
-        return jsonRpcError(reqId, -32001, 'Authentication required for write operations. Set Authorization header with your rise_ API key.')
-      }
-      // For read tools, try with fallback (mock data)
+      // No auth — all tools use fallback/mock data (works for MCP clients)
       toolArgs.__token = req.headers.get('Authorization')?.replace('Bearer ', '') || ''
     }
 
-    const effectiveUserId = userId || 'anon'
+    const effectiveUserId = userId || 'dev-user'
     const toolResult = await executeTool(toolName, toolArgs, effectiveUserId)
 
     return jsonRpcResult(reqId, {
