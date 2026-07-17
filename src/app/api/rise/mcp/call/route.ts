@@ -17,7 +17,7 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
   if (!token) return null
 
   if (token.startsWith('rise_')) {
-    // API-key auth
+    // API-key auth — validate against known keys
     try {
       const supabase = getSupabase()
       const { data } = await supabase
@@ -27,8 +27,12 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
         .single()
       if (data?.userId) return data.userId as string
     } catch {
-      // UserApiKey table might not exist — trust the key format
-      return 'api-key-user'
+      // Supabase not configured or table missing — reject unknown keys
+    }
+    // Fallback: check local env-allowed keys (for dev/self-hosted)
+    const allowedKeys = (process.env.RISE_ALLOWED_API_KEYS || '').split(',').filter(Boolean)
+    if (allowedKeys.includes(token)) {
+      return process.env.RISE_DEFAULT_USER_ID || 'dev-user'
     }
     return null
   }
