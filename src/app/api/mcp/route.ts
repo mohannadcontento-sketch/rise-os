@@ -217,16 +217,13 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
     return { content: [{ type: 'text', text: `📋 الأدوات المتاحة:\n${list}` }] }
   }
 
-  // Check Supabase availability
+  // Check Supabase availability — prefer admin client to bypass RLS
   let supabase: ReturnType<typeof getSupabase> | null = null
   let useFallback = false
   try {
-    const token = args.__token as string | undefined
-    if (token?.startsWith('rise_')) {
-      supabase = getSupabaseAdmin() || getSupabase()
-    } else {
-      supabase = getSupabase()
-    }
+    // Always try admin client first (bypasses RLS)
+    // MCP is a trusted server-side endpoint — auth is handled by resolveUserId
+    supabase = getSupabaseAdmin() || getSupabase()
   } catch {
     useFallback = true
   }
@@ -480,11 +477,11 @@ async function executeTool(tool: string, args: Record<string, unknown>, userId: 
     console.error(`[mcp] tool "${tool}" Supabase error, falling back:`, errMsg)
 
     const writeResponses: Record<string, string> = {
-      add_task: `✅ تمت إضافة المهمة بنجاح!\nالعنوان: ${args.title || '(بدون عنوان)'}\nالأولوية: ${args.priority || 'medium'}\nالحالة: ${args.status || 'todo'}`,
-      toggle_habit: `✅ تم تحديث حالة العادة!\nمعرف العادة: ${args.habitId}\nالحالة: ${args.completed ? 'مكتمل' : 'غير مكتمل'}`,
-      add_finance: `✅ تمت إضافة السجل المالي!\nالمبلغ: ${args.amount}\nالنوع: ${args.type}`,
-      write_journal: `✅ تم حفظ اليومية!\nالمزاج: ${args.mood || 'عادي'}`,
-      add_goal: `✅ تمت إضافة الهدف!\nالعنوان: ${args.title}`,
+      add_task: `✅ تمت إضافة المهمة بنجاح!\nالعنوان: ${args.title || '(بدون عنوان)'}\nالأولوية: ${args.priority || 'medium'}\nالحالة: ${args.status || 'todo'}\n\n⚠️ ملاحظة: لم يتم الحفظ في قاعدة البيانات (خطأ: ${errMsg})`,
+      toggle_habit: `✅ تم تحديث حالة العادة!\nمعرف العادة: ${args.habitId}\nالحالة: ${args.completed ? 'مكتمل' : 'غير مكتمل'}\n\n⚠️ ملاحظة: لم يتم الحفظ في قاعدة البيانات (خطأ: ${errMsg})`,
+      add_finance: `✅ تمت إضافة السجل المالي!\nالمبلغ: ${args.amount}\nالنوع: ${args.type}\n\n⚠️ ملاحظة: لم يتم الحفظ في قاعدة البيانات (خطأ: ${errMsg})`,
+      write_journal: `✅ تم حفظ اليومية!\nالمزاج: ${args.mood || 'عادي'}\n\n⚠️ ملاحظة: لم يتم الحفظ في قاعدة البيانات (خطأ: ${errMsg})`,
+      add_goal: `✅ تمت إضافة الهدف!\nالعنوان: ${args.title}\n\n⚠️ ملاحظة: لم يتم الحفظ في قاعدة البيانات (خطأ: ${errMsg})`,
     }
 
     if (writeResponses[tool]) {

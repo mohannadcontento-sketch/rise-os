@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
     const supabase = getSupabaseWithAuth(req)
 
@@ -315,7 +314,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, user })
   } catch (error) {
-    console.error('Seed error:', error)
-    return NextResponse.json({ success: false, error: 'فشل في إنشاء البيانات التجريبية' }, { status: 500 })
+    return handleRouteError(error, 'seed')
   }
 }

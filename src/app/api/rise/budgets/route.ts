@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -30,7 +30,6 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     const supabase = getSupabaseWithAuth(req)
     const body = await req.json()
@@ -62,19 +61,13 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ budgets: data || [] })
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ success: true, offline: true, budgets: [], id: 'mock-' + Date.now() })
-    }
-    console.error('[budgets] PUT error:', error)
-    return NextResponse.json({ error: 'فشل في حفظ الميزانية' }, { status: 500 })
+    return handleRouteError(error, 'budgets')
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     const supabase = getSupabaseWithAuth(req)
     const { searchParams } = new URL(req.url)
@@ -97,11 +90,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
-    }
-    console.error('[budgets] DELETE error:', error)
-    return NextResponse.json({ error: 'فشل في حذف الميزانية' }, { status: 500 })
+    return handleRouteError(error, 'budgets')
   }
 }

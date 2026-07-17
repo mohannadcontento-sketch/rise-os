@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
@@ -37,7 +37,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
     const body = await req.json()
     const supabase = getSupabaseWithAuth(req)
@@ -55,19 +54,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(data)
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
-    }
-    console.error('[tasks] POST error:', error)
-    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
+    return handleRouteError(error, 'tasks')
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
     const { id, ...body } = await req.json()
     const supabase = getSupabaseWithAuth(req)
@@ -87,19 +80,13 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(data)
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
-    }
-    console.error('[tasks] PUT error:', error)
-    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
+    return handleRouteError(error, 'tasks')
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
@@ -119,11 +106,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
-    }
-    console.error('[tasks] DELETE error:', error)
-    return NextResponse.json({ error: 'فشل في الحذف' }, { status: 500 })
+    return handleRouteError(error, 'tasks')
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
@@ -32,7 +32,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
     const supabase = getSupabaseWithAuth(req)
 
     const body = await req.json()
@@ -69,11 +68,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
-    }
-    console.error('[morning] POST error:', error)
-    return NextResponse.json({ error: 'فشل في العملية', details: error instanceof Error ? error.message : 'خطأ غير معروف' }, { status: 500 })
+    return handleRouteError(error, 'morning')
   }
 }

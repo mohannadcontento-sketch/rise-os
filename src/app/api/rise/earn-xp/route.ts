@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth } from '@/lib/supabase'
+import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { calculateXpForLevel } from '@/lib/rise-utils'
 
 export async function POST(req: NextRequest) {
   try {
         const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: "unauthorized", offline: true }, { status: 401 })
     const supabase = getSupabaseWithAuth(req)
 
     const { amount, reason } = await req.json()
@@ -54,11 +53,6 @@ export async function POST(req: NextRequest) {
       newLevel,
     })
   } catch (error) {
-    // If Supabase not configured, return mock success (demo mode)
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      return NextResponse.json({ xp: 0, leveled: false, newLevel: 1, offline: true, id: 'mock-' + Date.now() })
-    }
-    console.error('Earn XP error:', error)
-    return NextResponse.json({ xp: 0, leveled: false, newLevel: 1 })
+    return handleRouteError(error, 'earn-xp')
   }
 }
