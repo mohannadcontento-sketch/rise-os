@@ -534,9 +534,26 @@ const CORS_HEADERS = {
 /*        Falls back to JSON health check for browsers/other clients    */
 /* ------------------------------------------------------------------ */
 
-export async function GET() {
-  // Stateless server — no session management needed.
-  // Claude Desktop will POST all requests to this same URL.
+export async function GET(req: NextRequest) {
+  const accept = req.headers.get('Accept') || ''
+  const sessionId = generateSessionId()
+
+  // Claude Desktop sends GET with Accept: text/event-stream
+  // Return a valid SSE stream (stateless — no endpoint redirect)
+  if (accept.includes('text/event-stream')) {
+    return new NextResponse('', {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'mcp-session-id': sessionId,
+        ...CORS_HEADERS,
+      },
+    })
+  }
+
+  // Browser / other clients get JSON health info
   return NextResponse.json({
     status: 'ok',
     server: 'riseos-mcp',
