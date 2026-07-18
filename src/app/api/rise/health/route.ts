@@ -1,37 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /** Fields allowed to be stored in HealthLog */
 const ALLOWED_FIELDS = [
-  'sleepHours', 'sleepQuality', 'water', 'exercise', 'exerciseType',
-  'mood', 'energy', 'weight', 'notes', 'steps',
+  'sleepHours', 'sleepQuality', 'waterGlasses', 'steps',
+  'calories', 'weight', 'mood', 'energy', 'exerciseType',
+  'exerciseMin', 'exerciseNote',
 ] as const
+
+/** Map frontend field names to Prisma field names */
+const FIELD_MAP: Record<string, string> = {
+  water: 'waterGlasses',
+  exercise: 'exerciseType',
+}
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ logs: [], todayLog: null })
-    const supabase = getSupabaseWithAuth(req)
 
     const today = getToday()
     const last30 = getLast30Days()
 
-    const { data: logs, error } = await supabase
-      .from('HealthLog')
-      .select('*')
-      .eq('userId', userId)
-      .in('date', last30)
-      .order('date', { ascending: false })
+    const logs = await db.healthLog.findMany({
+      where: { userId, date: { in: last30 } },
+      orderBy: { date: 'desc' },
+    })
 
-    if (error) {
-      console.error('[health] GET Supabase error:', error.message)
-      return NextResponse.json({ logs: [], todayLog: null })
-    }
-
-    const todayLog = logs?.find(l => l.date === today) || null
-    return NextResponse.json({ logs: logs || [], todayLog })
+    const todayLog = logs.find(l => l.date === today) || null
+    return NextResponse.json({ logs, todayLog })
   } catch (error) {
     console.error('Health GET error:', error)
     return NextResponse.json({ logs: [], todayLog: null })
@@ -41,51 +41,46 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'health')
+
+    await ensureUserExists(userId)
 
     const body = await req.json().catch(() => ({}))
     const today = getToday()
     const targetDate = body.date || today
 
-    // Only keep allowed fields
+    // Only keep allowed fields, mapping frontend names to Prisma names
     const cleanData: Record<string, unknown> = { userId, date: targetDate }
     for (const field of ALLOWED_FIELDS) {
+      // Check both the Prisma field name and any mapped frontend name
       if (body[field] !== undefined) {
         cleanData[field] = body[field]
       }
     }
+    // Also handle mapped fields from frontend (water → waterGlasses, exercise → exerciseType)
+    for (const [frontend, prisma] of Object.entries(FIELD_MAP)) {
+      if (body[frontend] !== undefined && cleanData[prisma] === undefined) {
+        cleanData[prisma] = body[frontend]
+      }
+    }
 
-    const { data: existing } = await supabase
-      .from('HealthLog')
-      .select('id')
-      .eq('userId', userId)
-      .eq('date', targetDate)
-      .single()
+    const existing = await db.healthLog.findFirst({
+      where: { userId, date: targetDate },
+    })
 
     if (existing) {
-      const { data: updated, error } = await supabase
-        .from('HealthLog')
-        .update(cleanData)
-        .eq('id', existing.id)
-        .select()
-        .single()
-      if (error) {
-        console.error('[health] UPDATE error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+      const { date: _d, userId: _u, ...updateData } = cleanData
+      const updated = await db.healthLog.update({
+        where: { id: existing.id },
+        data: updateData as Record<string, unknown>,
+      })
       return NextResponse.json(updated)
     }
 
-    const { data: created, error } = await supabase
-      .from('HealthLog')
-      .insert(cleanData)
-      .select()
-      .single()
-    if (error) {
-      console.error('[health] INSERT error:', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const { date: _d, userId: _u, ...createData } = cleanData
+    const created = await db.healthLog.create({
+      data: createData as Record<string, unknown>,
+    })
     return NextResponse.json(created)
   } catch (error) {
     return handleRouteError(error, 'health')

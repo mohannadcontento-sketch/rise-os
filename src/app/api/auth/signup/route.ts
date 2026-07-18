@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ADMIN_EMAIL, ensureUserExists } from '@/lib/supabase'
+import { db } from '@/lib/db'
+import { ADMIN_EMAIL } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,55 +14,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' }, { status: 400 })
     }
 
-    // Try Supabase — if not configured, return helpful error
-    const { getSupabase } = await import('@/lib/supabase')
-    let supabaseClient
-    try {
-      supabaseClient = getSupabase()
-    } catch {
+    // Check if user already exists
+    const existing = await db.user.findUnique({ where: { email } })
+    if (existing) {
+      // Return session for existing user (same as login)
       return NextResponse.json({
-        error: 'خدمة إنشاء الحساب غير متوفرة حالياً. حاول لاحقاً.',
-      }, { status: 503 })
+        user: {
+          id: existing.id,
+          email: existing.email,
+          name: existing.name,
+          isAdmin: email === ADMIN_EMAIL,
+        },
+        session: {
+          access_token: existing.id,
+          refresh_token: '',
+          expires_at: 0,
+        },
+      })
     }
 
-    const { data, error } = await supabaseClient.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: name || email.split('@')[0],
-        },
+    // Create new user
+    const user = await db.user.create({
+      data: {
+        email,
+        name: name || email.split('@')[0] || 'مستخدم',
+        settings: { create: {} },
       },
     })
-
-    if (error) {
-      if (error.message.includes('already registered') || error.message.includes('already exists')) {
-        return NextResponse.json({ error: 'هذا البريد مسجل بالفعل' }, { status: 409 })
-      }
-      return NextResponse.json({ error: 'حدث خطأ في إنشاء الحساب' }, { status: 500 })
-    }
-
-    // Ensure User row exists (the DB trigger should handle this, but belt + suspenders)
-    if (data.user) {
-      await ensureUserExists(data.user.id, name || email.split('@')[0], email)
-    }
 
     return NextResponse.json({
       user: {
-        id: data.user?.id,
-        email: data.user?.email,
-        isAdmin: data.user?.email === ADMIN_EMAIL,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        isAdmin: email === ADMIN_EMAIL,
       },
-      session: data.session ? {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        expires_at: data.session.expires_at,
-      } : null,
-      needsConfirmation: !data.session,
+      session: {
+        access_token: user.id,
+        refresh_token: '',
+        expires_at: 0,
+      },
     })
-  } catch {
-    return NextResponse.json({
-      error: 'خدمة إنشاء الحساب غير متوفرة حالياً. حاول لاحقاً.',
-    }, { status: 503 })
+  } catch (error) {
+    console.error('[auth/signup] error:', error)
+    return NextResponse.json(
+      { error: 'حدث خطأ في إنشاء الحساب' },
+      { status: 500 },
+    )
   }
 }

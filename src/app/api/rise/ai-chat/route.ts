@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
 // Smart fallback responses
@@ -99,8 +99,6 @@ export async function POST(request: NextRequest) {
     const userId = await requireAuth(request)
     if (!userId) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
 
-    const supabase = getSupabaseWithAuth(request)
-
     const { message, history } = await request.json()
 
     if (!message) {
@@ -111,11 +109,7 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-    const { data: usage } = await supabase
-      .from('UserAIUsage')
-      .select('*')
-      .eq('userId', userId)
-      .single()
+    let usage = await db.userAIUsage.findUnique({ where: { userId } })
 
     const defaultLimit = 200
 
@@ -155,30 +149,30 @@ export async function POST(request: NextRequest) {
         const newTotal = (usage.totalUsed || 0) + 1
         const limit = usage.monthlyLimit || defaultLimit
 
-        await supabase.from('UserAIUsage').upsert({
-          userId,
-          monthlyUsed: newUsed,
-          totalUsed: newTotal,
-          monthlyLimit: limit,
-          month: monthKey,
+        await db.userAIUsage.update({
+          where: { userId },
+          data: {
+            monthlyUsed: newUsed,
+            totalUsed: newTotal,
+            monthlyLimit: limit,
+            month: monthKey,
+          },
         })
       } else {
-        await supabase.from('UserAIUsage').upsert({
-          userId,
-          monthlyUsed: 1,
-          totalUsed: 1,
-          monthlyLimit: defaultLimit,
-          month: monthKey,
+        await db.userAIUsage.create({
+          data: {
+            userId,
+            monthlyUsed: 1,
+            totalUsed: 1,
+            monthlyLimit: defaultLimit,
+            month: monthKey,
+          },
         })
       }
     }
 
     // Get updated usage
-    const { data: updatedUsage } = await supabase
-      .from('UserAIUsage')
-      .select('*')
-      .eq('userId', userId)
-      .single()
+    const updatedUsage = await db.userAIUsage.findUnique({ where: { userId } })
 
     return NextResponse.json({
       response: responseText,

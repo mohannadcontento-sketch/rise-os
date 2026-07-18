@@ -1,60 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { getSupabase, ADMIN_EMAIL } from '@/lib/supabase'
-
-function getAdminSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  return createClient(url, key)
-}
-
-async function requireAdmin(request: NextRequest) {
-  const authHeader = request.headers.get('Authorization') || ''
-  const token = authHeader.replace('Bearer ', '')
-
-  const supabase = getSupabase()
-  const { data: userData } = await supabase.auth.getUser(token)
-  if (!userData.user || userData.user.email !== ADMIN_EMAIL) {
-    return null
-  }
-  return userData.user
-}
+import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth'
+import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireAdmin(request)
-    if (!user) {
+    const userId = await requireAuth(request)
+    if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
     }
 
-    const adminClient = getAdminSupabase()
-    const supabase = getSupabase()
+    // Count users
+    const totalUsers = await db.user.count()
 
-    // Get all users from Supabase auth
-    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers()
-    const totalUsers = users?.length || 0
+    // Active users in last 7 days (users with recent activity)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const activeUsers7d = await db.user.count({
+      where: { updatedAt: { gte: sevenDaysAgo } },
+    })
 
-    // Active users in last 7 days
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const activeUsers7d = users?.filter(u => u.last_sign_in_at && u.last_sign_in_at >= sevenDaysAgo).length || 0
-
-    // User growth over last 30 days (grouped by day)
+    // User growth over last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const userGrowth: { date: string; count: number }[] = []
+    const usersCreatedInPeriod = await db.user.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    })
 
-    // Build cumulative growth data
-    const sortedUsers = (users || [])
-      .filter(u => u.created_at && new Date(u.created_at) >= thirtyDaysAgo)
-      .sort((a, b) => a.created_at!.localeCompare(b.created_at!))
+    const usersBeforePeriod = await db.user.count({
+      where: { createdAt: { lt: thirtyDaysAgo } },
+    })
 
-    // Count users created before the period
-    const usersBeforePeriod = (users || []).filter(
-      u => u.created_at && new Date(u.created_at) < thirtyDaysAgo
-    ).length
-
-    let cumulativeCount = usersBeforePeriod
-
-    // Create date entries for each day
+    // Build daily growth map
     const dateMap = new Map<string, number>()
     for (let i = 0; i <= 30; i++) {
       const d = new Date(thirtyDaysAgo)
@@ -62,89 +39,99 @@ export async function GET(request: NextRequest) {
       dateMap.set(d.toISOString().slice(0, 10), 0)
     }
 
-    // Count users per day
-    for (const u of sortedUsers) {
-      const day = u.created_at!.slice(0, 10)
+    for (const u of usersCreatedInPeriod) {
+      const day = u.createdAt.toISOString().slice(0, 10)
       dateMap.set(day, (dateMap.get(day) || 0) + 1)
     }
 
-    // Build growth data with cumulative counts
+    let cumulativeCount = usersBeforePeriod
+    const userGrowth: { date: string; count: number }[] = []
     for (const [date, newCount] of dateMap) {
       cumulativeCount += newCount
       userGrowth.push({ date, count: cumulativeCount })
     }
 
-    // Count rows in various tables
-    const tableCounts: Record<string, number> = {}
-    const tablesToCount = ['User', 'Task', 'Habit', 'HabitLog', 'Journal', 'Goal', 'GoalMilestone', 'Project', 'Book', 'KnowledgeItem', 'UserStorage', 'UserAIUsage', 'ApiKey']
+    // Table counts
+    const [
+      totalTasks,
+      totalHabits,
+      totalJournals,
+      totalGoals,
+      totalProjects,
+      totalBooks,
+      totalKnowledge,
+      totalFinanceRecords,
+      totalFocusSessions,
+    ] = await Promise.all([
+      db.task.count(),
+      db.habit.count(),
+      db.journal.count(),
+      db.goal.count(),
+      db.project.count(),
+      db.book.count(),
+      db.knowledgeItem.count(),
+      db.financeRecord.count(),
+      db.focusSession.count(),
+    ])
 
-    for (const table of tablesToCount) {
-      try {
-        const { count, error } = await supabase
-          .from(table)
-          .select('*', { count: 'exact', head: true })
-        if (!error && count !== null) {
-          tableCounts[table] = count
-        }
-      } catch {
-        // Table might not exist
-      }
-    }
+    // Storage usage
+    const storageRecords = await db.userStorage.findMany()
+    const totalStorageUsed = storageRecords.reduce((acc, s) => acc + s.storageUsed, 0)
 
-    // Aggregate stats
-    const totalTasks = tableCounts['Task'] || 0
-    const totalHabits = tableCounts['Habit'] || 0
-    const totalJournals = tableCounts['Journal'] || 0
-    const totalGoals = tableCounts['Goal'] || 0
+    // AI usage
+    const aiUsages = await db.userAIUsage.findMany()
+    const totalAiUsed = aiUsages.reduce((acc, a) => acc + a.monthlyUsed, 0)
 
-    // Storage and AI usage
-    const { data: storageRecords } = await supabase.from('UserStorage').select('*')
-    const totalStorageUsed = storageRecords?.reduce((acc: number, s: any) => acc + (s.storageUsed || 0), 0) || 0
-
-    const { data: aiUsages } = await supabase.from('UserAIUsage').select('*')
-    const totalAiUsed = aiUsages?.reduce((acc: number, a: any) => acc + (a.monthlyUsed || 0), 0) || 0
-
-    // Recent activity — get recent tasks, journals, habits
+    // Recent activity
     const recentActivity: { time: string; action: string; user: string }[] = []
 
-    try {
-      const { data: recentTasks } = await supabase
-        .from('Task')
-        .select('title, userId, createdAt, updatedAt')
-        .order('updatedAt', { ascending: false })
-        .limit(5)
-      if (recentTasks) {
-        for (const t of recentTasks) {
-          const userInfo = users?.find(u => u.id === t.userId)
-          recentActivity.push({
-            time: t.updatedAt || t.createdAt || '',
-            action: `مهمة: ${(t.title || '').slice(0, 40)}`,
-            user: userInfo?.user_metadata?.display_name || userInfo?.email?.split('@')[0] || 'مستخدم',
-          })
-        }
-      }
-    } catch { /* ignore */ }
+    // Recent tasks
+    const recentTasks = await db.task.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: { title: true, userId: true, updatedAt: true, user: { select: { name: true } } },
+    })
+    for (const t of recentTasks) {
+      recentActivity.push({
+        time: t.updatedAt.toISOString(),
+        action: `مهمة: ${t.title.slice(0, 40)}`,
+        user: t.user?.name || 'مستخدم',
+      })
+    }
 
-    try {
-      const { data: recentJournals } = await supabase
-        .from('Journal')
-        .select('content, userId, createdAt')
-        .order('createdAt', { ascending: false })
-        .limit(5)
-      if (recentJournals) {
-        for (const j of recentJournals) {
-          const userInfo = users?.find(u => u.id === j.userId)
-          recentActivity.push({
-            time: j.createdAt || '',
-            action: `يومية: ${(j.content || '').slice(0, 40)}`,
-            user: userInfo?.user_metadata?.display_name || userInfo?.email?.split('@')[0] || 'مستخدم',
-          })
-        }
-      }
-    } catch { /* ignore */ }
+    // Recent journals
+    const recentJournals = await db.journal.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { content: true, userId: true, createdAt: true, user: { select: { name: true } } },
+    })
+    for (const j of recentJournals) {
+      recentActivity.push({
+        time: j.createdAt.toISOString(),
+        action: `يومية: ${j.content.slice(0, 40)}`,
+        user: j.user?.name || 'مستخدم',
+      })
+    }
 
     // Sort by time desc and limit
     recentActivity.sort((a, b) => b.time.localeCompare(a.time))
+
+    const tableCounts: Record<string, number> = {
+      User: totalUsers,
+      Task: totalTasks,
+      Habit: totalHabits,
+      HabitLog: await db.habitLog.count(),
+      Journal: totalJournals,
+      Goal: totalGoals,
+      Milestone: await db.milestone.count(),
+      Project: totalProjects,
+      Book: totalBooks,
+      KnowledgeItem: totalKnowledge,
+      FinanceRecord: totalFinanceRecords,
+      FocusSession: totalFocusSessions,
+      UserStorage: storageRecords.length,
+      UserApiKey: await db.userApiKey.count(),
+    }
 
     return NextResponse.json({
       totalUsers,

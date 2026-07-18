@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 import { getLast30Days } from '@/lib/rise-utils'
 
 export async function GET(req: NextRequest) {
@@ -9,16 +10,19 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ habits: [], logs: [] })
     }
-    const supabase = getSupabaseWithAuth(req)
 
-    const { data: habits } = await supabase.from('Habit').select('*').eq('userId', userId)
+    const habits = await db.habit.findMany({ where: { userId } })
     const last30 = getLast30Days()
-    const habitIds = habits?.map(h => h.id) || []
+    const habitIds = habits.map(h => h.id)
 
-    const { data: logs } = await supabase.from('HabitLog').select('*').in('habitId', habitIds)
-    const filteredLogs = logs?.filter(log => last30.includes(log.date)) || []
+    let logs: Array<{ id: string; habitId: string; date: string; completed: boolean; count: number; createdAt: Date }> = []
+    if (habitIds.length > 0) {
+      logs = await db.habitLog.findMany({
+        where: { habitId: { in: habitIds }, date: { in: last30 } },
+      })
+    }
 
-    return NextResponse.json({ habits: habits || [], logs: filteredLogs })
+    return NextResponse.json({ habits, logs })
   } catch (error) {
     console.error('Habits GET error:', error)
     return NextResponse.json({ habits: [], logs: [] })
@@ -27,14 +31,16 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'habits')
 
     const body = await req.json()
-    const { data, error } = await supabase.from('Habit').insert({ userId, ...body }).select().single()
-    if (error) throw error
-    return NextResponse.json(data)
+    await ensureUserExists(userId)
+
+    const habit = await db.habit.create({
+      data: { userId, ...body },
+    })
+    return NextResponse.json(habit)
   } catch (error) {
     return handleRouteError(error, 'habits')
   }
@@ -42,54 +48,60 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'habits')
+
+    await ensureUserExists(userId)
     const body = await req.json()
 
     // Habit log toggle (from frontend habit toggle)
     if (body.habitId && body.date !== undefined) {
       // Verify habit belongs to current user
-      const { data: habit } = await supabase
-        .from('Habit')
-        .select('userId')
-        .eq('id', body.habitId)
-        .single()
+      const habit = await db.habit.findUnique({
+        where: { id: body.habitId },
+        select: { userId: true },
+      })
       if (!habit || habit.userId !== userId) {
         return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
       }
 
-      const { data: existing } = await supabase
-        .from('HabitLog')
-        .select('id')
-        .eq('habitId', body.habitId)
-        .eq('date', body.date)
-        .single()
+      const existing = await db.habitLog.findFirst({
+        where: { habitId: body.habitId, date: body.date },
+      })
 
       if (existing && !body.completed) {
         // Delete the log entry when unchecking
-        await supabase.from('HabitLog').delete().eq('id', existing.id)
+        await db.habitLog.delete({ where: { id: existing.id } })
         return NextResponse.json({ success: true })
       } else if (!existing && body.completed) {
         // Create log entry when checking
-        const habit = body.count !== undefined ? { habitId: body.habitId, date: body.date, completed: true, count: body.count } : { habitId: body.habitId, date: body.date, completed: true, count: 1 }
-        const { data, error } = await supabase.from('HabitLog').insert(habit).select().single()
-        if (error) throw error
-        return NextResponse.json(data)
+        const log = await db.habitLog.create({
+          data: {
+            habitId: body.habitId,
+            date: body.date,
+            completed: true,
+            count: body.count !== undefined ? body.count : 1,
+          },
+        })
+        return NextResponse.json(log)
       } else if (existing && body.completed) {
         // Update count if already exists
-        const { data, error } = await supabase.from('HabitLog').update({ completed: true, count: body.count || 1 }).eq('id', existing.id).select().single()
-        if (error) throw error
-        return NextResponse.json(data)
+        const log = await db.habitLog.update({
+          where: { id: existing.id },
+          data: { completed: true, count: body.count || 1 },
+        })
+        return NextResponse.json(log)
       }
       return NextResponse.json({ success: true })
     }
 
     // Normal habit update
     const { id, ...updateBody } = body
-    const { data, error } = await supabase.from('Habit').update(updateBody).eq('id', id).eq('userId', userId).select().single()
-    if (error) throw error
-    return NextResponse.json(data)
+    const habit = await db.habit.update({
+      where: { id },
+      data: updateBody,
+    })
+    return NextResponse.json(habit)
   } catch (error) {
     return handleRouteError(error, 'habits')
   }
@@ -97,15 +109,16 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'habits')
+
+    await ensureUserExists(userId)
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
-    const { error } = await supabase.from('Habit').delete().eq('id', id).eq('userId', userId)
-    if (error) throw error
+
+    await db.habit.deleteMany({ where: { id, userId } })
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleRouteError(error, 'habits')

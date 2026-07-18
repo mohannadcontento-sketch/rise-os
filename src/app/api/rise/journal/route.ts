@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 import { getToday } from '@/lib/rise-utils'
 
 export async function GET(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ journal: null, recentJournals: [] })
-    const supabase = getSupabaseWithAuth(req)
 
     const today = getToday()
-    const { data: journal } = await supabase.from('Journal').select('*').eq('userId', userId).eq('date', today).single()
-    const { data: recentJournals, error } = await supabase
-      .from('Journal')
-      .select('*')
-      .eq('userId', userId)
-      .order('createdAt', { ascending: false })
-      .limit(30)
-    if (error) throw error
 
-    return NextResponse.json({ journal: journal || null, recentJournals: recentJournals || [] })
+    const [journal, recentJournals] = await Promise.all([
+      db.journal.findFirst({ where: { userId, date: today } }),
+      db.journal.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
+    ])
+
+    return NextResponse.json({ journal: journal || null, recentJournals })
   } catch (error) {
     console.error('Journal GET error:', error)
     return NextResponse.json({ journal: null, recentJournals: [] })
@@ -28,24 +29,32 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'journal')
+
+    await ensureUserExists(userId)
 
     const body = await req.json()
     const today = getToday()
     const journalDate = body.date || today
 
-    const { data: existing } = await supabase.from('Journal').select('id').eq('userId', userId).eq('date', journalDate).single()
+    const existing = await db.journal.findFirst({
+      where: { userId, date: journalDate },
+    })
 
     if (existing) {
-      const { data, error } = await supabase.from('Journal').update(body).eq('id', existing.id).select().single()
-      if (error) throw error
-      return NextResponse.json(data)
+      const { date: _d, ...updateData } = body
+      const updated = await db.journal.update({
+        where: { id: existing.id },
+        data: updateData,
+      })
+      return NextResponse.json(updated)
     } else {
-      const { data, error } = await supabase.from('Journal').insert({ userId, date: today, ...body }).select().single()
-      if (error) throw error
-      return NextResponse.json(data)
+      const { date: _d, ...createData } = body
+      const created = await db.journal.create({
+        data: { userId, date: journalDate, ...createData },
+      })
+      return NextResponse.json(created)
     }
   } catch (error) {
     return handleRouteError(error, 'journal')

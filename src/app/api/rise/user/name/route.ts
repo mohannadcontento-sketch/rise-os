@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { getSupabaseWithAuth, handleRouteError } from '@/lib/supabase'
+import { handleRouteError } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { name } = await req.json()
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -14,12 +15,10 @@ export async function POST(req: NextRequest) {
 
     const trimmed = name.trim()
 
-    const { error } = await supabase
-      .from('User')
-      .update({ name: trimmed })
-      .eq('id', userId)
-
-    if (error) throw error
+    await db.user.update({
+      where: { id: userId },
+      data: { name: trimmed },
+    })
 
     return NextResponse.json({ name: trimmed })
   } catch (error) {

@@ -1,0 +1,408 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USERS ====================
+model User {
+  id             String   @id @default(cuid())
+  name           String   @default("مستخدم")
+  email          String   @unique @default("")
+  avatar         String?
+  level          Int      @default(1)
+  xp             Int      @default(0)
+  xpToNextLevel  Int      @default(100)
+  streak         Int      @default(0)
+  longestStreak  Int      @default(0)
+  totalFocusMin  Int      @default(0)
+  totalTasksDone Int      @default(0)
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  settings       UserSettings?
+  achievements   UserAchievement[]
+  dailyScores    DailyScore[]
+  projects       Project[]
+  tasks          Task[]
+  goals          Goal[]
+  habits         Habit[]
+  morningLogs    MorningLog[]
+  journals       Journal[]
+  focusSessions  FocusSession[]
+  healthLogs     HealthLog[]
+  financeRecords FinanceRecord[]
+  books          Book[]
+  knowledgeItems KnowledgeItem[]
+  plannerItems   PlannerItem[]
+  aiUsage        UserAIUsage?
+  storage        UserStorage?
+  apiKeys        UserApiKey[]
+}
+
+// ==================== USER SETTINGS ====================
+model UserSettings {
+  id               String  @id @default(cuid())
+  userId           String  @unique
+  theme            String  @default("system")
+  language         String  @default("ar")
+  wakeUpTime       String  @default("06:00")
+  sleepTime        String  @default("22:00")
+  focusDuration    Int     @default(50)
+  dailyWaterGoal   Int     @default(8)
+  dailyReadingGoal Int     @default(30)
+  weeklyExerciseGoal Int   @default(5)
+  notifications    Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== USER ACHIEVEMENTS ====================
+model UserAchievement {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  badgeName String
+  badgeIcon String
+  badgeDesc String
+  earnedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== DAILY SCORE ====================
+model DailyScore {
+  id            String  @id @default(cuid())
+  userId        String
+  date          String
+  score         Float   @default(0)
+  morningScore  Float   @default(0)
+  taskScore     Float   @default(0)
+  habitScore    Float   @default(0)
+  focusScore    Float   @default(0)
+  healthScore   Float   @default(0)
+  journalScore  Float   @default(0)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== PROJECTS ====================
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  color       String   @default("#059669")
+  icon        String?
+  progress    Float    @default(0)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
+}
+
+// ==================== TASKS ====================
+model Task {
+  id             String   @id @default(cuid())
+  userId         String
+  title          String
+  description    String?
+  status         String   @default("todo")
+  priority       String   @default("medium")
+  label          String?
+  projectId      String?
+  dueDate        String?
+  dueTime        String?
+  isRecurring    Boolean  @default(false)
+  recurringPattern String?
+  estimatedMin   Int?
+  xpReward       Int      @default(10)
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  dependsOn      String?
+  order          Int      @default(0)
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  subtasks SubTask[]
+}
+
+// ==================== SUBTASKS ====================
+model SubTask {
+  id        String  @id @default(cuid())
+  taskId    String
+  title     String
+  completed Boolean @default(false)
+  order     Int     @default(0)
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+// ==================== GOALS ====================
+model Goal {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  vision    String?
+  why       String?
+  type      String   @default("quarterly")
+  progress  Float    @default(0)
+  status    String   @default("active")
+  deadline  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
+}
+
+// ==================== MILESTONES ====================
+model Milestone {
+  id        String  @id @default(cuid())
+  goalId    String
+  title     String
+  completed Boolean @default(false)
+  order     Int     @default(0)
+  createdAt DateTime @default(now())
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+}
+
+// ==================== HABITS ====================
+model Habit {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  icon        String?
+  color       String   @default("#059669")
+  frequency   String   @default("daily")
+  targetCount Int      @default(1)
+  reminderTime String?
+  xpReward    Int      @default(15)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs HabitLog[]
+}
+
+// ==================== HABIT LOGS ====================
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  date      String
+  completed Boolean  @default(false)
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+}
+
+// ==================== MORNING LOG ====================
+model MorningLog {
+  id             String    @id @default(cuid())
+  userId         String
+  date           String
+  score          Float     @default(0)
+  completedItems String    @default("[]")
+  totalItems     Int
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== JOURNAL ====================
+model Journal {
+  id          String    @id @default(cuid())
+  userId      String
+  date        String
+  content     String    @default("")
+  gratitude   String?
+  wins        String?
+  challenges  String?
+  mood        Int?
+  energy      Int?
+  ideas       String?
+  tomorrowPlan String?
+  tags        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== FOCUS SESSION ====================
+model FocusSession {
+  id          String    @id @default(cuid())
+  userId      String
+  duration    Int
+  actualMin   Int       @default(0)
+  type        String    @default("pomodoro")
+  notes       String?
+  taskId      String?
+  completed   Boolean   @default(false)
+  startedAt   DateTime
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== HEALTH LOG ====================
+model HealthLog {
+  id            String   @id @default(cuid())
+  userId        String
+  date          String
+  sleepHours    Float?
+  sleepQuality  Int?
+  waterGlasses  Int?
+  steps         Int?
+  calories      Int?
+  weight        Float?
+  mood          Int?
+  energy        Int?
+  exerciseType  String?
+  exerciseMin   Int?
+  exerciseNote  String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== FINANCE RECORD ====================
+model FinanceRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  category  String?
+  description String
+  amount    Float
+  date      String
+  recurring Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== BOOKS ====================
+model Book {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  author       String?
+  type         String   @default("book")
+  status       String   @default("reading")
+  currentPage  Int      @default(0)
+  totalPages   Int?
+  notes        String?
+  highlights   String?
+  favoriteQuote String?
+  rating       Int?
+  coverUrl     String?
+  progress     Float    @default(0)
+  startDate    String?
+  endDate      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== KNOWLEDGE ITEM ====================
+model KnowledgeItem {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String   @default("note")
+  title      String
+  content    String   @default("")
+  folder     String?
+  tags       String?
+  source     String?
+  isFavorite Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== PLANNER ITEM ====================
+model PlannerItem {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String
+  section   String
+  time      String?
+  title     String
+  completed Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, section, order])
+}
+
+// ==================== USER AI USAGE ====================
+model UserAIUsage {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  monthlyUsed   Int      @default(0)
+  monthlyLimit  Int      @default(100)
+  totalUsed     Int      @default(0)
+  month         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== USER STORAGE ====================
+model UserStorage {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  supabaseId   String?
+  email        String?
+  name         String?
+  role         String   @default("user")
+  storageUsed  Int      @default(0)
+  storageLimit Int      @default(10485760)
+  aiLimit      Int      @default(100)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==================== APP CONFIG ====================
+model AppConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== USER API KEY ====================
+model UserApiKey {
+  id        String    @id @default(cuid())
+  userId    String
+  key       String    @unique
+  name      String    @default("MCP Key")
+  createdAt DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

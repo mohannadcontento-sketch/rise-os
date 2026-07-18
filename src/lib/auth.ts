@@ -1,97 +1,88 @@
 import { NextRequest } from 'next/server'
-import { getSupabase, getSupabaseAdmin } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 // Cache the resolved app user ID per cold-start
-let _appUserId: string | null | undefined = undefined // undefined = not resolved yet
+let _appUserId: string | null | undefined = undefined
 
 /**
- * Get or create the app user via Supabase RPC.
- * This calls get_or_create_app_user() which:
- * 1. Checks AppConfig table for stored user ID
- * 2. Checks User table for isDefault = true
- * 3. Falls back to first user in User table
- * 4. Creates a new user if none exists
- *
- * Zero configuration needed — works out of the box.
+ * Get or create the app user.
+ * Works without any configuration — always returns a valid userId.
  */
 export async function resolveAppUserId(): Promise<string> {
   if (_appUserId !== undefined) return _appUserId as string
 
   try {
-    const admin = getSupabaseAdmin()
-    if (admin) {
-      // Call the stored function — it handles everything
-      const { data, error } = await admin.rpc('get_or_create_app_user')
-
-      if (!error && data) {
-        _appUserId = data as string
-        console.log(`[auth] App user resolved: ${_appUserId}`)
+    // 1. Try AppConfig
+    const config = await db.appConfig.findUnique({ where: { key: 'app_user_id' } })
+    if (config?.value) {
+      const user = await db.user.findUnique({ where: { id: config.value } })
+      if (user) {
+        _appUserId = user.id
         return _appUserId!
       }
-      console.error('[auth] RPC get_or_create_app_user error:', error)
     }
+
+    // 2. Try isDefault user
+    const defaultUser = await db.user.findFirst({ where: { isDefault: true } })
+    if (defaultUser) {
+      _appUserId = defaultUser.id
+      await db.appConfig.upsert({
+        where: { key: 'app_user_id' },
+        update: { value: defaultUser.id },
+        create: { key: 'app_user_id', value: defaultUser.id },
+      })
+      return _appUserId!
+    }
+
+    // 3. Try first user
+    const firstUser = await db.user.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (firstUser) {
+      _appUserId = firstUser.id
+      await db.appConfig.upsert({
+        where: { key: 'app_user_id' },
+        update: { value: firstUser.id },
+        create: { key: 'app_user_id', value: firstUser.id },
+      })
+      return _appUserId!
+    }
+
+    // 4. Create new user
+    const newUser = await db.user.create({
+      data: {
+        name: 'مستخدم RiseOS',
+        email: 'riseos-app@local',
+        isDefault: true,
+        settings: { create: {} },
+      },
+    })
+    _appUserId = newUser.id
+    await db.appConfig.upsert({
+      where: { key: 'app_user_id' },
+      update: { value: newUser.id },
+      create: { key: 'app_user_id', value: newUser.id },
+    })
+    return _appUserId!
   } catch (err) {
     console.error('[auth] resolveAppUserId error:', err)
+    _appUserId = 'demo-user'
+    return _appUserId
   }
-
-  // Fallback: query directly (if RPC not available yet / migration not run)
-  try {
-    const admin = getSupabaseAdmin()
-    if (admin) {
-      // Try isDefault
-      const { data: defaultUser } = await admin
-        .from('User')
-        .select('id')
-        .eq('isDefault', true)
-        .limit(1)
-        .single()
-
-      if (defaultUser?.id) {
-        _appUserId = defaultUser.id as string
-        console.log(`[auth] App user from DB (isDefault): ${_appUserId}`)
-        return _appUserId!
-      }
-
-      // Try first user
-      const { data: firstUser } = await admin
-        .from('User')
-        .select('id')
-        .limit(1)
-        .single()
-
-      if (firstUser?.id) {
-        _appUserId = firstUser.id as string
-        console.log(`[auth] App user from DB (first): ${_appUserId}`)
-        return _appUserId!
-      }
-    }
-  } catch (err) {
-    console.error('[auth] fallback user lookup error:', err)
-  }
-
-  // Absolute last resort
-  _appUserId = 'demo-user'
-  console.log('[auth] WARNING: Using demo-user fallback (run supabase-migration-api-users.sql)')
-  return _appUserId
 }
 
 /**
- * Extract authenticated user ID from request (real JWT).
+ * Extract authenticated user ID from request.
  * Returns null for unauthenticated requests.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
     const authHeader = req.headers.get('Authorization') || ''
     const token = authHeader.replace('Bearer ', '')
-
     if (!token) return null
-    if (token.startsWith('rise_')) return null // API key, not JWT
+    if (token.startsWith('rise_')) return null
 
-    const supabase = getSupabase()
-    const { data, error } = await supabase.auth.getUser(token)
-
-    if (error || !data.user) return null
-    return data.user.id
+    // Check if this is a valid user ID stored locally (simple auth for local mode)
+    const stored = await db.user.findUnique({ where: { id: token } })
+    return stored ? stored.id : null
   } catch {
     return null
   }
@@ -99,17 +90,11 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 
 /**
  * Get the effective user ID for a request.
- * - Real JWT → use that user
- * - No auth → resolve app user from DB (auto-created if needed)
- *
- * This never returns null — the app always has a user.
+ * In local mode, always returns the app user.
  */
 export async function requireAuth(req: NextRequest): Promise<string | null> {
-  // 1. Real auth
   const userId = await getUserId(req)
   if (userId) return userId
-
-  // 2. API-managed user (auto-created on first call)
   return resolveAppUserId()
 }
 
@@ -117,8 +102,7 @@ export async function requireAuth(req: NextRequest): Promise<string | null> {
 export const optionalAuth = requireAuth
 
 /**
- * Resolve default user ID (for MCP compatibility).
- * Same as resolveAppUserId.
+ * Resolve default user ID.
  */
 export async function resolveDefaultUserId(): Promise<string> {
   return resolveAppUserId()

@@ -1,28 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 export async function GET(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ logs: [], todayLog: null })
-    const supabase = getSupabaseWithAuth(req)
 
     const today = getToday()
     const last30 = getLast30Days()
 
-    const { data: logs, error } = await supabase
-      .from('MorningLog')
-      .select('*')
-      .eq('userId', userId)
-      .in('date', last30)
-      .order('date', { ascending: false })
+    const logs = await db.morningLog.findMany({
+      where: { userId, date: { in: last30 } },
+      orderBy: { date: 'desc' },
+    })
 
-    if (error) throw error
-
-    const todayLog = (logs || []).find((l) => l.date === today) || null
-    return NextResponse.json({ logs: logs || [], todayLog })
+    const todayLog = logs.find((l) => l.date === today) || null
+    return NextResponse.json({ logs, todayLog })
   } catch (error) {
     console.error('Morning GET error:', error)
     return NextResponse.json({ logs: [], todayLog: null })
@@ -31,40 +27,33 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'morning')
+
+    await ensureUserExists(userId)
 
     const body = await req.json()
     const today = getToday()
     const date = body.date || today
 
     // Upsert: check if log exists for this date
-    const { data: existing } = await supabase
-      .from('MorningLog')
-      .select('id')
-      .eq('userId', userId)
-      .eq('date', date)
-      .single()
+    const existing = await db.morningLog.findFirst({
+      where: { userId, date },
+    })
 
     let result
     if (existing) {
-      const { data, error } = await supabase
-        .from('MorningLog')
-        .update(body)
-        .eq('id', existing.id)
-        .select()
-        .single()
-      if (error) throw error
-      result = data
+      // Remove date and userId from body to avoid overwriting
+      const { date: _d, userId: _u, ...updateData } = body
+      result = await db.morningLog.update({
+        where: { id: existing.id },
+        data: updateData,
+      })
     } else {
-      const { data, error } = await supabase
-        .from('MorningLog')
-        .insert({ userId, date, ...body })
-        .select()
-        .single()
-      if (error) throw error
-      result = data
+      const { date: _d, ...createData } = body
+      result = await db.morningLog.create({
+        data: { userId, date, ...createData },
+      })
     }
 
     return NextResponse.json(result)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase, getSupabaseWithAuth } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import crypto from 'crypto'
 
@@ -12,26 +12,19 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح', offline: true }, { status: 401 })
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
     const apiKey = generateApiKey()
-    const createdAt = new Date().toISOString()
 
-    // Use auth-aware client so RLS can evaluate auth.uid()
-    try {
-      const supabase = getSupabaseWithAuth(req)
-      const { error } = await supabase
-        .from('UserApiKey')
-        .insert({ userId, key: apiKey, createdAt })
-      if (error) {
-        console.error('[mcp/key] Supabase insert error:', error.message)
-      }
-    } catch (err) {
-      console.error('[mcp/key] Supabase not available:', err)
-    }
+    await db.userApiKey.create({
+      data: {
+        userId,
+        key: apiKey,
+      },
+    })
 
-    return NextResponse.json({ apiKey, createdAt })
+    return NextResponse.json({ apiKey, createdAt: new Date().toISOString() })
   } catch (error) {
     console.error('[mcp/key] POST error:', error)
     return NextResponse.json(
@@ -46,28 +39,18 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح', offline: true }, { status: 401 })
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    try {
-      const supabase = getSupabaseWithAuth(req)
-      const { data, error } = await supabase
-        .from('UserApiKey')
-        .select('key')
-        .eq('userId', userId)
-        .order('createdAt', { ascending: false })
-        .limit(1)
-        .single()
+    const keyRecord = await db.userApiKey.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    })
 
-      if (error) {
-        console.error('[mcp/key] Supabase select error:', error.message)
-      } else if (data?.key) {
-        const key = data.key as string
-        const masked = key.slice(0, 8) + '...' + key.slice(-4)
-        return NextResponse.json({ apiKey: masked, hasKey: true })
-      }
-    } catch (err) {
-      console.error('[mcp/key] Supabase not available:', err)
+    if (keyRecord?.key) {
+      const key = keyRecord.key
+      const masked = key.slice(0, 8) + '...' + key.slice(-4)
+      return NextResponse.json({ apiKey: masked, hasKey: true })
     }
 
     return NextResponse.json({ apiKey: null, hasKey: false })
@@ -77,23 +60,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** DELETE: Revoke the current user's API key */
+/** DELETE: Revoke the current user's API keys */
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح', offline: true }, { status: 401 })
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    try {
-      const supabase = getSupabaseWithAuth(req)
-      const { error } = await supabase.from('UserApiKey').delete().eq('userId', userId)
-      if (error) {
-        console.error('[mcp/key] Supabase delete error:', error.message)
-      }
-    } catch (err) {
-      console.error('[mcp/key] Supabase not available:', err)
-    }
+    await db.userApiKey.deleteMany({ where: { userId } })
 
     return NextResponse.json({ success: true })
   } catch (error) {

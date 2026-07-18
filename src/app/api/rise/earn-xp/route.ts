@@ -1,25 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 import { calculateXpForLevel } from '@/lib/rise-utils'
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+    await ensureUserExists(userId)
 
     const { amount, reason } = await req.json()
     if (!amount || amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
 
     // Fetch current user XP data
-    const { data: user, error: fetchError } = await supabase
-      .from('User')
-      .select('xp, level, xpToNextLevel')
-      .eq('id', userId)
-      .single()
-
-    if (fetchError) throw fetchError
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { xp: true, level: true, xpToNextLevel: true },
+    })
 
     const currentXp = user?.xp || 0
     const currentLevel = user?.level || 1
@@ -39,12 +37,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Update user
-    const { error: updateError } = await supabase
-      .from('User')
-      .update({ xp: newXp, level: newLevel, xpToNextLevel: newXpToNext })
-      .eq('id', userId)
-
-    if (updateError) throw updateError
+    await db.user.update({
+      where: { id: userId },
+      data: { xp: newXp, level: newLevel, xpToNextLevel: newXpToNext },
+    })
 
     return NextResponse.json({
       xp: newXp,

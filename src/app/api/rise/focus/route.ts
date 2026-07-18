@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
-    const supabase = getSupabaseWithAuth(req)
 
-    const { data: sessions } = await supabase
-      .from('FocusSession')
-      .select('*')
-      .eq('userId', userId)
-      .order('startedAt', { ascending: false })
-      .limit(50)
+    const sessions = await db.focusSession.findMany({
+      where: { userId },
+      orderBy: { startedAt: 'desc' },
+      take: 50,
+    })
 
-    return NextResponse.json({ sessions: sessions || [] })
+    return NextResponse.json({ sessions })
   } catch (error) {
     console.error('Focus GET error:', error)
     return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
@@ -24,17 +23,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'focus')
+
+    await ensureUserExists(userId)
 
     const body = await req.json()
-    const { data: session, error } = await supabase
-      .from('FocusSession')
-      .insert({ userId, ...body })
-      .select()
-      .single()
-    if (error) throw error
+    const session = await db.focusSession.create({
+      data: { userId, ...body },
+    })
     return NextResponse.json(session)
   } catch (error) {
     return handleRouteError(error, 'focus')
@@ -43,19 +40,16 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'focus')
+
+    await ensureUserExists(userId)
 
     const { id, ...body } = await req.json()
-    const { data: session, error } = await supabase
-      .from('FocusSession')
-      .update(body)
-      .eq('id', id)
-      .eq('userId', userId)
-      .select()
-      .single()
-    if (error) throw error
+    const session = await db.focusSession.update({
+      where: { id },
+      data: body,
+    })
     return NextResponse.json(session)
   } catch (error) {
     return handleRouteError(error, 'focus')

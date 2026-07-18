@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,25 +10,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ tasks: [], projects: [] })
     }
 
-    const supabase = getSupabaseWithAuth(req)
+    const [tasks, projects] = await Promise.all([
+      db.task.findMany({
+        where: { userId },
+        include: { subtasks: true, project: { select: { name: true, color: true } } },
+        orderBy: { order: 'asc' },
+      }),
+      db.project.findMany({ where: { userId } }),
+    ])
 
-    const { data: tasks, error: tasksError } = await supabase
-      .from('Task')
-      .select('*, subtasks:SubTask(*), project:Project(name, color)')
-      .eq('userId', userId)
-      .order('order', { ascending: true })
-
-    if (tasksError) {
-      console.error('Tasks GET error:', tasksError)
-      throw tasksError
-    }
-
-    const { data: projects } = await supabase
-      .from('Project')
-      .select('*')
-      .eq('userId', userId)
-
-    return NextResponse.json({ tasks: tasks || [], projects: projects || [] })
+    return NextResponse.json({ tasks, projects })
   } catch (error) {
     console.error('Tasks GET error:', error)
     return NextResponse.json({ tasks: [], projects: [] })
@@ -36,24 +28,41 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'tasks')
 
     const body = await req.json()
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    await ensureUserExists(userId)
 
-    const { data, error } = await supabase
-      .from('Task')
-      .insert({ userId, ...body })
-      .select('*, subtasks:SubTask(*), project:Project(*)')
-      .single()
+    const { projectId, subtasks, ...taskData } = body
+    const task = await db.task.create({
+      data: {
+        userId,
+        projectId: projectId || null,
+        ...taskData,
+      },
+      include: { subtasks: true, project: true },
+    })
 
-    if (error) {
-      console.error('Tasks POST error:', error)
-      throw error
+    // Create subtasks if provided
+    if (subtasks && Array.isArray(subtasks) && subtasks.length > 0) {
+      await db.subTask.createMany({
+        data: subtasks.map((s: { title: string; completed?: boolean; order?: number }, i: number) => ({
+          taskId: task.id,
+          title: s.title,
+          completed: s.completed || false,
+          order: s.order ?? i,
+        })),
+      })
+      // Re-fetch with subtasks
+      const withSubtasks = await db.task.findUnique({
+        where: { id: task.id },
+        include: { subtasks: true, project: true },
+      })
+      return NextResponse.json(withSubtasks)
     }
 
-    return NextResponse.json(data)
+    return NextResponse.json(task)
   } catch (error) {
     return handleRouteError(error, 'tasks')
   }
@@ -61,26 +70,24 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'tasks')
 
     const { id, ...body } = await req.json()
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
+    await ensureUserExists(userId)
 
-    const { data, error } = await supabase
-      .from('Task')
-      .update(body)
-      .eq('id', id)
-      .eq('userId', userId)
-      .select('*, subtasks:SubTask(*), project:Project(*)')
-      .single()
+    const { subtasks, projectId, ...updateData } = body
 
-    if (error) {
-      console.error('Tasks PUT error:', error)
-      throw error
-    }
+    const task = await db.task.update({
+      where: { id },
+      data: {
+        ...(projectId !== undefined ? { projectId: projectId || null } : {}),
+        ...updateData,
+      },
+      include: { subtasks: true, project: true },
+    })
 
-    return NextResponse.json(data)
+    return NextResponse.json(task)
   } catch (error) {
     return handleRouteError(error, 'tasks')
   }
@@ -88,24 +95,15 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-        const userId = await requireAuth(req)
+    const userId = await requireAuth(req)
+    if (!userId) return handleRouteError(new Error('Unauthorized'), 'tasks')
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    const supabase = getSupabaseWithAuth(req)
-    await ensureUserExists(supabase, userId)
-    const { error } = await supabase
-      .from('Task')
-      .delete()
-      .eq('id', id)
-      .eq('userId', userId)
-
-    if (error) {
-      console.error('Tasks DELETE error:', error)
-      throw error
-    }
+    await ensureUserExists(userId)
+    await db.task.deleteMany({ where: { id, userId } })
 
     return NextResponse.json({ success: true })
   } catch (error) {

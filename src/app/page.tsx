@@ -240,11 +240,12 @@ export default function RiseOSApp() {
             // Validate session with server
             apiGet('/api/auth/session').then(r => r.json()).then(data => {
               if (data.user) {
+                const storedInfo = JSON.parse(userInfo)
                 setAuth({
                   isAuthenticated: true,
                   userId: data.user.id,
                   userEmail: data.user.email || '',
-                  userName: data.user.email?.split('@')[0] || '',
+                  userName: data.user.name || storedInfo?.name || data.user.email?.split('@')[0] || '',
                   isAdmin: data.user.isAdmin,
                   accessToken: session.access_token,
                 })
@@ -254,9 +255,21 @@ export default function RiseOSApp() {
                 localStorage.removeItem('rise-user-info')
               }
             }).catch(() => {
-              // Server unreachable — clear invalid session
-              localStorage.removeItem('rise-auth')
-              localStorage.removeItem('rise-user-info')
+              // Server unreachable — use stored info as fallback
+              try {
+                const storedInfo = JSON.parse(userInfo)
+                setAuth({
+                  isAuthenticated: true,
+                  userId: session.access_token,
+                  userEmail: storedInfo?.email || '',
+                  userName: storedInfo?.name || '',
+                  isAdmin: storedInfo?.isAdmin || false,
+                  accessToken: session.access_token,
+                })
+              } catch {
+                localStorage.removeItem('rise-auth')
+                localStorage.removeItem('rise-user-info')
+              }
             })
           } else {
             // Invalid token — clear and show login
@@ -274,12 +287,12 @@ export default function RiseOSApp() {
     checkAuth()
   }, [setAuth])
 
-  const handleLogin = useCallback((data: { user: { id: string; email: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
+  const handleLogin = useCallback((data: { user: { id: string; email: string; name: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
     setAuth({
       isAuthenticated: true,
       userId: data.user.id,
       userEmail: data.user.email,
-      userName: data.user.email?.split('@')[0] || '',
+      userName: data.user.name || data.user.email?.split('@')[0] || '',
       isAdmin: data.user.isAdmin,
       accessToken: data.session.access_token,
     })

@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
-  const userId = await requireAuth(req)
-  if (!userId) {
-    return NextResponse.json({ books: [] })
-  }
-  const supabase = getSupabaseWithAuth(req)
-
   try {
-    const { data: books, error } = await supabase
-      .from('Book')
-      .select('*')
-      .eq('userId', userId)
-      .order('createdAt', { ascending: false })
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ books: [] })
 
-    if (error) throw error
+    const books = await db.book.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    })
+
     return NextResponse.json({ books })
   } catch (error) {
     console.error('Books GET error:', error)
@@ -25,42 +21,36 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const userId = await requireAuth(req)
-  const supabase = getSupabaseWithAuth(req)
-  await ensureUserExists(supabase, userId)
-
   try {
-    const body = await req.json()
-    const { data, error } = await supabase
-      .from('Book')
-      .insert({ userId, ...body })
-      .select()
-      .single()
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+    await ensureUserExists(userId)
 
-    if (error) throw error
-    return NextResponse.json(data)
+    const body = await req.json()
+    const { id, createdAt, updatedAt, userId: _uid, ...data } = body
+    const record = await db.book.create({
+      data: { userId, ...data },
+    })
+    return NextResponse.json(record)
   } catch (error) {
     return handleRouteError(error, 'books')
   }
 }
 
 export async function PUT(req: NextRequest) {
-    const userId = await requireAuth(req)
-  const supabase = getSupabaseWithAuth(req)
-  await ensureUserExists(supabase, userId)
-
   try {
-    const { id, ...body } = await req.json()
-    const { data, error } = await supabase
-      .from('Book')
-      .update(body)
-      .eq('id', id)
-      .eq('userId', userId)
-      .select()
-      .single()
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+    await ensureUserExists(userId)
 
-    if (error) throw error
-    return NextResponse.json(data)
+    const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
+    if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
+
+    const record = await db.book.update({
+      where: { id },
+      data: body,
+    })
+    return NextResponse.json(record)
   } catch (error) {
     return handleRouteError(error, 'books')
   }

@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseWithAuth, handleRouteError, ensureUserExists } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
-    const userId = await requireAuth(req)
-  if (!userId) return NextResponse.json({ items: [] })
-  const supabase = getSupabaseWithAuth(req)
-
   try {
-    const { data: items, error } = await supabase
-      .from('KnowledgeItem')
-      .select('*')
-      .eq('userId', userId)
-      .order('updatedAt', { ascending: false })
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ items: [] })
 
-    if (error) throw error
+    const items = await db.knowledgeItem.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    })
+
     return NextResponse.json({ items })
   } catch (error) {
     console.error('Knowledge GET error:', error)
@@ -23,64 +21,55 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const userId = await requireAuth(req)
-  const supabase = getSupabaseWithAuth(req)
-  await ensureUserExists(supabase, userId)
-
   try {
-    const body = await req.json()
-    const { data, error } = await supabase
-      .from('KnowledgeItem')
-      .insert({ userId, ...body })
-      .select()
-      .single()
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+    await ensureUserExists(userId)
 
-    if (error) throw error
-    return NextResponse.json(data)
+    const body = await req.json()
+    const { id, createdAt, updatedAt, userId: _uid, ...data } = body
+    const record = await db.knowledgeItem.create({
+      data: { userId, ...data },
+    })
+    return NextResponse.json(record)
   } catch (error) {
     return handleRouteError(error, 'knowledge')
   }
 }
 
 export async function PUT(req: NextRequest) {
-    const userId = await requireAuth(req)
-  const supabase = getSupabaseWithAuth(req)
-  await ensureUserExists(supabase, userId)
-
   try {
-    const { id, ...body } = await req.json()
-    const { data, error } = await supabase
-      .from('KnowledgeItem')
-      .update(body)
-      .eq('id', id)
-      .eq('userId', userId)
-      .select()
-      .single()
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+    await ensureUserExists(userId)
 
-    if (error) throw error
-    return NextResponse.json(data)
+    const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
+    if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
+
+    const record = await db.knowledgeItem.update({
+      where: { id },
+      data: body,
+    })
+    return NextResponse.json(record)
   } catch (error) {
     return handleRouteError(error, 'knowledge')
   }
 }
 
 export async function DELETE(req: NextRequest) {
-    const userId = await requireAuth(req)
-  const supabase = getSupabaseWithAuth(req)
-  await ensureUserExists(supabase, userId)
-
   try {
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+    await ensureUserExists(userId)
+
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    const { error } = await supabase
-      .from('KnowledgeItem')
-      .delete()
-      .eq('id', id)
-      .eq('userId', userId)
+    await db.knowledgeItem.deleteMany({
+      where: { id, userId },
+    })
 
-    if (error) throw error
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleRouteError(error, 'knowledge')

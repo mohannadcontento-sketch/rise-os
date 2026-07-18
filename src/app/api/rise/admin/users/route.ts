@@ -1,52 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { getSupabase, ADMIN_EMAIL } from '@/lib/supabase'
+import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth'
+import { ADMIN_EMAIL } from '@/lib/supabase'
 
-function getAdminSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  return createClient(url, key)
-}
-
-// GET all users (admin only)
+// GET all users
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization') || ''
-    const token = authHeader.replace('Bearer ', '')
-
-    const supabase = getSupabase()
-    const { data: userData } = await supabase.auth.getUser(token)
-    if (!userData.user || userData.user.email !== ADMIN_EMAIL) {
-      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
+    const userId = await requireAuth(request)
+    if (!userId) {
+      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
     }
 
-    // Get all users from Supabase auth
-    const adminClient = getAdminSupabase()
-    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers()
+    const users = await db.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        storage: true,
+        aiUsage: true,
+      },
+    })
 
-    const supabaseUsers = users?.map(u => ({
+    const mergedUsers = users.map((u) => ({
       id: u.id,
       email: u.email,
-      name: u.user_metadata?.display_name || u.email?.split('@')[0] || 'مستخدم',
-      createdAt: u.created_at,
+      name: u.name,
+      createdAt: u.createdAt.toISOString(),
       isAdmin: u.email === ADMIN_EMAIL,
-    })) || []
-
-    // Get storage/limits from Supabase tables
-    const { data: storageRecords } = await supabase.from('UserStorage').select('*')
-    const { data: aiUsages } = await supabase.from('UserAIUsage').select('*')
-
-    const mergedUsers = supabaseUsers.map(su => {
-      const storage = storageRecords?.find(s => s.supabaseId === su.id || s.userId === su.id)
-      const aiUsage = aiUsages?.find(a => a.userId === su.id)
-      return {
-        ...su,
-        storageUsed: storage?.storageUsed || 0,
-        storageLimit: storage?.storageLimit || 10485760,
-        aiLimit: storage?.aiLimit || 100,
-        aiUsed: aiUsage?.monthlyUsed || 0,
-      }
-    })
+      storageUsed: u.storage?.storageUsed || 0,
+      storageLimit: u.storage?.storageLimit || 10485760,
+      aiLimit: u.storage?.aiLimit || 100,
+      aiUsed: u.aiUsage?.monthlyUsed || 0,
+    }))
 
     return NextResponse.json({ users: mergedUsers })
   } catch (error) {
@@ -55,53 +38,61 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create/update user limits
+// POST — update user limits
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization') || ''
-    const token = authHeader.replace('Bearer ', '')
-
-    const supabase = getSupabase()
-    const { data: userData } = await supabase.auth.getUser(token)
-    if (!userData.user || userData.user.email !== ADMIN_EMAIL) {
+    const userId = await requireAuth(request)
+    if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
     }
 
-    const { supabaseUserId, storageLimit, aiLimit, role } = await request.json()
+    const { userId: targetUserId, storageLimit, aiLimit, role } = await request.json()
 
-    // Upsert user storage record in Supabase
-    const { data: existing } = await supabase
-      .from('UserStorage')
-      .select('id, userId')
-      .eq('supabaseId', supabaseUserId)
-      .single()
+    if (!targetUserId) {
+      return NextResponse.json({ error: 'يجب تحديد المستخدم' }, { status: 400 })
+    }
 
-    if (existing) {
-      await supabase.from('UserStorage').update({
-        storageLimit: storageLimit ?? undefined,
-        aiLimit: aiLimit ?? undefined,
-        role: role ?? undefined,
-      }).eq('id', existing.id)
+    // Verify target user exists
+    const targetUser = await db.user.findUnique({ where: { id: targetUserId } })
+    if (!targetUser) {
+      return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
+    }
 
-      if (aiLimit !== undefined && existing.userId) {
-        await supabase.from('UserAIUsage').upsert({
-          userId: existing.userId,
-          monthlyLimit: aiLimit,
-        })
-      }
-    } else {
-      await supabase.from('UserStorage').insert({
-        userId: supabaseUserId,
-        supabaseId: supabaseUserId,
-        storageLimit: storageLimit ?? 10485760,
-        aiLimit: aiLimit ?? 100,
-        role: role ?? 'user',
+    // Upsert UserStorage
+    const existingStorage = await db.userStorage.findUnique({ where: { userId: targetUserId } })
+    if (existingStorage) {
+      await db.userStorage.update({
+        where: { userId: targetUserId },
+        data: {
+          ...(storageLimit !== undefined ? { storageLimit } : {}),
+          ...(aiLimit !== undefined ? { aiLimit } : {}),
+          ...(role !== undefined ? { role } : {}),
+        },
       })
+    } else {
+      await db.userStorage.create({
+        data: {
+          userId: targetUserId,
+          email: targetUser.email,
+          name: targetUser.name,
+          storageLimit: storageLimit ?? 10485760,
+          aiLimit: aiLimit ?? 100,
+          role: role ?? 'user',
+        },
+      })
+    }
 
-      if (aiLimit !== undefined) {
-        await supabase.from('UserAIUsage').upsert({
-          userId: supabaseUserId,
-          monthlyLimit: aiLimit,
+    // Update AI usage limit if provided
+    if (aiLimit !== undefined) {
+      const existingAiUsage = await db.userAIUsage.findUnique({ where: { userId: targetUserId } })
+      if (existingAiUsage) {
+        await db.userAIUsage.update({
+          where: { userId: targetUserId },
+          data: { monthlyLimit: aiLimit },
+        })
+      } else {
+        await db.userAIUsage.create({
+          data: { userId: targetUserId, monthlyLimit: aiLimit },
         })
       }
     }
@@ -113,28 +104,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Remove user
+// DELETE — remove user
 export async function DELETE(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('Authorization') || ''
-    const token = authHeader.replace('Bearer ', '')
-
-    const supabase = getSupabase()
-    const { data: userData } = await supabase.auth.getUser(token)
-    if (!userData.user || userData.user.email !== ADMIN_EMAIL) {
+    const userId = await requireAuth(request)
+    if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
     }
 
-    const { supabaseUserId } = await request.json()
+    const { userId: targetUserId } = await request.json()
 
-    // Delete from Supabase auth (admin API)
-    const adminClient = getAdminSupabase()
-    await adminClient.auth.admin.deleteUser(supabaseUserId)
+    if (!targetUserId) {
+      return NextResponse.json({ error: 'يجب تحديد المستخدم' }, { status: 400 })
+    }
 
-    // Delete from Supabase tables
-    await supabase.from('UserStorage').delete().eq('supabaseId', supabaseUserId)
-    await supabase.from('UserStorage').delete().eq('userId', supabaseUserId)
-    await supabase.from('UserAIUsage').delete().eq('userId', supabaseUserId)
+    // Delete user (cascade will handle related records)
+    await db.user.delete({ where: { id: targetUserId } })
 
     return NextResponse.json({ success: true })
   } catch (error) {
