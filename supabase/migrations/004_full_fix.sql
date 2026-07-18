@@ -513,6 +513,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- حذف التريجر القديم اللي كان بيشتغل على profiles عشان handle_new_user شامل
+DROP TRIGGER IF EXISTS on_profile_created_settings ON public.profiles;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
