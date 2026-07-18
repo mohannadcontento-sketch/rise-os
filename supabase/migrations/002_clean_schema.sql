@@ -48,13 +48,16 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 -- STEP 3: PROFILES TABLE (extends Supabase auth.users)
 -- ============================================================
-DO $$ BEGIN
-  CREATE TABLE IF NOT EXISTS public.profiles (
+-- If table exists from migration 001, just add missing columns.
+-- If not, create it fresh.
+DO $$
+BEGIN
+  CREATE TABLE public.profiles (
     id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name            TEXT NOT NULL DEFAULT 'مستخدم',
     email           TEXT NOT NULL,
     avatar          TEXT,
-    role            TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    role            TEXT NOT NULL DEFAULT 'user',
     level           INT NOT NULL DEFAULT 1,
     xp              INT NOT NULL DEFAULT 0,
     xp_to_next_level INT NOT NULL DEFAULT 100,
@@ -66,20 +69,25 @@ DO $$ BEGIN
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   );
-EXCEPTION WHEN duplicate_table THEN
-  -- Table exists, add role column if missing
-  BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'role') THEN
-      ALTER TABLE public.profiles ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'));
-    END IF;
-  END;
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
+-- Add role column if profiles existed without it
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'role'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN role TEXT NOT NULL DEFAULT 'user';
+  END IF;
 END $$;
 
 -- ============================================================
 -- STEP 4: USER SETTINGS
 -- ============================================================
 DO $$ BEGIN
-  CREATE TABLE IF NOT EXISTS public.user_settings (
+  CREATE TABLE public.user_settings (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id         UUID NOT NULL UNIQUE REFERENCES public.profiles(id) ON DELETE CASCADE,
     theme           TEXT NOT NULL DEFAULT 'system',
@@ -97,19 +105,21 @@ DO $$ BEGIN
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   );
-EXCEPTION WHEN duplicate_table THEN
-  -- Add sound_enabled, sound_volume, avatar_url if missing
-  BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_settings' AND column_name = 'sound_enabled') THEN
-      ALTER TABLE public.user_settings ADD COLUMN sound_enabled BOOLEAN NOT NULL DEFAULT true;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_settings' AND column_name = 'sound_volume') THEN
-      ALTER TABLE public.user_settings ADD COLUMN sound_volume REAL NOT NULL DEFAULT 0.5;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_settings' AND column_name = 'avatar_url') THEN
-      ALTER TABLE public.user_settings ADD COLUMN avatar_url TEXT;
-    END IF;
-  END;
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
+-- Add missing columns to user_settings if table already existed
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_settings' AND column_name = 'sound_enabled') THEN
+    ALTER TABLE public.user_settings ADD COLUMN sound_enabled BOOLEAN NOT NULL DEFAULT true;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_settings' AND column_name = 'sound_volume') THEN
+    ALTER TABLE public.user_settings ADD COLUMN sound_volume REAL NOT NULL DEFAULT 0.5;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_settings' AND column_name = 'avatar_url') THEN
+    ALTER TABLE public.user_settings ADD COLUMN avatar_url TEXT;
+  END IF;
 END $$;
 
 -- ============================================================
