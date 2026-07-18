@@ -191,7 +191,7 @@ function TeamAvatars() {
           style={{ backgroundColor: colors[i], zIndex: 4 - i }}
           title={name}
         >
-          {name.charAt(0)}
+          {(name || 'م').charAt(0)}
         </div>
       ))}
       {names.length > 4 && (

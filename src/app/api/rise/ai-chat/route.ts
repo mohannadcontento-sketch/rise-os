@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 // Smart fallback responses
 const fallbackResponses: Record<string, string[]> = {
@@ -105,20 +105,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'الرسالة مطلوبة' }, { status: 400 })
     }
 
-    // Check AI usage limits
+    // Check AI usage limits via Supabase
     const now = new Date()
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-    let usage = await db.userAIUsage.findUnique({ where: { userId } })
-
+    const supabase = await getSupabaseAdmin()
     const defaultLimit = 200
+    let usage: { monthlyLimit: number; monthlyUsed: number; totalUsed: number } | null = null
+
+    if (supabase) {
+      try {
+        const { data: usageRow } = await supabase
+          .from('user_ai_usage')
+          .select('*')
+          .eq('user_id', userId)
+          .single()
+
+        if (usageRow) {
+          usage = {
+            monthlyLimit: usageRow.monthly_limit || defaultLimit,
+            monthlyUsed: usageRow.monthly_used || 0,
+            totalUsed: usageRow.total_used || 0,
+          }
+        }
+      } catch (err) {
+        console.error('[ai-chat] usage check error:', err)
+      }
+    }
 
     if (usage && usage.monthlyLimit > 0 && usage.monthlyUsed >= usage.monthlyLimit) {
       return NextResponse.json({
         response: getFallbackResponse(message),
         fallback: true,
         reason: 'limit_reached',
-        usage: { used: usage.monthlyUsed, limit: usage.monthlyLimit, total: usage.totalUsed || 0 },
+        usage: { used: usage.monthlyUsed, limit: usage.monthlyLimit, total: usage.totalUsed },
       })
     }
 
@@ -142,37 +162,59 @@ export async function POST(request: NextRequest) {
       isFallback = true
     }
 
-    // Track usage (only for real API calls)
-    if (!isFallback) {
-      if (usage) {
-        const newUsed = (usage.monthlyUsed || 0) + 1
-        const newTotal = (usage.totalUsed || 0) + 1
-        const limit = usage.monthlyLimit || defaultLimit
+    // Track usage (only for real API calls) via Supabase
+    if (!isFallback && supabase) {
+      try {
+        const newUsed = (usage?.monthlyUsed || 0) + 1
+        const newTotal = (usage?.totalUsed || 0) + 1
+        const limit = usage?.monthlyLimit || defaultLimit
 
-        await db.userAIUsage.update({
-          where: { userId },
-          data: {
-            monthlyUsed: newUsed,
-            totalUsed: newTotal,
-            monthlyLimit: limit,
-            month: monthKey,
-          },
-        })
-      } else {
-        await db.userAIUsage.create({
-          data: {
-            userId,
-            monthlyUsed: 1,
-            totalUsed: 1,
-            monthlyLimit: defaultLimit,
-            month: monthKey,
-          },
-        })
+        if (usage) {
+          await supabase
+            .from('user_ai_usage')
+            .update({
+              monthly_used: newUsed,
+              total_used: newTotal,
+              monthly_limit: limit,
+              month: monthKey,
+            })
+            .eq('user_id', userId)
+        } else {
+          await supabase
+            .from('user_ai_usage')
+            .insert({
+              user_id: userId,
+              monthly_used: 1,
+              total_used: 1,
+              monthly_limit: defaultLimit,
+              month: monthKey,
+            })
+        }
+      } catch (err) {
+        console.error('[ai-chat] usage tracking error:', err)
       }
     }
 
     // Get updated usage
-    const updatedUsage = await db.userAIUsage.findUnique({ where: { userId } })
+    let updatedUsage = usage
+    if (supabase && !isFallback) {
+      try {
+        const { data: u } = await supabase
+          .from('user_ai_usage')
+          .select('monthly_used, monthly_limit, total_used')
+          .eq('user_id', userId)
+          .single()
+        if (u) {
+          updatedUsage = {
+            monthlyLimit: u.monthly_limit,
+            monthlyUsed: u.monthly_used,
+            totalUsed: u.total_used,
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
 
     return NextResponse.json({
       response: responseText,

@@ -571,7 +571,7 @@ export default function RiseOSApp() {
               title={auth.userEmail}
             >
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
-                <span className="text-[10px] font-bold text-white">{auth.userName.charAt(0).toUpperCase()}</span>
+                <span className="text-[10px] font-bold text-white">{(auth.userName || 'م').charAt(0).toUpperCase()}</span>
               </div>
               <span className="hidden sm:inline max-w-[100px] truncate">{auth.userName}</span>
               {auth.isAdmin && <span className="text-[9px] bg-gold/20 text-gold px-1.5 py-0.5 rounded-full font-medium">أدمن</span>}

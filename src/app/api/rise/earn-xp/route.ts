@@ -1,25 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { setCurrentAuthToken } from '@/lib/data'
 import { calculateXpForLevel } from '@/lib/rise-utils'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { amount, reason } = await req.json()
     if (!amount || amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
 
-    // Fetch current user XP data
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { xp: true, level: true, xpToNextLevel: true },
-    })
+    const supabase = await getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json({ success: true, offline: true })
+    }
 
-    const currentXp = user?.xp || 0
-    const currentLevel = user?.level || 1
-    let currentXpToNext = user?.xpToNextLevel || calculateXpForLevel(currentLevel)
+    // Fetch current user XP data from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('xp, level, xp_to_next_level')
+      .eq('id', userId)
+      .single()
+      .catch(() => ({ data: null }))
+
+    const currentXp = profile?.xp || 0
+    const currentLevel = profile?.level || 1
+    let currentXpToNext = profile?.xp_to_next_level || calculateXpForLevel(currentLevel)
 
     let newXp = currentXp + amount
     let newLevel = currentLevel
@@ -34,11 +43,16 @@ export async function POST(req: NextRequest) {
       leveled = true
     }
 
-    // Update user
-    await db.user.update({
-      where: { id: userId },
-      data: { xp: newXp, level: newLevel, xpToNextLevel: newXpToNext },
-    })
+    // Update user in profiles table
+    await supabase
+      .from('profiles')
+      .update({
+        xp: newXp,
+        level: newLevel,
+        xp_to_next_level: newXpToNext,
+      })
+      .eq('id', userId)
+      .catch(() => null)
 
     return NextResponse.json({
       xp: newXp,

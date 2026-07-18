@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { data } from '@/lib/data'
+import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) {
       const fb = {
         metadata: { application: 'RiseOS', version: '1.0.0', exportDate: new Date().toISOString(), note: 'تسجيل الدخول مطلوب' },
@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
         headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="riseos-export.json"' },
       })
     }
+
+    const supabase = await getSupabaseAdmin()
 
     const [
       tasksResult,
@@ -33,7 +35,7 @@ export async function GET(req: NextRequest) {
       morningLogs,
       dailyScoresRaw,
       achievements,
-      user,
+      profileData,
       habitLogsAll,
     ] = await Promise.all([
       data.tasks.list(userId),
@@ -49,11 +51,12 @@ export async function GET(req: NextRequest) {
       data.morningLogs.list(userId, []),
       // Daily scores — direct supabase (no list method)
       (async () => {
-        const supabase = await getSupabaseAdmin()
+        if (!supabase) return []
         const { data: rows } = await supabase
           .from('daily_scores')
           .select('*')
           .eq('user_id', userId)
+          .catch(() => ({ data: null }))
         return (rows ?? []).map((d: any) => ({
           date: d.date,
           score: d.score,
@@ -66,14 +69,25 @@ export async function GET(req: NextRequest) {
         }))
       })(),
       data.userAchievements.list(userId),
-      db.user.findUnique({ where: { id: userId } }),
+      // User profile from Supabase instead of Prisma
+      (async () => {
+        if (!supabase) return null
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, level, xp, streak, longest_streak, total_focus_min, total_tasks_done')
+          .eq('id', userId)
+          .single()
+          .catch(() => ({ data: null }))
+        return profile
+      })(),
       // All habit logs — direct supabase for completeness
       (async () => {
-        const supabase = await getSupabaseAdmin()
+        if (!supabase) return []
         const { data: rows } = await supabase
           .from('habit_logs')
           .select('*, habits!inner(user_id)')
           .eq('habits.user_id', userId)
+          .catch(() => ({ data: null }))
         return (rows ?? []).map((r: any) => ({
           id: r.id,
           habitId: r.habit_id,
@@ -91,15 +105,15 @@ export async function GET(req: NextRequest) {
         exportDate: new Date().toISOString(),
         description: 'نسخة احتياطية شاملة من بيانات RiseOS',
       },
-      المستخدم: user
+      المستخدم: profileData
         ? {
-            الاسم: user.name,
-            المستوى: user.level,
-            الخبرة: user.xp,
-            السلسلة: user.streak,
-            أطول_سلسلة: user.longestStreak,
-            إجمالي_تركيز_دقائق: user.totalFocusMin,
-            إجمالي_مهام_مكتملة: user.totalTasksDone,
+            الاسم: profileData.name,
+            المستوى: profileData.level,
+            الخبرة: profileData.xp,
+            السلسلة: profileData.streak,
+            أطول_سلسلة: profileData.longest_streak,
+            إجمالي_تركيز_دقائق: profileData.total_focus_min,
+            إجمالي_مهام_مكتملة: profileData.total_tasks_done,
           }
         : null,
       المهام: tasksResult.map((t: any) => ({

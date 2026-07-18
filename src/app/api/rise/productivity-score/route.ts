@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { data } from '@/lib/data'
+import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
+import { getSupabaseAdmin } from '@/lib/supabase'
+
+async function getUserStreak(supabase: any, userId: string): Promise<number> {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('streak')
+    .eq('id', userId)
+    .single()
+    .catch(() => ({ data: null }))
+  return profile?.streak || 0
+}
 
 async function calculateScoreForDate(userId: string, date: string) {
   const [tasks, habitsWithLogs, focusSessions, morningResult] = await Promise.all([
@@ -38,8 +48,9 @@ async function calculateScoreForDate(userId: string, date: string) {
   const morningLog = morningResult.length > 0 ? morningResult[0] : null
   const morningScore = morningLog?.score || 0
 
-  const user = await db.user.findUnique({ where: { id: userId }, select: { streak: true } })
-  const streakScore = Math.min(((user?.streak || 0) / 30) * 100, 100)
+  const supabase = await getSupabaseAdmin()
+  const streak = supabase ? await getUserStreak(supabase, userId) : 0
+  const streakScore = Math.min((streak / 30) * 100, 100)
 
   return Math.min(Math.round(
     tasksScore * 0.25 + habitsScore * 0.25 + focusScore * 0.20 + morningScore * 0.20 + streakScore * 0.10
@@ -49,6 +60,7 @@ async function calculateScoreForDate(userId: string, date: string) {
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
 
     const { searchParams } = new URL(req.url)
@@ -100,8 +112,9 @@ export async function GET(req: NextRequest) {
     const morningLog = morningResult.length > 0 ? morningResult[0] : null
     const morningScoreVal = morningLog?.score || 0
 
-    const user = await db.user.findUnique({ where: { id: userId }, select: { streak: true } })
-    const streakScore = Math.min(((user?.streak || 0) / 30) * 100, 100)
+    const supabase = await getSupabaseAdmin()
+    const streak = supabase ? await getUserStreak(supabase, userId) : 0
+    const streakScore = Math.min((streak / 30) * 100, 100)
 
     let grade: string
     if (score >= 90) grade = 'متميز'

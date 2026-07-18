@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { data } from '@/lib/data'
+import { data, setCurrentAuthToken } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) {
       return NextResponse.json({ habits: [], logs: [] })
     }
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
@@ -65,6 +68,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)

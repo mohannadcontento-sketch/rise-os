@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,9 +22,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'يُسمح فقط باستعلامات SELECT' }, { status: 400 })
     }
 
-    // Execute raw SQL via Prisma (SQLite)
-    const rows = await db.$queryRawUnsafe(trimmedSql) as Record<string, unknown>[]
+    const supabase = await getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not available. Raw SQL queries require a configured database.' },
+        { status: 503 },
+      )
+    }
 
+    // Execute raw SQL via Supabase RPC
+    const { data, error } = await supabase.rpc('exec_sql', { query: trimmedSql })
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message || 'فشل تنفيذ الاستعلام' },
+        { status: 500 },
+      )
+    }
+
+    // Handle both array and single object results
+    const rows = Array.isArray(data) ? data : (data ? [data] : [])
     const columns = rows.length > 0 ? Object.keys(rows[0]) : []
 
     return NextResponse.json({ columns, rows })

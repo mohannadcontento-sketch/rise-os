@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import crypto from 'crypto'
 
 function generateApiKey(): string {
@@ -17,12 +17,28 @@ export async function POST(req: NextRequest) {
 
     const apiKey = generateApiKey()
 
-    await db.userApiKey.create({
-      data: {
-        userId,
+    const supabase = await getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'Database not available', details: 'Supabase admin client not configured' },
+        { status: 503 },
+      )
+    }
+
+    const { error } = await supabase
+      .from('user_api_keys')
+      .insert({
+        user_id: userId,
         key: apiKey,
-      },
-    })
+      })
+
+    if (error) {
+      console.error('[mcp/key] POST insert error:', error.message)
+      return NextResponse.json(
+        { error: 'فشل في إنشاء مفتاح API', details: error.message },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({ apiKey, createdAt: new Date().toISOString() })
   } catch (error) {
@@ -42,10 +58,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    const keyRecord = await db.userApiKey.findFirst({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    })
+    const supabase = await getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json({ apiKey: null, hasKey: false })
+    }
+
+    const { data: keyRecord } = await supabase
+      .from('user_api_keys')
+      .select('key')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+      .catch(() => ({ data: null }))
 
     if (keyRecord?.key) {
       const key = keyRecord.key
@@ -68,7 +93,23 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    await db.userApiKey.deleteMany({ where: { userId } })
+    const supabase = await getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'Database not available' },
+        { status: 503 },
+      )
+    }
+
+    const { error } = await supabase
+      .from('user_api_keys')
+      .delete()
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('[mcp/key] DELETE error:', error.message)
+      return NextResponse.json({ error: 'فشل في حذف مفتاح API' }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

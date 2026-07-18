@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { getSupabaseWithAuth, isSupabaseConfigured, handleRouteError } from '@/lib/supabase'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,26 +14,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'الصورة الرمزية مطلوبة' }, { status: 400 })
     }
 
-    // Update local Prisma
-    await db.user.update({
-      where: { id: userId },
-      data: { avatar },
-    })
-
-    // Also update Supabase if available
+    // Update Supabase profile
     if (isSupabaseConfigured()) {
-      const supabase = await getSupabaseWithAuth(req)
-      if (supabase) {
-        await supabase
-          .from('user_settings')
-          .update({ avatar_url: avatar })
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { error } = await admin
+          .from('profiles')
+          .update({ avatar })
           .eq('id', userId)
-          .then(() => {}).catch(() => {})
+        if (error) console.error('[user/avatar] Supabase error:', error)
       }
     }
 
     return NextResponse.json({ success: true, avatar })
   } catch (error) {
-    return handleRouteError(error, 'user-avatar')
+    console.error('[user/avatar] error:', error)
+    return NextResponse.json({ error: 'Failed to update avatar' }, { status: 500 })
   }
 }

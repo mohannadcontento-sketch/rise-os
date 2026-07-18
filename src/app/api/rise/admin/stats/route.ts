@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { Prisma } from '@prisma/client'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { setCurrentAuthToken } from '@/lib/data'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,48 +10,89 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
     }
 
-    // Count users
-    const totalUsers = await db.user.count()
+    // Set auth token for data layer
+    setCurrentAuthToken(request.headers.get('Authorization')?.replace('Bearer ', ''))
 
-    // Active users in last 7 days (users with recent activity)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    const activeUsers7d = await db.user.count({
-      where: { updatedAt: { gte: sevenDaysAgo } },
-    })
+    const admin = await getSupabaseAdmin()
+
+    // Helper to safely count rows from Supabase
+    async function countTable(tableName: string): Promise<number> {
+      if (!admin) return 0
+      try {
+        const { count, error } = await admin
+          .from(tableName)
+          .select('*', { count: 'exact', head: true })
+        if (error) {
+          console.warn(`[admin/stats] count ${tableName} error:`, error.message)
+          return 0
+        }
+        return count ?? 0
+      } catch {
+        return 0
+      }
+    }
+
+    // Count users
+    const totalUsers = await countTable('profiles')
+
+    // Active users in last 7 days (users with recent activity — use daily_scores as proxy)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    let activeUsers7d = 0
+    if (admin) {
+      try {
+        const { data: recentScores } = await admin
+          .from('daily_scores')
+          .select('user_id')
+          .gte('date', sevenDaysAgo)
+        if (recentScores) {
+          activeUsers7d = new Set(recentScores.map((r: any) => r.user_id)).size
+        }
+      } catch { /* ignore */ }
+    }
 
     // User growth over last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const usersCreatedInPeriod = await db.user.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    })
+    let userGrowth: { date: string; count: number }[] = []
 
-    const usersBeforePeriod = await db.user.count({
-      where: { createdAt: { lt: thirtyDaysAgo } },
-    })
+    if (admin) {
+      try {
+        const { data: users } = await admin
+          .from('profiles')
+          .select('created_at')
+          .gte('created_at', thirtyDaysAgo.toISOString())
+          .order('created_at', { ascending: true })
 
-    // Build daily growth map
-    const dateMap = new Map<string, number>()
-    for (let i = 0; i <= 30; i++) {
-      const d = new Date(thirtyDaysAgo)
-      d.setDate(d.getDate() + i)
-      dateMap.set(d.toISOString().slice(0, 10), 0)
+        // Count users before period
+        const { count: usersBefore } = await admin
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .lt('created_at', thirtyDaysAgo.toISOString())
+
+        // Build daily growth map
+        const dateMap = new Map<string, number>()
+        for (let i = 0; i <= 30; i++) {
+          const d = new Date(thirtyDaysAgo)
+          d.setDate(d.getDate() + i)
+          dateMap.set(d.toISOString().slice(0, 10), 0)
+        }
+
+        for (const u of (users ?? [])) {
+          const day = new Date(u.created_at).toISOString().slice(0, 10)
+          dateMap.set(day, (dateMap.get(day) || 0) + 1)
+        }
+
+        let cumulativeCount = usersBefore ?? 0
+        userGrowth = []
+        for (const [date, newCount] of dateMap) {
+          cumulativeCount += newCount
+          userGrowth.push({ date, count: cumulativeCount })
+        }
+      } catch (err) {
+        console.warn('[admin/stats] user growth error:', err)
+      }
     }
 
-    for (const u of usersCreatedInPeriod) {
-      const day = u.createdAt.toISOString().slice(0, 10)
-      dateMap.set(day, (dateMap.get(day) || 0) + 1)
-    }
-
-    let cumulativeCount = usersBeforePeriod
-    const userGrowth: { date: string; count: number }[] = []
-    for (const [date, newCount] of dateMap) {
-      cumulativeCount += newCount
-      userGrowth.push({ date, count: cumulativeCount })
-    }
-
-    // Table counts
+    // Table counts (all from Supabase)
     const [
       totalTasks,
       totalHabits,
@@ -62,75 +103,90 @@ export async function GET(request: NextRequest) {
       totalKnowledge,
       totalFinanceRecords,
       totalFocusSessions,
+      totalHabitLogs,
+      totalMilestones,
     ] = await Promise.all([
-      db.task.count(),
-      db.habit.count(),
-      db.journal.count(),
-      db.goal.count(),
-      db.project.count(),
-      db.book.count(),
-      db.knowledgeItem.count(),
-      db.financeRecord.count(),
-      db.focusSession.count(),
+      countTable('tasks'),
+      countTable('habits'),
+      countTable('journals'),
+      countTable('goals'),
+      countTable('projects'),
+      countTable('books'),
+      countTable('knowledge_items'),
+      countTable('finance_records'),
+      countTable('focus_sessions'),
+      countTable('habit_logs'),
+      countTable('milestones'),
     ])
-
-    // Storage usage
-    const storageRecords = await db.userStorage.findMany()
-    const totalStorageUsed = storageRecords.reduce((acc, s) => acc + s.storageUsed, 0)
-
-    // AI usage
-    const aiUsages = await db.userAIUsage.findMany()
-    const totalAiUsed = aiUsages.reduce((acc, a) => acc + a.monthlyUsed, 0)
 
     // Recent activity
     const recentActivity: { time: string; action: string; user: string }[] = []
 
-    // Recent tasks
-    const recentTasks = await db.task.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: 5,
-      select: { title: true, userId: true, updatedAt: true, user: { select: { name: true } } },
-    })
-    for (const t of recentTasks) {
-      recentActivity.push({
-        time: t.updatedAt.toISOString(),
-        action: `مهمة: ${t.title.slice(0, 40)}`,
-        user: t.user?.name || 'مستخدم',
-      })
-    }
+    if (admin) {
+      try {
+        // Recent tasks
+        const { data: recentTasks } = await admin
+          .from('tasks')
+          .select('title, user_id, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(5)
 
-    // Recent journals
-    const recentJournals = await db.journal.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { content: true, userId: true, createdAt: true, user: { select: { name: true } } },
-    })
-    for (const j of recentJournals) {
-      recentActivity.push({
-        time: j.createdAt.toISOString(),
-        action: `يومية: ${j.content.slice(0, 40)}`,
-        user: j.user?.name || 'مستخدم',
-      })
+        // Get user names for the tasks
+        const taskUserIds = [...new Set((recentTasks ?? []).map((t: any) => t.user_id))]
+        const userNameMap = new Map<string, string>()
+        if (taskUserIds.length > 0) {
+          const { data: profiles } = await admin
+            .from('profiles')
+            .select('id, name')
+            .in('id', taskUserIds)
+          for (const p of (profiles ?? [])) {
+            userNameMap.set(p.id, p.name || 'مستخدم')
+          }
+        }
+
+        for (const t of (recentTasks ?? [])) {
+          recentActivity.push({
+            time: t.updated_at,
+            action: `مهمة: ${(t.title || '').slice(0, 40)}`,
+            user: userNameMap.get(t.user_id) || 'مستخدم',
+          })
+        }
+      } catch { /* ignore */ }
+
+      try {
+        // Recent journals
+        const { data: recentJournals } = await admin
+          .from('journals')
+          .select('content, user_id, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5)
+
+        for (const j of (recentJournals ?? [])) {
+          recentActivity.push({
+            time: j.created_at,
+            action: `يومية: ${(j.content || '').slice(0, 40)}`,
+            user: 'مستخدم',
+          })
+        }
+      } catch { /* ignore */ }
     }
 
     // Sort by time desc and limit
     recentActivity.sort((a, b) => b.time.localeCompare(a.time))
 
     const tableCounts: Record<string, number> = {
-      User: totalUsers,
+      Profiles: totalUsers,
       Task: totalTasks,
       Habit: totalHabits,
-      HabitLog: await db.habitLog.count(),
+      HabitLog: totalHabitLogs,
       Journal: totalJournals,
       Goal: totalGoals,
-      Milestone: await db.milestone.count(),
+      Milestone: totalMilestones,
       Project: totalProjects,
       Book: totalBooks,
       KnowledgeItem: totalKnowledge,
       FinanceRecord: totalFinanceRecords,
       FocusSession: totalFocusSessions,
-      UserStorage: storageRecords.length,
-      UserApiKey: await db.userApiKey.count(),
     }
 
     return NextResponse.json({
@@ -140,8 +196,8 @@ export async function GET(request: NextRequest) {
       totalHabits,
       totalJournals,
       totalGoals,
-      totalStorageUsed,
-      totalAiUsed,
+      totalStorageUsed: 0,
+      totalAiUsed: 0,
       userGrowth,
       tableCounts,
       recentActivity: recentActivity.slice(0, 15),

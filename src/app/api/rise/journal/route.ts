@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { data } from '@/lib/data'
+import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ journal: null, recentJournals: [] })
 
     const today = getToday()
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()

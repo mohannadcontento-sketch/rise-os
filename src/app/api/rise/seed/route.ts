@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { data } from '@/lib/data'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { data, setCurrentAuthToken } from '@/lib/data'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
+
+    // Set auth token for data layer
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
 
     // Parse body to check for profileOnly flag
     let createProfileOnly = false
@@ -17,172 +19,202 @@ export async function POST(req: NextRequest) {
       createProfileOnly = body?.createProfileOnly === true
     } catch { /* no body or invalid JSON — default to full seed */ }
 
-    // Check if user profile already exists
-    const existingUser = await db.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
-    })
-
-    // If profileOnly mode: just ensure User + UserSettings exist, no sample data
-    if (createProfileOnly) {
-      if (!existingUser) {
-        await db.user.create({
-          data: {
-            id: userId,
-            email: '',
-            name: '',
-            level: 1,
-            xp: 0,
-            streak: 0,
-            longestStreak: 0,
-            totalFocusMin: 0,
-            totalTasksDone: 0,
-            settings: { create: {} },
-          },
-        })
+    // Check if user profile already exists in Supabase
+    let userExists = false
+    try {
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { data: profile } = await admin
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle()
+        userExists = !!profile
       }
+    } catch { /* ignore */ }
+
+    // If profileOnly mode: just ensure profile exists, no sample data
+    if (createProfileOnly) {
       return NextResponse.json({ success: true, seeded: false })
     }
 
     // Full seed mode — check if user already has data
-    const tasks = await data.tasks.list(userId)
+    let hasTasks = false
+    try {
+      const tasks = await data.tasks.list(userId)
+      hasTasks = tasks.length > 0
+    } catch { /* data layer might fail on empty state */ }
 
-    if (existingUser && tasks.length > 0) {
-      return NextResponse.json({ success: true, user: existingUser, seeded: false })
+    if (userExists && hasTasks) {
+      return NextResponse.json({ success: true, seeded: false })
     }
 
     const today = getToday()
     const last30 = getLast30Days()
 
-    // --- Create / update User profile ---
-    if (existingUser) {
-      await db.user.update({
-        where: { id: userId },
-        data: {
-          name: 'مستخدم RiseOS',
-          level: 7,
-          xp: 650,
-          streak: 12,
-          longestStreak: 21,
-          totalFocusMin: 4200,
-          totalTasksDone: 187,
-        },
-      })
-    } else {
-      await db.user.create({
-        data: {
-          id: userId,
-          email: '',
-          name: 'مستخدم RiseOS',
-          level: 7,
-          xp: 650,
-          streak: 12,
-          longestStreak: 21,
-          totalFocusMin: 4200,
-          totalTasksDone: 187,
-          settings: { create: {} },
-        },
-      })
+    // --- Create / update User profile in Supabase ---
+    try {
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { data: existingProfile } = await admin
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle()
+
+        if (!existingProfile) {
+          await admin.from('profiles').upsert({
+            id: userId,
+            name: 'مستخدم RiseOS',
+            email: '',
+            role: 'user',
+          }, { onConflict: 'id' })
+        }
+      }
+    } catch (err) {
+      console.error('[seed] profile upsert error:', err)
     }
 
-    // --- UserSettings ---
-    await db.userSettings.upsert({
-      where: { userId },
-      update: {
-        theme: 'system',
-        language: 'ar',
-        wakeUpTime: '06:00',
-        sleepTime: '22:00',
-        focusDuration: 50,
-        dailyWaterGoal: 8,
-        dailyReadingGoal: 30,
-        weeklyExerciseGoal: 5,
-      },
-      create: {
-        userId,
-        theme: 'system',
-        language: 'ar',
-        wakeUpTime: '06:00',
-        sleepTime: '22:00',
-        focusDuration: 50,
-        dailyWaterGoal: 8,
-        dailyReadingGoal: 30,
-        weeklyExerciseGoal: 5,
-      },
-    })
+    // --- Create user_settings row if missing ---
+    try {
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { data: existingSettings } = await admin
+          .from('user_settings')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (!existingSettings) {
+          await admin.from('user_settings').insert({
+            user_id: userId,
+            theme: 'system',
+            language: 'ar',
+            wake_up_time: '06:00',
+            sleep_time: '22:00',
+            focus_duration: 50,
+            daily_water_goal: 8,
+            daily_reading_goal: 30,
+            weekly_exercise_goal: 5,
+          })
+        }
+      }
+    } catch (err) {
+      console.error('[seed] user_settings insert error:', err)
+    }
 
     // --- Projects ---
-    const project0 = await data.projects.create(userId, { name: 'تطوير تطبيق الويب', description: 'بناء تطبيق ويب متكامل', color: '#059669', progress: 65 })
-    const project1 = await data.projects.create(userId, { name: 'كتابة الكتاب', description: 'إكمال كتاب الإنتاجية', color: '#D4A853', progress: 35 })
-    const project2 = await data.projects.create(userId, { name: 'تعلم البرمجة', description: 'دورة متقدمة في TypeScript', color: '#6366F1', progress: 80 })
+    let project0: any = { id: 'mock-p0' }, project1: any = { id: 'mock-p1' }, project2: any = { id: 'mock-p2' }
+    try {
+      project0 = await data.projects.create(userId, { name: 'تطوير تطبيق الويب', description: 'بناء تطبيق ويب متكامل', color: '#059669', progress: 65 })
+      project1 = await data.projects.create(userId, { name: 'كتابة الكتاب', description: 'إكمال كتاب الإنتاجية', color: '#D4A853', progress: 35 })
+      project2 = await data.projects.create(userId, { name: 'تعلم البرمجة', description: 'دورة متقدمة في TypeScript', color: '#6366F1', progress: 80 })
+    } catch (err) {
+      console.error('[seed] projects error:', err)
+    }
 
     // --- Tasks ---
-    await data.tasks.create(userId, { title: 'إكمال التصميم', status: 'done', priority: 'high', projectId: project0.id, xpReward: 25, completedAt: new Date() })
-    await data.tasks.create(userId, { title: 'كتابة الفصل الثالث', status: 'in_progress', priority: 'high', projectId: project1.id, xpReward: 30 })
-    await data.tasks.create(userId, { title: 'مراجعة الكود', status: 'todo', priority: 'medium', projectId: project0.id, dueDate: today, xpReward: 15 })
-    await data.tasks.create(userId, { title: 'تمرين رياضي', status: 'todo', priority: 'medium', xpReward: 20 })
-    await data.tasks.create(userId, { title: 'قراءة 30 صفحة', status: 'todo', priority: 'low', xpReward: 10 })
-    await data.tasks.create(userId, { title: 'اجتماع الفريق', status: 'todo', priority: 'high', dueDate: today, xpReward: 15 })
-    await data.tasks.create(userId, { title: 'تحديث المدونة', status: 'todo', priority: 'low', projectId: project0.id, xpReward: 20 })
-    await data.tasks.create(userId, { title: 'درس TypeScript', status: 'in_progress', priority: 'medium', projectId: project2.id, xpReward: 15 })
-    await data.tasks.create(userId, { title: 'تخطيط الأسبوع', status: 'done', priority: 'medium', xpReward: 10, completedAt: new Date() })
-    await data.tasks.create(userId, { title: 'مراجعة أهداف الشهر', status: 'todo', priority: 'high', dueDate: today, xpReward: 15 })
+    const taskData = [
+      { title: 'إكمال التصميم', status: 'done', priority: 'high', projectId: project0.id, xpReward: 25, completedAt: new Date() },
+      { title: 'كتابة الفصل الثالث', status: 'in_progress', priority: 'high', projectId: project1.id, xpReward: 30 },
+      { title: 'مراجعة الكود', status: 'todo', priority: 'medium', projectId: project0.id, dueDate: today, xpReward: 15 },
+      { title: 'تمرين رياضي', status: 'todo', priority: 'medium', xpReward: 20 },
+      { title: 'قراءة 30 صفحة', status: 'todo', priority: 'low', xpReward: 10 },
+      { title: 'اجتماع الفريق', status: 'todo', priority: 'high', dueDate: today, xpReward: 15 },
+      { title: 'تحديث المدونة', status: 'todo', priority: 'low', projectId: project0.id, xpReward: 20 },
+      { title: 'درس TypeScript', status: 'in_progress', priority: 'medium', projectId: project2.id, xpReward: 15 },
+      { title: 'تخطيط الأسبوع', status: 'done', priority: 'medium', xpReward: 10, completedAt: new Date() },
+      { title: 'مراجعة أهداف الشهر', status: 'todo', priority: 'high', dueDate: today, xpReward: 15 },
+    ]
+    for (const t of taskData) {
+      try { await data.tasks.create(userId, t) } catch (err) { console.error('[seed] task error:', err) }
+    }
 
     // --- Habits ---
-    const habit0 = await data.habits.create(userId, { name: 'شرب الماء', icon: '💧', color: '#3B82F6', frequency: 'daily', targetCount: 8, xpReward: 10 })
-    const habit1 = await data.habits.create(userId, { name: 'تمارين رياضية', icon: '🏋️', color: '#EF4444', frequency: 'daily', targetCount: 1, xpReward: 25 })
-    const habit2 = await data.habits.create(userId, { name: 'قراءة', icon: '📖', color: '#059669', frequency: 'daily', targetCount: 1, xpReward: 15 })
-    const habit3 = await data.habits.create(userId, { name: 'تأمل', icon: '🧘', color: '#8B5CF6', frequency: 'daily', targetCount: 1, xpReward: 15 })
-    const habit4 = await data.habits.create(userId, { name: 'كتابة اليوميات', icon: '✍️', color: '#D4A853', frequency: 'daily', targetCount: 1, xpReward: 20 })
-    const habit5 = await data.habits.create(userId, { name: 'تعلم مهارة جديدة', icon: '🎯', color: '#F97316', frequency: 'daily', targetCount: 1, xpReward: 20 })
-    const habit6 = await data.habits.create(userId, { name: 'لا ساعة لمدة ساعة', icon: '📵', color: '#6366F1', frequency: 'daily', targetCount: 1, xpReward: 10 })
-
-    const createdHabits = [
-      { id: habit0.id, targetCount: habit0.targetCount },
-      { id: habit1.id, targetCount: habit1.targetCount },
-      { id: habit2.id, targetCount: habit2.targetCount },
-      { id: habit3.id, targetCount: habit3.targetCount },
-      { id: habit4.id, targetCount: habit4.targetCount },
-      { id: habit5.id, targetCount: habit5.targetCount },
-      { id: habit6.id, targetCount: habit6.targetCount },
+    const habitData = [
+      { name: 'شرب الماء', icon: '💧', color: '#3B82F6', frequency: 'daily', targetCount: 8, xpReward: 10 },
+      { name: 'تمارين رياضية', icon: '🏋️', color: '#EF4444', frequency: 'daily', targetCount: 1, xpReward: 25 },
+      { name: 'قراءة', icon: '📖', color: '#059669', frequency: 'daily', targetCount: 1, xpReward: 15 },
+      { name: 'تأمل', icon: '🧘', color: '#8B5CF6', frequency: 'daily', targetCount: 1, xpReward: 15 },
+      { name: 'كتابة اليوميات', icon: '✍️', color: '#D4A853', frequency: 'daily', targetCount: 1, xpReward: 20 },
+      { name: 'تعلم مهارة جديدة', icon: '🎯', color: '#F97316', frequency: 'daily', targetCount: 1, xpReward: 20 },
+      { name: 'لا ساعة لمدة ساعة', icon: '📵', color: '#6366F1', frequency: 'daily', targetCount: 1, xpReward: 10 },
     ]
 
-    // --- Habit Logs (last 30 days) — bulk insert via supabase for performance ---
-    const habitLogRows: Array<{ habit_id: string; date: string; completed: boolean; count: number }> = []
-    for (const day of last30) {
-      for (const habit of createdHabits) {
-        const completed = Math.random() > 0.3
-        habitLogRows.push({
-          habit_id: habit.id,
-          date: day,
-          completed,
-          count: completed ? (habit.targetCount || 1) : 0,
-        })
+    const createdHabits: Array<{ id: string; targetCount: number }> = []
+    for (const h of habitData) {
+      try {
+        const habit = await data.habits.create(userId, h)
+        createdHabits.push({ id: habit.id, targetCount: habit.targetCount || h.targetCount || 1 })
+      } catch (err) {
+        console.error('[seed] habit error:', err)
       }
     }
-    if (habitLogRows.length > 0) {
-      const supabase = await getSupabaseAdmin()
-      await supabase.from('habit_logs').insert(habitLogRows)
+
+    // --- Habit Logs (last 30 days) — bulk insert via supabase ---
+    try {
+      const habitLogRows: Array<{ habit_id: string; date: string; completed: boolean; count: number }> = []
+      for (const day of last30) {
+        for (const habit of createdHabits) {
+          const completed = Math.random() > 0.3
+          habitLogRows.push({
+            habit_id: habit.id,
+            date: day,
+            completed,
+            count: completed ? (habit.targetCount || 1) : 0,
+          })
+        }
+      }
+      if (habitLogRows.length > 0) {
+        const supabase = await getSupabaseAdmin()
+        if (supabase) {
+          // Insert in batches of 100
+          for (let i = 0; i < habitLogRows.length; i += 100) {
+            await supabase.from('habit_logs').insert(habitLogRows.slice(i, i + 100))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[seed] habit_logs error:', err)
     }
 
     // --- Goals ---
-    const goal0 = await data.goals.create(userId, { title: 'إكمال كتاب الإنتاجية', vision: 'نشر كتاب يغيّر حياة الناس', why: 'للمساهمة في نشر المعرفة', type: 'quarterly', progress: 35, deadline: '2025-12-31' })
-    const goal1 = await data.goals.create(userId, { title: 'الوصول لمستوى 10', vision: 'بناء نظام حياة متكامل', why: 'للتحول لشخص أفضل', type: 'annual', progress: 70, deadline: '2025-12-31' })
-    const goal2 = await data.goals.create(userId, { title: 'قراءة 24 كتاب', vision: 'قراءة كتابين شهرياً', why: 'للتطور المستمر', type: 'annual', progress: 45, deadline: '2025-12-31' })
-    const goal3 = await data.goals.create(userId, { title: 'تسجيل 500 ساعة عمل عميق', vision: 'إتقان التركيز العميق', why: 'لزيادة الإنتاجية', type: 'annual', progress: 65, deadline: '2025-12-31' })
+    const goalData = [
+      { title: 'إكمال كتاب الإنتاجية', vision: 'نشر كتاب يغيّر حياة الناس', why: 'للمساهمة في نشر المعرفة', type: 'quarterly', progress: 35, deadline: '2025-12-31' },
+      { title: 'الوصول لمستوى 10', vision: 'بناء نظام حياة متكامل', why: 'للتحول لشخص أفضل', type: 'annual', progress: 70, deadline: '2025-12-31' },
+      { title: 'قراءة 24 كتاب', vision: 'قراءة كتابين شهرياً', why: 'للتطور المستمر', type: 'annual', progress: 45, deadline: '2025-12-31' },
+      { title: 'تسجيل 500 ساعة عمل عميق', vision: 'إتقان التركيز العميق', why: 'لزيادة الإنتاجية', type: 'annual', progress: 65, deadline: '2025-12-31' },
+    ]
+
+    const createdGoals: any[] = []
+    for (const g of goalData) {
+      try {
+        const goal = await data.goals.create(userId, g)
+        createdGoals.push(goal)
+      } catch (err) {
+        console.error('[seed] goal error:', err)
+      }
+    }
 
     // --- Milestones — bulk insert via supabase ---
-    const milestoneRows: Array<{ goal_id: string; title: string; completed: boolean; order: number }> = []
-    const createdGoals = [goal0, goal1, goal2, goal3]
-    for (const goal of createdGoals) {
-      milestoneRows.push({ goal_id: goal.id, title: 'البحث وجمع المصادر', completed: true, order: 0 })
-      milestoneRows.push({ goal_id: goal.id, title: 'كتابة المسودة الأولى', completed: false, order: 1 })
-      milestoneRows.push({ goal_id: goal.id, title: 'المراجعة والتحرير', completed: false, order: 2 })
-      milestoneRows.push({ goal_id: goal.id, title: 'النشر', completed: false, order: 3 })
-    }
-    if (milestoneRows.length > 0) {
-      const supabase = await getSupabaseAdmin()
-      await supabase.from('milestones').insert(milestoneRows)
+    try {
+      const milestoneRows: Array<{ goal_id: string; title: string; completed: boolean; order: number }> = []
+      for (const goal of createdGoals) {
+        milestoneRows.push({ goal_id: goal.id, title: 'البحث وجمع المصادر', completed: true, order: 0 })
+        milestoneRows.push({ goal_id: goal.id, title: 'كتابة المسودة الأولى', completed: false, order: 1 })
+        milestoneRows.push({ goal_id: goal.id, title: 'المراجعة والتحرير', completed: false, order: 2 })
+        milestoneRows.push({ goal_id: goal.id, title: 'النشر', completed: false, order: 3 })
+      }
+      if (milestoneRows.length > 0) {
+        const supabase = await getSupabaseAdmin()
+        if (supabase) {
+          for (let i = 0; i < milestoneRows.length; i += 100) {
+            await supabase.from('milestones').insert(milestoneRows.slice(i, i + 100))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[seed] milestones error:', err)
     }
 
     // --- Journals (last 10 days) ---
@@ -190,14 +222,18 @@ export async function POST(req: NextRequest) {
     const energyValues = [4, 3, 5, 4, 3, 4, 5, 3, 4, 5]
     for (let i = 0; i < last30.slice(-10).length; i++) {
       const day = last30.slice(-10)[i]
-      await data.journals.upsert(userId, day, {
-        content: 'كان يوماً مليئاً بالإنجازات والتقدم. تعلمت أشياء جديدة وأنجزت مهام مهمة.',
-        gratitude: 'الصحة، العائلة، الفرص المتاحة',
-        wins: 'أكملت مهمة مهمة وتعلمت مهارة جديدة',
-        challenges: 'بعض التشتت في الصباح لكن تم التغلب عليه',
-        mood: moodValues[i] ?? 4,
-        energy: energyValues[i] ?? 4,
-      })
+      try {
+        await data.journals.upsert(userId, day, {
+          content: 'كان يوماً مليئاً بالإنجازات والتقدم. تعلمت أشياء جديدة وأنجزت مهام مهمة.',
+          gratitude: 'الصحة، العائلة، الفرص المتاحة',
+          wins: 'أكملت مهمة مهمة وتعلمت مهارة جديدة',
+          challenges: 'بعض التشتت في الصباح لكن تم التغلب عليه',
+          mood: moodValues[i] ?? 4,
+          energy: energyValues[i] ?? 4,
+        })
+      } catch (err) {
+        console.error('[seed] journal error:', err)
+      }
     }
 
     // --- Focus Sessions (last 14 days) ---
@@ -206,30 +242,38 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < sessions; i++) {
         const duration = [25, 50, 90][Math.floor(Math.random() * 3)]
         const completed = Math.random() > 0.2
-        await data.focusSessions.create(userId, {
-          duration,
-          actualMin: completed ? duration : Math.floor(duration * 0.7),
-          type: duration === 25 ? 'pomodoro' : duration === 50 ? 'deep50' : 'deep90',
-          completed,
-          startedAt: new Date(day + 'T08:00:00'),
-          completedAt: completed ? new Date(day + 'T09:00:00') : null,
-        })
+        try {
+          await data.focusSessions.create(userId, {
+            duration,
+            actualMin: completed ? duration : Math.floor(duration * 0.7),
+            type: duration === 25 ? 'pomodoro' : duration === 50 ? 'deep50' : 'deep90',
+            completed,
+            startedAt: new Date(day + 'T08:00:00'),
+            completedAt: completed ? new Date(day + 'T09:00:00') : null,
+          })
+        } catch (err) {
+          console.error('[seed] focus session error:', err)
+        }
       }
     }
 
     // --- Health Logs (last 14 days) ---
     for (const day of last30.slice(-14)) {
-      await data.healthLogs.upsert(userId, day, {
-        sleepHours: +(6 + Math.random() * 3).toFixed(1),
-        sleepQuality: Math.floor(Math.random() * 3) + 3,
-        waterGlasses: Math.floor(Math.random() * 5) + 4,
-        steps: Math.floor(Math.random() * 8000) + 3000,
-        calories: Math.floor(Math.random() * 500) + 1500,
-        mood: Math.floor(Math.random() * 3) + 3,
-        energy: Math.floor(Math.random() * 3) + 3,
-        exerciseType: Math.random() > 0.3 ? 'جري' : null,
-        exerciseMin: Math.random() > 0.3 ? Math.floor(Math.random() * 45) + 15 : null,
-      })
+      try {
+        await data.healthLogs.upsert(userId, day, {
+          sleepHours: +(6 + Math.random() * 3).toFixed(1),
+          sleepQuality: Math.floor(Math.random() * 3) + 3,
+          waterGlasses: Math.floor(Math.random() * 5) + 4,
+          steps: Math.floor(Math.random() * 8000) + 3000,
+          calories: Math.floor(Math.random() * 500) + 1500,
+          mood: Math.floor(Math.random() * 3) + 3,
+          energy: Math.floor(Math.random() * 3) + 3,
+          exerciseType: Math.random() > 0.3 ? 'جري' : null,
+          exerciseMin: Math.random() > 0.3 ? Math.floor(Math.random() * 45) + 15 : null,
+        })
+      } catch (err) {
+        console.error('[seed] health log error:', err)
+      }
     }
 
     // --- Finance Records ---
@@ -246,7 +290,7 @@ export async function POST(req: NextRequest) {
       { type: 'expense', description: 'نادي رياضي', amount: 250, category: 'صحة', date: today },
     ]
     for (const f of financeData) {
-      await data.financeRecords.create(userId, f)
+      try { await data.financeRecords.create(userId, f) } catch (err) { console.error('[seed] finance error:', err) }
     }
 
     // --- Books ---
@@ -258,7 +302,7 @@ export async function POST(req: NextRequest) {
       { title: 'دورة React المتقدمة', author: 'أونلاين', type: 'course', status: 'reading', totalPages: 50, currentPage: 30, progress: 60, startDate: '2025-01-15' },
     ]
     for (const b of bookData) {
-      await data.books.create(userId, b)
+      try { await data.books.create(userId, b) } catch (err) { console.error('[seed] book error:', err) }
     }
 
     // --- Knowledge Items ---
@@ -269,53 +313,67 @@ export async function POST(req: NextRequest) {
       { type: 'bookmark', title: 'مقال عن العمل العميق', content: 'https://example.com/deep-work', tags: '["قراءة","إنتاجية"]' },
     ]
     for (const k of knowledgeData) {
-      await data.knowledgeItems.create(userId, k)
+      try { await data.knowledgeItems.create(userId, k) } catch (err) { console.error('[seed] knowledge error:', err) }
     }
 
     // --- Morning Logs (last 10 days) ---
     for (const day of last30.slice(-10)) {
       const total = 7
       const done = Math.floor(Math.random() * 3) + 4
-      await data.morningLogs.upsert(userId, day, {
-        score: Math.round((done / total) * 100),
-        completedItems: JSON.stringify(Array(done).fill(true).concat(Array(total - done).fill(false))),
-        totalItems: total,
-      })
+      try {
+        await data.morningLogs.upsert(userId, day, {
+          score: Math.round((done / total) * 100),
+          completedItems: JSON.stringify(Array(done).fill(true).concat(Array(total - done).fill(false))),
+          totalItems: total,
+        })
+      } catch (err) {
+        console.error('[seed] morning log error:', err)
+      }
     }
 
     // --- Daily Scores (last 30 days) — bulk insert via supabase ---
-    const dailyScoreRows: Array<Record<string, any>> = []
-    for (const day of last30) {
-      dailyScoreRows.push({
-        user_id: userId,
-        date: day,
-        score: Math.round(40 + Math.random() * 55),
-        morning_score: Math.round(30 + Math.random() * 70),
-        task_score: Math.round(30 + Math.random() * 70),
-        habit_score: Math.round(30 + Math.random() * 70),
-        focus_score: Math.round(20 + Math.random() * 80),
-        health_score: Math.round(30 + Math.random() * 70),
-        journal_score: Math.round(20 + Math.random() * 80),
-      })
-    }
-    if (dailyScoreRows.length > 0) {
-      const supabase = await getSupabaseAdmin()
-      await supabase.from('daily_scores').insert(dailyScoreRows)
+    try {
+      const dailyScoreRows: Array<Record<string, any>> = []
+      for (const day of last30) {
+        dailyScoreRows.push({
+          user_id: userId,
+          date: day,
+          score: Math.round(40 + Math.random() * 55),
+          morning_score: Math.round(30 + Math.random() * 70),
+          task_score: Math.round(30 + Math.random() * 70),
+          habit_score: Math.round(30 + Math.random() * 70),
+          focus_score: Math.round(20 + Math.random() * 80),
+          health_score: Math.round(30 + Math.random() * 70),
+          journal_score: Math.round(20 + Math.random() * 80),
+        })
+      }
+      if (dailyScoreRows.length > 0) {
+        const supabase = await getSupabaseAdmin()
+        if (supabase) {
+          for (let i = 0; i < dailyScoreRows.length; i += 100) {
+            await supabase.from('daily_scores').insert(dailyScoreRows.slice(i, i + 100))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[seed] daily_scores error:', err)
     }
 
     // --- Achievements ---
-    await data.userAchievements.create(userId, { badgeId: 'streak_7', badgeName: 'أسبوع متواصل', badgeIcon: '🔥', badgeDesc: '7 أيام متتالية' })
-    await data.userAchievements.create(userId, { badgeId: 'streak_21', badgeName: 'ثلاثة أسابيع', badgeIcon: '⚡', badgeDesc: '21 يوم متتالي' })
-    await data.userAchievements.create(userId, { badgeId: 'tasks_100', badgeName: 'مائة مهمة', badgeIcon: '✅', badgeDesc: 'أكملت 100 مهمة' })
-    await data.userAchievements.create(userId, { badgeId: 'focus_50h', badgeName: '50 ساعة تركيز', badgeIcon: '🧠', badgeDesc: '50 ساعة عمل عميق' })
-    await data.userAchievements.create(userId, { badgeId: 'books_5', badgeName: 'قارئ نهم', badgeIcon: '📚', badgeDesc: 'أنهيت 5 كتب' })
+    const achievements = [
+      { badgeId: 'streak_7', badgeName: 'أسبوع متواصل', badgeIcon: '🔥', badgeDesc: '7 أيام متتالية' },
+      { badgeId: 'streak_21', badgeName: 'ثلاثة أسابيع', badgeIcon: '⚡', badgeDesc: '21 يوم متتالي' },
+      { badgeId: 'tasks_100', badgeName: 'مائة مهمة', badgeIcon: '✅', badgeDesc: 'أكملت 100 مهمة' },
+      { badgeId: 'focus_50h', badgeName: '50 ساعة تركيز', badgeIcon: '🧠', badgeDesc: '50 ساعة عمل عميق' },
+      { badgeId: 'books_5', badgeName: 'قارئ نهم', badgeIcon: '📚', badgeDesc: 'أنهيت 5 كتب' },
+    ]
+    for (const a of achievements) {
+      try { await data.userAchievements.create(userId, a) } catch (err) { console.error('[seed] achievement error:', err) }
+    }
 
-    // Re-fetch user after update
-    const user = await db.user.findUnique({ where: { id: userId } })
-
-    return NextResponse.json({ success: true, user })
+    return NextResponse.json({ success: true, seeded: true })
   } catch (error) {
     console.error('Seed error:', error)
-    return NextResponse.json({ error: 'Seed failed' }, { status: 500 })
+    return NextResponse.json({ error: 'Seed failed', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

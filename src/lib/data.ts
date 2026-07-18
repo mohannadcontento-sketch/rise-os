@@ -1,4 +1,15 @@
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
+
+// ============================================================
+// Auth Token Context (set by API routes before data calls)
+// ============================================================
+
+let _currentAuthToken: string | undefined
+
+/** Set the current request's auth token so sb() can create an authenticated client */
+export function setCurrentAuthToken(token: string | undefined) {
+  _currentAuthToken = token
+}
 
 // ============================================================
 // Case Conversion Helpers
@@ -44,11 +55,38 @@ function toCamel<T = Record<string, any>>(obj: unknown): T {
   return result as T
 }
 
-/** Get the cached Supabase admin client; throws if not configured. */
+/**
+ * Get a Supabase client for data operations.
+ * Priority:
+ * 1. Admin client (bypasses RLS) — best for server-side operations
+ * 2. Anon client with user JWT (respects RLS, needs proper policies)
+ * 3. Anon client without JWT (may be blocked by RLS)
+ * Throws only if Supabase is not configured at all.
+ */
 async function sb() {
-  const client = await getSupabaseAdmin()
-  if (!client) throw new Error('Supabase admin client is not configured')
-  return client
+  // 1. Try admin client (bypasses RLS)
+  const adminClient = await getSupabaseAdmin()
+  if (adminClient) return adminClient
+
+  // 2. Try anon client with current request's JWT
+  if (_currentAuthToken) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          global: { headers: { Authorization: `Bearer ${_currentAuthToken}` } },
+        })
+      }
+    } catch { /* fall through */ }
+  }
+
+  // 3. Fall back to plain anon client
+  const anonClient = await getSupabaseAnon()
+  if (anonClient) return anonClient
+
+  throw new Error('Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
 }
 
 // ============================================================

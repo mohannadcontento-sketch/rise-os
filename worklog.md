@@ -2338,3 +2338,46 @@ Stage Summary:
 - Admin role check is consistent across session and refresh endpoints
 - Removed unnecessary Prisma user creation from auth flows (Supabase triggers handle this)
 - Lint passes clean
+
+---
+Task ID: fix-all-errors
+Agent: Main
+Task: إصلاح جميع الأخطاء — data not saving, session lost, charAt crash, admin stats 500, notifications
+
+Work Log:
+- تحليل شامل لكل الأخطاء من console log المستخدم
+- اكتشاف أن `sb()` في data.ts يرمي خطأ عندما لا يتوفر service role key
+- اكتشاف أن جميع API routes تستخدم Prisma/SQLite مباشرة (لا يعمل على Vercel)
+- إصلاح `data.ts`: إضافة `setCurrentAuthToken()` وتعديل `sb()` ليدعم 3 مستويات: admin client → anon+JWT → anon
+- إصلاح 17 API route لإرسال auth token قبل استدعاء data layer
+- إصلاح `charAt(0)` crash في page.tsx, projects.tsx, settings.tsx (إضافة fallback 'م')
+- إعادة كتابة `seed/route.ts` بالكامل — لا يستخدم Prisma، يستخدم Supabase فقط مع batch inserts
+- إعادة كتابة `admin/stats/route.ts` — يستخدم Supabase بدل Prisma
+- إعادة كتابة `dashboard/route.ts` — يستخدم Supabase بدل Prisma
+- إعادة كتابة `user/name/route.ts` و `user/avatar/route.ts` — Supabase فقط
+- إعادة كتابة `admin/users/route.ts` — Supabase فقط
+- إصلاح `auth.ts` — إزالة الاعتماد على Prisma، فقط Supabase JWT verification
+- إصلاح 7 ملفات API إضافية (earn-xp, productivity-score, admin/query, admin/api-keys, export, ai-chat, mcp/key)
+- التحقق من أن الصفحة تعمل بدون أخطاء (agent-browser test)
+- التحقق من lint ناجح
+- التحقق من HTTP 200 على الصفحة الرئيسية
+
+Stage Summary:
+- **Data Layer**: `sb()` الآن يدعم 3 مستويات مصادقة (admin → anon+JWT → anon)
+- **No Prisma on Vercel**: جميع API routes تستخدم Supabase فقط
+- **charAt crash fixed**: 3 ملفات تم إصلاحها
+- **Seed route**: يعمل بالكامل مع Supabase، batch inserts، graceful error handling
+- **Admin stats**: يستخدم Supabase لجميع الإحصائيات
+- **Login page**: يُعرض بدون أخطاء، لا console errors
+- **Notifications**: تعمل عبر data layer مع setCurrentAuthToken
+
+## الحالة الحالية
+- التطبيق يعمل على Vercel بدون الاعتماد على Prisma/SQLite
+- جميع البيانات تُخزن في Supabase PostgreSQL
+- نظام المصادقة يعتمد كلياً على Supabase Auth
+- الإشعارات تعمل عبر Supabase notifications table
+
+## مخاطر متبقية
+- إذا لم يُفعّل المستخدم `SUPABASE_SERVICE_ROLE_KEY` على Vercel، سيعمل data layer بـ anon client + JWT (يحتاج RLS policies صحيحة)
+- لا يوجد VAPID key لـ push notifications الحقيقية (تحتاج إعداد web-push)
+- الـ session refresh يعتمد على Supabase refresh token

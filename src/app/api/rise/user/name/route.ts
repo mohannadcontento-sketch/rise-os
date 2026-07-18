@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { getSupabaseWithAuth, isSupabaseConfigured, handleRouteError } from '@/lib/supabase'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,26 +16,21 @@ export async function POST(req: NextRequest) {
 
     const trimmed = name.trim()
 
-    // Update local Prisma
-    await db.user.update({
-      where: { id: userId },
-      data: { name: trimmed },
-    })
-
-    // Also update Supabase profile
+    // Update Supabase profile
     if (isSupabaseConfigured()) {
-      const supabase = await getSupabaseWithAuth(req)
-      if (supabase) {
-        await supabase
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { error } = await admin
           .from('profiles')
           .update({ name: trimmed })
           .eq('id', userId)
-          .then(() => {}).catch(() => {})
+        if (error) console.error('[user/name] Supabase error:', error)
       }
     }
 
     return NextResponse.json({ name: trimmed })
   } catch (error) {
-    return handleRouteError(error, 'user-name')
+    console.error('[user/name] error:', error)
+    return NextResponse.json({ error: 'Failed to update name' }, { status: 500 })
   }
 }
