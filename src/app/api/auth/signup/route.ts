@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ADMIN_EMAIL } from '@/lib/supabase'
+import { ADMIN_EMAIL, ensureUserExists } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +39,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'هذا البريد مسجل بالفعل' }, { status: 409 })
       }
       return NextResponse.json({ error: 'حدث خطأ في إنشاء الحساب' }, { status: 500 })
+    }
+
+    // Ensure User row exists (the DB trigger should handle this, but belt + suspenders)
+    if (data.user) {
+      await ensureUserExists(data.user.id, name || email.split('@')[0], email)
     }
 
     return NextResponse.json({
