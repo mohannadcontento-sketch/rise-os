@@ -537,13 +537,15 @@ const CORS_HEADERS = {
 export async function GET(req: NextRequest) {
   const accept = req.headers.get('Accept') || ''
 
-  // If client expects SSE, return proper MCP SSE stream
+  // If client expects SSE, return proper MCP SSE stream with JSON-encoded URI
   if (accept.includes('text/event-stream')) {
     const sessionId = generateSessionId()
-    const postEndpoint = `/api/mcp`
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.headers.get('x-forwarded-host')
+      ? `https://${req.headers.get('x-forwarded-host')}` : 'http://localhost:3000'
+    const postEndpoint = `${baseUrl}/api/mcp?sessionId=${sessionId}`
 
     const body = `event: endpoint
-data: ${postEndpoint}?sessionId=${sessionId}
+data: ${JSON.stringify({ uri: postEndpoint })}
 
 `
 
