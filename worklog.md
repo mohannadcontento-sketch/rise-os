@@ -2203,3 +2203,36 @@ Stage Summary:
 - Name/email now synced between auth store, settings, and Supabase profiles
 - `rise:user-updated` and `rise:avatar-changed` custom events for cross-component reactivity
 - All lint checks pass, dev server compiles without errors
+
+---
+Task ID: 2-7
+Agent: Main Agent + Sub-agents
+Task: Database cleanup, notifications, avatars, background timer, admin roles
+
+Work Log:
+- Created SQL migration 002_clean_schema.sql that drops ALL duplicate PascalCase tables
+- 23 clean snake_case tables with proper UUID types and foreign keys
+- RLS enabled on all tables with per-user SELECT/INSERT/UPDATE/DELETE policies
+- Admin can read all profiles via admin policy
+- Added profiles.role column (user/admin) with CHECK constraint
+- Added notifications table with unread index
+- Performance indexes on key query patterns
+- updated_at triggers on all timestamped tables
+- Fixed focus timer: timestamp-based (endTime) instead of decrement counter
+- Timer persists to localStorage, auto-resumes on component mount
+- AudioContext resumes on visibilitychange event
+- Created NotificationBell component with dropdown, badge, polling
+- Created /api/rise/notifications CRUD endpoint (Supabase + fallback)
+- Created 24 CSS gradient + SVG avatars in /src/lib/avatars.tsx
+- Avatar picker dialog in settings page
+- /api/rise/user/avatar endpoint saves to Prisma + Supabase
+- Name API now syncs to Supabase profiles table
+- Session/Login endpoints check profiles.role for admin detection
+- Settings shows real email from auth store
+- rise:user-updated event listener in page.tsx refreshes UI
+
+Stage Summary:
+- 14 files changed, 1934 insertions
+- Pushed as commit de7188c
+- User MUST run 002_clean_schema.sql in Supabase SQL Editor
+- User should provide SERVICE_ROLE_KEY for full admin operations
