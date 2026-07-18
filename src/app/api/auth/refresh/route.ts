@@ -1,17 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL } from '@/lib/supabase'
+import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
     const { refresh_token } = await request.json()
 
-    // In local mode, refresh_token is a userId
     if (!refresh_token) {
       return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
     }
 
-    // Find user by ID
+    // ── Try Supabase refresh ──
+    if (isSupabaseConfigured() && refresh_token.length > 20) {
+      const supabase = getSupabaseAnon()
+      if (supabase) {
+        try {
+          const { data, error } = await supabase.auth.refreshSession({ refresh_token })
+
+          if (!error && data.session && data.user) {
+            return NextResponse.json({
+              session: {
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_at: data.session.expires_at,
+              },
+              user: {
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || data.user.email?.split('@')[0],
+                isAdmin: data.user.email === ADMIN_EMAIL,
+              },
+            })
+          }
+        } catch {
+          // Fall through to local
+        }
+      }
+    }
+
+    // ── Local Fallback ──
     const user = await db.user.findUnique({ where: { id: refresh_token } })
     if (!user) {
       return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })

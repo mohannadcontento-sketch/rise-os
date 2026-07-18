@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL } from '@/lib/supabase'
+import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,8 +11,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user: null, expires: null })
     }
 
-    // In local mode, the "access_token" IS the userId
-    // Validate it exists in the database
+    // ── Try Supabase Auth ──
+    if (isSupabaseConfigured() && token.length > 50 && !token.startsWith('rise_')) {
+      const supabase = getSupabaseAnon()
+      if (supabase) {
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser(token)
+
+          if (!error && user) {
+            // Ensure local user exists
+            const localUser = await db.user.findUnique({ where: { id: user.id } })
+            if (!localUser) {
+              await db.user.create({
+                data: {
+                  id: user.id,
+                  name: user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
+                  email: user.email || '',
+                  settings: { create: {} },
+                },
+              })
+            }
+
+            return NextResponse.json({
+              user: {
+                id: user.id,
+                email: user.email,
+                name: user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
+                isAdmin: user.email === ADMIN_EMAIL,
+              },
+              expires: new Date((user.exp || 0) * 1000).toISOString() || null,
+            })
+          }
+        } catch {
+          // Token invalid, fall through to local check
+        }
+      }
+    }
+
+    // ── Local Fallback: token IS the userId ──
     const user = await db.user.findUnique({
       where: { id: token },
       select: { id: true, email: true, name: true },

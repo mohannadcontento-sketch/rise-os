@@ -237,6 +237,53 @@ export default function RiseOSApp() {
         if (stored && userInfo) {
           const session = JSON.parse(stored)
           if (session.access_token) {
+            // Check if Supabase token needs refresh (real JWT has expires_at > 0)
+            const isSupabaseSession = session.refresh_token && session.refresh_token.length > 20
+            if (isSupabaseSession && session.expires_at) {
+              const expiresAtMs = session.expires_at * 1000
+              const nowMs = Date.now()
+              const fiveMin = 5 * 60 * 1000
+              if (expiresAtMs - nowMs < fiveMin) {
+                // Token expiring soon — refresh it
+                fetch('/api/auth/refresh', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ refresh_token: session.refresh_token }),
+                }).then(r => r.json()).then(data => {
+                  if (data.session) {
+                    localStorage.setItem('rise-auth', JSON.stringify(data.session))
+                    localStorage.setItem('rise-user-info', JSON.stringify(data.user))
+                    setAuth({
+                      isAuthenticated: true,
+                      userId: data.user.id,
+                      userEmail: data.user.email || '',
+                      userName: data.user.name || '',
+                      isAdmin: data.user.isAdmin,
+                      accessToken: data.session.access_token,
+                    })
+                  } else {
+                    // Refresh failed — clear session
+                    localStorage.removeItem('rise-auth')
+                    localStorage.removeItem('rise-user-info')
+                  }
+                }).catch(() => {
+                  // Offline — use stored session as fallback
+                  try {
+                    const storedInfo = JSON.parse(userInfo)
+                    setAuth({
+                      isAuthenticated: true,
+                      userId: session.access_token,
+                      userEmail: storedInfo?.email || '',
+                      userName: storedInfo?.name || '',
+                      isAdmin: storedInfo?.isAdmin || false,
+                      accessToken: session.access_token,
+                    })
+                  } catch { /* ignore */ }
+                })
+                return
+              }
+            }
+
             // Validate session with server
             apiGet('/api/auth/session').then(r => r.json()).then(data => {
               if (data.user) {
@@ -250,9 +297,36 @@ export default function RiseOSApp() {
                   accessToken: session.access_token,
                 })
               } else {
-                // Session invalid — clear and show login
-                localStorage.removeItem('rise-auth')
-                localStorage.removeItem('rise-user-info')
+                // Session invalid — try refresh first for Supabase sessions
+                if (isSupabaseSession && session.refresh_token) {
+                  fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: session.refresh_token }),
+                  }).then(r => r.json()).then(refreshData => {
+                    if (refreshData.session) {
+                      localStorage.setItem('rise-auth', JSON.stringify(refreshData.session))
+                      localStorage.setItem('rise-user-info', JSON.stringify(refreshData.user))
+                      setAuth({
+                        isAuthenticated: true,
+                        userId: refreshData.user.id,
+                        userEmail: refreshData.user.email || '',
+                        userName: refreshData.user.name || '',
+                        isAdmin: refreshData.user.isAdmin,
+                        accessToken: refreshData.session.access_token,
+                      })
+                    } else {
+                      localStorage.removeItem('rise-auth')
+                      localStorage.removeItem('rise-user-info')
+                    }
+                  }).catch(() => {
+                    localStorage.removeItem('rise-auth')
+                    localStorage.removeItem('rise-user-info')
+                  })
+                } else {
+                  localStorage.removeItem('rise-auth')
+                  localStorage.removeItem('rise-user-info')
+                }
               }
             }).catch(() => {
               // Server unreachable — use stored info as fallback
@@ -288,6 +362,9 @@ export default function RiseOSApp() {
   }, [setAuth])
 
   const handleLogin = useCallback((data: { user: { id: string; email: string; name: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
+    // Store full session (including refresh_token for Supabase)
+    localStorage.setItem('rise-auth', JSON.stringify(data.session))
+    localStorage.setItem('rise-user-info', JSON.stringify(data.user))
     setAuth({
       isAuthenticated: true,
       userId: data.user.id,
