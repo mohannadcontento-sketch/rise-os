@@ -5,18 +5,16 @@ import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supaba
 export async function POST(request: NextRequest) {
   try {
     const { refresh_token } = await request.json()
-
     if (!refresh_token) {
       return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
     }
 
     // ── Try Supabase refresh ──
     if (isSupabaseConfigured() && refresh_token.length > 20) {
-      const supabase = getSupabaseAnon()
+      const supabase = await getSupabaseAnon()
       if (supabase) {
         try {
           const { data, error } = await supabase.auth.refreshSession({ refresh_token })
-
           if (!error && data.session && data.user) {
             return NextResponse.json({
               session: {
@@ -32,9 +30,7 @@ export async function POST(request: NextRequest) {
               },
             })
           }
-        } catch {
-          // Fall through to local
-        }
+        } catch { /* fall through */ }
       }
     }
 
@@ -45,17 +41,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      session: {
-        access_token: user.id,
-        refresh_token: '',
-        expires_at: 0,
-      },
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        isAdmin: user.email === ADMIN_EMAIL,
-      },
+      session: { access_token: user.id, refresh_token: '', expires_at: 0 },
+      user: { id: user.id, email: user.email, name: user.name, isAdmin: user.email === ADMIN_EMAIL },
     })
   } catch {
     return NextResponse.json({ error: 'حدث خطأ' }, { status: 500 })

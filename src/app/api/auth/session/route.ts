@@ -5,21 +5,17 @@ import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supaba
 export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get('Authorization')?.replace('Bearer ', '')
-
-    // No token — return empty session
     if (!token) {
       return NextResponse.json({ user: null, expires: null })
     }
 
     // ── Try Supabase Auth ──
     if (isSupabaseConfigured() && token.length > 50 && !token.startsWith('rise_')) {
-      const supabase = getSupabaseAnon()
+      const supabase = await getSupabaseAnon()
       if (supabase) {
         try {
           const { data: { user }, error } = await supabase.auth.getUser(token)
-
           if (!error && user) {
-            // Ensure local user exists
             const localUser = await db.user.findUnique({ where: { id: user.id } })
             if (!localUser) {
               await db.user.create({
@@ -31,7 +27,6 @@ export async function GET(request: NextRequest) {
                 },
               })
             }
-
             return NextResponse.json({
               user: {
                 id: user.id,
@@ -42,29 +37,20 @@ export async function GET(request: NextRequest) {
               expires: new Date((user.exp || 0) * 1000).toISOString() || null,
             })
           }
-        } catch {
-          // Token invalid, fall through to local check
-        }
+        } catch { /* fall through */ }
       }
     }
 
-    // ── Local Fallback: token IS the userId ──
+    // ── Local Fallback ──
     const user = await db.user.findUnique({
       where: { id: token },
       select: { id: true, email: true, name: true },
     })
 
-    if (!user) {
-      return NextResponse.json({ user: null, expires: null })
-    }
+    if (!user) return NextResponse.json({ user: null, expires: null })
 
     return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        isAdmin: user.email === ADMIN_EMAIL,
-      },
+      user: { id: user.id, email: user.email, name: user.name, isAdmin: user.email === ADMIN_EMAIL },
     })
   } catch {
     return NextResponse.json({ user: null, expires: null })

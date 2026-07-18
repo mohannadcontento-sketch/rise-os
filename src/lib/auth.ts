@@ -13,7 +13,6 @@ export async function resolveAppUserId(): Promise<string> {
   if (_appUserId !== undefined) return _appUserId as string
 
   try {
-    // 1. Try AppConfig
     const config = await db.appConfig.findUnique({ where: { key: 'app_user_id' } })
     if (config?.value) {
       const user = await db.user.findUnique({ where: { id: config.value } })
@@ -23,7 +22,6 @@ export async function resolveAppUserId(): Promise<string> {
       }
     }
 
-    // 2. Try isDefault user
     const defaultUser = await db.user.findFirst({ where: { isDefault: true } })
     if (defaultUser) {
       _appUserId = defaultUser.id
@@ -35,7 +33,6 @@ export async function resolveAppUserId(): Promise<string> {
       return _appUserId!
     }
 
-    // 3. Try first user
     const firstUser = await db.user.findFirst({ orderBy: { createdAt: 'asc' } })
     if (firstUser) {
       _appUserId = firstUser.id
@@ -47,7 +44,6 @@ export async function resolveAppUserId(): Promise<string> {
       return _appUserId!
     }
 
-    // 4. Create new user
     const newUser = await db.user.create({
       data: {
         name: 'مستخدم RiseOS',
@@ -72,18 +68,16 @@ export async function resolveAppUserId(): Promise<string> {
 
 /**
  * Verify a Supabase JWT and return the user ID.
- * Returns null if the token is invalid or Supabase is not configured.
  */
 export async function verifySupabaseToken(token: string): Promise<string | null> {
   if (!isSupabaseConfigured() || !token || token.length < 50) return null
 
   try {
-    const supabase = getSupabaseAnon()
+    const supabase = await getSupabaseAnon()
     if (!supabase) return null
 
     const { data: { user }, error } = await supabase.auth.getUser(token)
     if (error || !user) {
-      console.log(`[auth] token verify failed:`, error?.message)
       return null
     }
 
@@ -97,7 +91,6 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
 /**
  * Extract authenticated user ID from request.
  * Supports: Supabase JWT, rise_ API key, local user ID.
- * Returns null for unauthenticated requests.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
@@ -105,7 +98,7 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
     const token = authHeader.replace('Bearer ', '')
     if (!token) return null
 
-    // 1. Check for rise_ API key (MCP / external access)
+    // 1. Check for rise_ API key
     if (token.startsWith('rise_')) {
       return await resolveUserId(token)
     }
@@ -113,12 +106,11 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
     // 2. Try Supabase JWT verification
     const supabaseUserId = await verifySupabaseToken(token)
     if (supabaseUserId) {
-      // Ensure local user record exists for this Supabase user
       await ensureLocalUserFromSupabase(supabaseUserId)
       return supabaseUserId
     }
 
-    // 3. Check if this is a local user ID (simple auth for local mode)
+    // 3. Check if this is a local user ID
     const stored = await db.user.findUnique({ where: { id: token } })
     return stored ? stored.id : null
   } catch {
@@ -128,15 +120,13 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 
 /**
  * Ensure a local user record exists for a Supabase user.
- * Syncs profile data from Supabase to local Prisma.
  */
 async function ensureLocalUserFromSupabase(supabaseUserId: string): Promise<void> {
   try {
     const existing = await db.user.findUnique({ where: { id: supabaseUserId } })
     if (existing) return
 
-    // Fetch profile from Supabase
-    const admin = getSupabaseAdmin()
+    const admin = await getSupabaseAdmin()
     let name = 'مستخدم RiseOS'
     let email = ''
 
@@ -160,7 +150,6 @@ async function ensureLocalUserFromSupabase(supabaseUserId: string): Promise<void
         settings: { create: {} },
       },
     })
-    console.log(`[auth] created local user for Supabase: ${supabaseUserId}`)
   } catch (err) {
     console.error('[auth] ensureLocalUserFromSupabase error:', err)
   }
@@ -168,7 +157,6 @@ async function ensureLocalUserFromSupabase(supabaseUserId: string): Promise<void
 
 /**
  * Get the effective user ID for a request.
- * Falls back to the app user if not authenticated.
  */
 export async function requireAuth(req: NextRequest): Promise<string | null> {
   const userId = await getUserId(req)

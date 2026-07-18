@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     // ── Supabase Auth Flow ──
     if (isSupabaseConfigured()) {
-      const supabase = getSupabaseAnon()
+      const supabase = await getSupabaseAnon()
       if (supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -20,7 +20,6 @@ export async function POST(request: NextRequest) {
         })
 
         if (error) {
-          // Handle email not confirmed
           if (error.message.includes('Email not confirmed')) {
             return NextResponse.json({
               error: 'البريد الإلكتروني لم يتم تأكيده بعد. تحقق من صندوق البريد.',
@@ -39,7 +38,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'فشل تسجيل الدخول' }, { status: 401 })
         }
 
-        // Ensure local user record exists
         const isAdmin = email === ADMIN_EMAIL
         await ensureLocalUser({
           id: user.id,
@@ -64,7 +62,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Local Fallback (no Supabase) ──
+    // ── Local Fallback ──
     let user = await db.user.findUnique({ where: { email } })
 
     if (!user) {
@@ -99,16 +97,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Ensure a local user record exists for a Supabase-authenticated user
- */
 async function ensureLocalUser(params: { id: string; email: string; name: string; isAdmin: boolean }) {
-  const { id, email, name, isAdmin } = params
+  const { id, email, name } = params
 
   try {
     const existing = await db.user.findUnique({ where: { id } })
     if (existing) {
-      // Update name/email if changed
       if (existing.name !== name || existing.email !== email) {
         await db.user.update({ where: { id }, data: { name, email } })
       }
@@ -116,24 +110,13 @@ async function ensureLocalUser(params: { id: string; email: string; name: string
     }
 
     await db.user.create({
-      data: {
-        id,
-        email,
-        name,
-        settings: { create: {} },
-      },
+      data: { id, email, name, settings: { create: {} } },
     })
 
-    // Also update Supabase profile name if needed
-    const admin = getSupabaseAdmin()
+    const admin = await getSupabaseAdmin()
     if (admin) {
-      await admin
-        .from('profiles')
-        .update({ name, email })
-        .eq('id', id)
+      await admin.from('profiles').update({ name, email }).eq('id', id)
     }
-
-    console.log(`[auth/login] created local user for Supabase: ${id}`)
   } catch (err) {
     console.error('[auth/login] ensureLocalUser error:', err)
   }

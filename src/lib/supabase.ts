@@ -1,9 +1,8 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 // ============================================================
-// Supabase Client Management
+// Supabase Client Management (lazy loading to avoid build errors)
 // ============================================================
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -23,34 +22,48 @@ export function hasServiceRole(): boolean {
   return !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
 }
 
-// ── Anon client (client-side, respects RLS) ──
-let _anonClient: SupabaseClient | null = null
-export function getSupabaseAnon(): SupabaseClient | null {
-  if (!isSupabaseConfigured()) return null
-  if (!_anonClient) {
-    _anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+// Lazy-loaded client cache
+let _anonClient: ReturnType<typeof import('@supabase/supabase-js').createClient> | null = null
+let _adminClient: ReturnType<typeof import('@supabase/supabase-js').createClient> | null = null
+let _sbModule: typeof import('@supabase/supabase-js') | null = null
+
+/** Lazy load the supabase module */
+async function loadSupabase() {
+  if (!_sbModule) {
+    _sbModule = await import('@supabase/supabase-js')
   }
+  return _sbModule
+}
+
+/** Anon client (respects RLS) */
+export async function getSupabaseAnon() {
+  if (!isSupabaseConfigured()) return null
+  if (_anonClient) return _anonClient
+
+  const { createClient } = await loadSupabase()
+  _anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   return _anonClient
 }
 
-// ── Admin client (bypasses RLS) ──
-let _adminClient: SupabaseClient | null = null
-export function getSupabaseAdmin(): SupabaseClient | null {
+/** Admin client (bypasses RLS) */
+export async function getSupabaseAdmin() {
   if (!hasServiceRole()) return null
-  if (!_adminClient) {
-    _adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-  }
+  if (_adminClient) return _adminClient
+
+  const { createClient } = await loadSupabase()
+  _adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   return _adminClient
 }
 
-// ── Server-side client with user JWT (respects RLS) ──
-export function getSupabaseWithAuth(req?: NextRequest): SupabaseClient | null {
+/** Server-side client with user JWT (respects RLS) */
+export async function getSupabaseWithAuth(req?: NextRequest) {
   if (!isSupabaseConfigured()) return null
 
   const token = req?.headers.get('Authorization')?.replace('Bearer ', '') || ''
 
   // If we have a real JWT token (from Supabase Auth), use it
   if (token && !token.startsWith('rise_') && token.length > 50) {
+    const { createClient } = await loadSupabase()
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: `Bearer ${token}` },
@@ -63,10 +76,7 @@ export function getSupabaseWithAuth(req?: NextRequest): SupabaseClient | null {
 }
 
 // ── Legacy compatibility ──
-export function getSupabase(): SupabaseClient | null {
-  return getSupabaseAnon()
-}
-
+export const getSupabase = getSupabaseAnon
 export function isAdminAvailable(): boolean {
   return isSupabaseConfigured()
 }
@@ -77,7 +87,6 @@ export function isAdminAvailable(): boolean {
 
 /**
  * Handle API route errors gracefully.
- * Returns mock success data so the app keeps working in demo mode.
  */
 export function handleRouteError(error: unknown, route: string): NextResponse {
   const msg = error instanceof Error ? error.message : String(error)
@@ -89,12 +98,10 @@ export function handleRouteError(error: unknown, route: string): NextResponse {
 // Local User Management (Prisma fallback)
 // ============================================================
 
-// Track which user IDs have already been ensured (per-cold-start cache)
 const _ensuredUsers = new Set<string>()
 
 /**
  * Ensure a user row exists in the local User table.
- * Uses Prisma. Safe to call multiple times (idempotent).
  */
 export async function ensureUserExists(userId: string): Promise<boolean> {
   if (_ensuredUsers.has(userId)) return true
@@ -128,14 +135,13 @@ export async function ensureUserExists(userId: string): Promise<boolean> {
 
 /**
  * Resolve user ID from API key (rise_ prefix).
- * Checks Supabase first, falls back to local Prisma.
  */
 export async function resolveUserId(apiKey: string): Promise<string | null> {
   if (!apiKey.startsWith('rise_')) return null
 
   // Try Supabase first
   if (isSupabaseConfigured()) {
-    const admin = getSupabaseAdmin()
+    const admin = await getSupabaseAdmin()
     if (admin) {
       const { data } = await admin
         .from('user_api_keys')
@@ -143,7 +149,6 @@ export async function resolveUserId(apiKey: string): Promise<string | null> {
         .eq('key', apiKey)
         .single()
       if (data?.user_id) {
-        // Update last_used_at
         await admin
           .from('user_api_keys')
           .update({ last_used_at: new Date().toISOString() })
@@ -175,9 +180,6 @@ export async function resolveUserId(apiKey: string): Promise<string | null> {
 // ZhipuAI JWT Token
 // ============================================================
 
-/**
- * Generate ZhipuAI JWT token
- */
 export function generateZhipuToken(): string {
   const apiKey = process.env.BIGMODEL_API_KEY || ''
   const [id, secret] = apiKey.split('.')
