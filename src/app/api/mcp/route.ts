@@ -575,14 +575,13 @@ export async function OPTIONS() {
 
 /* ------------------------------------------------------------------ */
 /*  POST — Handle MCP JSON-RPC requests (stateless)                    */
-/*          Returns SSE if client expects it, JSON otherwise            */
+/*          ALWAYS returns SSE — all MCP clients expect it             */
 /* ------------------------------------------------------------------ */
 
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   const sessionId = generateSessionId()
-  const wantsSSE = (req.headers.get('Accept') || '').includes('text/event-stream')
 
   try {
     // Parse JSON-RPC request
@@ -590,22 +589,20 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json()
     } catch {
-      const errResp = jsonRpcError(null, -32700, 'Parse error: invalid JSON')
-      return wantsSSE ? sseResponse(errResp, sessionId) : NextResponse.json(errResp, { status: 400, headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
+      return sseResponse(jsonRpcError(null, -32700, 'Parse error: invalid JSON'), sessionId)
     }
 
     // Handle batch requests (array of requests)
     if (Array.isArray(body)) {
       const results = await Promise.all(body.map(async (msg: any) => handleSingleMessage(msg, req, sessionId)))
-      return wantsSSE ? sseResponse(results, sessionId) : NextResponse.json(results, { headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
+      return sseResponse(results, sessionId)
     }
 
     // Single request
     const result = await handleSingleMessage(body, req, sessionId)
-    return wantsSSE ? sseResponse(result, sessionId) : NextResponse.json(result, { headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
+    return sseResponse(result, sessionId)
   } catch (error) {
-    const errResp = jsonRpcError(null, -32603, `Internal error: ${error instanceof Error ? error.message : String(error)}`)
-    return wantsSSE ? sseResponse(errResp, sessionId) : NextResponse.json(errResp, { status: 500, headers: { ...CORS_HEADERS, 'mcp-session-id': sessionId } })
+    return sseResponse(jsonRpcError(null, -32603, `Internal error: ${error instanceof Error ? error.message : String(error)}`), sessionId)
   }
 }
 
