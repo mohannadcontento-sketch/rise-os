@@ -32,6 +32,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { AVATARS } from '@/lib/avatars'
 
 interface NavItem {
   id: ModuleId
@@ -122,6 +123,23 @@ export function Sidebar() {
   const [quickNotes, setQuickNotes] = useState('')
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const [notesLoaded, setNotesLoaded] = useState(false)
+  const [selectedAvatar, setSelectedAvatar] = useState<string>('')
+
+  // Load selected avatar
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rise-user-avatar')
+      if (stored) setSelectedAvatar(stored)
+    } catch { /* ignore */ }
+    const handler = () => {
+      try {
+        const stored = localStorage.getItem('rise-user-avatar')
+        if (stored) setSelectedAvatar(stored)
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('rise:avatar-changed', handler)
+    return () => window.removeEventListener('rise:avatar-changed', handler)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -356,9 +374,18 @@ export function Sidebar() {
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-sidebar-border to-transparent" />
           <div className="glass rounded-xl p-2.5 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20">
-                {user?.name?.charAt(0) || 'م'}
-              </div>
+              {selectedAvatar && AVATARS.find(a => a.id === selectedAvatar) ? (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shadow-md shadow-gold/20 overflow-hidden"
+                  style={AVATARS.find(a => a.id === selectedAvatar)!.style}
+                >
+                  <span className="scale-75">{AVATARS.find(a => a.id === selectedAvatar)!.svg}</span>
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20">
+                  {user?.name?.charAt(0) || 'م'}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-sidebar-foreground truncate">
                   {user?.name || 'مستخدم RiseOS'}

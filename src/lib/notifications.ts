@@ -1,4 +1,12 @@
 import { toast } from 'sonner'
+import { apiPost } from '@/lib/api-fetch'
+
+// Push notification to server (for persistence)
+export async function pushNotification(data: { title: string; body?: string; type?: string; icon?: string; actionUrl?: string }) {
+  try {
+    await apiPost('/api/rise/notifications', data)
+  } catch { /* silent */ }
+}
 
 // Show when user completes all morning routine items
 export function notifyMorningComplete(score: number, xp: number) {
@@ -6,6 +14,12 @@ export function notifyMorningComplete(score: number, xp: number) {
     toast.success('🎉 صباح رائع!', {
       description: `درجتك: ${score}% | +${xp} XP`,
       duration: 4000,
+    })
+    pushNotification({
+      title: 'صباح رائع!',
+      body: `درجتك: ${score}% | +${xp} XP`,
+      type: 'success',
+      icon: '🌅',
     })
   } catch {
     // never break the UI
@@ -18,6 +32,12 @@ export function notifyTaskComplete(title: string, xp: number) {
     toast.success('✅ مهمة مكتملة', {
       description: `${title} | +${xp} XP`,
       duration: 3000,
+    })
+    pushNotification({
+      title: 'مهمة مكتملة',
+      body: `${title} | +${xp} XP`,
+      type: 'success',
+      icon: '✅',
     })
   } catch {
     // never break the UI
@@ -32,6 +52,12 @@ export function notifyHabitComplete(name: string, streak: number) {
       description: `${name}${streakMsg}`,
       duration: 3000,
     })
+    pushNotification({
+      title: 'عادة مكتملة',
+      body: `${name}${streakMsg}`,
+      type: 'success',
+      icon: '🔥',
+    })
   } catch {
     // never break the UI
   }
@@ -44,6 +70,12 @@ export function notifyFocusComplete(minutes: number, xp: number) {
       description: `${minutes} دقيقة | +${xp} XP`,
       duration: 4000,
     })
+    pushNotification({
+      title: 'جلسة تركيز مكتملة',
+      body: `${minutes} دقيقة | +${xp} XP`,
+      type: 'success',
+      icon: '🧠',
+    })
   } catch {
     // never break the UI
   }
@@ -55,6 +87,12 @@ export function notifyLevelUp(level: number) {
     toast.success('🎊 مستوى جديد!', {
       description: `تهانينا! وصلت للمستوى ${level}`,
       duration: 5000,
+    })
+    pushNotification({
+      title: 'مستوى جديد!',
+      body: `تهانينا! وصلت للمستوى ${level}`,
+      type: 'achievement',
+      icon: '🎊',
     })
   } catch {
     // never break the UI
@@ -70,9 +108,11 @@ export function notifyMotivation() {
       '🌟 أنت أقرب مما تعتقد. واصل العمل!',
       '🎯 تذكر لماذا بدأت. استمر!',
     ]
-    toast.info(messages[Math.floor(Math.random() * messages.length)], {
+    const msg = messages[Math.floor(Math.random() * messages.length)]
+    toast.info(msg, {
       duration: 4000,
     })
+    // Don't push motivation to notifications (too frequent)
   } catch {
     // never break the UI
   }

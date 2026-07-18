@@ -2145,3 +2145,61 @@ Stage Summary:
 - Build error fixed by ensuring Prisma Client generation happens during Vercel build
 - Files changed: package.json, 5 auth route files
 - Pending: User needs to execute SQL migration in Supabase Dashboard, provide Service Role Key (optional)
+
+---
+Task ID: 3
+Agent: Focus Timer Fix Agent
+Task: Fix focus timer to work in background tab
+
+Work Log:
+- Read `/src/components/rise/deep-work.tsx` to understand existing timer logic (setInterval decrementing prev state)
+- Added `endTimeRef` (useRef<number | null>) and `FOCUS_TIMER_STORAGE_KEY` constant
+- Added mount-time restore effect that reads `localStorage` key `rise-focus-timer-state` and restores timer if still active (endTime > Date.now()), or shows completion state if finished within last 5 minutes
+- Replaced the old `setInterval(() => prev - 1, 1000)` timer with a timestamp-based approach: calculates remaining from `endTimeRef.current - Date.now()` on each tick (200ms interval)
+- On timer completion, clears endTimeRef and removes localStorage key
+- Updated `handleStart` to reset `endTimeRef.current = null` so the effect recalculates it
+- Updated `handlePause` to recalculate `endTimeRef` from current `timeRemaining`
+- Updated `handleResume` to recalculate `endTimeRef` from current `timeRemaining`
+- Updated `handleReset` to clear `endTimeRef` and remove localStorage key
+- Updated `handleStop` to clear `endTimeRef` and remove localStorage key
+- Updated `handleDurationSelect` to clear `endTimeRef` and remove localStorage key
+- Added `visibilitychange` event listener in `useAmbientSounds` hook that resumes a suspended `AudioContext` when the tab becomes visible again
+- Ran lint — zero errors
+- Verified dev server compiles cleanly with no errors
+
+Stage Summary:
+- Timer now uses timestamp-based calculation (`endTime - Date.now()`) instead of decrementing a counter, making it accurate even when browser throttles intervals in background tabs
+- Timer state (endTime, duration, startedAt) is persisted to localStorage, so navigating away and back restores the timer with correct remaining time
+- AudioContext is automatically resumed on tab visibility to prevent ambient sounds from staying muted after background tab return
+- No UI or layout changes were made
+
+---
+Task ID: 4-5-6
+Agent: Notification + Avatar + Sync Agent
+Task: Add notification system, avatar library, name/email sync
+
+Work Log:
+- Created `/src/app/api/rise/notifications/route.ts` with GET (fetch, filter unread), POST (create), PUT (mark read), DELETE — supports Supabase + in-memory fallback
+- Created `/src/app/api/rise/user/avatar/route.ts` with POST to save avatar to Prisma + Supabase `user_settings.avatar_url`
+- Updated `/src/app/api/rise/user/name/route.ts` to also sync name to Supabase `profiles` table after updating Prisma
+- Created `/src/components/rise/notification-bell.tsx` — Bell icon with unread badge, dropdown panel, framer-motion animations, 30s polling, mark-read, mark-all-read, delete, RTL, Arabic labels
+- Created `/src/lib/avatars.tsx` — 24 CSS/SVG avatar options (forest, ocean, sunset, mountain, sky, sun, moon, gold, abstract, earth, desert, rose themes)
+- Updated `/src/lib/notifications.ts` — added `pushNotification()` function and updated all notification helpers to also push to server
+- Updated `/src/app/page.tsx`:
+  - Lazy-loaded `NotificationBell` in top bar (between Bluetooth and theme toggle)
+  - Added `rise:user-updated` event listener that refreshes auth data from session API
+- Updated `/src/components/rise/settings.tsx`:
+  - Avatar is now clickable — opens Dialog picker with 24 CSS gradient avatars in 4-column grid
+  - Selected avatar has green ring + checkmark, saves to localStorage + API + dispatches `rise:avatar-changed` event
+  - Email now shows `auth.userEmail` instead of hardcoded "user@riseos.app"
+  - Name initializes from auth store (`auth.userName`) via `displayName` computed value
+- Updated `/src/components/rise/sidebar.tsx`:
+  - Footer user card shows selected avatar (loaded from localStorage, listens for `rise:avatar-changed` event)
+- Fixed lint errors: removed sync setState in effects, renamed avatars.ts → .tsx for JSX support
+
+Stage Summary:
+- Full notification system (API + bell component) with server persistence and local fallback
+- Avatar library with 24 CSS/SVG options, picker dialog, sidebar + settings display sync
+- Name/email now synced between auth store, settings, and Supabase profiles
+- `rise:user-updated` and `rise:avatar-changed` custom events for cross-component reactivity
+- All lint checks pass, dev server compiles without errors

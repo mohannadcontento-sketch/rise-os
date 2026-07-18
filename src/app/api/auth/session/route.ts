@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
+import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
+
+async function checkAdminRole(userId: string, email: string | undefined): Promise<boolean> {
+  // Check ADMIN_EMAIL env var first
+  if (email && email === ADMIN_EMAIL) return true
+
+  // Check Supabase profiles.role column
+  if (isSupabaseConfigured()) {
+    try {
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { data } = await admin
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single()
+        if (data?.role === 'admin') return true
+      }
+    } catch { /* ignore */ }
+  }
+
+  return false
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,12 +51,31 @@ export async function GET(request: NextRequest) {
                 },
               })
             }
+
+            // Check admin from profiles.role column
+            const isAdmin = await checkAdminRole(user.id, user.email)
+
+            // Get avatar from Supabase profile
+            let avatar: string | null = null
+            try {
+              const admin = await getSupabaseAdmin()
+              if (admin) {
+                const { data: profile } = await admin
+                  .from('profiles')
+                  .select('avatar')
+                  .eq('id', user.id)
+                  .single()
+                avatar = profile?.avatar || null
+              }
+            } catch { /* ignore */ }
+
             return NextResponse.json({
               user: {
                 id: user.id,
                 email: user.email,
                 name: user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
-                isAdmin: user.email === ADMIN_EMAIL,
+                isAdmin,
+                avatar,
               },
               expires: new Date((user.exp || 0) * 1000).toISOString() || null,
             })
@@ -51,8 +92,9 @@ export async function GET(request: NextRequest) {
 
     if (!user) return NextResponse.json({ user: null, expires: null })
 
+    const isAdmin = await checkAdminRole(user.id, user.email)
     return NextResponse.json({
-      user: { id: user.id, email: user.email, name: user.name, isAdmin: user.email === ADMIN_EMAIL },
+      user: { id: user.id, email: user.email, name: user.name, isAdmin },
     })
   } catch {
     return NextResponse.json({ user: null, expires: null })

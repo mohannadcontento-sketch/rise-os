@@ -72,6 +72,7 @@ import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
+import { AVATARS, type AvatarItem } from '@/lib/avatars'
 
 /* ────────────── Types ────────────── */
 
@@ -141,6 +142,14 @@ function formatBytes(bytes: number): string {
 export default function Settings() {
   const { theme, setTheme } = useTheme()
   const { auth } = useRiseStore()
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const [selectedAvatar, setSelectedAvatar] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    return localStorage.getItem('rise-user-avatar') || ''
+  })
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [isEditingName, setIsEditingName] = useState(false)
   const [settings, setSettings] = useState<SettingsData>(() => {
     if (typeof window === 'undefined') return defaultSettings
     try {
@@ -149,10 +158,12 @@ export default function Settings() {
     } catch { /* ignore */ }
     return defaultSettings
   })
-  const [resetDialogOpen, setResetDialogOpen] = useState(false)
-  const [confirmText, setConfirmText] = useState('')
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [editName, setEditName] = useState(settings.userName)
+  const [editName, setEditName] = useState(() => {
+    // Prefer auth store name, fallback to settings
+    return auth?.userName && auth.userName !== 'مستخدم' ? auth.userName : settings.userName
+  })
+  // Sync settings.userName from auth store
+  const displayName = auth?.userName && auth.userName !== 'مستخدم' ? auth.userName : settings.userName
   const [storageSize, setStorageSize] = useState(() => {
     if (typeof window === 'undefined') return { used: 0, total: 5 * 1024 * 1024 }
     return getLocalStorageSize()
@@ -194,6 +205,17 @@ export default function Settings() {
     try {
       await apiPost('/api/rise/user/name', { name: newName })
       window.dispatchEvent(new CustomEvent('rise:user-updated'))
+    } catch { /* silent */ }
+  }
+
+  const handleSelectAvatar = async (avatar: AvatarItem) => {
+    setSelectedAvatar(avatar.id)
+    localStorage.setItem('rise-user-avatar', avatar.id)
+    window.dispatchEvent(new CustomEvent('rise:avatar-changed'))
+    setAvatarPickerOpen(false)
+    toast.success(`تم اختيار ${avatar.name}`)
+    try {
+      await apiPost('/api/rise/user/avatar', { avatar: avatar.id })
     } catch { /* silent */ }
   }
 
@@ -336,24 +358,74 @@ export default function Settings() {
         <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent premium-card">
           <CardContent className="p-6">
             <div className="flex items-start gap-5">
-              {/* Avatar with gradient + animated glow */}
-              <motion.div
-                className="relative"
-                whileHover={{ scale: 1.05, rotate: -3 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <motion.div
-                  className="absolute inset-[-4px] rounded-full bg-gradient-to-br from-emerald-accent via-forest to-gold"
-                  animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.05, 1] }}
-                  transition={{ type: 'tween', duration: 3, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                />
-                <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-emerald-accent/25">
-                  {settings.userName.charAt(0)}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-white" />
+              {/* Avatar with gradient + animated glow — clickable to open picker */}
+              <Dialog open={avatarPickerOpen} onOpenChange={setAvatarPickerOpen}>
+                <DialogTrigger asChild>
+                  <motion.div
+                    className="relative cursor-pointer"
+                    whileHover={{ scale: 1.05, rotate: -3 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <motion.div
+                      className="absolute inset-[-4px] rounded-full bg-gradient-to-br from-emerald-accent via-forest to-gold"
+                      animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.05, 1] }}
+                      transition={{ type: 'tween', duration: 3, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                    />
+                    <div className="relative w-20 h-20 rounded-full shadow-xl shadow-emerald-accent/25 overflow-hidden flex items-center justify-center">
+                      {selectedAvatar && AVATARS.find(a => a.id === selectedAvatar) ? (
+                        <div
+                          className="w-full h-full flex items-center justify-center text-2xl"
+                          style={AVATARS.find(a => a.id === selectedAvatar)!.style}
+                        >
+                          {AVATARS.find(a => a.id === selectedAvatar)!.svg}
+                        </div>
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white">
+                          {displayName.charAt(0)}
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-forest border-2 border-background flex items-center justify-center">
+                        <Pencil className="w-3 h-3 text-white" />
+                      </div>
+                    </div>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent className="max-w-md" dir="rtl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-gold" />
+                      اختر صورتك الرمزية
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="grid grid-cols-4 gap-3 max-h-80 overflow-y-auto p-1">
+                    {AVATARS.map((avatar) => (
+                      <motion.button
+                        key={avatar.id}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleSelectAvatar(avatar)}
+                        className={cn(
+                          'flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all',
+                          'hover:bg-muted/50',
+                          selectedAvatar === avatar.id && 'ring-2 ring-emerald-accent bg-emerald-accent/5'
+                        )}
+                      >
+                        <div
+                          className="w-12 h-12 rounded-full flex items-center justify-center text-lg shadow-md"
+                          style={avatar.style}
+                        >
+                          {avatar.svg}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground truncate w-full text-center">{avatar.name}</span>
+                        {selectedAvatar === avatar.id && (
+                          <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-emerald-accent flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
+                          </div>
+                        )}
+                      </motion.button>
+                    ))}
                   </div>
-                </div>
-              </motion.div>
+                </DialogContent>
+              </Dialog>
               <div className="flex-1 space-y-3">
                 {/* Name */}
                 {isEditingName ? (
@@ -365,7 +437,7 @@ export default function Settings() {
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') saveName()
-                        if (e.key === 'Escape') { setIsEditingName(false); setEditName(settings.userName) }
+                        if (e.key === 'Escape') { setIsEditingName(false); setEditName(displayName) }
                       }}
                     />
                     <motion.button
@@ -377,7 +449,7 @@ export default function Settings() {
                     </motion.button>
                     <motion.button
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => { setIsEditingName(false); setEditName(settings.userName) }}
+                      onClick={() => { setIsEditingName(false); setEditName(displayName) }}
                       className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -388,10 +460,10 @@ export default function Settings() {
                     <div>
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">الاسم</Label>
                       <p className="text-base font-bold flex items-center gap-1.5">
-                        {settings.userName}
+                        {displayName}
                         <motion.button
                           whileTap={{ scale: 0.9 }}
-                          onClick={() => { setEditName(settings.userName); setIsEditingName(true) }}
+                          onClick={() => { setEditName(displayName); setIsEditingName(true) }}
                           className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors opacity-50 hover:opacity-100"
                         >
                           <Pencil className="w-3 h-3" />
@@ -403,7 +475,7 @@ export default function Settings() {
                 {/* Email */}
                 <div>
                   <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">البريد</Label>
-                  <p className="text-sm text-muted-foreground">user@riseos.app</p>
+                  <p className="text-sm text-muted-foreground">{auth?.userEmail || 'user@riseos.app'}</p>
                 </div>
                 {/* Stats Row */}
                 <div className="flex items-center gap-3 pt-1">

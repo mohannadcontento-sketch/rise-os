@@ -52,6 +52,7 @@ const ConnectionStatus = lazy(() => import('@/lib/pwa').then(m => ({ default: m.
 const OfflineBanner = lazy(() => import('@/lib/pwa').then(m => ({ default: m.OfflineBanner })))
 const BluetoothSharePanel = lazy(() => import('@/lib/pwa').then(m => ({ default: m.BluetoothSharePanel })))
 const Onboarding = lazy(() => import('@/components/rise/onboarding'))
+const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard'))
@@ -396,6 +397,37 @@ export default function RiseOSApp() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Listen for user-updated events to refresh user data from session
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const res = await apiGet('/api/auth/session')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.user) {
+            const storedInfo = localStorage.getItem('rise-user-info')
+            const parsed = storedInfo ? JSON.parse(storedInfo) : {}
+            setAuth(prev => prev ? {
+              ...prev,
+              userName: data.user.name || parsed?.name || prev.userName,
+              userEmail: data.user.email || prev.userEmail,
+            } : prev)
+            // Also update localStorage
+            localStorage.setItem('rise-user-info', JSON.stringify({
+              ...parsed,
+              name: data.user.name || parsed?.name,
+              email: data.user.email || parsed?.email,
+            }))
+          }
+        }
+      } catch {
+        // silent
+      }
+    }
+    window.addEventListener('rise:user-updated', handler)
+    return () => window.removeEventListener('rise:user-updated', handler)
+  }, [setAuth])
+
   /* ── Global search ── */
   const handleSearchQuery = useCallback((query: string) => {
     setSearchQuery(query)
@@ -518,6 +550,9 @@ export default function RiseOSApp() {
           >
             <Bluetooth className="w-4 h-4" />
           </Button>
+
+          {/* Notifications */}
+          <Suspense fallback={null}><NotificationBell /></Suspense>
 
           {/* Theme toggle with rotation */}
           {mounted && (

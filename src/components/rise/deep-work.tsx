@@ -554,6 +554,17 @@ function useAmbientSounds() {
     }
   }, [updateVolume])
 
+  // Resume AudioContext when tab becomes visible again
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && ctxRef.current && ctxRef.current.state === 'suspended') {
+        ctxRef.current.resume()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -642,6 +653,8 @@ export default function DeepWork() {
   const [lastSessionId, setLastSessionId] = useState<string | null>(null)
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const endTimeRef = useRef<number | null>(null)
+  const FOCUS_TIMER_STORAGE_KEY = 'rise-focus-timer-state'
 
   /* ─── Fetch ─── */
   const fetchSessions = useCallback(async () => {
@@ -662,29 +675,76 @@ export default function DeepWork() {
     fetchSessions()
   }, [fetchSessions])
 
-  /* ─── Timer Logic ─── */
+  /* ─── Restore timer state on mount ─── */
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(FOCUS_TIMER_STORAGE_KEY)
+      if (stored) {
+        const state = JSON.parse(stored)
+        if (state.endTime && state.endTime > Date.now()) {
+          // Timer still running
+          const remaining = Math.max(0, Math.floor((state.endTime - Date.now()) / 1000))
+          setSelectedDuration(state.duration)
+          setTimeRemaining(remaining)
+          setSessionStartTime(state.startedAt)
+          setIsRunning(true)
+          setIsPaused(false)
+          endTimeRef.current = state.endTime
+        } else if (state.endTime && state.endTime <= Date.now() && (Date.now() - state.endTime) < 5 * 60 * 1000) {
+          // Completed while away
+          setTimeRemaining(0)
+          setSessionCompleted(true)
+          setSessionStartTime(state.startedAt)
+          setSelectedDuration(state.duration)
+          localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY)
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  /* ─── Timer Logic (timestamp-based) ─── */
   useEffect(() => {
     if (isRunning && !isPaused) {
+      if (!endTimeRef.current) {
+        endTimeRef.current = Date.now() + timeRemaining * 1000
+      }
+
+      // Save state to localStorage
+      try {
+        localStorage.setItem(FOCUS_TIMER_STORAGE_KEY, JSON.stringify({
+          endTime: endTimeRef.current,
+          duration: selectedDuration,
+          startedAt: sessionStartTime,
+        }))
+      } catch { /* ignore */ }
+
       intervalRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            clearInterval(intervalRef.current!)
-            setIsRunning(false)
-            setIsPaused(false)
-            setSessionCompleted(true)
-            setCelebrateKey((k) => k + 1)
-            playSound('timer-done')
-            setTimeout(() => playSound('achievement'), 400)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
+        const remaining = Math.max(0, Math.floor((endTimeRef.current! - Date.now()) / 1000))
+        setTimeRemaining(remaining)
+
+        if (remaining <= 0) {
+          clearInterval(intervalRef.current!)
+          intervalRef.current = null
+          endTimeRef.current = null
+          setIsRunning(false)
+          setIsPaused(false)
+          setSessionCompleted(true)
+          setCelebrateKey((k) => k + 1)
+          playSound('timer-done')
+          setTimeout(() => playSound('achievement'), 400)
+          try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+        }
+      }, 200)
+    } else {
+      if (!isRunning && !sessionCompleted) {
+        try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+      }
     }
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [isRunning, isPaused])
+  }, [isRunning, isPaused, selectedDuration, sessionStartTime])
 
   /* ─── Save Session ─── */
   const saveSession = async (completed: boolean) => {
@@ -774,6 +834,7 @@ export default function DeepWork() {
     if (!sessionStartTime) {
       setSessionStartTime(new Date().toISOString())
     }
+    endTimeRef.current = null // Will be recalculated in the effect
     setIsRunning(true)
     setIsPaused(false)
     setSessionCompleted(false)
@@ -781,11 +842,13 @@ export default function DeepWork() {
   }
 
   const handlePause = () => {
+    endTimeRef.current = Date.now() + timeRemaining * 1000
     setIsPaused(true)
     playSound('toggle')
   }
 
   const handleResume = () => {
+    endTimeRef.current = Date.now() + timeRemaining * 1000
     setIsPaused(false)
     playSound('click')
   }
@@ -796,12 +859,16 @@ export default function DeepWork() {
     setSessionCompleted(false)
     setTimeRemaining(selectedDuration * 60)
     setSessionStartTime(null)
+    endTimeRef.current = null
+    try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     playSound('click')
   }
 
   const handleStop = () => {
     setIsRunning(false)
     setIsPaused(false)
+    endTimeRef.current = null
+    try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
     if (elapsedMin > 0) {
       saveSession(false)
@@ -819,6 +886,8 @@ export default function DeepWork() {
     setTimeRemaining(min * 60)
     setSessionCompleted(false)
     setSessionStartTime(null)
+    endTimeRef.current = null
+    try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     playSound('navigate')
   }
 

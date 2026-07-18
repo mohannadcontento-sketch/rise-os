@@ -10,33 +10,31 @@ export async function POST(req: NextRequest) {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
-    const { name } = await req.json()
-    if (!name || typeof name !== 'string' || !name.trim()) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    const { avatar } = await req.json()
+    if (!avatar || typeof avatar !== 'string') {
+      return NextResponse.json({ error: 'الصورة الرمزية مطلوبة' }, { status: 400 })
     }
-
-    const trimmed = name.trim()
 
     // Update local Prisma
     await db.user.update({
       where: { id: userId },
-      data: { name: trimmed },
+      data: { avatar },
     })
 
-    // Also update Supabase profile
+    // Also update Supabase if available
     if (isSupabaseConfigured()) {
       const supabase = await getSupabaseWithAuth(req)
       if (supabase) {
         await supabase
-          .from('profiles')
-          .update({ name: trimmed })
+          .from('user_settings')
+          .update({ avatar_url: avatar })
           .eq('id', userId)
           .then(() => {}).catch(() => {})
       }
     }
 
-    return NextResponse.json({ name: trimmed })
+    return NextResponse.json({ success: true, avatar })
   } catch (error) {
-    return handleRouteError(error, 'user-name')
+    return handleRouteError(error, 'user-avatar')
   }
 }
