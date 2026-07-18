@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
+import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +18,20 @@ export async function POST(request: NextRequest) {
         try {
           const { data, error } = await supabase.auth.refreshSession({ refresh_token })
           if (!error && data.session && data.user) {
+            // Check admin role from profiles.role column
+            let isAdmin = data.user.email === ADMIN_EMAIL
+            try {
+              const admin = await getSupabaseAdmin()
+              if (admin) {
+                const { data: profile } = await admin
+                  .from('profiles')
+                  .select('role')
+                  .eq('id', data.user.id)
+                  .single()
+                if (profile?.role === 'admin') isAdmin = true
+              }
+            } catch { /* ignore */ }
+
             return NextResponse.json({
               session: {
                 access_token: data.session.access_token,
@@ -28,7 +42,7 @@ export async function POST(request: NextRequest) {
                 id: data.user.id,
                 email: data.user.email,
                 name: data.user.user_metadata?.name || data.user.email?.split('@')[0],
-                isAdmin: data.user.email === ADMIN_EMAIL,
+                isAdmin,
               },
             })
           }

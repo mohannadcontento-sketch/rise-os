@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
-import { getLast30Days } from '@/lib/rise-utils'
+import { data } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,16 +9,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ habits: [], logs: [] })
     }
 
-    const habits = await db.habit.findMany({ where: { userId } })
-    const last30 = getLast30Days()
-    const habitIds = habits.map(h => h.id)
-
-    let logs: Array<{ id: string; habitId: string; date: string; completed: boolean; count: number; createdAt: Date }> = []
-    if (habitIds.length > 0) {
-      logs = await db.habitLog.findMany({
-        where: { habitId: { in: habitIds }, date: { in: last30 } },
-      })
-    }
+    const habitsWithLogs = await data.habits.list(userId)
+    const logs = habitsWithLogs.flatMap(h => h.logs)
+    const habits = habitsWithLogs.map(({ logs: _l, ...rest }) => rest)
 
     return NextResponse.json({ habits, logs })
   } catch (error) {
@@ -32,95 +23,58 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'habits')
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    await ensureUserExists(userId)
-
-    const habit = await db.habit.create({
-      data: { userId, ...body },
-    })
+    const habit = await data.habits.create(userId, body)
     return NextResponse.json(habit)
   } catch (error) {
-    return handleRouteError(error, 'habits')
+    console.error('Habits POST error:', error)
+    return NextResponse.json({ error: 'Failed to create habit' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'habits')
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    await ensureUserExists(userId)
     const body = await req.json()
 
     // Habit log toggle (from frontend habit toggle)
     if (body.habitId && body.date !== undefined) {
-      // Verify habit belongs to current user
-      const habit = await db.habit.findUnique({
-        where: { id: body.habitId },
-        select: { userId: true },
-      })
-      if (!habit || habit.userId !== userId) {
-        return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
-      }
-
-      const existing = await db.habitLog.findFirst({
-        where: { habitId: body.habitId, date: body.date },
-      })
-
-      if (existing && !body.completed) {
-        // Delete the log entry when unchecking
-        await db.habitLog.delete({ where: { id: existing.id } })
-        return NextResponse.json({ success: true })
-      } else if (!existing && body.completed) {
-        // Create log entry when checking
-        const log = await db.habitLog.create({
-          data: {
-            habitId: body.habitId,
-            date: body.date,
-            completed: true,
-            count: body.count !== undefined ? body.count : 1,
-          },
-        })
-        return NextResponse.json(log)
-      } else if (existing && body.completed) {
-        // Update count if already exists
-        const log = await db.habitLog.update({
-          where: { id: existing.id },
-          data: { completed: true, count: body.count || 1 },
-        })
-        return NextResponse.json(log)
-      }
-      return NextResponse.json({ success: true })
+      const log = await data.habits.toggleLog(
+        body.habitId,
+        body.date,
+        body.completed,
+        body.count !== undefined ? body.count : 1,
+      )
+      return NextResponse.json(log)
     }
 
     // Normal habit update
     const { id, ...updateBody } = body
-    const habit = await db.habit.update({
-      where: { id },
-      data: updateBody,
-    })
+    const habit = await data.habits.update(id, updateBody)
     return NextResponse.json(habit)
   } catch (error) {
-    return handleRouteError(error, 'habits')
+    console.error('Habits PUT error:', error)
+    return NextResponse.json({ error: 'Failed to update habit' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'habits')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    await db.habit.deleteMany({ where: { id, userId } })
+    await data.habits.remove(id, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
-    return handleRouteError(error, 'habits')
+    console.error('Habits DELETE error:', error)
+    return NextResponse.json({ error: 'Failed to delete habit' }, { status: 500 })
   }
 }

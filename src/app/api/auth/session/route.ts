@@ -40,18 +40,6 @@ export async function GET(request: NextRequest) {
         try {
           const { data: { user }, error } = await supabase.auth.getUser(token)
           if (!error && user) {
-            const localUser = await db.user.findUnique({ where: { id: user.id } })
-            if (!localUser) {
-              await db.user.create({
-                data: {
-                  id: user.id,
-                  name: user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
-                  email: user.email || '',
-                  settings: { create: {} },
-                },
-              })
-            }
-
             // Check admin from profiles.role column
             const isAdmin = await checkAdminRole(user.id, user.email)
 

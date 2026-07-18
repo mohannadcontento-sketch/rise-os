@@ -157,10 +157,15 @@ async function ensureLocalUserFromSupabase(supabaseUserId: string): Promise<void
 
 /**
  * Get the effective user ID for a request.
+ * When Supabase is configured, returns null if no valid token is provided
+ * (no fallback to a default/app user).
  */
 export async function requireAuth(req: NextRequest): Promise<string | null> {
   const userId = await getUserId(req)
   if (userId) return userId
+  // When Supabase is configured, don't fall back to a default user —
+  // the client must present a valid JWT.
+  if (isSupabaseConfigured()) return null
   return resolveAppUserId()
 }
 

@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
+import { data } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ books: [] })
 
-    const books = await db.book.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    })
-
+    const books = await data.books.list(userId)
     return NextResponse.json({ books })
   } catch (error) {
     console.error('Books GET error:', error)
@@ -24,16 +19,14 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
-    await ensureUserExists(userId)
 
     const body = await req.json()
-    const { id, createdAt, updatedAt, userId: _uid, ...data } = body
-    const record = await db.book.create({
-      data: { userId, ...data },
-    })
+    const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
+    const record = await data.books.create(userId, dataFields)
     return NextResponse.json(record)
   } catch (error) {
-    return handleRouteError(error, 'books')
+    console.error('Books POST error:', error)
+    return NextResponse.json({ error: 'Failed to create book' }, { status: 500 })
   }
 }
 
@@ -41,17 +34,31 @@ export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
-    await ensureUserExists(userId)
 
     const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    const record = await db.book.update({
-      where: { id },
-      data: body,
-    })
+    const record = await data.books.update(id, body)
     return NextResponse.json(record)
   } catch (error) {
-    return handleRouteError(error, 'books')
+    console.error('Books PUT error:', error)
+    return NextResponse.json({ error: 'Failed to update book' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const userId = await requireAuth(req)
+    if (!userId) return NextResponse.json({ success: true, offline: true })
+
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
+
+    await data.books.remove(id, userId)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Books DELETE error:', error)
+    return NextResponse.json({ error: 'Failed to delete book' }, { status: 500 })
   }
 }

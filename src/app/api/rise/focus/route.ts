@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
+import { data } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
 
-    const sessions = await db.focusSession.findMany({
-      where: { userId },
-      orderBy: { startedAt: 'desc' },
-      take: 50,
-    })
+    const sessions = await data.focusSessions.list(userId, 50)
 
     return NextResponse.json({ sessions })
   } catch (error) {
@@ -24,34 +19,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'focus')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const session = await db.focusSession.create({
-      data: { userId, ...body },
-    })
+    const session = await data.focusSessions.create(userId, body)
     return NextResponse.json(session)
   } catch (error) {
-    return handleRouteError(error, 'focus')
+    console.error('Focus POST error:', error)
+    return NextResponse.json({ error: 'Failed to create focus session' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'focus')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id, ...body } = await req.json()
-    const session = await db.focusSession.update({
-      where: { id },
-      data: body,
-    })
+    const session = await data.focusSessions.update(id, body)
     return NextResponse.json(session)
   } catch (error) {
-    return handleRouteError(error, 'focus')
+    console.error('Focus PUT error:', error)
+    return NextResponse.json({ error: 'Failed to update focus session' }, { status: 500 })
   }
 }

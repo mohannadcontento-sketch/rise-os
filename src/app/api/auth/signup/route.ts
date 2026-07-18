@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
               return NextResponse.json({ error: 'هذا البريد مسجل بالفعل وكلمة المرور غير صحيحة' }, { status: 409 })
             }
             const user = signInData.user!
-            await ensureLocalUser({ id: user.id, email: user.email || email, name: user.user_metadata?.name || name || email.split('@')[0] })
             return NextResponse.json({
               user: { id: user.id, email: user.email, name: user.user_metadata?.name || name || email.split('@')[0], isAdmin: email === ADMIN_EMAIL },
               session: { access_token: signInData.session!.access_token, refresh_token: signInData.session!.refresh_token, expires_at: signInData.session!.expires_at },
@@ -57,7 +56,6 @@ export async function POST(request: NextRequest) {
         }
 
         if (data.session) {
-          await ensureLocalUser({ id: user.id, email: user.email || email, name: user.user_metadata?.name || name || email.split('@')[0] })
           return NextResponse.json({
             user: { id: user.id, email: user.email, name: user.user_metadata?.name || name || email.split('@')[0], isAdmin: email === ADMIN_EMAIL },
             session: { access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at },
@@ -91,12 +89,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function ensureLocalUser(params: { id: string; email: string; name: string }) {
-  try {
-    const existing = await db.user.findUnique({ where: { id: params.id } })
-    if (existing) return
-    await db.user.create({ data: { id: params.id, email: params.email, name: params.name, settings: { create: {} } } })
-  } catch (err) {
-    console.error('[auth/signup] ensureLocalUser error:', err)
-  }
-}

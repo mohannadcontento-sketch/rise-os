@@ -23,7 +23,7 @@ import {
   LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
   Brain, GraduationCap, Heart, HeartPulse, LogOut, PenLine,
   Wallet, Calendar as CalendarIcon, Network, BarChart3,
-  Sparkles, Settings as SettingsIcon, Zap, Bluetooth, ShieldCheck,
+  Sparkles, Settings as SettingsIcon, Zap, ShieldCheck,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -50,7 +50,7 @@ const LoginPage = lazy(() => import('@/components/rise/login-page'))
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
 const ConnectionStatus = lazy(() => import('@/lib/pwa').then(m => ({ default: m.ConnectionStatus })))
 const OfflineBanner = lazy(() => import('@/lib/pwa').then(m => ({ default: m.OfflineBanner })))
-const BluetoothSharePanel = lazy(() => import('@/lib/pwa').then(m => ({ default: m.BluetoothSharePanel })))
+
 const Onboarding = lazy(() => import('@/components/rise/onboarding'))
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
 
@@ -220,7 +220,6 @@ export default function RiseOSApp() {
     journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
   }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
   const [fabOpen, setFabOpen] = useState(false)
-  const [btPanelOpen, setBtPanelOpen] = useState(false)
   const [themeRotating, setThemeRotating] = useState(false)
   const mountedRef = useRef(false)
   const mounted = useSyncExternalStore(
@@ -540,17 +539,6 @@ export default function RiseOSApp() {
           {/* Connection Status */}
           <Suspense fallback={null}><ConnectionStatus /></Suspense>
 
-          {/* Bluetooth Share */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-muted-foreground hover:text-blue-500"
-            onClick={() => setBtPanelOpen(true)}
-            aria-label="مشاركة بلوتوث"
-          >
-            <Bluetooth className="w-4 h-4" />
-          </Button>
-
           {/* Notifications */}
           <Suspense fallback={null}><NotificationBell /></Suspense>
 
@@ -825,8 +813,6 @@ export default function RiseOSApp() {
       {/* Onboarding for first-time users */}
       <Suspense fallback={null}><Onboarding /></Suspense>
 
-      {/* Bluetooth Share Panel */}
-      <Suspense fallback={null}><BluetoothSharePanel isOpen={btPanelOpen} onClose={() => setBtPanelOpen(false)} /></Suspense>
     </div>
   )
 }

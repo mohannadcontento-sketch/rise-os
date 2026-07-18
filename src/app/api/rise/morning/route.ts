@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
+import { data } from '@/lib/data'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 export async function GET(req: NextRequest) {
@@ -12,12 +11,9 @@ export async function GET(req: NextRequest) {
     const today = getToday()
     const last30 = getLast30Days()
 
-    const logs = await db.morningLog.findMany({
-      where: { userId, date: { in: last30 } },
-      orderBy: { date: 'desc' },
-    })
+    const logs = await data.morningLogs.list(userId, last30)
+    const todayLog = logs.find((l: any) => l.date === today) || null
 
-    const todayLog = logs.find((l) => l.date === today) || null
     return NextResponse.json({ logs, todayLog })
   } catch (error) {
     console.error('Morning GET error:', error)
@@ -28,36 +24,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'morning')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
     const today = getToday()
     const date = body.date || today
 
-    // Upsert: check if log exists for this date
-    const existing = await db.morningLog.findFirst({
-      where: { userId, date },
-    })
-
-    let result
-    if (existing) {
-      // Remove date and userId from body to avoid overwriting
-      const { date: _d, userId: _u, ...updateData } = body
-      result = await db.morningLog.update({
-        where: { id: existing.id },
-        data: updateData,
-      })
-    } else {
-      const { date: _d, ...createData } = body
-      result = await db.morningLog.create({
-        data: { userId, date, ...createData },
-      })
-    }
+    // Remove date and userId from body — upsert handles them via parameters
+    const { date: _d, userId: _u, ...upsertData } = body
+    const result = await data.morningLogs.upsert(userId, date, upsertData)
 
     return NextResponse.json(result)
   } catch (error) {
-    return handleRouteError(error, 'morning')
+    console.error('Morning POST error:', error)
+    return NextResponse.json({ error: 'Failed to save morning log' }, { status: 500 })
   }
 }

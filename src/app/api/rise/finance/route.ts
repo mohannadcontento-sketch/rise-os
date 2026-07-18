@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
+import { data } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ records: [], summary: { income: 0, expense: 0, balance: 0 } })
 
-    const records = await db.financeRecord.findMany({
-      where: { userId },
-      orderBy: { date: 'desc' },
-    })
-
+    const records = await data.financeRecords.list(userId)
     return NextResponse.json({ records })
   } catch (error) {
     console.error('Finance GET error:', error)
@@ -24,16 +19,14 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
-    await ensureUserExists(userId)
 
     const body = await req.json()
-    const { id, createdAt, updatedAt, userId: _uid, ...data } = body
-    const record = await db.financeRecord.create({
-      data: { userId, ...data },
-    })
+    const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
+    const record = await data.financeRecords.create(userId, dataFields)
     return NextResponse.json(record)
   } catch (error) {
-    return handleRouteError(error, 'finance')
+    console.error('Finance POST error:', error)
+    return NextResponse.json({ error: 'Failed to create finance record' }, { status: 500 })
   }
 }
 
@@ -41,18 +34,15 @@ export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
-    await ensureUserExists(userId)
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    await db.financeRecord.deleteMany({
-      where: { id, userId },
-    })
-
+    await data.financeRecords.remove(id, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
-    return handleRouteError(error, 'finance')
+    console.error('Finance DELETE error:', error)
+    return NextResponse.json({ error: 'Failed to delete finance record' }, { status: 500 })
   }
 }

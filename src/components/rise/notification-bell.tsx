@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, CheckCheck, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { apiGet, apiPut, apiDelete } from '@/lib/api-fetch'
 import { cn } from '@/lib/utils'
+import { useBrowserNotifications } from '@/lib/push-notifications'
 
 interface Notification {
   id: string
@@ -15,9 +16,9 @@ interface Notification {
   body?: string
   type?: string
   icon?: string
-  action_url?: string
-  is_read: boolean
-  created_at: string
+  actionUrl?: string
+  isRead: boolean
+  createdAt: string
 }
 
 function timeAgo(dateStr: string): string {
@@ -44,46 +45,73 @@ export function NotificationBell() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const loadingRef = useRef(false)
   const mountedRef = useRef(true)
+  const prevUnreadRef = useRef(0)
+  const { showBrowserNotification, requestPermission } = useBrowserNotifications()
 
-  // Ensure cleanup doesn't update unmounted component
   useEffect(() => {
     return () => { mountedRef.current = false }
   }, [])
 
+  const fetchNotifications = async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    try {
+      const r = await apiGet('/api/rise/notifications')
+      if (r.ok) {
+        const data = await r.json()
+        if (mountedRef.current && data) {
+          const newNotifs = data.notifications || []
+          const newUnread = data.unreadCount || 0
+
+          // Show browser notification for new unread notifications
+          if (newUnread > prevUnreadRef.current && prevUnreadRef.current >= 0) {
+            const latestUnread = newNotifs
+              .filter((n: Notification) => !n.isRead)
+              .slice(0, newUnread - prevUnreadRef.current)
+            for (const notif of latestUnread) {
+              showBrowserNotification(notif.title, {
+                body: notif.body || '',
+                tag: notif.id,
+              })
+            }
+            // Request permission on first new notification
+            if (newUnread > 0) requestPermission()
+          }
+
+          prevUnreadRef.current = newUnread
+          setNotifications(newNotifs)
+          setUnreadCount(newUnread)
+        }
+      }
+    } catch { /* silent */ }
+    finally { loadingRef.current = false }
+  }
+
   // Fetch on open
   useEffect(() => {
-    if (open && !loadingRef.current) {
-      loadingRef.current = true
-      apiGet('/api/rise/notifications')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!mountedRef.current) return
-          if (data) {
-            setNotifications(data.notifications || [])
-            setUnreadCount(data.unreadCount || 0)
-          }
-        })
-        .catch(() => {})
-        .finally(() => { loadingRef.current = false })
-    }
+    if (open) fetchNotifications()
   }, [open])
 
   // Poll every 30s when open
   useEffect(() => {
     if (!open) return
-    const poll = setInterval(() => {
-      apiGet('/api/rise/notifications')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!mountedRef.current) return
-          if (data) {
-            setNotifications(data.notifications || [])
-            setUnreadCount(data.unreadCount || 0)
-          }
-        })
-        .catch(() => {})
-    }, 30000)
+    const poll = setInterval(fetchNotifications, 30000)
     pollRef.current = poll
+    return () => clearInterval(poll)
+  }, [open])
+
+  // Also poll every 60s globally for badge count
+  useEffect(() => {
+    const poll = setInterval(() => {
+      if (!open) {
+        apiGet('/api/rise/notifications?unreadOnly=true')
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (mountedRef.current && data) setUnreadCount(data.unreadCount || 0)
+          })
+          .catch(() => {})
+      }
+    }, 60000)
     return () => clearInterval(poll)
   }, [open])
 
@@ -101,46 +129,39 @@ export function NotificationBell() {
 
   const markAsRead = async (id: string) => {
     setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
+      prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
     )
     setUnreadCount(prev => Math.max(0, prev - 1))
     try {
       await apiPut('/api/rise/notifications', { ids: [id] })
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   }
 
   const markAllAsRead = async () => {
-    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id)
+    const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id)
     if (unreadIds.length === 0) return
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
     setUnreadCount(0)
     try {
       await apiPut('/api/rise/notifications', { ids: unreadIds })
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   }
 
   const deleteNotification = async (id: string) => {
     const notif = notifications.find(n => n.id === id)
     setNotifications(prev => prev.filter(n => n.id !== id))
-    if (notif && !notif.is_read) {
+    if (notif && !notif.isRead) {
       setUnreadCount(prev => Math.max(0, prev - 1))
     }
     try {
       await apiDelete(`/api/rise/notifications?id=${id}`)
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   }
 
   const handleClickNotif = (notif: Notification) => {
-    if (!notif.is_read) markAsRead(notif.id)
-    if (notif.action_url) {
-      // Navigate via custom event
-      window.dispatchEvent(new CustomEvent('rise:navigate', { detail: notif.action_url }))
+    if (!notif.isRead) markAsRead(notif.id)
+    if (notif.actionUrl) {
+      window.dispatchEvent(new CustomEvent('rise:navigate', { detail: notif.actionUrl }))
     }
   }
 
@@ -235,9 +256,9 @@ export function NotificationBell() {
                         exit={{ opacity: 0, x: 10, height: 0 }}
                         transition={{ duration: 0.2 }}
                         className={cn(
-                          'flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors',
+                          'group flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors',
                           'hover:bg-white/5 dark:hover:bg-white/[0.03]',
-                          !notif.is_read && 'bg-emerald-accent/[0.03]'
+                          !notif.isRead && 'bg-emerald-accent/[0.03]'
                         )}
                         onClick={() => handleClickNotif(notif)}
                       >
@@ -248,11 +269,11 @@ export function NotificationBell() {
                           <div className="flex items-center gap-2">
                             <p className={cn(
                               'text-sm truncate',
-                              notif.is_read ? 'text-muted-foreground' : 'text-foreground font-semibold'
+                              notif.isRead ? 'text-muted-foreground' : 'text-foreground font-semibold'
                             )}>
                               {notif.title}
                             </p>
-                            {!notif.is_read && (
+                            {!notif.isRead && (
                               <span className="w-2 h-2 rounded-full bg-emerald-accent shrink-0" />
                             )}
                           </div>
@@ -262,7 +283,7 @@ export function NotificationBell() {
                             </p>
                           )}
                           <p className="text-[10px] text-muted-foreground/50 mt-1">
-                            {timeAgo(notif.created_at)}
+                            {timeAgo(notif.createdAt)}
                           </p>
                         </div>
                         <Button

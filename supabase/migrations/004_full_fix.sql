@@ -74,6 +74,13 @@ BEGIN
   ) THEN
     ALTER TABLE public.user_settings ADD COLUMN avatar_url TEXT;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'user_settings' AND column_name = 'push_subscription'
+  ) THEN
+    ALTER TABLE public.user_settings ADD COLUMN push_subscription JSONB;
+  END IF;
 END $$;
 
 -- ═══════════════════════════════════════════════════════════

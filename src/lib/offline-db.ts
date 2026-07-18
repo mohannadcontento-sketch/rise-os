@@ -26,14 +26,6 @@ export interface SyncStatusRecord {
   synced: boolean;
 }
 
-export interface BluetoothShareRecord {
-  id?: number;
-  senderName: string;
-  data: string; // JSON stringified
-  type: string;
-  receivedAt: number;
-}
-
 const DB_NAME_PREFIX = 'riseos-offline'
 const DB_VERSION = 1
 
@@ -50,7 +42,7 @@ const STORE_NAMES: StoreName[] = [
   'settings',
 ];
 
-const META_STORES = ['syncStatus', 'bluetoothShares'] as const;
+const META_STORES = ['syncStatus'] as const;
 
 const ALL_STORES = [...STORE_NAMES, ...META_STORES];
 
@@ -92,15 +84,6 @@ export class OfflineDB {
           ss.createIndex('synced', 'synced', { unique: false });
           ss.createIndex('storeName', 'storeName', { unique: false });
         }
-
-        // Bluetooth shares store
-        if (!db.objectStoreNames.contains('bluetoothShares')) {
-          const bs = db.createObjectStore('bluetoothShares', {
-            keyPath: 'id',
-            autoIncrement: true,
-          });
-          bs.createIndex('receivedAt', 'receivedAt', { unique: false });
-        }
       };
 
       request.onsuccess = () => {
@@ -122,7 +105,7 @@ export class OfflineDB {
   // ─── Generic CRUD ────────────────────────────────────────────────────
 
   async getAll<T = Record<string, unknown>>(
-    storeName: StoreName | 'syncStatus' | 'bluetoothShares'
+    storeName: StoreName | 'syncStatus'
   ): Promise<T[]> {
     const db = await this.getDB();
     return new Promise((resolve, reject) => {
@@ -135,7 +118,7 @@ export class OfflineDB {
   }
 
   async getById<T = Record<string, unknown>>(
-    storeName: StoreName | 'syncStatus' | 'bluetoothShares',
+    storeName: StoreName | 'syncStatus',
     id: string | number
   ): Promise<T | undefined> {
     const db = await this.getDB();
@@ -149,7 +132,7 @@ export class OfflineDB {
   }
 
   async add<T = Record<string, unknown>>(
-    storeName: StoreName | 'syncStatus' | 'bluetoothShares',
+    storeName: StoreName | 'syncStatus',
     data: T
   ): Promise<T> {
     const db = await this.getDB();
@@ -163,7 +146,7 @@ export class OfflineDB {
   }
 
   async update<T = Record<string, unknown>>(
-    storeName: StoreName | 'syncStatus' | 'bluetoothShares',
+    storeName: StoreName | 'syncStatus',
     data: T
   ): Promise<T> {
     const db = await this.getDB();
@@ -177,7 +160,7 @@ export class OfflineDB {
   }
 
   async delete(
-    storeName: StoreName | 'syncStatus' | 'bluetoothShares',
+    storeName: StoreName | 'syncStatus',
     id: string | number
   ): Promise<void> {
     const db = await this.getDB();
@@ -191,7 +174,7 @@ export class OfflineDB {
   }
 
   async clear(
-    storeName: StoreName | 'syncStatus' | 'bluetoothShares'
+    storeName: StoreName | 'syncStatus'
   ): Promise<void> {
     const db = await this.getDB();
     return new Promise((resolve, reject) => {

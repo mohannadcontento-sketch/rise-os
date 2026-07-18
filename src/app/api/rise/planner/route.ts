@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
+import { data } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,11 +10,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
 
-    const items = await db.plannerItem.findMany({
-      where: { userId, date },
-      orderBy: [{ section: 'asc' }, { order: 'asc' }],
-    })
-
+    const items = await data.plannerItems.list(userId, date)
     return NextResponse.json({ items })
   } catch (error) {
     console.error('Planner GET error:', error)
@@ -26,73 +21,53 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'planner')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const { date, section, title, time } = body
+    const { date, section } = body
 
     // Get next order for this section/date
-    const maxItem = await db.plannerItem.findFirst({
-      where: { userId, date, section },
-      orderBy: { order: 'desc' },
-    })
+    const existing = await data.plannerItems.list(userId, date)
+    const maxOrder = existing
+      .filter((i: any) => i.section === section)
+      .reduce((max: number, i: any) => Math.max(max, i.order ?? 0), -1)
+    const nextOrder = maxOrder + 1
 
-    const nextOrder = (maxItem?.order ?? -1) + 1
-
-    const item = await db.plannerItem.create({
-      data: {
-        userId,
-        date,
-        section,
-        title,
-        time: time || null,
-        order: nextOrder,
-      },
-    })
-
+    const item = await data.plannerItems.create(userId, { ...body, order: nextOrder })
     return NextResponse.json(item)
   } catch (error) {
-    return handleRouteError(error, 'planner')
+    console.error('Planner POST error:', error)
+    return NextResponse.json({ error: 'Failed to create planner item' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'planner')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id, ...body } = await req.json()
-
-    const item = await db.plannerItem.update({
-      where: { id },
-      data: body,
-    })
-
+    const item = await data.plannerItems.update(id, body)
     return NextResponse.json(item)
   } catch (error) {
-    return handleRouteError(error, 'planner')
+    console.error('Planner PUT error:', error)
+    return NextResponse.json({ error: 'Failed to update planner item' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'planner')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    await db.plannerItem.deleteMany({ where: { id, userId } })
-
+    await data.plannerItems.remove(id, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
-    return handleRouteError(error, 'planner')
+    console.error('Planner DELETE error:', error)
+    return NextResponse.json({ error: 'Failed to delete planner item' }, { status: 500 })
   }
 }

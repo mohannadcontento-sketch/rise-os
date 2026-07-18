@@ -1,8 +1,8 @@
-// RiseOS Service Worker — v2
+// RiseOS Service Worker — v3
 // IMPORTANT: Only caches in PWA standalone mode (installed app).
 // In browser mode, this SW does nothing — all requests pass through normally.
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `${CACHE_VERSION}-standalone`;
 
 // Check if we're running in standalone (installed PWA) mode
@@ -13,7 +13,6 @@ function isStandalone() {
 
 // ─── Install ────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  // Always install but don't pre-cache anything yet
   self.skipWaiting();
 });
 
@@ -30,43 +29,86 @@ self.addEventListener('activate', (event) => {
   );
   self.clients.claim();
 
-  // Notify all clients about the update
   self.clients.matchAll().then((clients) => {
     clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' }));
   });
 });
 
+// ─── Push Notifications ───────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  let data = { title: 'RiseOS', body: '', icon: '/icon-192.png', url: '/' };
+
+  if (event.data) {
+    try {
+      data = { ...data, ...event.data.json() };
+    } catch {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon,
+    badge: '/icon-192.png',
+    vibrate: [100, 50, 100],
+    data: { url: data.url || '/' },
+    actions: [
+      { action: 'open', title: 'فتح' },
+      { action: 'dismiss', title: 'إغلاق' },
+    ],
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// ─── Notification Click ───────────────────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') return;
+
+  const urlToOpen = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // Focus existing window if available
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(urlToOpen);
+          return client.focus();
+        }
+      }
+      // Otherwise open new window
+      return self.clients.openWindow(urlToOpen);
+    })
+  );
+});
+
 // ─── Fetch ──────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
-  // In browser mode — do nothing, let browser handle everything
   if (!isStandalone()) return;
 
   const { request } = event;
 
-  // Only handle GET requests
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // Skip chrome-extension and other non-http(s) requests
   if (!url.protocol.startsWith('http')) return;
-
-  // Skip Supabase requests — always go to network
   if (url.hostname.includes('supabase')) return;
 
-  // API requests: Network-First (try server, fallback to cache)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(networkFirst(request));
     return;
   }
 
-  // Static assets: Cache-First
   if (isStaticAsset(url.pathname)) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  // Navigation (HTML pages): Network-First with offline shell fallback
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request, true));
     return;
@@ -83,11 +125,9 @@ async function networkFirst(request, isNavigation = false) {
     }
     return response;
   } catch {
-    // Network failed — try cache
     const cached = await caches.match(request);
     if (cached) return cached;
 
-    // For navigation, try serving the cached root page
     if (isNavigation) {
       const shell = await caches.match('/');
       if (shell) return shell;
@@ -122,7 +162,6 @@ function isStaticAsset(pathname) {
 // ─── Listen for display-mode changes ────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'CHECK_STANDALONE') {
-    // Re-check standalone status
     const clients = self.clients.matchAll();
     clients.then((list) => {
       list.forEach((client) => {

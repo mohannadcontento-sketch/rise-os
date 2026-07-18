@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
+import { data } from '@/lib/data'
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,12 +9,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ goals: [] })
     }
 
-    const goals = await db.goal.findMany({
-      where: { userId },
-      include: { milestones: true },
-      orderBy: { createdAt: 'desc' },
-    })
-
+    const goals = await data.goals.list(userId)
     return NextResponse.json({ goals })
   } catch (error) {
     console.error('Goals GET error:', error)
@@ -26,72 +20,52 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'goals')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const goal = await db.goal.create({
-      data: { userId, ...body },
-    })
+    const goal = await data.goals.create(userId, body)
     return NextResponse.json(goal)
   } catch (error) {
-    return handleRouteError(error, 'goals')
+    console.error('Goals POST error:', error)
+    return NextResponse.json({ error: 'Failed to create goal' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'goals')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
 
     // Milestone toggle
     if (body.milestoneId) {
-      // Verify milestone belongs to user's goal
-      const milestone = await db.milestone.findUnique({
-        where: { id: body.milestoneId },
-        include: { goal: { select: { userId: true } } },
-      })
-      if (!milestone || milestone.goal?.userId !== userId) {
-        return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
-      }
-
-      const updated = await db.milestone.update({
-        where: { id: body.milestoneId },
-        data: { completed: body.completed },
-      })
+      const updated = await data.goals.toggleMilestone(body.milestoneId, body.completed)
       return NextResponse.json(updated)
     }
 
     const { id, ...updateBody } = body
-    const goal = await db.goal.update({
-      where: { id },
-      data: updateBody,
-    })
+    const goal = await data.goals.update(id, updateBody)
     return NextResponse.json(goal)
   } catch (error) {
-    return handleRouteError(error, 'goals')
+    console.error('Goals PUT error:', error)
+    return NextResponse.json({ error: 'Failed to update goal' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return handleRouteError(new Error('Unauthorized'), 'goals')
-
-    await ensureUserExists(userId)
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    await db.goal.deleteMany({ where: { id, userId } })
+    await data.goals.remove(id, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
-    return handleRouteError(error, 'goals')
+    console.error('Goals DELETE error:', error)
+    return NextResponse.json({ error: 'Failed to delete goal' }, { status: 500 })
   }
 }

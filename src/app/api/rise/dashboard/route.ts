@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { data } from '@/lib/data'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
 
 // Vercel: extend serverless function timeout to 30s for cold starts
@@ -16,96 +18,108 @@ export async function GET(req: NextRequest) {
     const today = getToday()
     const last30 = getLast30Days()
     const weekDays = getWeekDays()
-    const last30StartDate = new Date(last30[0] + 'T00:00:00')
 
     // Fetch all data in parallel
     const [
       user,
-      tasks,
-      habits,
-      focusSessions,
-      healthLog,
-      morningLog,
+      tasksResult,
+      habitsWithLogs,
+      focusSessionsResult,
+      healthResult,
+      morningResult,
       achievements,
-      dailyScores,
+      dailyScoresRaw,
       projects,
       goals,
       books,
       journals,
     ] = await Promise.all([
-      // User
+      // User — keep Prisma for user profile
       db.user.findUnique({ where: { id: userId } }),
-      // Tasks with project join
-      db.task.findMany({
-        where: { userId },
-        include: { subtasks: true, project: { select: { name: true, color: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-      // Habits with today's logs
-      db.habit.findMany({
-        where: { userId },
-        include: { logs: { where: { date: today } } },
-      }),
-      // Recent focus sessions (last 30 days)
-      db.focusSession.findMany({
-        where: { userId, startedAt: { gte: last30StartDate } },
-        orderBy: { startedAt: 'desc' },
-      }),
+      // Tasks (ordered by order asc from data layer)
+      data.tasks.list(userId),
+      // Habits with logs (last 30 days from data layer)
+      data.habits.list(userId),
+      // Recent focus sessions
+      data.focusSessions.list(userId),
       // Today health log
-      db.healthLog.findFirst({ where: { userId, date: today } }),
+      data.healthLogs.list(userId, [today]),
       // Today morning log
-      db.morningLog.findFirst({ where: { userId, date: today } }),
+      data.morningLogs.list(userId, [today]),
       // Achievements
-      db.userAchievement.findMany({
-        where: { userId },
-        orderBy: { earnedAt: 'desc' },
-        take: 10,
-      }),
-      // Daily scores for last 30 days
-      db.dailyScore.findMany({
-        where: { userId, date: { in: last30 } },
-      }),
+      data.userAchievements.list(userId),
+      // Daily scores for last 30 days — use direct supabase (no list method in data layer)
+      (async () => {
+        const supabase = await getSupabaseAdmin()
+        const { data: rows } = await supabase
+          .from('daily_scores')
+          .select('*')
+          .eq('user_id', userId)
+          .in('date', last30)
+        return (rows ?? []).map((d: any) => ({
+          date: d.date,
+          score: d.score,
+          morningScore: d.morning_score,
+          taskScore: d.task_score,
+          habitScore: d.habit_score,
+          focusScore: d.focus_score,
+          healthScore: d.health_score,
+          journalScore: d.journal_score,
+        }))
+      })(),
       // Projects
-      db.project.findMany({ where: { userId } }),
-      // Active goals (top 5)
-      db.goal.findMany({
-        where: { userId, status: 'active' },
-        take: 5,
-      }),
-      // Books currently reading
-      db.book.findMany({ where: { userId, status: 'reading' } }),
+      data.projects.list(userId),
+      // Goals
+      data.goals.list(userId),
+      // Books
+      data.books.list(userId),
       // Recent journals
-      db.journal.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-      }),
+      data.journals.list(userId, 5),
     ])
 
     if (!user) {
       return NextResponse.json(emptyDashboard())
     }
 
-    // Extract today habit logs from included logs
+    // Re-sort tasks by createdAt desc and take top 10
+    const tasks = [...tasksResult]
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .slice(0, 10)
+
+    // Filter habits to only include today's logs
+    const habits = habitsWithLogs.map(h => ({
+      ...h,
+      logs: (h.logs || []).filter((l: any) => l.date === today),
+    }))
+
+    // Filter focus sessions to last 30 days
+    const focusSessions = focusSessionsResult.filter(
+      (s: any) => s.startedAt && s.startedAt >= last30[0]
+    )
+
+    // Extract today habit logs
     const todayHabitsLogs = habits.flatMap(h =>
-      h.logs.map(l => ({ ...l, habitId: h.id })),
+      h.logs.map((l: any) => ({ ...l, habitId: h.id })),
     )
 
     // Computed metrics
     const completedTasksToday = tasks.filter(
-      (t) => t.completedAt && String(t.completedAt).startsWith(today),
+      (t: any) => t.completedAt && String(t.completedAt).startsWith(today),
     ).length
-    const completedHabitsToday = todayHabitsLogs.filter((l) => l.completed).length
+    const completedHabitsToday = todayHabitsLogs.filter((l: any) => l.completed).length
     const totalHabits = habits.length
     const todayFocusMin = focusSessions
       .filter(
-        (s) => String(s.startedAt).startsWith(today) && s.completed,
+        (s: any) => String(s.startedAt).startsWith(today) && s.completed,
       )
-      .reduce((sum, s) => sum + (s.actualMin || 0), 0)
+      .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
 
     const totalTasks = tasks.length
-    const doneTasks = tasks.filter((t) => t.status === 'done').length
+    const doneTasks = tasks.filter((t: any) => t.status === 'done').length
+
+    // Extract single records from arrays
+    const healthLog = healthResult.length > 0 ? healthResult[0] : null
+    const morningLog = morningResult.length > 0 ? morningResult[0] : null
 
     return NextResponse.json({
       user: {
@@ -125,29 +139,29 @@ export async function GET(req: NextRequest) {
         focusMin: todayFocusMin,
         morningScore: morningLog?.score || 0,
       },
-      tasks: tasks.map((t) => ({
+      tasks: tasks.map((t: any) => ({
         ...t,
         done: t.status === 'done',
         projectName: t.project?.name,
         projectColor: t.project?.color,
       })),
-      habits: habits.map((h) => ({
+      habits: habits.map((h: any) => ({
         ...h,
         todayCompleted:
-          todayHabitsLogs.find((l) => l.habitId === h.id)?.completed || false,
+          todayHabitsLogs.find((l: any) => l.habitId === h.id)?.completed || false,
         todayCount:
-          todayHabitsLogs.find((l) => l.habitId === h.id)?.count || 0,
+          todayHabitsLogs.find((l: any) => l.habitId === h.id)?.count || 0,
       })),
       recentFocus: focusSessions.slice(0, 5),
       health: healthLog,
       morning: morningLog,
       achievements,
-      dailyScores: dailyScores.sort((a, b) => a.date.localeCompare(b.date)),
-      projects: projects.map((p) => ({
+      dailyScores: dailyScoresRaw.sort((a: any, b: any) => a.date.localeCompare(b.date)),
+      projects: projects.map((p: any) => ({
         ...p,
-        taskCount: tasks.filter((t) => t.projectId === p.id).length,
-        doneTaskCount: tasks.filter(
-          (t) => t.projectId === p.id && t.status === 'done',
+        taskCount: tasksResult.filter((t: any) => t.projectId === p.id).length,
+        doneTaskCount: tasksResult.filter(
+          (t: any) => t.projectId === p.id && t.status === 'done',
         ).length,
       })),
       goals,
@@ -157,7 +171,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Dashboard error:', error)
-    // Return empty fallback when database is unavailable
     return NextResponse.json(emptyDashboard())
   }
 }

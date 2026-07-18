@@ -53,13 +53,6 @@ export async function POST(request: NextRequest) {
             if (profile?.role === 'admin') isAdmin = true
           }
         } catch { /* ignore */ }
-        await ensureLocalUser({
-          id: user.id,
-          email: user.email || email,
-          name: user.user_metadata?.name || email.split('@')[0] || 'مستخدم',
-          isAdmin,
-        })
-
         return NextResponse.json({
           user: {
             id: user.id,
@@ -109,30 +102,5 @@ export async function POST(request: NextRequest) {
       { error: 'حدث خطأ في تسجيل الدخول' },
       { status: 500 },
     )
-  }
-}
-
-async function ensureLocalUser(params: { id: string; email: string; name: string; isAdmin: boolean }) {
-  const { id, email, name } = params
-
-  try {
-    const existing = await db.user.findUnique({ where: { id } })
-    if (existing) {
-      if (existing.name !== name || existing.email !== email) {
-        await db.user.update({ where: { id }, data: { name, email } })
-      }
-      return
-    }
-
-    await db.user.create({
-      data: { id, email, name, settings: { create: {} } },
-    })
-
-    const admin = await getSupabaseAdmin()
-    if (admin) {
-      await admin.from('profiles').update({ name, email }).eq('id', id)
-    }
-  } catch (err) {
-    console.error('[auth/login] ensureLocalUser error:', err)
   }
 }

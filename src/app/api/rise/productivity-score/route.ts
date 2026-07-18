@@ -1,37 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { data } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
 
 async function calculateScoreForDate(userId: string, date: string) {
-  const [tasks, habits, habitLogs, focusSessions, morningLog] = await Promise.all([
-    db.task.findMany({ where: { userId } }),
-    db.habit.findMany({ where: { userId } }),
-    db.habitLog.findMany({
-      where: { habit: { userId }, date },
-    }),
-    db.focusSession.findMany({
-      where: {
-        userId,
-        startedAt: { gte: new Date(date + 'T00:00:00'), lt: new Date(date + 'T23:59:59') },
-      },
-    }),
-    db.morningLog.findFirst({ where: { userId, date } }),
+  const [tasks, habitsWithLogs, focusSessions, morningResult] = await Promise.all([
+    data.tasks.list(userId),
+    data.habits.list(userId),
+    data.focusSessions.list(userId),
+    data.morningLogs.list(userId, [date]),
   ])
+
+  // Extract habit logs for the given date
+  const habitLogs = habitsWithLogs.flatMap((h: any) =>
+    (h.logs || []).filter((l: any) => l.date === date)
+  )
+
+  // Filter focus sessions for the given date
+  const dayFocusSessions = focusSessions.filter(
+    (s: any) => s.startedAt && s.startedAt.startsWith(date)
+  )
 
   const totalTasks = tasks.length
   const completedTasks = tasks.filter(
-    (t) => t.status === 'done' && t.completedAt && t.completedAt.toISOString().slice(0, 10) === date
+    (t: any) => t.status === 'done' && t.completedAt && String(t.completedAt).slice(0, 10) === date
   ).length
   const tasksScore = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
 
-  const totalHabits = habits.length
-  const completedHabits = habitLogs.filter((l) => l.completed).length
+  const totalHabits = habitsWithLogs.length
+  const completedHabits = habitLogs.filter((l: any) => l.completed).length
   const habitsScore = totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0
 
-  const todayFocusMin = focusSessions.filter((s) => s.completed).reduce((sum, s) => sum + (s.actualMin || 0), 0)
+  const todayFocusMin = dayFocusSessions.filter((s: any) => s.completed).reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
   const focusScore = Math.min((todayFocusMin / 120) * 100, 100)
 
+  const morningLog = morningResult.length > 0 ? morningResult[0] : null
   const morningScore = morningLog?.score || 0
 
   const user = await db.user.findUnique({ where: { id: userId }, select: { streak: true } })
@@ -66,34 +70,34 @@ export async function GET(req: NextRequest) {
     const score = await calculateScoreForDate(userId, today)
 
     // Recalculate breakdown for today specifically
-    const [tasks, habits, todayHabitLogs, focusSessions, morningLog] = await Promise.all([
-      db.task.findMany({ where: { userId } }),
-      db.habit.findMany({ where: { userId } }),
-      db.habitLog.findMany({
-        where: { habit: { userId }, date: today },
-      }),
-      db.focusSession.findMany({
-        where: {
-          userId,
-          startedAt: { gte: new Date(today + 'T00:00:00'), lt: new Date(today + 'T23:59:59') },
-        },
-      }),
-      db.morningLog.findFirst({ where: { userId, date: today } }),
+    const [tasks, habitsWithLogs, focusSessions, morningResult] = await Promise.all([
+      data.tasks.list(userId),
+      data.habits.list(userId),
+      data.focusSessions.list(userId),
+      data.morningLogs.list(userId, [today]),
     ])
+
+    const todayHabitLogs = habitsWithLogs.flatMap((h: any) =>
+      (h.logs || []).filter((l: any) => l.date === today)
+    )
 
     const totalTasks = tasks.length
     const completedTasksToday = tasks.filter(
-      (t) => t.status === 'done' && t.completedAt && t.completedAt.toISOString().slice(0, 10) === today
+      (t: any) => t.status === 'done' && t.completedAt && String(t.completedAt).slice(0, 10) === today
     ).length
     const tasksScore = totalTasks > 0 ? (completedTasksToday / totalTasks) * 100 : 0
 
-    const totalHabits = habits.length
-    const completedHabitsToday = todayHabitLogs.filter((l) => l.completed).length
+    const totalHabits = habitsWithLogs.length
+    const completedHabitsToday = todayHabitLogs.filter((l: any) => l.completed).length
     const habitsScore = totalHabits > 0 ? (completedHabitsToday / totalHabits) * 100 : 0
 
-    const todayFocusMin = focusSessions.filter((s) => s.completed).reduce((sum, s) => sum + (s.actualMin || 0), 0)
+    const dayFocusSessions = focusSessions.filter(
+      (s: any) => s.startedAt && s.startedAt.startsWith(today)
+    )
+    const todayFocusMin = dayFocusSessions.filter((s: any) => s.completed).reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
     const focusScore = Math.min((todayFocusMin / 120) * 100, 100)
 
+    const morningLog = morningResult.length > 0 ? morningResult[0] : null
     const morningScoreVal = morningLog?.score || 0
 
     const user = await db.user.findUnique({ where: { id: userId }, select: { streak: true } })

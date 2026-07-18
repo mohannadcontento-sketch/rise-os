@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { ensureUserExists, handleRouteError } from '@/lib/supabase'
 import { calculateXpForLevel } from '@/lib/rise-utils'
 
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
-    await ensureUserExists(userId)
 
     const { amount, reason } = await req.json()
     if (!amount || amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
@@ -50,6 +48,7 @@ export async function POST(req: NextRequest) {
       newLevel,
     })
   } catch (error) {
-    return handleRouteError(error, 'earn-xp')
+    console.error('Earn XP error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

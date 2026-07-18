@@ -2236,3 +2236,105 @@ Stage Summary:
 - Pushed as commit de7188c
 - User MUST run 002_clean_schema.sql in Supabase SQL Editor
 - User should provide SERVICE_ROLE_KEY for full admin operations
+
+---
+Task ID: data-layer
+Agent: Main
+Task: Create Supabase-backed data access layer (src/lib/data.ts)
+
+Work Log:
+- Read supabase.ts (getSupabaseAdmin), 004_full_fix.sql (Supabase table schemas), prisma/schema.prisma (field names)
+- Created /home/z/my-project/src/lib/data.ts with comprehensive data access layer
+- Implemented recursive toSnake() helper (camelCase→snake_case, serialises Date→ISO string)
+- Implemented recursive toCamel() helper (snake_case→camelCase)
+- Implemented sb() helper that returns cached admin client or throws
+- Created 15 entity namespaces on the `data` export: projects, tasks, goals, habits, journals, focusSessions, healthLogs, financeRecords, books, knowledgeItems, plannerItems, morningLogs, notifications, dailyScores, userAchievements
+- Tasks.list() fetches subtasks (via IN query) and projects (name+color only) and joins them in JS
+- Goals.list() fetches milestones grouped by goalId
+- Habits.list() fetches habit_logs for the last 30 days and groups by habitId
+- Tasks.create() handles nested subtasks array insertion
+- Upsert operations (journals, healthLogs, morningLogs, dailyScores) use find-then-update-or-insert pattern
+- Habits.toggleLog() uses find-then-update-or-insert on habit_logs
+- All methods are async, use getSupabaseAdmin() (bypasses RLS), return camelCase data, throw on error
+- ESLint passes cleanly
+
+Stage Summary:
+- Single new file: src/lib/data.ts (~520 lines)
+- Drop-in replacement for Prisma db.* calls in API routes
+- No other files modified
+
+---
+Task ID: 2
+Agent: full-stack-developer (route migration)
+Task: Migrate all API routes from Prisma/SQLite to Supabase data layer
+
+Work Log:
+- Replaced `import { db } from '@/lib/db'` with `import { data } from '@/lib/data'` in 17 route files
+- Removed all `import { ensureUserExists, handleRouteError } from '@/lib/supabase'` references
+- Removed all `ensureUserExists(userId)` calls
+- Replaced `handleRouteError(error, 'xxx')` with proper `console.error` + `NextResponse.json({ error }, { status: 500 })`
+- Mapped all Prisma CRUD calls to data layer methods:
+  - projects: list/create/update/remove
+  - tasks: list/create/update/remove (list returns nested subtasks + project join)
+  - goals: list/create/update/toggleMilestone/remove
+  - habits: list/create/update/toggleLog/remove (flattened nested logs for response)
+  - journals: get/list/upsert
+  - focusSessions: list/create/update
+  - healthLogs: list/upsert
+  - financeRecords: list/create/remove
+  - books: list/create/update/remove (added missing DELETE handler)
+  - knowledgeItems: list/create/update/remove
+  - plannerItems: list/create/update/remove (preserved order computation in POST)
+  - morningLogs: list/upsert
+  - notifications: list/create/update/remove (replaced direct supabase + in-memory fallback with data layer)
+- Left earn-xp route using Prisma (updates user-specific XP/level fields)
+- Left budgets route as-is (no data model, just removed handleRouteError import)
+- Updated seed route: uses data layer for all data tables, Prisma for user/userSettings, direct supabase bulk insert for habit_logs/milestones/daily_scores
+- Updated dashboard route: uses data layer for all data tables, Prisma for user, direct supabase for daily_scores list
+- Updated productivity-score route: uses data layer for tasks/habits/focus/morning, Prisma for user streak
+- Updated export route: uses data layer for all data tables, Prisma for user, direct supabase for daily_scores and all habit_logs
+- ESLint passes cleanly with zero errors
+
+Stage Summary:
+- All 17 route files migrated to use Supabase data layer
+- Files modified: src/app/api/rise/{projects,tasks,goals,habits,journal,focus,health,finance,books,knowledge,planner,morning,notifications,earn-xp,seed,dashboard,productivity-score,export,budgets}/route.ts
+- Only earn-xp retains Prisma (user XP/level updates)
+- Only dashboard/productivity-score/export retain Prisma for user profile reads
+- All data operations (projects, tasks, goals, habits, journals, focus, health, finance, books, knowledge, planner, morning, notifications, achievements) go through data.ts → Supabase
+
+---
+Task ID: bt-cleanup
+Agent: Main
+Task: Remove ALL Bluetooth-related code from the application
+
+Work Log:
+- src/app/page.tsx: Removed `Bluetooth` from lucide-react imports, removed `BluetoothSharePanel` lazy import, removed `btPanelOpen` state, removed Bluetooth button in header bar, removed `<Suspense><BluetoothSharePanel>` rendering at end of JSX
+- src/lib/pwa.tsx: Removed entire `BluetoothSharePanel` component (167 lines), removed `Bluetooth, Share2, CheckCircle2` from icon imports, removed `getBluetoothShare`/`BluetoothShareData` import from bluetooth-share.ts, removed unused `useCallback` import
+- src/lib/bluetooth-share.ts: Deleted entire file (224 lines)
+- src/lib/offline-db.ts: Removed `BluetoothShareRecord` interface, removed `'bluetoothShares'` from `META_STORES`, removed bluetoothShares IndexedDB object store creation in upgrade handler, removed `'bluetoothShares'` from all method type unions (`getAll`, `getById`, `add`, `update`, `delete`, `clear`)
+- src/components/rise/settings.tsx: No Bluetooth-related code found (already clean)
+
+Stage Summary:
+- All Bluetooth code fully removed from 4 files, 1 file deleted
+- `bun run lint` passes with zero errors
+- No remaining references to bluetooth, BluetoothSharePanel, or bluetooth-share in the codebase
+
+---
+Task ID: auth-persistence-fix
+Agent: Main
+Task: Fix authentication session persistence — page refresh showing login page
+
+Work Log:
+- Fixed `requireAuth()` in `/src/lib/auth.ts` to return `null` when Supabase is configured and no valid JWT is provided, instead of falling back to `resolveAppUserId()` (which created a random default user)
+- Removed local Prisma user creation (`db.user.findUnique/create`) from `/src/app/api/auth/session/route.ts` — now only validates the Supabase JWT and returns user info
+- Removed `ensureLocalUser()` call and function from `/src/app/api/auth/login/route.ts` — user already exists in Supabase via trigger
+- Fixed `/src/app/api/auth/refresh/route.ts` to check `profiles.role` column for admin status (not just `ADMIN_EMAIL`), matching the session route behavior
+- Removed `ensureLocalUser()` calls and function from `/src/app/api/auth/signup/route.ts` — user already exists in Supabase via trigger
+- Verified `page.tsx` auth check logic is correct — it validates session, refreshes tokens, saves to localStorage, and falls back appropriately
+
+Stage Summary:
+- Session persistence now works correctly: valid Supabase JWT → user stays logged in
+- No more phantom default users leaking through `requireAuth()`
+- Admin role check is consistent across session and refresh endpoints
+- Removed unnecessary Prisma user creation from auth flows (Supabase triggers handle this)
+- Lint passes clean
