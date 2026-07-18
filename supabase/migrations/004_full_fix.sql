@@ -496,16 +496,19 @@ END $$;
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, email, avatar, role)
+  -- فقط الأعمدة المضمونة وجودها (role و avatar ليهم DEFAULT)
+  INSERT INTO public.profiles (id, name, email)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'avatar', NULL),
-    'user'
-  );
+    NEW.email
+  )
+  ON CONFLICT (id) DO NOTHING;
+
   INSERT INTO public.user_settings (user_id)
-  VALUES (NEW.id);
+  VALUES (NEW.id)
+  ON CONFLICT (user_id) DO NOTHING;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
         })
 
         if (error) {
+          console.error('[auth/signup] Supabase error:', error.message, error.code, error.status)
           if (error.message.includes('already registered') || error.message.includes('already been registered')) {
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
             if (signInError) {
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
               session: { access_token: signInData.session!.access_token, refresh_token: signInData.session!.refresh_token, expires_at: signInData.session!.expires_at },
             })
           }
-          return NextResponse.json({ error: error.message }, { status: 400 })
+          return NextResponse.json({ error: `خطأ في التسجيل: ${error.message}` }, { status: 400 })
         }
 
         const user = data.user
