@@ -534,34 +534,9 @@ const CORS_HEADERS = {
 /*        Falls back to JSON health check for browsers/other clients    */
 /* ------------------------------------------------------------------ */
 
-export async function GET(req: NextRequest) {
-  const accept = req.headers.get('Accept') || ''
-
-  // If client expects SSE, return proper MCP SSE stream with JSON-encoded URI
-  if (accept.includes('text/event-stream')) {
-    const sessionId = generateSessionId()
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.headers.get('x-forwarded-host')
-      ? `https://${req.headers.get('x-forwarded-host')}` : 'http://localhost:3000'
-    const postEndpoint = `${baseUrl}/api/mcp?sessionId=${sessionId}`
-
-    const body = `event: endpoint
-data: ${JSON.stringify({ uri: postEndpoint })}
-
-`
-
-    return new NextResponse(body, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
-        'mcp-session-id': sessionId,
-        ...CORS_HEADERS,
-      },
-    })
-  }
-
-  // Otherwise return JSON health info
+export async function GET() {
+  // Stateless server — no session management needed.
+  // Claude Desktop will POST all requests to this same URL.
   return NextResponse.json({
     status: 'ok',
     server: 'riseos-mcp',
