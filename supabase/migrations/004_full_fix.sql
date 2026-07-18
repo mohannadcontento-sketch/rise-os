@@ -477,7 +477,7 @@ DO $$
 DECLARE
   tbl TEXT;
 BEGIN
-  FOR tbl IN SELECT table_name FROM information_schema.tables
+  FOR tbl IN SELECT table_name FROM information_schema.columns
     WHERE table_schema = 'public'
     AND column_name = 'updated_at'
   LOOP
