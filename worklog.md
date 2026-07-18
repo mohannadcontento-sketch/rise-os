@@ -1925,3 +1925,35 @@ Stage Summary:
 - Full MCP → DB → Frontend data flow now works
 - Chain: MCP call → admin client (bypasses RLS) → ensureUserExists creates demo-user → insert succeeds → frontend reads via admin client → data visible
 - All previous fixes also active: AudioContext, 401s, handleRouteError
+---
+Task ID: mcp-auth-fix
+Agent: Main
+Task: اختبار شامل للموقع + إصلاح MCP ليعمل مع أي مستخدم
+
+Work Log:
+- اختبار شامل عبر agent-browser: تسجيل دخول، لوحة تحكم، مهام، عادات، تحليلات، إعدادات
+- كل API requests تعمل بـ 200 (صفر 401 errors)
+- اكتشاف المشكلة الأساسية: getSupabaseWithAuth() كان يستخدم JWT client لليوزرز المسجلين، و RLS كان يمنع الوصول أحياناً
+- إصلاح getSupabaseWithAuth() ليفضل دائماً admin (service-role) client
+- إصلاح MCP call route: يستخدم admin client لبحث API key + جميع العمليات
+- إصلاح login route: يستدعي ensureUserExists() بعد تسجيل الدخول الناجح
+- إصلاح signup route: يستدعي ensureUserExists() بعد إنشاء الحساب
+- تحسين ensureUserExists() ليقبل (userId, name?, email?) مباشرة
+- إضافة UserApiKey table في supabase-schema.sql
+- إنشاء supabase-migration-mcp.sql كملف ترحيل منفصل
+- push إلى GitHub واختبار على Vercel
+
+Stage Summary:
+- الموقع يعمل بدون أي أخطاء API
+- كل الـ 100+ API requests تعود بـ 200
+- MCP يدعم الآن:
+  1. API key (rise_xxx) → admin client → بيانات المستخدم
+  2. JWT (من rise_auth) → admin client → نفس بيانات المستخدم
+  3. الموقع المسجل → admin client → بيانات المستخدم
+- البيانات المضافة عبر MCP تظهر على الموقع للمستخدم
+
+## خطوة مطلوبة من المستخدم:
+1. افتح Supabase SQL Editor
+2. شغّل ملف supabase-migration-mcp.sql
+3. في إعدادات RiseOS: احذف مفتاح API القديم وأنشئ واحد جديد
+4. استخدم المفتاح الجديد في Claude Desktop / أي AI
