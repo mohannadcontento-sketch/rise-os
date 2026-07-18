@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabase, getSupabaseAdmin } from '@/lib/supabase'
-import { requireAuth, resolveDefaultUserId } from '@/lib/auth'
+import { getSupabaseAdmin, getSupabase, ensureUserExists } from '@/lib/supabase'
+import { getUserId } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /* ------------------------------------------------------------------ */
@@ -9,7 +9,7 @@ import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /**
  * Resolve a userId from either a `rise_` API key or a Supabase JWT.
- * Returns null when authentication fails.
+ * Returns null when authentication fails (no app-user fallback for MCP).
  */
 async function resolveUserId(req: NextRequest): Promise<string | null> {
   const authHeader = req.headers.get('Authorization') || ''
@@ -17,28 +17,24 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
   if (!token) return null
 
   if (token.startsWith('rise_')) {
-    // API-key auth — validate against known keys
+    // API-key auth — look up userId using ADMIN client (bypasses RLS on UserApiKey table)
     try {
-      const supabase = getSupabase()
-      const { data } = await supabase
+      const admin = getSupabaseAdmin()
+      const client = admin || getSupabase()
+      const { data } = await client
         .from('UserApiKey')
         .select('userId')
         .eq('key', token)
         .single()
       if (data?.userId) return data.userId as string
-    } catch {
-      // Supabase not configured or table missing — reject unknown keys
-    }
-    // Fallback: check local env-allowed keys (for dev/self-hosted)
-    const allowedKeys = (process.env.RISE_ALLOWED_API_KEYS || '').split(',').filter(Boolean)
-    if (allowedKeys.includes(token)) {
-      return process.env.RISE_DEFAULT_USER_ID || undefined
+    } catch (err) {
+      console.error('[mcp/call] API key lookup error:', err)
     }
     return null
   }
 
-  // Regular JWT auth
-  return requireAuth(req)
+  // Regular JWT auth — extract real user (no app-user fallback)
+  return getUserId(req)
 }
 
 /* ------------------------------------------------------------------ */
@@ -197,18 +193,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, data: TOOLS })
     }
 
-    // 3. Get Supabase client (may not be configured) — fall back to mock routes
-    // When authed via API key, prefer service role to bypass RLS
-    // (we already verified the key, so RLS would block anon client)
-    let supabase: ReturnType<typeof getSupabase> | null = null
+    // 3. Ensure User row exists + get admin client
+    await ensureUserExists(userId)
+
+    let supabase = getSupabaseAdmin() || getSupabase()
     let useFallback = false
-    const isApiKeyAuth = req.headers.get('Authorization')?.replace('Bearer ', '').startsWith('rise_')
     try {
-      if (isApiKeyAuth) {
-        supabase = getSupabaseAdmin() || getSupabase()
-      } else {
-        supabase = getSupabase()
-      }
+      // Test the connection
+      await supabase.from('User').select('id').eq('id', userId).single()
     } catch {
       useFallback = true
     }

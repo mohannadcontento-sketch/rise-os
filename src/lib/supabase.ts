@@ -38,15 +38,21 @@ export function getSupabaseAdmin(): SupabaseClient | null {
 
 /**
  * Get a Supabase client for API routes.
- * - If a real user JWT is present → creates a client with that JWT (RLS applies normally)
- * - If no JWT (demo/unauthenticated) → uses admin/service-role client to bypass RLS
+ * ALWAYS prefers the admin (service-role) client to bypass RLS.
  *
- * This ensures the app always works, even without authentication.
+ * WHY: The API layer already validates user identity via requireAuth() / getUserId().
+ * RLS is redundant on the server side and causes issues:
+ * - JWT client RLS can fail if User row doesn't exist
+ * - API key auth has no JWT, so RLS blocks everything
+ * - The admin client is safe because callers filter by userId manually
  */
 export function getSupabaseWithAuth(req: NextRequest): SupabaseClient {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  // Always prefer admin client — bypasses RLS entirely
+  const admin = getSupabaseAdmin()
+  if (admin) return admin
 
-  // If it's a real Supabase JWT (not an API key), use it for RLS
+  // Fallback: if no service role key, try JWT client (RLS may block)
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (token && !token.startsWith('rise_')) {
     return createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,12 +65,7 @@ export function getSupabaseWithAuth(req: NextRequest): SupabaseClient {
     )
   }
 
-  // No real auth or API key → use admin client (bypasses RLS)
-  // This allows demo mode to read/write freely
-  const admin = getSupabaseAdmin()
-  if (admin) return admin
-
-  // Fallback to base client (RLS may block — but at least we try)
+  // Last resort: base anon client (RLS will block most ops)
   return getSupabase()
 }
 
@@ -112,45 +113,57 @@ const _ensuredUsers = new Set<string>()
 
 /**
  * Ensure a user row exists in the User table.
- * Uses admin client to bypass RLS. Safe to call multiple times (idempotent).
- * This is critical for demo-mode and MCP — the FK constraint requires a real User row.
+ * Uses the provided client or admin client. Safe to call multiple times (idempotent).
+ * This is critical for MCP and login — the FK constraint requires a real User row.
  */
-export async function ensureUserExists(supabase: SupabaseClient, userId: string): Promise<boolean> {
+export async function ensureUserExists(clientOrUserId: SupabaseClient | string, userId?: string, name?: string, email?: string): Promise<boolean> {
+  let supabase: SupabaseClient
+  let id: string
+
+  if (typeof clientOrUserId === 'string') {
+    // Called as ensureUserExists(userId, name?, email?)
+    supabase = getSupabaseAdmin() || getSupabase()
+    id = clientOrUserId
+  } else {
+    // Called as ensureUserExists(supabase, userId)
+    supabase = clientOrUserId
+    id = userId!
+  }
+
   // Already checked in this serverless instance
-  if (_ensuredUsers.has(userId)) return true
+  if (_ensuredUsers.has(id)) return true
 
   try {
     const { data } = await supabase
       .from('User')
       .select('id')
-      .eq('id', userId)
+      .eq('id', id)
       .single()
 
     if (!data) {
       // User doesn't exist — create them
-      const isDemo = userId === 'demo-user'
       const { error: insertErr } = await supabase
         .from('User')
         .upsert({
-          id: userId,
-          name: isDemo ? 'مستخدم تجريبي' : 'مستخدم RiseOS',
-          email: `${userId}@rise-os.local`,
+          id,
+          name: name || (id === 'demo-user' ? 'مستخدم تجريبي' : 'مستخدم RiseOS'),
+          email: email || `${id}@rise-os.local`,
           level: 1,
           xp: 0,
           streak: 0,
         }, { onConflict: 'id' })
 
       if (insertErr) {
-        console.error(`[ensureUserExists] upsert error for ${userId}:`, insertErr.message)
+        console.error(`[ensureUserExists] upsert error for ${id}:`, insertErr.message)
         return false
       }
-      console.log(`[ensureUserExists] created user: ${userId}`)
+      console.log(`[ensureUserExists] created user: ${id}`)
     }
 
-    _ensuredUsers.add(userId)
+    _ensuredUsers.add(id)
     return true
   } catch (err) {
-    console.error(`[ensureUserExists] error for ${userId}:`, err)
+    console.error(`[ensureUserExists] error for ${id}:`, err)
     return false
   }
 }

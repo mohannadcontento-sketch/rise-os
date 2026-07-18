@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ADMIN_EMAIL } from '@/lib/supabase'
+import { ADMIN_EMAIL, ensureUserExists } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,10 +38,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'بيانات الدخول غير صحيحة' }, { status: 401 })
     }
 
+    // Ensure User row exists in the public "User" table
+    // This handles cases where the DB trigger didn't fire or user was created before the trigger
+    if (data.user) {
+      const userName = data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'مستخدم'
+      await ensureUserExists(data.user.id, userName, data.user.email || undefined)
+    }
+
     return NextResponse.json({
       user: {
         id: data.user.id,
         email: data.user.email,
+        name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'مستخدم',
         isAdmin: data.user.email === ADMIN_EMAIL,
       },
       session: {

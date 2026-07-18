@@ -516,3 +516,17 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ==================== USER API KEY (for MCP/AI integrations) ====================
+CREATE TABLE IF NOT EXISTS "UserApiKey" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+  "key" TEXT NOT NULL UNIQUE,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_userApiKey_key ON "UserApiKey"("key");
+CREATE INDEX IF NOT EXISTS idx_userApiKey_userId ON "UserApiKey"("userId");
+
+ALTER TABLE "UserApiKey" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access UserApiKey" ON "UserApiKey" FOR ALL USING (true) WITH CHECK (true);
