@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ADMIN_EMAIL, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { refresh_token } = await request.json()
