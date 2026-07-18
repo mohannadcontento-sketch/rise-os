@@ -17,7 +17,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase, getSupabaseAdmin, ensureUserExists } from '@/lib/supabase'
-import { resolveDefaultUserId } from '@/lib/auth'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
 /* ------------------------------------------------------------------ */
@@ -30,19 +29,17 @@ async function resolveUserId(req: NextRequest): Promise<string | null> {
   if (!token) return null
 
   if (token.startsWith('rise_')) {
+    // Use ADMIN client to bypass RLS on UserApiKey table
     try {
-      const supabase = getSupabase()
-      const { data } = await supabase
+      const admin = getSupabaseAdmin()
+      const client = admin || getSupabase()
+      const { data } = await client
         .from('UserApiKey')
         .select('userId')
         .eq('key', token)
         .single()
       if (data?.userId) return data.userId as string
     } catch { /* Supabase not configured */ }
-    const allowedKeys = (process.env.RISE_ALLOWED_API_KEYS || '').split(',').filter(Boolean)
-    if (allowedKeys.includes(token)) {
-      return process.env.RISE_DEFAULT_USER_ID || undefined
-    }
     return null
   }
 
@@ -698,17 +695,14 @@ async function handleSingleMessage(msg: any, req: NextRequest, sessionId: string
       return jsonRpcError(reqId, -32602, 'Missing tool name in params.name')
     }
 
-    // For tool calls, resolve the user ID from the request
-    // Pass the API key as a hidden arg for internal use
-    let userId = await resolveUserId(req)
+    // ── Per-user auth required for tool calls ──
+    // Every user must connect with their own API key (rise_...)
+    const userId = await resolveUserId(req)
     if (!userId) {
-      // No API key — resolve default user from env/DB
-      userId = await resolveDefaultUserId()
-      toolArgs.__token = req.headers.get('Authorization')?.replace('Bearer ', '') || ''
+      return jsonRpcError(reqId, -32001, 'مطلوب مفتاح API صالح. أنشئ مفتاح من إعدادات RiseOS وأضفه في headers: { "Authorization": "Bearer rise_YOUR_KEY" }')
     }
 
-    const effectiveUserId = userId
-    const toolResult = await executeTool(toolName, toolArgs, effectiveUserId)
+    const toolResult = await executeTool(toolName, toolArgs, userId)
 
     return jsonRpcResult(reqId, {
       content: toolResult.content,

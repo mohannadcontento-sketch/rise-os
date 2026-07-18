@@ -547,8 +547,7 @@ function McpSection() {
 
   const displayKey = showFull && apiKey ? apiKey : maskedKey
   const endpointUrl = `${MCP_BASE_URL}/api/rise/mcp/call`
-  const mcpSseUrl = `${MCP_BASE_URL}/?XTransformPort=3003/sse`
-  const mcpStreamUrl = `${MCP_BASE_URL}/?XTransformPort=3003/mcp`
+  const mcpEndpointUrl = `${MCP_BASE_URL}/api/mcp`
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
@@ -672,83 +671,75 @@ function McpSection() {
             </div>
 
             <div className="space-y-2.5">
-              {/* Claude Desktop */}
-              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
-                <div className="flex items-center gap-2 mb-2">
+              {/* ── Claude Desktop / Cursor — Streamable HTTP (PRIMARY) ── */}
+              <div className="bg-emerald-500/5 rounded-lg p-3 border border-emerald-accent/30 relative">
+                <div className="absolute top-2 left-2">
+                  <Badge className="text-[9px] bg-emerald-accent/20 text-emerald-accent border-0">الأفضل</Badge>
+                </div>
+                <div className="flex items-center gap-2 mb-2 mt-1">
                   <span className="text-sm">🟣</span>
-                  <span className="text-xs font-semibold">Claude Desktop</span>
+                  <span className="text-xs font-semibold">Claude Desktop · Cursor · أي عميل MCP</span>
                 </div>
                 <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
-                  <li>أنشئ مفتاح API من أعلى</li>
-                  <li>افتح ملف الإعدادات: <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">claude_desktop_config.json</code></li>
-                  <li>أضف الإعدادات دي:</li>
+                  <li>أنشئ مفتاح API من أعلى ↑</li>
+                  <li>افتح ملف الإعدادات:
+                    {typeof window !== 'undefined' && (
+                      <span className="block mt-0.5">
+                        <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">
+                          {process.platform === 'win32' ? '%APPDATA%\\Claude\\claude_desktop_config.json' : '~/Library/Application Support/Claude/claude_desktop_config.json'}
+                        </code>
+                      </span>
+                    )}
+                  </li>
+                  <li>أضف JSON ده:</li>
                 </ol>
+                <pre className="text-[10px] font-mono text-foreground/70 mt-2 p-2.5 bg-muted/40 rounded leading-relaxed" dir="ltr">{`{
+  "mcpServers": {
+    "riseos": {
+      "url": "${mcpEndpointUrl}",
+      "headers": {
+        "Authorization": "Bearer ${apiKey || 'rise_YOUR_KEY'}"
+      }
+    }
+  }
+}`}</pre>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[10px] text-muted-foreground/60">أعد تشغيل Claude Desktop — هيظهر "MCP connected" ✅</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] gap-1"
+                    onClick={() => copyText(`{\n  "mcpServers": {\n    "riseos": {\n      "url": "${mcpEndpointUrl}",\n      "headers": {\n        "Authorization": "Bearer ${apiKey || 'rise_YOUR_KEY'}"\n      }\n    }\n  }\n}`)}
+                  >
+                    <Copy className="w-3 h-3" />
+                    نسخ
+                  </Button>
+                </div>
+              </div>
+
+              {/* Claude Desktop — stdio (alternative via npm) */}
+              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">📦</span>
+                  <span className="text-xs font-semibold">بديل: Claude Desktop عبر npm</span>
+                  <Badge variant="secondary" className="text-[10px]">stdio</Badge>
+                </div>
                 <pre className="text-[10px] font-mono text-foreground/50 mt-2 p-2 bg-muted/30 rounded leading-relaxed" dir="ltr">{`{
   "mcpServers": {
     "riseos": {
       "command": "npx",
       "args": ["-y", "riseos-mcp@latest"],
       "env": {
-        "RISE_API_URL": "${MCP_BASE_URL}",
-        "RISE_API_KEY": "rise_YOUR_KEY"
+        "RISE_API_URL": "${endpointUrl}",
+        "RISE_API_KEY": "${apiKey || 'rise_YOUR_KEY'}"
       }
     }
   }
 }`}</pre>
-                <p className="text-[10px] text-muted-foreground/60 mt-1.5">أعد تشغيل Claude Desktop — هيظهر "MCP connected" ✅</p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">محتاج Node.js. الأعلى أفضل وأسرع ⬆️</p>
               </div>
 
-              {/* Claude Desktop — SSE / Remote */}
-              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm">🟣</span>
-                  <span className="text-xs font-semibold">Claude Desktop — اتصال عن بُعد (SSE)</span>
-                  <Badge variant="secondary" className="text-[10px]">جديد</Badge>
-                </div>
-                <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
-                  <li>تأكد إن خادم MCP شغال على البورت 3003</li>
-                  <li>افتح <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">claude_desktop_config.json</code></li>
-                  <li>أضف الإعدادات دي:</li>
-                </ol>
-                <pre className="text-[10px] font-mono text-foreground/50 mt-2 p-2 bg-muted/30 rounded leading-relaxed" dir="ltr">{`{
-  "mcpServers": {
-    "riseos": {
-      "url": "${mcpSseUrl}",
-      "headers": {
-        "Authorization": "Bearer rise_YOUR_KEY"
-      }
-    }
-  }
-}`}</pre>
-                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
-                  💡 تستخدم Streamable HTTP transport — مش محتاج تثبت حاجة
-                </p>
-              </div>
-
-              {/* Any MCP Client — Streamable HTTP */}
-              <div className="bg-background/50 rounded-lg p-3 border border-border/30">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm">🔗</span>
-                  <span className="text-xs font-semibold">أي عميل MCP — Streamable HTTP</span>
-                </div>
-                <div className="bg-muted/40 rounded-lg p-2.5 space-y-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground shrink-0">Endpoint:</span>
-                    <code className="flex-1 text-[10px] text-foreground/70 font-mono truncate" dir="ltr">{mcpStreamUrl}</code>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => copyText(mcpStreamUrl)}>
-                      <Copy className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  اربط بأي عميل MCP يدعم <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">streamable-http</code> أو <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">sse</code> transport.
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
-                  أرسل <code className="font-mono text-[10px]">Accept: application/json, text/event-stream</code> و <code className="font-mono text-[10px]">MCP-Protocol-Version: 2025-03-26</code> في الهيدر
-                </p>
-              </div>
-
-              {/* ChatGPT / Qwen / Any AI */}
+              {/* ChatGPT / Qwen / Any AI — REST API */}
               <div className="bg-background/50 rounded-lg p-3 border border-border/30">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm">🟢</span>
@@ -761,29 +752,36 @@ function McpSection() {
                 </ol>
                 <div className="mt-2 p-2.5 bg-muted/30 rounded-lg border border-dashed border-emerald-accent/30">
                   <p className="text-[11px] text-foreground/70 leading-relaxed italic">
-                    "عندي API لموقع RiseOS. الرابط: <code dir="ltr" className="text-emerald-accent text-[10px]">{endpointUrl}</code> والمفتاح: <code dir="ltr" className="text-emerald-accent text-[10px]">rise_xxxx</code>. ابعت طلب POST بهيئة JSON: <code dir="ltr" className="text-emerald-accent text-[10px]">{'{{ "tool": "get_dashboard", "args": {{}} }}'}</code> وهاتلي النتيجة."
+                    "عندي API لموقع RiseOS. الرابط: <code dir="ltr" className="text-emerald-accent text-[10px]">{endpointUrl}</code> والمفتاح: <code dir="ltr" className="text-emerald-accent text-[10px]">{apiKey || 'rise_xxxx'}</code>. ابعت طلب POST بهيئة JSON: <code dir="ltr" className="text-emerald-accent text-[10px]">{'{{ "tool": "get_dashboard", "args": {{}} }}'}</code> وهاتلي النتيجة."
                   </p>
                 </div>
                 <p className="text-[10px] text-muted-foreground/60 mt-1.5">
-                  💡 طلب POST مع <code className="font-mono">Authorization: Bearer rise_xxxx</code> في الهيدر
+                  💡 طلب POST مع <code className="font-mono">Authorization: Bearer {apiKey || 'rise_xxxx'}</code> في الهيدر
                 </p>
               </div>
 
-              {/* Cursor / VS Code */}
+              {/* Custom MCP Client — Technical Details */}
               <div className="bg-background/50 rounded-lg p-3 border border-border/30">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm">🔵</span>
-                  <span className="text-xs font-semibold">Cursor IDE · VS Code</span>
+                  <span className="text-sm">🔗</span>
+                  <span className="text-xs font-semibold">تقنياً — تفاصيل الـ MCP Endpoint</span>
                 </div>
-                <ol className="text-[11px] text-muted-foreground space-y-1 list-decimal list-inside leading-relaxed">
-                  <li>أنشئ مفتاح API من أعلى</li>
-                  <li>في Cursor: <code className="text-foreground/50 font-mono text-[10px]">Settings → MCP → Add Server</code></li>
-                  <li>اختر <code className="font-mono text-[10px]">stdio</code> وضبط:</li>
-                </ol>
-                <pre className="text-[10px] font-mono text-foreground/50 mt-2 p-2 bg-muted/30 rounded leading-relaxed" dir="ltr">{`Command: bun
-Args: run /path/to/rise-os/mini-services/mcp-server/index.ts
-Env: RISE_API_URL=${MCP_BASE_URL}
-     RISE_API_KEY=rise_YOUR_KEY_HERE`}</pre>
+                <div className="bg-muted/40 rounded-lg p-2.5 space-y-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground shrink-0">Endpoint:</span>
+                    <code className="flex-1 text-[10px] text-foreground/70 font-mono truncate" dir="ltr">{mcpEndpointUrl}</code>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => copyText(mcpEndpointUrl)}>
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground shrink-0">Protocol:</span>
+                    <code className="text-[10px] text-foreground/70 font-mono">MCP Streamable HTTP (JSON-RPC 2.0)</code>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  يدعم <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">streamable-http</code> و <code className="text-foreground/50 font-mono text-[10px]" dir="ltr">SSE</code> transport.
+                </p>
               </div>
             </div>
           </div>

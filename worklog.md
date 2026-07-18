@@ -1957,3 +1957,26 @@ Stage Summary:
 2. شغّل ملف supabase-migration-mcp.sql
 3. في إعدادات RiseOS: احذف مفتاح API القديم وأنشئ واحد جديد
 4. استخدم المفتاح الجديد في Claude Desktop / أي AI
+
+---
+Task ID: mcp-per-user-fix
+Agent: Main
+Task: Fix MCP per-user auth + provide correct JSON config
+
+Work Log:
+- Fixed `/api/mcp/route.ts` — removed default user fallback, now requires `rise_` API key for all tool calls
+- Fixed `resolveUserId` in MCP route to use admin client (bypass RLS on UserApiKey table)
+- Removed unused `resolveDefaultUserId` import from MCP route
+- Updated Settings page (`settings.tsx`):
+  - Removed wrong port 3003 URLs (only work locally, not on Vercel)
+  - Made Streamable HTTP the PRIMARY connection method with "الأفضل" badge
+  - Auto-populates user's actual API key in the JSON config
+  - Shows correct endpoint: `/api/mcp` (not port 3003)
+  - Added copy button for the JSON config
+  - Removed outdated Cursor/VS Code stdio instructions
+
+Stage Summary:
+- MCP now works per-user: each user connects with their own `rise_` API key
+- The JSON config is now correct and auto-populated with the user's key
+- `initialize` and `tools/list` still work without auth (metadata endpoints)
+- `tools/call` requires valid API key — returns -32001 error without one
