@@ -2069,3 +2069,61 @@ Stage Summary:
 - Full seed creates: 10 tasks, 7 habits, 3 projects, 4 goals, 5 books, 5 focus sessions, 5 achievements, 14 health logs, 10 journals, 30 daily scores, 10 morning logs, 4 knowledge items, 10 finance records
 - Lint passes with zero errors
 - All API endpoints verified working via curl
+
+---
+Task ID: supabase-setup
+Agent: Main
+Task: ربط Supabase — إعداد الجداول والصلاحيات وAuthentication
+
+Work Log:
+- تثبيت @supabase/supabase-js@2.110.7
+- إنشاء .env.local مع بيانات Supabase (URL + anon key)
+- إنشاء ملف SQL شامل (supabase/migrations/001_initial_schema.sql) يحتوي:
+  - 23 جدول يطابق Prisma schema بالكامل
+  - Trigger تلقائي لإنشاء profile عند signup
+  - Trigger تلقائي لإنشاء settings عند إنشاء profile
+  - Updated_at triggers لكل الجداول
+  - RLS (Row Level Security) على كل الجداول
+  - سياسات صلاحيات: كل مستخدم يرى/يعدل بياناته فقط
+  - Indexes للأداء (user_id, date, status)
+- إعادة كتابة /src/lib/supabase.ts:
+  - getSupabaseAnon() — عميل anon (يحترم RLS)
+  - getSupabaseAdmin() — عميل service_role (يتجاوز RLS)
+  - getSupabaseWithAuth(req) — يختار العميل حسب نوع التوكن
+  - resolveUserId(apiKey) — يحلل rise_ API keys من Supabase/محلي
+  - isSupabaseConfigured() / hasServiceRole() — فحص الإعداد
+  - بقاء ensureUserExists() كـ fallback محلي
+- إعادة كتابة /src/lib/auth.ts:
+  - verifySupabaseToken() — تحقق من JWT عبر Supabase
+  - getUserId() يدعم: Supabase JWT + rise_ API key + local ID
+  - ensureLocalUserFromSupabase() — مزامنة المستخدم محلياً
+  - requireAuth() مع دعم Supabase
+- تحديث API routes:
+  - /api/auth/login — Supabase signInWithPassword + fallback محلي
+  - /api/auth/signup — Supabase signUp + معالجة email confirmation
+  - /api/auth/session — تحقق JWT من Supabase + fallback
+  - /api/auth/refresh — تجديد التوكن عبر Supabase
+  - /api/auth/resend — إعادة إرسال تأكيد البريد
+- تحديث page.tsx:
+  - حفظ refresh_token في localStorage
+  - فحص تلقائي لتجديد التوكن قبل انتهائه (5 دقائق)
+  - محاولة تجديد تلقائي عند فشل الجلسة
+
+Stage Summary:
+- Supabase مربوط بالكامل مع dual-mode (Supabase + SQLite local)
+- نظام Authentication حقيقي عبر Supabase Auth
+- RLS policies شاملة (كل مستخدم يرى بياناته فقط)
+- SQL migration جاهز للتنفيذ في Supabase Dashboard
+- الكود يمر من ESLint بنجاح
+- Dev server يعطي HTTP 200
+
+## خطوات المستخدم المطلوبة:
+1. فتح Supabase Dashboard > SQL Editor
+2. تنفيذ محتوى supabase/migrations/001_initial_schema.sql
+3. (اختياري) تعطيل Email Confirmation: Authentication > Providers > Email > uncheck "Confirm email"
+4. (اختياري) إضافة SUPABASE_SERVICE_ROLE_KEY إلى .env.local لعمليات Admin
+5. (اختياري) إضافة ADMIN_EMAIL إلى .env.local
+
+## مخاطر:
+- Service Role Key غير متوفر — عمليات Admin ستستخدم fallback محلي
+- يجب تنفيذ SQL migration يدوياً في Supabase Dashboard
