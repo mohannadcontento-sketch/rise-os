@@ -1980,3 +1980,63 @@ Stage Summary:
 - The JSON config is now correct and auto-populated with the user's key
 - `initialize` and `tools/list` still work without auth (metadata endpoints)
 - `tools/call` requires valid API key — returns -32001 error without one
+
+---
+Task ID: 1
+Agent: MCP removal
+Task: Remove MCP section from Settings page
+
+Work Log:
+- Removed McpSection function component (~350 lines)
+- Removed MCP render call from Settings component
+- Cleaned up unused imports (Key, Copy, ExternalLink, Sparkles, ChevronsUpDown, apiDelete)
+- Kept Bot import (still used in stats card outside MCP section)
+
+Stage Summary:
+- MCP section fully removed from Settings page
+- Lint passes clean
+
+---
+Task ID: user-name-sync-fix
+Agent: Main
+Task: Fix user name sync between Settings (localStorage) and sidebar/dashboard (Supabase server)
+
+Work Log:
+- Created `/api/rise/user/name` POST endpoint that uses `requireAuth` + `getSupabaseWithAuth` to update `User.name` in Supabase
+- Updated `saveName()` in settings.tsx to `async`: after saving to localStorage, calls `apiPost('/api/rise/user/name', { name })` and dispatches `rise:user-updated` custom event
+- Refactored sidebar.tsx `fetchUser` into a `useCallback`, added a `useEffect` listening for `rise:user-updated` to trigger immediate re-fetch
+- Added `displayName` fallback logic in dashboard.tsx: when server returns a generic name (مستخدم/مستخدم RiseOS/مستخدم تجريبي), falls back to `localStorage.rise-settings.userName`
+- All lint checks pass clean
+
+Stage Summary:
+- Name changes in Settings now sync to Supabase server immediately
+- Sidebar picks up the new name instantly via custom event
+- Dashboard uses localStorage name as fallback for generic server names
+
+---
+Task ID: admin-panel-v2
+Agent: Main
+Task: Build professional Admin Panel as separate module
+
+Work Log:
+- Added 'admin-panel' to ModuleId type in app-store.ts
+- Created /src/components/rise/admin-panel.tsx as full-page module with 4 tabs:
+  - User Management: sortable/filterable data table, user detail dialog, edit dialog, delete confirmation
+  - System Stats: stat cards, user growth bar chart (div-based), table row counts, recent activity feed
+  - Database Operations: SQL query editor with syntax-aware execution, dangerous query confirmation, query history, quick-action buttons
+  - API Keys: keys table with search, copy key, revoke confirmation
+- Updated sidebar.tsx: added ShieldCheck icon import, admin-panel nav group (conditional on auth.isAdmin)
+- Updated page.tsx: lazy import for AdminPanel, added to moduleComponents/moduleNames/moduleIconMap/moduleAccentMap
+- Created API endpoints:
+  - /api/rise/admin/stats/route.ts (GET): system-wide stats with user growth, table counts, recent activity
+  - /api/rise/admin/query/route.ts (POST): execute SQL with admin auth, fallback for simple SELECTs
+  - /api/rise/admin/api-keys/route.ts (GET/DELETE): list all API keys with user info, revoke key
+- Removed old AdminPanel function from settings.tsx (lines 141-471) and its render call
+- Cleaned up unused useCallback import in settings.tsx
+- ESLint passes cleanly
+
+Stage Summary:
+- Admin Panel is now a standalone module accessible from sidebar (admin-only)
+- 4 professional tabs with full CRUD, data visualization, and SQL execution
+- All 3 new API endpoints follow existing admin auth pattern
+- Old admin section removed from Settings page

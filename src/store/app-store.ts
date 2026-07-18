@@ -20,6 +20,7 @@ export type ModuleId =
   | 'monthly-review'
   | 'analytics'
   | 'ai-coach'
+  | 'admin-panel'
   | 'settings'
 
 export interface UserInfo {

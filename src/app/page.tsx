@@ -23,7 +23,7 @@ import {
   LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
   Brain, GraduationCap, Heart, HeartPulse, LogOut, PenLine,
   Wallet, Calendar as CalendarIcon, Network, BarChart3,
-  Sparkles, Settings as SettingsIcon, Zap, Bluetooth,
+  Sparkles, Settings as SettingsIcon, Zap, Bluetooth, ShieldCheck,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -73,6 +73,7 @@ const WeeklyReview = lazy(() => import('@/components/rise/weekly-review'))
 const MonthlyReview = lazy(() => import('@/components/rise/monthly-review'))
 const Analytics = lazy(() => import('@/components/rise/analytics'))
 const AICoach = lazy(() => import('@/components/rise/ai-coach'))
+const AdminPanel = lazy(() => import('@/components/rise/admin-panel'))
 const Settings = lazy(() => import('@/components/rise/settings'))
 
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
@@ -95,6 +96,7 @@ const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.Compone
   'monthly-review': MonthlyReview,
   'analytics': Analytics,
   'ai-coach': AICoach,
+  'admin-panel': AdminPanel,
   'settings': Settings,
 }
 
@@ -118,6 +120,7 @@ const moduleNames: Record<ModuleId, string> = {
   'monthly-review': 'مراجعة شهرية',
   'analytics': 'التحليلات',
   'ai-coach': 'المدرب الذكي',
+  'admin-panel': 'لوحة الإدارة',
   'settings': 'الإعدادات',
 }
 
@@ -170,6 +173,7 @@ const moduleIconMap: Record<ModuleId, React.ElementType> = {
   'monthly-review': BarChart3,
   'analytics': BarChart3,
   'ai-coach': Sparkles,
+  'admin-panel': ShieldCheck,
   'settings': SettingsIcon,
 }
 
@@ -194,6 +198,7 @@ const moduleAccentMap: Record<ModuleId, string> = {
   'monthly-review': 'bg-forest',
   'analytics': 'bg-emerald-accent',
   'ai-coach': 'bg-gold',
+  'admin-panel': 'bg-gold',
   'settings': 'bg-foreground/30',
 }
 

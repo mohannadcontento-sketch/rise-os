@@ -1119,6 +1119,18 @@ export default function Dashboard() {
 
   const user = data.user || { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0 }
   const today = data.today || { tasksCompleted: 0, tasksTotal: 0, habitsCompleted: 0, habitsTotal: 0, focusMin: 0, morningScore: 0 }
+
+  // Use localStorage settings name as fallback if server name is generic
+  let displayName = typeof user.name === 'string' ? user.name : 'مستخدم'
+  if (displayName === 'مستخدم' || displayName === 'مستخدم RiseOS' || displayName === 'مستخدم تجريبي') {
+    try {
+      const stored = localStorage.getItem('rise-settings')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed.userName?.trim()) displayName = parsed.userName.trim()
+      }
+    } catch { /* ignore */ }
+  }
   const tasks = Array.isArray(data.tasks) ? data.tasks : []
   const habits = Array.isArray(data.habits) ? data.habits : []
   const health = data.health && typeof data.health === 'object' ? data.health : null
@@ -1193,7 +1205,7 @@ export default function Dashboard() {
               )}
               <span>{greeting}،</span>
             </div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-gradient-forest">{typeof user.name === 'string' ? user.name : 'مستخدم'}</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-gradient-forest">{displayName}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge className="bg-gradient-to-l from-gold to-gold-light text-forest-dark text-[10px] px-2.5 py-0.5 rounded-full font-bold shadow-md shadow-gold/20 border-0">
                 <Zap className="w-3 h-3 ml-1" />

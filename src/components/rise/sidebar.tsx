@@ -29,8 +29,9 @@ import {
   Zap,
   TrendingUp,
   Pencil,
+  ShieldCheck,
 } from 'lucide-react'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 
 interface NavItem {
   id: ModuleId
@@ -97,6 +98,12 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: 'الإدارة',
+    items: [
+      { id: 'admin-panel', label: 'لوحة الإدارة', icon: ShieldCheck },
+    ],
+  },
+  {
     title: '',
     items: [{ id: 'settings', label: 'الإعدادات', icon: Settings }],
   },
@@ -143,37 +150,44 @@ export function Sidebar() {
   }, [quickNotes, notesLoaded])
 
   // Fetch user data for XP display
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await apiFetch('/api/rise/dashboard')
-        if (res.ok) {
-          const data = await res.json()
-          if (data.user) {
-            const { calculateLevel } = await import('@/lib/gamification')
-            const levelInfo = calculateLevel(data.user.xp)
-            setUser({
-              id: auth?.userId || '',
-              email: auth?.userEmail || '',
-              isAdmin: auth?.isAdmin || false,
-              name: data.user.name,
-              level: levelInfo.level,
-              currentXp: levelInfo.currentXp,
-              xpToNext: levelInfo.xpToNext,
-              progress: levelInfo.progress,
-              streak: data.user.streak,
-            })
-          }
+  const fetchUser = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/rise/dashboard')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.user) {
+          const { calculateLevel } = await import('@/lib/gamification')
+          const levelInfo = calculateLevel(data.user.xp)
+          setUser({
+            id: auth?.userId || '',
+            email: auth?.userEmail || '',
+            isAdmin: auth?.isAdmin || false,
+            name: data.user.name,
+            level: levelInfo.level,
+            currentXp: levelInfo.currentXp,
+            xpToNext: levelInfo.xpToNext,
+            progress: levelInfo.progress,
+            streak: data.user.streak,
+          })
         }
-      } catch {
-        // silently ignore
       }
+    } catch {
+      // silently ignore
     }
+  }, [setUser, auth?.userId, auth?.userEmail, auth?.isAdmin])
+
+  useEffect(() => {
     fetchUser()
-    // Refresh every 30 seconds
     const interval = setInterval(fetchUser, 30000)
     return () => clearInterval(interval)
-  }, [setUser])
+  }, [fetchUser])
+
+  // Re-fetch when user updates name in settings
+  useEffect(() => {
+    const handler = () => { fetchUser() }
+    window.addEventListener('rise:user-updated', handler)
+    return () => window.removeEventListener('rise:user-updated', handler)
+  }, [fetchUser])
 
   return (
     <>
@@ -223,7 +237,10 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-2.5 pb-4">
-          {navGroups.map((group, gi) => (
+          {navGroups.map((group, gi) => {
+            // Hide admin section for non-admin users
+            if (group.items.some((item) => item.id === 'admin-panel') && !auth?.isAdmin) return null
+            return (
             <div key={gi} className={cn(group.title && 'mt-4')}>
               {group.title && (
                 <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35 flex items-center gap-2">
@@ -265,7 +282,8 @@ export function Sidebar() {
                 })}
               </div>
             </div>
-          ))}
+            )
+          })}
         </nav>
 
         {/* Quick Notes Section */}
