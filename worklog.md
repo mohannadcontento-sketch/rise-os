@@ -2127,3 +2127,21 @@ Stage Summary:
 ## مخاطر:
 - Service Role Key غير متوفر — عمليات Admin ستستخدم fallback محلي
 - يجب تنفيذ SQL migration يدوياً في Supabase Dashboard
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Vercel build error - PrismaClientInitializationError
+
+Work Log:
+- Analyzed Vercel build log: Prisma Client not generated during build due to Vercel's dependency caching
+- Root cause: `prisma generate` was not running before `next build` on Vercel
+- Fix 1: Added `"postinstall": "prisma generate"` to package.json — runs after bun install, regenerates Prisma Client even with cached deps
+- Fix 2: Updated build script to `"prisma generate && next build && ..."` — double-redundancy ensures client is always generated
+- Fix 3: Added `export const dynamic = 'force-dynamic'` to all 5 auth API routes (login, signup, refresh, session, resend) to prevent Next.js from attempting static page data collection at build time
+- Verified: lint passes cleanly, dev server starts without errors
+- Pushed commit 54d1ad9 to GitHub
+
+Stage Summary:
+- Build error fixed by ensuring Prisma Client generation happens during Vercel build
+- Files changed: package.json, 5 auth route files
+- Pending: User needs to execute SQL migration in Supabase Dashboard, provide Service Role Key (optional)
