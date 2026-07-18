@@ -536,12 +536,14 @@ const CORS_HEADERS = {
 
 export async function GET(req: NextRequest) {
   const accept = req.headers.get('Accept') || ''
-  const sessionId = generateSessionId()
 
-  // Claude Desktop sends GET with Accept: text/event-stream
-  // Return a valid SSE stream (stateless — no endpoint redirect)
+  // Claude Desktop sends GET first. For stateless servers, return SSE with
+  // a keepalive comment — no session redirect, no endpoint event.
   if (accept.includes('text/event-stream')) {
-    return new NextResponse('', {
+    const sessionId = generateSessionId()
+    // Send a valid SSE stream with a comment (ignored by parser, keeps connection valid)
+    const body = ': riseos-mcp stateless ready\n\n'
+    return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': 'text/event-stream',
@@ -560,7 +562,6 @@ export async function GET(req: NextRequest) {
     version: '2.0.0',
     transport: 'streamable-http',
     endpoint: '/api/mcp',
-    note: 'Send POST with MCP initialize request to start',
   }, { headers: CORS_HEADERS })
 }
 
