@@ -17,8 +17,7 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
     }
 
     return user.id
-  } catch (err) {
-    console.error('[auth] verifySupabaseToken error:', err)
+  } catch {
     return null
   }
 }
@@ -38,20 +37,22 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
       return await resolveUserId(token)
     }
 
-    // 2. Try Supabase JWT verification
-    const supabaseUserId = await verifySupabaseToken(token)
-    if (supabaseUserId) {
-      return supabaseUserId
+    // 2. If token is long enough, try Supabase JWT verification
+    if (token.length >= 50) {
+      const supabaseUserId = await verifySupabaseToken(token)
+      if (supabaseUserId) {
+        return supabaseUserId
+      }
     }
 
     // 3. Local fallback: treat token as user ID (Prisma)
-    if (!isSupabaseConfigured()) {
-      try {
-        const { db } = await import('@/lib/db')
-        const user = await db.user.findUnique({ where: { id: token } })
-        if (user) return user.id
-      } catch { /* ignore */ }
-    }
+    // Always try this — even if Supabase is configured, user may have
+    // logged in via local fallback when Supabase was unavailable
+    try {
+      const { db } = await import('@/lib/db')
+      const user = await db.user.findUnique({ where: { id: token } })
+      if (user) return user.id
+    } catch { /* ignore */ }
 
     return null
   } catch {

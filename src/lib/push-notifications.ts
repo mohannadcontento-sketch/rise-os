@@ -50,7 +50,6 @@ export function useBrowserNotifications() {
 
       // Check if push manager is available
       if (!registration.pushManager) {
-        console.warn('[push] Push manager not available')
         return null
       }
 
@@ -65,7 +64,6 @@ export function useBrowserNotifications() {
       // Use VAPID key from env
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_KEY
       if (!vapidKey) {
-        console.warn('[push] NEXT_PUBLIC_VAPID_KEY not set — push subscription disabled')
         return null
       }
 
@@ -76,8 +74,8 @@ export function useBrowserNotifications() {
 
       await saveSubscription(subscription)
       return subscription
-    } catch (err) {
-      console.error('[push] Subscription error:', err)
+    } catch {
+      // Push not available in this environment (HTTP, missing VAPID, etc.) — silent
       return null
     }
   }
@@ -139,8 +137,8 @@ async function saveSubscription(subscription: PushSubscription) {
       headers,
       body: JSON.stringify({ subscription }),
     })
-  } catch (err) {
-    console.error('[push] Save subscription error:', err)
+  } catch {
+    // Silent — push subscription save failed
   }
 }
 

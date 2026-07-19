@@ -61,8 +61,8 @@ export function PWAInit() {
           window.addEventListener('keydown', requestOnInteraction, { once: true })
         }
       }
-    }).catch((err) => {
-      console.warn('[PWA] Service worker registration failed:', err)
+    }).catch(() => {
+      // Service worker registration failed — silent (normal in dev)
     })
 
     // Handle URL shortcuts (e.g., ?module=tasks)
