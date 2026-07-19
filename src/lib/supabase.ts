@@ -94,19 +94,54 @@ export function isAdminAvailable(): boolean {
 }
 
 // ============================================================
+// API Key Resolution (Supabase-only)
+// ============================================================
+
+/**
+ * Resolve a user ID from a rise_ API key using the Supabase user_api_keys table.
+ * Returns null if the key is invalid or not found.
+ */
+export async function resolveUserId(apiKey: string): Promise<string | null> {
+  if (!apiKey || !apiKey.startsWith('rise_')) return null
+  if (!isSupabaseConfigured()) return null
+
+  const admin = await getSupabaseAdmin()
+  if (!admin) return null
+
+  try {
+    const { data } = await admin
+      .from('user_api_keys')
+      .select('user_id')
+      .eq('key', apiKey)
+      .maybeSingle()
+
+    if (data?.user_id) {
+      await admin
+        .from('user_api_keys')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('key', apiKey)
+      return data.user_id
+    }
+  } catch (err) {
+    console.error('[resolveUserId] error:', err)
+  }
+
+  return null
+}
+
+// ============================================================
 // Error Handling
 // ============================================================
 
 /**
  * Handle API route errors with proper HTTP status codes.
- * Returns 401 for auth/Supabase config errors, 500 for unexpected errors.
- * The offline flag is only set when there's a real token but the connection failed.
+ * Returns 503 when Supabase is not configured, 500 for unexpected errors.
  */
 export function handleRouteError(error: unknown, route: string, hasToken = false): NextResponse {
   const msg = error instanceof Error ? error.message : String(error)
   console.error(`[${route}] error:`, msg)
 
-  // If the caller had a valid token but Supabase is unreachable → offline response
+  // If the caller had a token but Supabase is unreachable → 503
   if (hasToken && !isSupabaseConfigured()) {
     return NextResponse.json(
       { success: false, error: 'خدمة غير متوفرة حالياً', offline: true },
