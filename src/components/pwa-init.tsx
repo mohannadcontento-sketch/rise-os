@@ -15,56 +15,44 @@ export function isStandaloneMode(): boolean {
 /**
  * PWA initialization.
  *
- * Browser mode: Unregisters any existing service worker so it doesn't
- * interfere with network requests. The app uses server APIs normally.
- *
- * Standalone mode (installed PWA): Registers the service worker for
- * offline caching and IndexedDB support.
+ * Always registers the service worker (for push notifications support).
+ * Caching only happens in standalone PWA mode.
  */
 export function PWAInit() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
-    if (isStandaloneMode()) {
-      // ─── PWA Standalone Mode: register SW ─────────────────────────
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        // If a new version is waiting, activate it
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-        }
-
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                newWorker.postMessage({ type: 'SKIP_WAITING' })
-                window.location.reload()
-              }
-            })
-          }
-        })
-      }).catch(() => {
-        // SW failed — app still works
-      })
-    } else {
-      // ─── Browser Mode: unregister any existing SW ─────────────────
-      // This clears old v1 caches that caused the "offline mode" issue
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const reg of registrations) {
-          reg.unregister().catch(() => {})
-        }
-      }).catch(() => {})
-
-      // Also clear any old caches directly
-      if ('caches' in window) {
-        caches.keys().then((names) => {
-          for (const name of names) {
-            caches.delete(name).catch(() => {})
-          }
-        }).catch(() => {})
+    // Always register SW for notification support
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((reg) => {
+      // If a new version is waiting, activate it
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' })
       }
-    }
+
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: 'SKIP_WAITING' })
+              window.location.reload()
+            }
+          })
+        }
+      })
+
+      // Request notification permission after registration
+      if ('Notification' in window && Notification.permission === 'default') {
+        // Don't request immediately — wait for user interaction
+        const requestOnInteraction = () => {
+          Notification.requestPermission().catch(() => {})
+          window.removeEventListener('click', requestOnInteraction)
+        }
+        window.addEventListener('click', requestOnInteraction, { once: true })
+      }
+    }).catch(() => {
+      // SW failed — app still works
+    })
 
     // Handle URL shortcuts (e.g., ?module=tasks)
     const params = new URLSearchParams(window.location.search)

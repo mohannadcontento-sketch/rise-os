@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+
+export const dynamic = 'force-dynamic'
 
 async function getUserStreak(supabase: any, userId: string): Promise<number> {
   const { data: profile } = await supabase
@@ -62,6 +64,11 @@ export async function GET(req: NextRequest) {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
+
+    // If no Supabase, return empty score
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
+    }
 
     const { searchParams } = new URL(req.url)
     const datesParam = searchParams.get('dates')

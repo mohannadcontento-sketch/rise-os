@@ -3,8 +3,11 @@ import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { setCurrentAuthToken } from '@/lib/data'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
+    // Guard: require admin access
     const userId = await requireAuth(request)
     if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
@@ -13,6 +16,15 @@ export async function GET(request: NextRequest) {
     // Set auth token for data layer
     setCurrentAuthToken(request.headers.get('Authorization')?.replace('Bearer ', ''))
 
+    // If no Supabase, return empty stats
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        totalUsers: 0, activeUsers7d: 0, totalTasks: 0, totalHabits: 0,
+        totalJournals: 0, totalGoals: 0, totalStorageUsed: 0, totalAiUsed: 0,
+        userGrowth: [], tableCounts: {}, recentActivity: [],
+      })
+    }
+
     const admin = await getSupabaseAdmin()
 
     // Helper to safely count rows from Supabase
@@ -20,14 +32,15 @@ export async function GET(request: NextRequest) {
       if (!admin) return 0
       try {
         const { count, error } = await admin
-          .from(tableName)
+          .from(tableName as any)
           .select('*', { count: 'exact', head: true })
         if (error) {
           console.warn(`[admin/stats] count ${tableName} error:`, error.message)
           return 0
         }
         return count ?? 0
-      } catch {
+      } catch (err) {
+        console.warn(`[admin/stats] count ${tableName} exception:`, err)
         return 0
       }
     }

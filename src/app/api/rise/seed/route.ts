@@ -4,6 +4,8 @@ import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
@@ -11,6 +13,11 @@ export async function POST(req: NextRequest) {
 
     // Set auth token for data layer
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+
+    // If Supabase is not configured, return early
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ success: true, seeded: false, offline: true })
+    }
 
     // Parse body to check for profileOnly flag
     let createProfileOnly = false

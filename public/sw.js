@@ -1,8 +1,7 @@
-// RiseOS Service Worker — v3
-// IMPORTANT: Only caches in PWA standalone mode (installed app).
-// In browser mode, this SW does nothing — all requests pass through normally.
+// RiseOS Service Worker — v4
+// Handles push notifications, background sync, and caching (PWA standalone only).
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `${CACHE_VERSION}-standalone`;
 
 // Check if we're running in standalone (installed PWA) mode
@@ -36,7 +35,7 @@ self.addEventListener('activate', (event) => {
 
 // ─── Push Notifications ───────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'RiseOS', body: '', icon: '/icon-192.png', url: '/' };
+  let data = { title: 'RiseOS', body: '', icon: '/icon-192.png', url: '/', tag: 'default' };
 
   if (event.data) {
     try {
@@ -48,10 +47,13 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: data.icon,
+    icon: data.icon || '/icon-192.png',
     badge: '/icon-192.png',
     vibrate: [100, 50, 100],
     data: { url: data.url || '/' },
+    tag: data.tag || 'riseos-' + Date.now(),
+    renotify: true,
+    dir: 'rtl',
     actions: [
       { action: 'open', title: 'فتح' },
       { action: 'dismiss', title: 'إغلاق' },
@@ -86,8 +88,43 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// ─── Fetch ──────────────────────────────────────────────────────────────
+// ─── Message Handler (from main thread) ──────────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'CHECK_STANDALONE') {
+    const clients = self.clients.matchAll();
+    clients.then((list) => {
+      list.forEach((client) => {
+        client.postMessage({
+          type: 'STANDALONE_STATUS',
+          isStandalone: isStandalone(),
+        });
+      });
+    });
+  }
+
+  // Show notification from main thread
+  if (event.data?.type === 'SHOW_NOTIFICATION') {
+    const { title, body, icon, tag, url } = event.data;
+    self.registration.showNotification(title || 'RiseOS', {
+      body: body || '',
+      icon: icon || '/icon-192.png',
+      badge: '/icon-192.png',
+      vibrate: [100, 50, 100],
+      tag: tag || 'riseos-' + Date.now(),
+      data: { url: url || '/' },
+      dir: 'rtl',
+      renotify: true,
+      actions: [
+        { action: 'open', title: 'فتح' },
+        { action: 'dismiss', title: 'إغلاق' },
+      ],
+    });
+  }
+});
+
+// ─── Fetch (caching only in standalone mode) ────────────────────────
 self.addEventListener('fetch', (event) => {
+  // In browser mode, don't cache — let requests pass through
   if (!isStandalone()) return;
 
   const { request } = event;
@@ -158,18 +195,3 @@ async function cacheFirst(request) {
 function isStaticAsset(pathname) {
   return /\.(js|css|png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|otf|eot)$/i.test(pathname);
 }
-
-// ─── Listen for display-mode changes ────────────────────────────────────
-self.addEventListener('message', (event) => {
-  if (event.data?.type === 'CHECK_STANDALONE') {
-    const clients = self.clients.matchAll();
-    clients.then((list) => {
-      list.forEach((client) => {
-        client.postMessage({
-          type: 'STANDALONE_STATUS',
-          isStandalone: isStandalone(),
-        });
-      });
-    });
-  }
-});

@@ -25,7 +25,7 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
 
 /**
  * Extract authenticated user ID from request.
- * Supports: Supabase JWT, rise_ API key.
+ * Supports: Supabase JWT, rise_ API key, local user ID.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
@@ -44,6 +44,15 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
       return supabaseUserId
     }
 
+    // 3. Local fallback: treat token as user ID (Prisma)
+    if (!isSupabaseConfigured()) {
+      try {
+        const { db } = await import('@/lib/db')
+        const user = await db.user.findUnique({ where: { id: token } })
+        if (user) return user.id
+      } catch { /* ignore */ }
+    }
+
     return null
   } catch {
     return null
@@ -57,7 +66,6 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 export async function requireAuth(req: NextRequest): Promise<string | null> {
   const userId = await getUserId(req)
   if (userId) return userId
-  if (isSupabaseConfigured()) return null
   return null
 }
 

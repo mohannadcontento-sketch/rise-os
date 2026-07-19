@@ -316,13 +316,37 @@ export default function RiseOSApp() {
                         accessToken: refreshData.session.access_token,
                       })
                     } else {
+                      // Refresh failed — for Supabase, must clear session
                       localStorage.removeItem('rise-auth')
                       localStorage.removeItem('rise-user-info')
                     }
                   }).catch(() => {
-                    localStorage.removeItem('rise-auth')
-                    localStorage.removeItem('rise-user-info')
+                    // Network error during refresh — keep stored session as fallback
+                    try {
+                      const storedInfo = JSON.parse(userInfo)
+                      setAuth({
+                        isAuthenticated: true,
+                        userId: session.access_token,
+                        userEmail: storedInfo?.email || '',
+                        userName: storedInfo?.name || '',
+                        isAdmin: storedInfo?.isAdmin || false,
+                        accessToken: session.access_token,
+                      })
+                    } catch { /* ignore */ }
                   })
+                } else if (!isSupabaseSession) {
+                  // Local mode: always trust stored session
+                  try {
+                    const storedInfo = JSON.parse(userInfo)
+                    setAuth({
+                      isAuthenticated: true,
+                      userId: session.access_token,
+                      userEmail: storedInfo?.email || '',
+                      userName: storedInfo?.name || '',
+                      isAdmin: storedInfo?.isAdmin || false,
+                      accessToken: session.access_token,
+                    })
+                  } catch { /* ignore */ }
                 } else {
                   localStorage.removeItem('rise-auth')
                   localStorage.removeItem('rise-user-info')
@@ -571,7 +595,7 @@ export default function RiseOSApp() {
               title={auth.userEmail}
             >
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
-                <span className="text-[10px] font-bold text-white">{(auth.userName || 'م').charAt(0).toUpperCase()}</span>
+                <span className="text-[10px] font-bold text-white">{((auth.userName || 'م')).charAt(0)?.toUpperCase() || 'م'}</span>
               </div>
               <span className="hidden sm:inline max-w-[100px] truncate">{auth.userName}</span>
               {auth.isAdmin && <span className="text-[9px] bg-gold/20 text-gold px-1.5 py-0.5 rounded-full font-medium">أدمن</span>}

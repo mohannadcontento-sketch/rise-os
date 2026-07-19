@@ -2381,3 +2381,50 @@ Stage Summary:
 - إذا لم يُفعّل المستخدم `SUPABASE_SERVICE_ROLE_KEY` على Vercel، سيعمل data layer بـ anon client + JWT (يحتاج RLS policies صحيحة)
 - لا يوجد VAPID key لـ push notifications الحقيقية (تحتاج إعداد web-push)
 - الـ session refresh يعتمد على Supabase refresh token
+
+---
+Task ID: error-fix-session-notifications
+Agent: Main
+Task: إصلاح أخطاء 500، charAt TypeError، session persistence، وتحسين نظام الإشعارات
+
+Work Log:
+- إصلاح `requireAuth` في `/src/lib/auth.ts` لدعم الوضع المحلي (بدون Supabase) — يتحقق من Prisma DB كـ fallback
+- إضافة `dynamic = 'force-dynamic'` لـ seed, admin/stats, productivity-score routes
+- إضافة حماية `isSupabaseConfigured()` في seed route, admin/stats route, productivity-score route — تُرجع بيانات فارغة بدلاً من 500
+- تحسين `countTable` في admin/stats لاستخدام `as any` و log أفضل للأخطاء
+- إصلاح `charAt` TypeError — إضافة optional chaining في admin-panel.tsx `(user?.name || user?.email || '?')`
+- إضافة `safeCharAt` utility في rise-utils.ts
+- تحسين session persistence في page.tsx:
+  - عند فشل refresh بسبب خطأ شبكة → يستخدم الجلسة المخزنة كـ fallback
+  - في الوضع المحلي (non-Supabase) → يثق بالجلسة المخزنة دائماً
+- تحديث Service Worker (`/public/sw.js`) إلى v4:
+  - دعم الإشعارات في كل الأوضاع (ليس فقط PWA standalone)
+  - إضافة معالج رسائل `SHOW_NOTIFICATION` من main thread
+  - إضافة `dir: 'rtl'` و `renotify: true` للإشعارات
+- تحديث PWA init (`/src/components/pwa-init.tsx`):
+  - تسجيل Service Worker دائماً (لدعم الإشعارات)
+  - طلب إذن الإشعارات عند أول تفاعل مستخدم
+- تحسين NotificationBell (`/src/components/rise/notification-bell.tsx`):
+  - أيقونة BellRing متحركة عند وجود إشعارات جديدة
+  - تأثيرات صوتية (`playSound('notification')`) عند وصول إشعارات
+  - ألوان مخصصة حسب نوع الإشعار (success=emerald, achievement=amber, info=sky, warning=orange, error=red)
+  - أيقونات إيموجي مخصصة حسب النوع
+  - دعم Escape key لإغلاق القائمة
+  - إشعارات المتصفح عند عدم التركيز على التبويب
+  - زر "مسح جميع الإشعارات" في الأسفل
+  - تحسين الـ polling (45 ثانية عالمياً، 30 ثانية عند الفتح)
+- إضافة حماية Supabase في productivity-score route
+
+Stage Summary:
+- ✅ اختبار المتصفح: تسجيل الدخول يعمل، الصفحة تُعرض بدون أخطاء
+- ✅ اختبار Refresh: الجلسة تظل محفوظة بعد إعادة تحميل الصفحة
+- ✅ صفر أخطاء في الكونسول بعد التحديثات
+- ✅ Lint يمر بنجاح
+- ✅ نظام الإشعارات محسّن بالكامل مع تأثيرات صوتية ورسائل متصفح
+
+## الحالة الحالية
+- التطبيق يعمل محلياً (بدون Supabase) مع بيانات تجريبية
+- نظام المصادقة يدعم الوضع المحلي و Supabase
+- الإشعارات تعمل مع poll دوري + إشعارات متصفح
+- Service Worker مسجل دائماً لدعم Push notifications
+- جميع الـ API routes محمية ضد 500 errors عند عدم توفر Supabase

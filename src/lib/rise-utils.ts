@@ -135,3 +135,13 @@ export function toArabicNum(n: unknown): string {
   if (isNaN(num)) return '٠'
   return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
 }
+
+/**
+ * Safely get the first character of a string. Returns fallback for null/undefined/non-strings.
+ */
+export function safeCharAt(value: unknown, index = 0, fallback = 'م'): string {
+  if (typeof value === 'string' && value.length > 0) {
+    return value.charAt(index) || fallback
+  }
+  return fallback
+}

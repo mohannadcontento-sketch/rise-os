@@ -86,7 +86,7 @@ async function sb() {
   const anonClient = await getSupabaseAnon()
   if (anonClient) return anonClient
 
-  throw new Error('Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  throw new Error('Supabase is not configured')
 }
 
 // ============================================================
