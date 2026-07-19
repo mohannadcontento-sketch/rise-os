@@ -24,7 +24,8 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
 
 /**
  * Extract authenticated user ID from request.
- * Supports: Supabase JWT, rise_ API key, local user ID.
+ * Supports: Supabase JWT and rise_ API keys (both verified server-side).
+ * Returns null for any unauthenticated request.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
@@ -32,27 +33,15 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
     const token = authHeader.replace('Bearer ', '')
     if (!token) return null
 
-    // 1. Check for rise_ API key
+    // 1. rise_ API keys — resolved via Supabase user_api_keys table
     if (token.startsWith('rise_')) {
       return await resolveUserId(token)
     }
 
-    // 2. If token is long enough, try Supabase JWT verification
+    // 2. Supabase JWT (must be verified, never trust the token value as a user ID)
     if (token.length >= 50) {
-      const supabaseUserId = await verifySupabaseToken(token)
-      if (supabaseUserId) {
-        return supabaseUserId
-      }
+      return await verifySupabaseToken(token)
     }
-
-    // 3. Local fallback: treat token as user ID (Prisma)
-    // Always try this — even if Supabase is configured, user may have
-    // logged in via local fallback when Supabase was unavailable
-    try {
-      const { db } = await import('@/lib/db')
-      const user = await db.user.findUnique({ where: { id: token } })
-      if (user) return user.id
-    } catch { /* ignore */ }
 
     return null
   } catch {
@@ -62,12 +51,10 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 
 /**
  * Get the effective user ID for a request.
- * When Supabase is configured, returns null if no valid token is provided.
+ * Returns null if no valid Supabase JWT or API key is provided.
  */
 export async function requireAuth(req: NextRequest): Promise<string | null> {
-  const userId = await getUserId(req)
-  if (userId) return userId
-  return null
+  return await getUserId(req)
 }
 
 /** Alias */
