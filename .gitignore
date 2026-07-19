@@ -37,7 +37,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -62,3 +61,8 @@ server.log
 *.png
 !public/*.png
 BUILD_GUIDE.md
+
+# Research and dev artifacts (not part of the app)
+mcp-research-*.json
+screenshot-*.png
+worklog.md
