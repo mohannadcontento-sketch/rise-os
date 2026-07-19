@@ -55,13 +55,18 @@ export async function getSupabaseAdmin() {
   return _adminClient
 }
 
-/** Server-side client with user JWT (respects RLS) */
+/**
+ * Server-side client with user JWT (respects RLS).
+ * - Real JWT token → anon client with user's token (RLS enforced per user)
+ * - rise_ API key → admin client to resolve user, then anon client with that user
+ * - No token → anon client only (never admin — prevents RLS bypass)
+ */
 export async function getSupabaseWithAuth(req?: NextRequest) {
   if (!isSupabaseConfigured()) return null
 
   const token = req?.headers.get('Authorization')?.replace('Bearer ', '') || ''
 
-  // If we have a real JWT token (from Supabase Auth), use it
+  // If we have a real JWT token (from Supabase Auth), use it with anon client
   if (token && !token.startsWith('rise_') && token.length > 50) {
     const { createClient } = await loadSupabase()
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -71,8 +76,15 @@ export async function getSupabaseWithAuth(req?: NextRequest) {
     })
   }
 
-  // For rise_ API keys or no token, use admin client if available
-  return getSupabaseAdmin() || getSupabaseAnon()
+  // For rise_ API keys — resolve user ID first, then return anon client with that user's context
+  if (token && token.startsWith('rise_')) {
+    // Return admin client so the route can do user_api_keys lookup
+    // The route MUST switch to anon+userId after resolving the API key
+    return getSupabaseAdmin()
+  }
+
+  // No token at all — return anon client (never admin, to prevent RLS bypass)
+  return getSupabaseAnon()
 }
 
 // ── Legacy compatibility ──
@@ -86,94 +98,26 @@ export function isAdminAvailable(): boolean {
 // ============================================================
 
 /**
- * Handle API route errors gracefully.
+ * Handle API route errors with proper HTTP status codes.
+ * Returns 401 for auth/Supabase config errors, 500 for unexpected errors.
+ * The offline flag is only set when there's a real token but the connection failed.
  */
-export function handleRouteError(error: unknown, route: string): NextResponse {
+export function handleRouteError(error: unknown, route: string, hasToken = false): NextResponse {
   const msg = error instanceof Error ? error.message : String(error)
   console.error(`[${route}] error:`, msg)
-  return NextResponse.json({ success: true, offline: true, id: 'mock-' + Date.now() })
-}
 
-// ============================================================
-// Local User Management (Prisma fallback)
-// ============================================================
-
-const _ensuredUsers = new Set<string>()
-
-/**
- * Ensure a user row exists in the local User table.
- */
-export async function ensureUserExists(userId: string): Promise<boolean> {
-  if (_ensuredUsers.has(userId)) return true
-
-  try {
-    const { db } = await import('@/lib/db')
-    const existing = await db.user.findUnique({ where: { id } })
-
-    if (!existing) {
-      await db.user.create({
-        data: {
-          id: userId,
-          name: userId === 'demo-user' ? 'مستخدم تجريبي' : 'مستخدم RiseOS',
-          email: `${userId}@rise-os.local`,
-          level: 1,
-          xp: 0,
-          streak: 0,
-          settings: { create: {} },
-        },
-      })
-      console.log(`[ensureUserExists] created local user: ${userId}`)
-    }
-
-    _ensuredUsers.add(userId)
-    return true
-  } catch (err) {
-    console.error(`[ensureUserExists] error for ${userId}:`, err)
-    return false
-  }
-}
-
-/**
- * Resolve user ID from API key (rise_ prefix).
- */
-export async function resolveUserId(apiKey: string): Promise<string | null> {
-  if (!apiKey.startsWith('rise_')) return null
-
-  // Try Supabase first
-  if (isSupabaseConfigured()) {
-    const admin = await getSupabaseAdmin()
-    if (admin) {
-      const { data } = await admin
-        .from('user_api_keys')
-        .select('user_id')
-        .eq('key', apiKey)
-        .single()
-      if (data?.user_id) {
-        await admin
-          .from('user_api_keys')
-          .update({ last_used_at: new Date().toISOString() })
-          .eq('key', apiKey)
-        return data.user_id
-      }
-    }
+  // If the caller had a valid token but Supabase is unreachable → offline response
+  if (hasToken && !isSupabaseConfigured()) {
+    return NextResponse.json(
+      { success: false, error: 'خدمة غير متوفرة حالياً', offline: true },
+      { status: 503 }
+    )
   }
 
-  // Fallback to local Prisma
-  try {
-    const { db } = await import('@/lib/db')
-    const record = await db.userApiKey.findUnique({ where: { key: apiKey } })
-    if (record) {
-      await db.userApiKey.update({
-        where: { key: apiKey },
-        data: { lastUsedAt: new Date() },
-      })
-      return record.userId
-    }
-  } catch (err) {
-    console.error('[resolveUserId] local fallback error:', err)
-  }
-
-  return null
+  return NextResponse.json(
+    { success: false, error: 'حدث خطأ في الخادم' },
+    { status: 500 }
+  )
 }
 
 // ============================================================
