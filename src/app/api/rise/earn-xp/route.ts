@@ -4,6 +4,8 @@ import { setCurrentAuthToken } from '@/lib/data'
 import { calculateXpForLevel } from '@/lib/rise-utils'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)

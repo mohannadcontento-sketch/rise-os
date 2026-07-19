@@ -451,6 +451,32 @@ export default function RiseOSApp() {
     return () => window.removeEventListener('rise:user-updated', handler)
   }, [setAuth])
 
+  // Listen for token refresh events from api-fetch
+  useEffect(() => {
+    const handleRefresh = (e: CustomEvent) => {
+      const { user, session } = e.detail || {}
+      if (user && session) {
+        setAuth({
+          isAuthenticated: true,
+          userId: user.id,
+          userEmail: user.email || '',
+          userName: user.name || '',
+          isAdmin: user.isAdmin,
+          accessToken: session.access_token,
+        })
+      }
+    }
+    const handleExpired = () => {
+      setAuth(null)
+    }
+    window.addEventListener('rise:auth-refreshed', handleRefresh as EventListener)
+    window.addEventListener('rise:session-expired', handleExpired)
+    return () => {
+      window.removeEventListener('rise:auth-refreshed', handleRefresh as EventListener)
+      window.removeEventListener('rise:session-expired', handleExpired)
+    }
+  }, [setAuth])
+
   /* ── Global search ── */
   const handleSearchQuery = useCallback((query: string) => {
     setSearchQuery(query)

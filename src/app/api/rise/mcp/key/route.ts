@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import crypto from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 function generateApiKey(): string {
   return 'rise_' + crypto.randomBytes(16).toString('hex')
 }

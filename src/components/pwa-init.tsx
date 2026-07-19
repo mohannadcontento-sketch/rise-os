@@ -87,6 +87,11 @@ async function trySubscribePush(registration: ServiceWorkerRegistration) {
     const existing = await registration.pushManager.getSubscription()
     if (existing) return // Already subscribed
 
+    // Only subscribe on HTTPS (push requires secure context)
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return
+    }
+
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidKey),
@@ -107,8 +112,8 @@ async function trySubscribePush(registration: ServiceWorkerRegistration) {
       headers,
       body: JSON.stringify({ subscription }),
     })
-  } catch (err) {
-    console.warn('[PWA] Push subscription failed:', err)
+  } catch {
+    // Push subscription not available (HTTP, missing VAPID, etc.) — silent
   }
 }
 

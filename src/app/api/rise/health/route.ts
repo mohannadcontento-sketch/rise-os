@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
 
+export const dynamic = 'force-dynamic'
+
 /** Fields allowed to be stored in HealthLog */
 const ALLOWED_FIELDS = [
   'sleepHours', 'sleepQuality', 'waterGlasses', 'steps',

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin, ADMIN_EMAIL } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 // GET all users
 export async function GET(request: NextRequest) {
   try {

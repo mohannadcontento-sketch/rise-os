@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)

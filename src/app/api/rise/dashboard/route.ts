@@ -4,6 +4,8 @@ import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
 
+export const dynamic = 'force-dynamic'
+
 // Vercel: extend serverless function timeout to 30s for cold starts
 export const maxDuration = 30
 
