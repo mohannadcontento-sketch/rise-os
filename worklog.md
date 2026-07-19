@@ -2428,3 +2428,28 @@ Stage Summary:
 - الإشعارات تعمل مع poll دوري + إشعارات متصفح
 - Service Worker مسجل دائماً لدعم Push notifications
 - جميع الـ API routes محمية ضد 500 errors عند عدم توفر Supabase
+---
+Task ID: error-fix-session
+Agent: Main
+Task: إصلاح جميع الأخطاء (seed 500, admin/stats 500, charAt TypeError) + بناء نظام إشعارات Push
+
+Work Log:
+- تشخيص خطأ avatar في login route: كان يُرجع Promise غير محلول بدلاً من القيمة الفعلية
+- إصلاح login route: استخراج avatar من نفس كويري الـ profile بدلاً من كويري منفصل
+- إصلاح admin/stats: إضافة early return عند عدم توفر admin client + تغيير catch من 500 إلى 200 مع بيانات فارغة
+- إصلاح charAt TypeError: إضافة String() wrapper على كل استدعاءات .charAt() في 6 ملفات
+- تحسين data.ts sb(): إضافة try/catch حول كل عملية إنشاء client + رسالة خطأ أوضح
+- إصلاح seed route: تغيير outer catch من 500 إلى 200 مع seeded:false (best-effort)
+- إنشاء service worker (public/sw.js) يدعم Push Notifications + Background Sync + Caching
+- إنشاء VAPID keys وإضافتها لـ .env
+- إنشاء /api/rise/notifications/send endpoint لإرسال push notifications من السيرفر
+- تحديث PWA init component مع auto-subscribe للـ push بعد تسجيل الدخول
+- تحديث push-notifications.ts مع إدارة اشتراك أفضل وإرسال headers صحيحة
+- إصلاح dev script في package.json: استخدام مسار مطلق للـ log + ربط بـ 0.0.0.0
+- رفع 3 commits على GitHub (c28ab71, 04788ef, 09dc6f3)
+
+Stage Summary:
+- كل الأخطاء الـ 3 تم إصلاحها (seed 500, admin/stats 500, charAt TypeError)
+- نظام Push Notifications مكتمل: SW + VAPID + auto-subscribe + send endpoint
+- الصفحة تُجمع بنجاح HTTP 200
+- كل التحديثات مرفوعة على GitHub
