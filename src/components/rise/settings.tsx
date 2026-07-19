@@ -381,7 +381,7 @@ export default function Settings() {
                         </div>
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white">
-                          {(displayName || 'م').charAt(0)}
+                          {String(displayName || 'م').charAt(0)}
                         </div>
                       )}
                       <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-forest border-2 border-background flex items-center justify-center">

@@ -15,15 +15,15 @@ export function isStandaloneMode(): boolean {
 /**
  * PWA initialization.
  *
- * Always registers the service worker (for push notifications support).
- * Caching only happens in standalone PWA mode.
+ * Registers the service worker for push notifications support,
+ * requests notification permission, and subscribes to push.
  */
 export function PWAInit() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
-    // Always register SW for notification support
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((reg) => {
+    // Register service worker
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(async (reg) => {
       // If a new version is waiting, activate it
       if (reg.waiting) {
         reg.waiting.postMessage({ type: 'SKIP_WAITING' })
@@ -41,17 +41,28 @@ export function PWAInit() {
         }
       })
 
-      // Request notification permission after registration
-      if ('Notification' in window && Notification.permission === 'default') {
-        // Don't request immediately — wait for user interaction
-        const requestOnInteraction = () => {
-          Notification.requestPermission().catch(() => {})
-          window.removeEventListener('click', requestOnInteraction)
+      // Request notification permission and subscribe to push
+      if ('Notification' in window) {
+        // If already granted, try to subscribe immediately
+        if (Notification.permission === 'granted') {
+          await trySubscribePush(reg)
+        } else if (Notification.permission === 'default') {
+          // Request on first user interaction
+          const requestOnInteraction = () => {
+            Notification.requestPermission().then(async (result) => {
+              if (result === 'granted') {
+                await trySubscribePush(reg)
+              }
+            }).catch(() => {})
+            window.removeEventListener('click', requestOnInteraction)
+            window.removeEventListener('keydown', requestOnInteraction)
+          }
+          window.addEventListener('click', requestOnInteraction, { once: true })
+          window.addEventListener('keydown', requestOnInteraction, { once: true })
         }
-        window.addEventListener('click', requestOnInteraction, { once: true })
       }
-    }).catch(() => {
-      // SW failed — app still works
+    }).catch((err) => {
+      console.warn('[PWA] Service worker registration failed:', err)
     })
 
     // Handle URL shortcuts (e.g., ?module=tasks)
@@ -63,4 +74,51 @@ export function PWAInit() {
   }, [])
 
   return null
+}
+
+async function trySubscribePush(registration: ServiceWorkerRegistration) {
+  try {
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_KEY
+    if (!vapidKey) return
+
+    if (!registration.pushManager) return
+
+    // Check if already subscribed
+    const existing = await registration.pushManager.getSubscription()
+    if (existing) return // Already subscribed
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    })
+
+    // Save subscription to server
+    const stored = localStorage.getItem('rise-auth')
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (stored) {
+      const session = JSON.parse(stored)
+      if (session.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+    }
+
+    await fetch('/api/rise/notifications/push', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ subscription }),
+    })
+  } catch (err) {
+    console.warn('[PWA] Push subscription failed:', err)
+  }
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
 }

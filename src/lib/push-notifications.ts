@@ -1,7 +1,7 @@
 /**
  * usePushNotifications — hook for web push notification support.
- * Requests browser notification permission and shows browser notifications
- * for in-app notifications (works when tab is in background).
+ * Requests browser notification permission, subscribes to push,
+ * and shows browser notifications for in-app notifications.
  */
 
 export function useBrowserNotifications() {
@@ -26,6 +26,7 @@ export function useBrowserNotifications() {
       new Notification(title, {
         icon: '/icon-192.png',
         badge: '/icon-192.png',
+        dir: 'rtl',
         ...options,
       })
     } catch {
@@ -40,44 +41,77 @@ export function useBrowserNotifications() {
     }
   }
 
-  async function subscribeToPush() {
+  async function subscribeToPush(): Promise<PushSubscription | null> {
     if (typeof window === 'undefined') return null
     if (!('serviceWorker' in navigator)) return null
 
-    const registration = await navigator.serviceWorker.ready
-
-    // Check if push manager is available
-    if (!registration.pushManager) {
-      console.warn('Push manager not available')
-      return null
-    }
-
-    // Use a valid VAPID key (generate with: npx web-push generate-vapid-keys)
-    // For now, we use a placeholder — the user needs to set NEXT_PUBLIC_VAPID_KEY
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_KEY
-    if (!vapidKey) {
-      console.warn('NEXT_PUBLIC_VAPID_KEY not set — push subscription disabled')
-      return null
-    }
-
     try {
+      const registration = await navigator.serviceWorker.ready
+
+      // Check if push manager is available
+      if (!registration.pushManager) {
+        console.warn('[push] Push manager not available')
+        return null
+      }
+
+      // Check existing subscription first
+      const existing = await registration.pushManager.getSubscription()
+      if (existing) {
+        // Re-send to server in case it changed
+        await saveSubscription(existing)
+        return existing
+      }
+
+      // Use VAPID key from env
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_KEY
+      if (!vapidKey) {
+        console.warn('[push] NEXT_PUBLIC_VAPID_KEY not set — push subscription disabled')
+        return null
+      }
+
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
 
-      // Save subscription to server
-      const res = await fetch('/api/rise/notifications/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription }),
-      })
-
-      if (res.ok) return subscription
-      return null
+      await saveSubscription(subscription)
+      return subscription
     } catch (err) {
-      console.error('Push subscription error:', err)
+      console.error('[push] Subscription error:', err)
       return null
+    }
+  }
+
+  async function unsubscribeFromPush(): Promise<boolean> {
+    if (typeof window === 'undefined') return false
+    if (!('serviceWorker' in navigator)) return false
+
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (!subscription) return true
+
+      await subscription.unsubscribe()
+
+      // Remove from server
+      try {
+        const stored = localStorage.getItem('rise-auth')
+        if (stored) {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+          const session = JSON.parse(stored)
+          if (session.access_token) {
+            headers['Authorization'] = `Bearer ${session.access_token}`
+          }
+          await fetch('/api/rise/notifications/push', {
+            method: 'DELETE',
+            headers,
+          })
+        }
+      } catch { /* silent */ }
+
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -85,7 +119,28 @@ export function useBrowserNotifications() {
     requestPermission,
     showBrowserNotification,
     subscribeToPush,
+    unsubscribeFromPush,
     permission: typeof window !== 'undefined' ? Notification?.permission : 'default',
+  }
+}
+
+async function saveSubscription(subscription: PushSubscription) {
+  try {
+    const stored = localStorage.getItem('rise-auth')
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (stored) {
+      const session = JSON.parse(stored)
+      if (session.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+    }
+    await fetch('/api/rise/notifications/push', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ subscription }),
+    })
+  } catch (err) {
+    console.error('[push] Save subscription error:', err)
   }
 }
 

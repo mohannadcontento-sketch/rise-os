@@ -40,8 +40,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'فشل تسجيل الدخول' }, { status: 401 })
         }
 
-        // Check admin role from Supabase profiles table
+        // Check admin role and avatar from Supabase profiles table
         let isAdmin = email === ADMIN_EMAIL
+        let avatar: string | null = null
         try {
           const admin = await getSupabaseAdmin()
           if (admin) {
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
               .eq('id', user.id)
               .single()
             if (profile?.role === 'admin') isAdmin = true
+            avatar = profile?.avatar || null
           }
         } catch { /* ignore */ }
         return NextResponse.json({
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
             email: user.email,
             name: user.user_metadata?.name || email.split('@')[0],
             isAdmin,
-            avatar: (await getSupabaseAdmin())?.from('profiles').select('avatar').eq('id', user.id).single().then(r => r.data?.avatar || null).catch(() => null),
+            avatar,
           },
           session: {
             access_token: data.session.access_token,

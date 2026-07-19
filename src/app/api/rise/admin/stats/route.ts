@@ -27,9 +27,17 @@ export async function GET(request: NextRequest) {
 
     const admin = await getSupabaseAdmin()
 
+    // If admin client is unavailable, return minimal stats
+    if (!admin) {
+      return NextResponse.json({
+        totalUsers: 0, activeUsers7d: 0, totalTasks: 0, totalHabits: 0,
+        totalJournals: 0, totalGoals: 0, totalStorageUsed: 0, totalAiUsed: 0,
+        userGrowth: [], tableCounts: {}, recentActivity: [],
+      })
+    }
+
     // Helper to safely count rows from Supabase
     async function countTable(tableName: string): Promise<number> {
-      if (!admin) return 0
       try {
         const { count, error } = await admin
           .from(tableName as any)
@@ -217,6 +225,11 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Admin stats error:', error)
-    return NextResponse.json({ error: 'فشل تحميل الإحصائيات' }, { status: 500 })
+    // Return 200 with empty stats — don't crash the app
+    return NextResponse.json({
+      totalUsers: 0, activeUsers7d: 0, totalTasks: 0, totalHabits: 0,
+      totalJournals: 0, totalGoals: 0, totalStorageUsed: 0, totalAiUsed: 0,
+      userGrowth: [], tableCounts: {}, recentActivity: [],
+    })
   }
 }

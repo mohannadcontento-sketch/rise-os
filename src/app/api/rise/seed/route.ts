@@ -381,6 +381,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, seeded: true })
   } catch (error) {
     console.error('Seed error:', error)
-    return NextResponse.json({ error: 'Seed failed', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    // Return 200 even on failure — seed is best-effort, don't crash the app
+    return NextResponse.json({ success: true, seeded: false, error: error instanceof Error ? error.message : String(error) })
   }
 }

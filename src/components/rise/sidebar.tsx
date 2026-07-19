@@ -383,7 +383,7 @@ export function Sidebar() {
                 </div>
               ) : (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-light flex items-center justify-center text-sm font-bold text-forest-dark shadow-md shadow-gold/20">
-                  {user?.name?.charAt(0) || 'م'}
+                  {String(user?.name || 'م').charAt(0) || 'م'}
                 </div>
               )}
               <div className="flex-1 min-w-0">

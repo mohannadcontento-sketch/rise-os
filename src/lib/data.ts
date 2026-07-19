@@ -61,16 +61,16 @@ function toCamel<T = Record<string, any>>(obj: unknown): T {
  * 1. Admin client (bypasses RLS) — best for server-side operations
  * 2. Anon client with user JWT (respects RLS, needs proper policies)
  * 3. Anon client without JWT (may be blocked by RLS)
- * Throws only if Supabase is not configured at all.
+ * Throws if no client can be created.
  */
 async function sb() {
-  // 1. Try admin client (bypasses RLS)
-  const adminClient = await getSupabaseAdmin()
-  if (adminClient) return adminClient
+  try {
+    // 1. Try admin client (bypasses RLS)
+    const adminClient = await getSupabaseAdmin()
+    if (adminClient) return adminClient
 
-  // 2. Try anon client with current request's JWT
-  if (_currentAuthToken) {
-    try {
+    // 2. Try anon client with current request's JWT
+    if (_currentAuthToken) {
       const { createClient } = await import('@supabase/supabase-js')
       const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -79,14 +79,16 @@ async function sb() {
           global: { headers: { Authorization: `Bearer ${_currentAuthToken}` } },
         })
       }
-    } catch { /* fall through */ }
+    }
+
+    // 3. Fall back to plain anon client
+    const anonClient = await getSupabaseAnon()
+    if (anonClient) return anonClient
+  } catch (err) {
+    console.error('[data/sb] Error creating Supabase client:', err)
   }
 
-  // 3. Fall back to plain anon client
-  const anonClient = await getSupabaseAnon()
-  if (anonClient) return anonClient
-
-  throw new Error('Supabase is not configured')
+  throw new Error('Database client unavailable — check SUPABASE_URL and SUPABASE_ANON_KEY env vars')
 }
 
 // ============================================================

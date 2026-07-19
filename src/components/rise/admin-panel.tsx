@@ -420,7 +420,7 @@ function UserManagementTab() {
                     <TableCell className="pr-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shrink-0">
                         <span className="text-xs font-bold text-white">
-                          {(user?.name || user?.email || '?').charAt(0).toUpperCase()}
+                          {String(user?.name || user?.email || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
                     </TableCell>
@@ -501,7 +501,7 @@ function UserManagementTab() {
             <DialogTitle className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
                 <span className="text-sm font-bold text-white">
-                  {(selectedUser?.name || '?').charAt(0).toUpperCase()}
+                  {String(selectedUser?.name || '?').charAt(0).toUpperCase()}
                 </span>
               </div>
               <div>

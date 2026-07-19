@@ -4,6 +4,7 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
+// POST — Save push subscription
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// DELETE — Remove push subscription
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
