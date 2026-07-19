@@ -164,37 +164,8 @@ export function ConnectionStatus() {
   )
 }
 
-// ─── Offline Banner (standalone only) ────────────────────────────────────
+// ─── Offline Banner — disabled per user request ────────────────────────
 
 export function OfflineBanner() {
-  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
-  const standalone = useIsStandalone()
-
-  useEffect(() => {
-    const goOnline = () => setIsOnline(true)
-    const goOffline = () => setIsOnline(false)
-    window.addEventListener('online', goOnline)
-    window.addEventListener('offline', goOffline)
-    return () => {
-      window.removeEventListener('online', goOnline)
-      window.removeEventListener('offline', goOffline)
-    }
-  }, [])
-
-  if (standalone && !isOnline) {
-    return (
-      <div className="fixed top-0 left-0 right-0 z-[60] bg-orange-500 text-white text-center py-2 text-xs font-medium flex items-center justify-center gap-2">
-        <WifiOff className="w-3.5 h-3.5" />
-        <span>غير متصل بالإنترنت — البيانات محفوظة محلياً</span>
-        <button
-          onClick={() => window.location.reload()}
-          className="mr-2 p-1 rounded hover:bg-white/20"
-        >
-          <RefreshCw className="w-3 h-3" />
-        </button>
-      </div>
-    )
-  }
-
   return null
 }

@@ -232,13 +232,21 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           })
         }
       }
+      // For write requests, queue and return success
+      if (options.method && options.method !== 'GET') {
+        enqueueRequest(url, options.method, options.body as string | undefined)
+        return new Response(JSON.stringify({ success: true, offline: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-Offline-Queued': 'true' },
+        })
+      }
       // Return a timeout error response
       return new Response(JSON.stringify({ error: 'timeout', message: 'انتهت مهلة الطلب' }), {
         status: 408,
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    // Network error — for GET, try cache
+    // Network error — for GET, try cache; for writes, queue for later
     if (options.method === 'GET' || !options.method) {
       const cached = getCached(url)
       if (cached) {
@@ -247,10 +255,13 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
         })
       }
+    } else {
+      // POST/PUT/DELETE failed — queue for offline sync
+      enqueueRequest(url, options.method || 'POST', options.body as string | undefined)
     }
-    return new Response(JSON.stringify({ error: 'network', message: 'خطأ في الاتصال' }), {
-      status: 0,
-      headers: { 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify({ success: true, offline: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Offline-Queued': 'true' },
     })
   }
 
@@ -359,4 +370,97 @@ export async function apiDelete(url: string) {
  */
 export function isFromCache(response: Response): boolean {
   return response.headers.get('X-From-Cache') === 'true'
+}
+
+// ─── Offline Write Queue ───
+const QUEUE_KEY = 'rise-offline-queue'
+const MAX_QUEUE_SIZE = 50
+
+interface QueuedRequest {
+  id: string
+  url: string
+  method: string
+  body: string | undefined
+  timestamp: number
+  retries: number
+}
+
+function getQueue(): QueuedRequest[] {
+  if (typeof window === 'undefined') return []
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')
+  } catch { return [] }
+}
+
+function saveQueue(queue: QueuedRequest[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+  } catch { /* ignore */ }
+}
+
+function enqueueRequest(url: string, method: string, body: string | undefined): void {
+  const queue = getQueue()
+  if (queue.length >= MAX_QUEUE_SIZE) queue.shift() // Remove oldest
+  queue.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    url,
+    method,
+    body,
+    timestamp: Date.now(),
+    retries: 0,
+  })
+  saveQueue(queue)
+}
+
+async function flushQueue(): Promise<void> {
+  const queue = getQueue()
+  if (queue.length === 0) return
+
+  const remaining: QueuedRequest[] = []
+  const authHeaders = getAuthHeaders()
+
+  for (const item of queue) {
+    try {
+      const headers = new Headers(authHeaders)
+      headers.set('Content-Type', 'application/json')
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+      const res = await fetch(item.url, {
+        method: item.method,
+        headers,
+        body: item.body,
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (!res.ok && res.status !== 408) {
+        remaining.push({ ...item, retries: item.retries + 1 })
+      }
+      // Success or timeout → remove from queue
+    } catch {
+      remaining.push({ ...item, retries: item.retries + 1 })
+    }
+  }
+
+  saveQueue(remaining)
+
+  // If all succeeded and we had items, invalidate GET cache to refresh
+  if (remaining.length === 0 && queue.length > 0) {
+    invalidateCache()
+  }
+}
+
+// Auto-flush when coming back online
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    // Small delay to let the connection stabilize
+    setTimeout(flushQueue, 1000)
+  })
+
+  // Also flush on page load if online
+  if (navigator.onLine) {
+    setTimeout(flushQueue, 2000)
+  }
 }

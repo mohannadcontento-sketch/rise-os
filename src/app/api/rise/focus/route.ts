@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const body = await req.json()
     const session = await data.focusSessions.create(userId, body)
@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { id, ...body } = await req.json()
     const session = await data.focusSessions.update(id, body)

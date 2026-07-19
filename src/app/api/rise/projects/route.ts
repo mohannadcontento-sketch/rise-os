@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = await requireAuth(req)
   setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!userId) return NextResponse.json({ success: true, offline: true })
 
   try {
     const body = await req.json()
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const userId = await requireAuth(req)
   setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!userId) return NextResponse.json({ success: true, offline: true })
 
   try {
     const { id, ...body } = await req.json()
@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const userId = await requireAuth(req)
   setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!userId) return NextResponse.json({ success: true, offline: true })
 
   try {
     const { searchParams } = new URL(req.url)

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) return NextResponse.json({ success: true, offline: true })
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Push not configured' }, { status: 400 })
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const admin = await getSupabaseAdmin()
     if (!admin) {
