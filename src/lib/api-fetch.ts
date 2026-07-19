@@ -2,11 +2,96 @@
  * apiFetch — centralized fetch utility for RiseOS API calls.
  * Automatically attaches the Supabase auth token from localStorage.
  * Includes automatic token refresh on 401 responses.
+ * Includes request timeout (8s) to fail fast when offline.
+ * Includes localStorage cache for GET requests (stale-while-revalidate).
  * All frontend components should use this instead of raw fetch().
  */
 
+// ─── Config ───
+const REQUEST_TIMEOUT_MS = 8000
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 // Refresh lock to prevent concurrent refresh requests
 let _refreshPromise: Promise<boolean> | null = null
+
+// ─── Online detection ───
+function isOnline(): boolean {
+  if (typeof window === 'undefined') return true
+  return navigator.onLine !== false
+}
+
+// ─── Cache layer (localStorage) ───
+const CACHE_PREFIX = 'rise-cache:'
+
+interface CacheEntry {
+  data: any
+  ts: number
+}
+
+function getCacheKey(url: string): string {
+  return CACHE_PREFIX + url
+}
+
+function getCached<T = any>(url: string): T | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(getCacheKey(url))
+    if (!raw) return null
+    const entry: CacheEntry = JSON.parse(raw)
+    const age = Date.now() - entry.ts
+    // Return cached data even if stale (we use stale-while-revalidate)
+    if (age < 24 * 60 * 60 * 1000) { // Max 24h old
+      return entry.data as T
+    }
+    localStorage.removeItem(getCacheKey(url))
+    return null
+  } catch {
+    return null
+  }
+}
+
+function setCache(url: string, data: any): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(getCacheKey(url), JSON.stringify({ data, ts: Date.now() }))
+  } catch {
+    // localStorage full — clear old cache entries
+    try {
+      const keys: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith(CACHE_PREFIX)) keys.push(key)
+      }
+      // Remove oldest half
+      keys.sort((a, b) => {
+        const aRaw = localStorage.getItem(a) || '{}'
+        const bRaw = localStorage.getItem(b) || '{}'
+        return JSON.parse(aRaw).ts - JSON.parse(bRaw).ts
+      })
+      keys.slice(0, Math.ceil(keys.length / 2)).forEach(k => localStorage.removeItem(k))
+      // Try again
+      localStorage.setItem(getCacheKey(url), JSON.stringify({ data, ts: Date.now() }))
+    } catch { /* give up */ }
+  }
+}
+
+function invalidateCache(urlPrefix?: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(CACHE_PREFIX)) {
+        if (!urlPrefix || key.includes(urlPrefix)) keys.push(key)
+      }
+    }
+    keys.forEach(k => localStorage.removeItem(k))
+  } catch { /* ignore */ }
+}
+
+export { invalidateCache }
+
+// ─── Auth helpers ───
 
 function getAuthHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -27,6 +112,9 @@ function getAuthHeaders(): Record<string, string> {
  * Uses a lock to prevent concurrent refreshes.
  */
 async function tryRefreshToken(): Promise<boolean> {
+  // If offline, don't try refresh
+  if (!isOnline()) return false
+
   // If a refresh is already in progress, wait for it
   if (_refreshPromise) return _refreshPromise
 
@@ -39,16 +127,22 @@ async function tryRefreshToken(): Promise<boolean> {
       const isSupabaseSession = session.refresh_token && session.refresh_token.length > 20
 
       if (!isSupabaseSession) {
-        // Local mode — just clear and redirect to login
-        clearAuth()
+        // Local mode — don't clear auth offline, just return false
+        if (isOnline()) clearAuth()
         return false
       }
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: session.refresh_token }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       if (!res.ok) {
         clearAuth()
@@ -71,7 +165,7 @@ async function tryRefreshToken(): Promise<boolean> {
       clearAuth()
       return false
     } catch {
-      clearAuth()
+      // Network error or timeout — don't clear auth, keep stored session
       return false
     } finally {
       _refreshPromise = null
@@ -89,6 +183,8 @@ function clearAuth() {
   window.dispatchEvent(new CustomEvent('rise:session-expired'))
 }
 
+// ─── Main fetch with timeout + cache ───
+
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers || {})
 
@@ -105,11 +201,71 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     headers.set('Content-Type', 'application/json')
   }
 
+  // Create abort controller with timeout
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  // Merge with any existing signal
+  const existingSignal = options.signal
+  if (existingSignal) {
+    existingSignal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
   // Make the request
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    })
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    if (err?.name === 'AbortError') {
+      // Timeout — for GET requests, try to return cached data as a synthetic response
+      if (options.method === 'GET' || !options.method) {
+        const cached = getCached(url)
+        if (cached) {
+          return new Response(JSON.stringify(cached), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
+          })
+        }
+      }
+      // Return a timeout error response
+      return new Response(JSON.stringify({ error: 'timeout', message: 'انتهت مهلة الطلب' }), {
+        status: 408,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    // Network error — for GET, try cache
+    if (options.method === 'GET' || !options.method) {
+      const cached = getCached(url)
+      if (cached) {
+        return new Response(JSON.stringify(cached), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
+        })
+      }
+    }
+    return new Response(JSON.stringify({ error: 'network', message: 'خطأ في الاتصال' }), {
+      status: 0,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  clearTimeout(timeoutId)
+
+  // Cache successful GET responses
+  if (response.ok && (options.method === 'GET' || !options.method)) {
+    const clone = response.clone()
+    clone.json().then(data => setCache(url, data)).catch(() => {})
+  }
+
+  // Invalidate cache on successful POST/PUT/DELETE
+  if (response.ok && options.method && options.method !== 'GET') {
+    invalidateCache()
+  }
 
   // If 401 and this is an API request, try to refresh and retry
   if (response.status === 401 && url.startsWith('/api/') && authHeaders['Authorization']) {
@@ -125,11 +281,48 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         retryHeaders.set('Content-Type', 'application/json')
       }
 
-      // Retry the request once
-      response = await fetch(url, {
-        ...options,
-        headers: retryHeaders,
-      })
+      const retryController = new AbortController()
+      const retryTimeout = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS)
+
+      try {
+        // Retry the request once
+        response = await fetch(url, {
+          ...options,
+          headers: retryHeaders,
+          signal: retryController.signal,
+        })
+
+        // Cache successful retry
+        if (response.ok && (options.method === 'GET' || !options.method)) {
+          const clone = response.clone()
+          clone.json().then(data => setCache(url, data)).catch(() => {})
+        }
+      } catch {
+        clearTimeout(retryTimeout)
+        // Retry failed — try cache for GET
+        if (options.method === 'GET' || !options.method) {
+          const cached = getCached(url)
+          if (cached) {
+            return new Response(JSON.stringify(cached), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
+            })
+          }
+        }
+        return response
+      }
+      clearTimeout(retryTimeout)
+    } else {
+      // Refresh failed — for GET, return cached data
+      if (options.method === 'GET' || !options.method) {
+        const cached = getCached(url)
+        if (cached) {
+          return new Response(JSON.stringify(cached), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
+          })
+        }
+      }
     }
   }
 
@@ -159,4 +352,11 @@ export async function apiPut(url: string, body?: unknown) {
 
 export async function apiDelete(url: string) {
   return apiFetch(url, { method: 'DELETE' })
+}
+
+/**
+ * Check if a response came from the offline cache.
+ */
+export function isFromCache(response: Response): boolean {
+  return response.headers.get('X-From-Cache') === 'true'
 }

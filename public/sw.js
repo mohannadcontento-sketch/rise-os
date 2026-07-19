@@ -1,7 +1,8 @@
 // RiseOS Service Worker
 // Handles push notifications, background sync, and cache for PWA
 
-const CACHE_NAME = 'rise-os-v1'
+const CACHE_NAME = 'rise-os-v2'
+const API_CACHE_NAME = 'rise-api-v1'
 const STATIC_ASSETS = [
   '/',
   '/icon-192.png',
@@ -25,22 +26,68 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((names) =>
       Promise.all(
-        names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))
+        names.filter((name) => name !== CACHE_NAME && name !== API_CACHE_NAME).map((name) => caches.delete(name))
       )
     )
   )
   self.clients.claim()
 })
 
-// Fetch — network first, fallback to cache
+// Fetch — stale-while-revalidate for API, network-first for static
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+
   // Skip non-GET requests
   if (event.request.method !== 'GET') return
 
-  // Skip API calls and external requests
-  const url = new URL(event.request.url)
-  if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) return
+  // Skip external requests
+  if (url.origin !== self.location.origin) return
 
+  // ── API calls: stale-while-revalidate ──
+  if (url.pathname.startsWith('/api/rise/') || url.pathname.startsWith('/api/auth/')) {
+    event.respondWith(
+      caches.open(API_CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request)
+
+        // Return cached immediately (stale), then update in background
+        const fetchPromise = fetch(event.request)
+          .then((response) => {
+            if (response.ok) {
+              // Clone and cache the response
+              cache.put(event.request, response.clone())
+            }
+            return response
+          })
+          .catch(() => {
+            // Network failed — return cached if available
+            return cached || new Response(JSON.stringify({ error: 'offline' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          })
+
+        // If we have cached data, return it immediately while fetching in background
+        if (cached) {
+          // Update cache in background (fire-and-forget)
+          fetchPromise.catch(() => {})
+          // Add header to indicate cache
+          const headers = new Headers(cached.headers)
+          headers.set('X-From-Cache', 'true')
+          return new Response(cached.body, {
+            status: cached.status,
+            statusText: cached.statusText,
+            headers,
+          })
+        }
+
+        // No cache — wait for network
+        return fetchPromise
+      })
+    )
+    return
+  }
+
+  // ── Static assets: network first, fallback to cache ──
   event.respondWith(
     fetch(event.request)
       .then((response) => {

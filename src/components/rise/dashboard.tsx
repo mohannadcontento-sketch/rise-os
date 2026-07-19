@@ -45,7 +45,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
-import { apiFetch } from '@/lib/api-fetch'
+import { apiFetch, isFromCache } from '@/lib/api-fetch'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
@@ -1067,15 +1067,20 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [fromCache, setFromCache] = useState(false)
 
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const res = await apiFetch('/api/rise/dashboard')
-      if (!res.ok) throw new Error('فشل في تحميل البيانات')
-      const json = await res.json()
-      setData(json)
+      if (res.ok) {
+        const json = await res.json()
+        setFromCache(isFromCache(res))
+        setData(json)
+      } else {
+        throw new Error('فشل في تحميل البيانات')
+      }
     } catch (err: any) {
       setError(err.message || 'حدث خطأ غير متوقع')
     } finally {

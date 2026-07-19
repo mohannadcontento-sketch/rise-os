@@ -228,156 +228,110 @@ export default function RiseOSApp() {
     () => false
   )
 
-  // Auth check — show login if no valid session
+  // Auth check — OFFLINE-FIRST: trust stored session instantly, validate in background
   useEffect(() => {
     const checkAuth = () => {
       try {
         const stored = localStorage.getItem('rise-auth')
         const userInfo = localStorage.getItem('rise-user-info')
-        if (stored && userInfo) {
-          const session = JSON.parse(stored)
-          if (session.access_token) {
-            // Check if Supabase token needs refresh (real JWT has expires_at > 0)
-            const isSupabaseSession = session.refresh_token && session.refresh_token.length > 20
-            if (isSupabaseSession && session.expires_at) {
-              const expiresAtMs = session.expires_at * 1000
-              const nowMs = Date.now()
-              const fiveMin = 5 * 60 * 1000
-              if (expiresAtMs - nowMs < fiveMin) {
-                // Token expiring soon — refresh it
-                fetch('/api/auth/refresh', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ refresh_token: session.refresh_token }),
-                }).then(r => r.json()).then(data => {
-                  if (data.session) {
-                    localStorage.setItem('rise-auth', JSON.stringify(data.session))
-                    localStorage.setItem('rise-user-info', JSON.stringify(data.user))
-                    setAuth({
-                      isAuthenticated: true,
-                      userId: data.user.id,
-                      userEmail: data.user.email || '',
-                      userName: data.user.name || '',
-                      isAdmin: data.user.isAdmin,
-                      accessToken: data.session.access_token,
-                    })
-                  } else {
-                    // Refresh failed — clear session
-                    localStorage.removeItem('rise-auth')
-                    localStorage.removeItem('rise-user-info')
-                  }
-                }).catch(() => {
-                  // Offline — use stored session as fallback
-                  try {
-                    const storedInfo = JSON.parse(userInfo)
-                    setAuth({
-                      isAuthenticated: true,
-                      userId: session.access_token,
-                      userEmail: storedInfo?.email || '',
-                      userName: storedInfo?.name || '',
-                      isAdmin: storedInfo?.isAdmin || false,
-                      accessToken: session.access_token,
-                    })
-                  } catch { /* ignore */ }
-                })
-                return
-              }
-            }
+        if (!stored || !userInfo) return // No session — show login
 
-            // Validate session with server
-            apiGet('/api/auth/session').then(r => r.json()).then(data => {
-              if (data.user) {
-                const storedInfo = JSON.parse(userInfo)
+        const session = JSON.parse(stored)
+        if (!session.access_token) {
+          localStorage.removeItem('rise-auth')
+          localStorage.removeItem('rise-user-info')
+          return
+        }
+
+        // ✅ INSTANT: Set auth from localStorage immediately (zero delay)
+        const storedInfo = JSON.parse(userInfo)
+        const isSupabaseSession = session.refresh_token && session.refresh_token.length > 20
+        setAuth({
+          isAuthenticated: true,
+          userId: isSupabaseSession ? (storedInfo?.id || session.access_token) : session.access_token,
+          userEmail: storedInfo?.email || '',
+          userName: storedInfo?.name || '',
+          isAdmin: storedInfo?.isAdmin || false,
+          accessToken: session.access_token,
+        })
+
+        // 🔍 BACKGROUND: Validate session with server (non-blocking)
+        // Skip if offline
+        if (navigator.onLine === false) return
+
+        // For Supabase sessions, check if token needs refresh first
+        if (isSupabaseSession && session.expires_at) {
+          const expiresAtMs = session.expires_at * 1000
+          const fiveMin = 5 * 60 * 1000
+          if (expiresAtMs - Date.now() < fiveMin) {
+            fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: session.refresh_token }),
+            }).then(r => r.json()).then(data => {
+              if (data.session) {
+                localStorage.setItem('rise-auth', JSON.stringify(data.session))
+                localStorage.setItem('rise-user-info', JSON.stringify(data.user))
                 setAuth({
                   isAuthenticated: true,
                   userId: data.user.id,
                   userEmail: data.user.email || '',
-                  userName: data.user.name || storedInfo?.name || data.user.email?.split('@')[0] || '',
+                  userName: data.user.name || '',
                   isAdmin: data.user.isAdmin,
-                  accessToken: session.access_token,
+                  accessToken: data.session.access_token,
                 })
-              } else {
-                // Session invalid — try refresh first for Supabase sessions
-                if (isSupabaseSession && session.refresh_token) {
-                  fetch('/api/auth/refresh', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh_token: session.refresh_token }),
-                  }).then(r => r.json()).then(refreshData => {
-                    if (refreshData.session) {
-                      localStorage.setItem('rise-auth', JSON.stringify(refreshData.session))
-                      localStorage.setItem('rise-user-info', JSON.stringify(refreshData.user))
-                      setAuth({
-                        isAuthenticated: true,
-                        userId: refreshData.user.id,
-                        userEmail: refreshData.user.email || '',
-                        userName: refreshData.user.name || '',
-                        isAdmin: refreshData.user.isAdmin,
-                        accessToken: refreshData.session.access_token,
-                      })
-                    } else {
-                      // Refresh failed — for Supabase, must clear session
-                      localStorage.removeItem('rise-auth')
-                      localStorage.removeItem('rise-user-info')
-                    }
-                  }).catch(() => {
-                    // Network error during refresh — keep stored session as fallback
-                    try {
-                      const storedInfo = JSON.parse(userInfo)
-                      setAuth({
-                        isAuthenticated: true,
-                        userId: session.access_token,
-                        userEmail: storedInfo?.email || '',
-                        userName: storedInfo?.name || '',
-                        isAdmin: storedInfo?.isAdmin || false,
-                        accessToken: session.access_token,
-                      })
-                    } catch { /* ignore */ }
-                  })
-                } else if (!isSupabaseSession) {
-                  // Local mode: always trust stored session
-                  try {
-                    const storedInfo = JSON.parse(userInfo)
-                    setAuth({
-                      isAuthenticated: true,
-                      userId: session.access_token,
-                      userEmail: storedInfo?.email || '',
-                      userName: storedInfo?.name || '',
-                      isAdmin: storedInfo?.isAdmin || false,
-                      accessToken: session.access_token,
-                    })
-                  } catch { /* ignore */ }
-                } else {
-                  localStorage.removeItem('rise-auth')
-                  localStorage.removeItem('rise-user-info')
-                }
               }
-            }).catch(() => {
-              // Server unreachable — use stored info as fallback
-              try {
-                const storedInfo = JSON.parse(userInfo)
-                setAuth({
-                  isAuthenticated: true,
-                  userId: session.access_token,
-                  userEmail: storedInfo?.email || '',
-                  userName: storedInfo?.name || '',
-                  isAdmin: storedInfo?.isAdmin || false,
-                  accessToken: session.access_token,
-                })
-              } catch {
-                localStorage.removeItem('rise-auth')
-                localStorage.removeItem('rise-user-info')
-              }
-            })
-          } else {
-            // Invalid token — clear and show login
-            localStorage.removeItem('rise-auth')
-            localStorage.removeItem('rise-user-info')
+              // If refresh failed but we're already showing the UI, keep it —
+              // the token might still be valid for a few more minutes
+            }).catch(() => { /* offline — already showing UI */ })
+            return
           }
         }
-        // No stored session — show login page (do nothing, LoginPage renders)
+
+        // Validate session in background
+        apiGet('/api/auth/session').then(r => r.json()).then(data => {
+          if (data.user) {
+            // Session valid — update with fresh server data
+            setAuth(prev => prev ? {
+              ...prev,
+              userName: data.user.name || prev.userName,
+              userEmail: data.user.email || prev.userEmail,
+              userId: data.user.id,
+              isAdmin: data.user.isAdmin,
+            } : prev)
+          } else if (isSupabaseSession) {
+            // Supabase session invalid — try refresh
+            fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: session.refresh_token }),
+            }).then(r => r.json()).then(refreshData => {
+              if (refreshData.session) {
+                localStorage.setItem('rise-auth', JSON.stringify(refreshData.session))
+                localStorage.setItem('rise-user-info', JSON.stringify(refreshData.user))
+                setAuth({
+                  isAuthenticated: true,
+                  userId: refreshData.user.id,
+                  userEmail: refreshData.user.email || '',
+                  userName: refreshData.user.name || '',
+                  isAdmin: refreshData.user.isAdmin,
+                  accessToken: refreshData.session.access_token,
+                })
+              } else {
+                // Both session and refresh failed — clear
+                localStorage.removeItem('rise-auth')
+                localStorage.removeItem('rise-user-info')
+                setAuth(null)
+              }
+            }).catch(() => {
+              // Network error — keep showing UI with stored session
+            })
+          }
+          // For local sessions, always trust stored data
+        }).catch(() => {
+          // Network error — already showing UI with stored session
+        })
       } catch {
-        // Corrupted data — clear and show login
         localStorage.removeItem('rise-auth')
         localStorage.removeItem('rise-user-info')
       }
