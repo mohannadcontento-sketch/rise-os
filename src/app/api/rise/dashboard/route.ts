@@ -12,10 +12,13 @@ export const maxDuration = 30
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) {
-      return NextResponse.json(emptyDashboard())
+      return NextResponse.json(
+        { error: 'مطلوب تسجيل الدخول', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      )
     }
+    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
 
     const today = getToday()
     const last30 = getLast30Days()
@@ -175,27 +178,9 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Dashboard error:', error)
-    return NextResponse.json(emptyDashboard())
-  }
-}
-
-function emptyDashboard() {
-  return {
-    user: { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0, xpToNextLevel: 100, avatar: null },
-    today: { tasksCompleted: 0, tasksTotal: 0, habitsCompleted: 0, habitsTotal: 0, focusMin: 0, morningScore: 0 },
-    tasks: [],
-    habits: [],
-    todayHabitsLogs: [],
-    recentFocus: [],
-    health: null,
-    morning: null,
-    achievements: [],
-    dailyScores: [],
-    projects: [],
-    goals: [],
-    books: [],
-    journals: [],
-    weekDays: [],
-    offline: true,
+    return NextResponse.json(
+      { error: 'حدث خطأ في تحميل لوحة التحكم' },
+      { status: 500 }
+    )
   }
 }
