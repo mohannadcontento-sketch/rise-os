@@ -62,8 +62,9 @@ export async function POST(request: NextRequest) {
           .select('role, avatar')
           .eq('id', user.id)
           .single()
-        if (profile?.role === 'admin') isAdmin = true
-        avatar = profile?.avatar || null
+        const p = profile as { role?: string; avatar?: string } | null
+        if (p?.role === 'admin') isAdmin = true
+        avatar = p?.avatar || null
       }
     } catch { /* ignore */ }
 

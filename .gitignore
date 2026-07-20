@@ -66,3 +66,15 @@ BUILD_GUIDE.md
 mcp-research-*.json
 screenshot-*.png
 worklog.md
+
+# Dev/server infrastructure (not part of the app)
+.zscripts/
+Caddyfile
+tauri/
+upload/
+examples/
+mcp-claude-config.json
+MCP_SETUP.md
+supabase-migration-*.sql
+supabase-schema.sql
+db/*.db
