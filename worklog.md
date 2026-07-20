@@ -2508,3 +2508,43 @@ Stage Summary:
 - لا أخطاء console: لا Push AbortError، لا 401، لا 403
 - كل API requests ترجع 200 (مؤكد بـ agent-browser و server log)
 - Dashboard يتحمل في 17-19ms بعد أول compile
+---
+Task ID: fix-timer-offline-linked-tasks
+Agent: Main
+Task: إصلاح 3 مشاكل: تيمر الصباح لا يُوقف + عناصر المخطط لا تظهر + ربط المهام بالمخطط
+
+Work Log:
+- قراءة وتحليل morning-routine.tsx, daily-planner.tsx, api-fetch.ts, planner/route.ts, data.ts, auth.ts
+- تشخيص 3 بقل رئيسية:
+  1. تيمر الجلسة في الروتين الصباحي: لا يوجد زر إيقاف + localStorage key غير مرتبط بالمستخدم
+  2. إضافة مهمة في المخطط: apiFetch يرجع {success:true, offline:true} عند التايم أوت/الأوفلاين
+     الكود يستبدل العنصر المُضاف بـ optimistically بهذا الـ response الفارغ → يختفي العنصر
+  3. لا يوجد أي ربط بين نظام المهام والمخطط اليومي
+
+- إصلاح #1 - تيمر الصباح (morning-routine.tsx):
+  - إضافة getSessionStorageKey() — يربط مفتاح localStorage بـ userId
+  - إضافة handleStopMorning() — زر إيقاف للتيمر
+  - إضافة مستمعي أحداث rise:session-expired و rise:auth-refreshed
+  - عند تغيير الحساب: يتم مسح الجلسة وإيقاف كل التايمرات
+  - عند إكمال كل العناصر: يتم إيقاف تيمر الجلسة تلقائياً
+
+- إصلاح #2 - عناصر لا تظهر بعد الإضافة:
+  - daily-planner.tsx addItem: فحص X-Offline-Queued header قبل استبدال العنصر
+  - habits.tsx handleAddHabit: إضافة optimistic update + فحص أوفلاين
+  - goals.tsx handleAddGoal: إضافة optimistic update + فحص أوفلاين
+  - deep-work.tsx saveSession: إضافة error handling + فحص أوفلاين
+
+- إصلاح #3 - ربط المهام بالمخطط اليومي:
+  - إضافة حقل dueTime لنموذج المهام في tasks.tsx (UI + إنشاء)
+  - تعديل planner API (GET) لجلب مهام اليوم التي لها dueTime
+  - تصنيف المهام حسب الوقت: صباح (6-11)، ظهر (12-16)، مساء (17+)
+  - عرض المهام المرتبطة في المخطط مع شارة "مهمة" ولون المشروع
+  - تفعيل/إلغاء المهام المرتبطة من المخطط عبر tasks API
+  - عرض المهام في عرض الجدول الزمني أيضاً
+
+Stage Summary:
+- التايمر الصباحي الآن له زر إيقاف ولا يستمر عند تغيير الحساب
+- العناصر المضافة تظهر فوراً حتى لو أوفلاين (لا تختفي بعد الـ API response)
+- المهام التي لها مواعيد تظهر تلقائياً في المخطط اليومي في القسم المناسب
+- Lint يمر بنجاح (0 errors)
+- Compilation ينجح (GET / 200 في ~15 ثانية أول مرة)

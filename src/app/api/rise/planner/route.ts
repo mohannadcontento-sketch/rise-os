@@ -8,16 +8,47 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
-    if (!userId) return NextResponse.json({ items: [] })
+    if (!userId) return NextResponse.json({ items: [], linkedTasks: [] })
 
     const { searchParams } = new URL(req.url)
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
 
-    const items = await data.plannerItems.list(userId, date)
-    return NextResponse.json({ items })
+    const [items, allTasks] = await Promise.all([
+      data.plannerItems.list(userId, date),
+      data.tasks.list(userId),
+    ])
+
+    // Filter tasks due today with a dueTime (not completed, not cancelled)
+    const linkedTasks = allTasks.filter(
+      (t: any) => t.dueDate === date && t.dueTime && t.status !== 'done' && t.status !== 'cancelled'
+    ).map((t: any) => {
+      // Determine section from dueTime hour
+      const hour = parseInt(t.dueTime.split(':')[0], 10)
+      let section = 'morning'
+      if (hour >= 12 && hour < 17) section = 'noon'
+      else if (hour >= 17) section = 'evening'
+
+      return {
+        id: `task-${t.id}`,
+        taskId: t.id,
+        title: t.title,
+        completed: t.status === 'done',
+        time: t.dueTime,
+        section,
+        order: -1, // linked tasks sort by time, not order
+        priority: t.priority,
+        projectName: t.project?.name || null,
+        projectColor: t.project?.color || null,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+        isLinkedTask: true,
+      }
+    })
+
+    return NextResponse.json({ items, linkedTasks })
   } catch (error) {
     console.error('Planner GET error:', error)
-    return NextResponse.json({ items: [] })
+    return NextResponse.json({ items: [], linkedTasks: [] })
   }
 }
 

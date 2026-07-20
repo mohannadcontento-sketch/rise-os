@@ -103,6 +103,7 @@ interface Task {
   projectId?: string | null
   project?: { name: string; color: string } | null
   dueDate?: string | null
+  dueTime?: string | null
   xpReward: number
   completedAt?: string | null
   subtasks: SubTask[]
@@ -213,6 +214,7 @@ export function Tasks() {
   const [formPriority, setFormPriority] = useState('medium')
   const [formProject, setFormProject] = useState<string>('none')
   const [formDueDate, setFormDueDate] = useState('')
+  const [formDueTime, setFormDueTime] = useState('')
   const [formDependsOn, setFormDependsOn] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
 
@@ -366,6 +368,7 @@ export function Tasks() {
         description: formDesc.trim() || null,
         priority: formPriority,
         dueDate: formDueDate || null,
+        dueTime: formDueTime || null,
       }
       if (formProject !== 'none') body.projectId = formProject
       if (formDependsOn.length > 0) body.dependsOn = formDependsOn.join(',')
@@ -380,6 +383,7 @@ export function Tasks() {
       setFormPriority('medium')
       setFormProject('none')
       setFormDueDate('')
+      setFormDueTime('')
       setFormDependsOn([])
       setAddOpen(false)
       toast.success('تمت إضافة المهمة بنجاح')
@@ -609,7 +613,13 @@ export function Tasks() {
                 {task.dueDate && (
                   <span className="flex items-center gap-1">
                     <CalendarClock className="w-3 h-3" />
-                    {formatDateShort(task.dueDate)}
+                    {formatDateShort(task.dueDate)}{task.dueTime && <span className="mr-1">· {task.dueTime}</span>}
+                  </span>
+                )}
+                {!task.dueDate && task.dueTime && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {task.dueTime}
                   </span>
                 )}
                 {task.subtasks.length > 0 && (
@@ -798,7 +808,13 @@ export function Tasks() {
             {task.dueDate && (
               <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                 <CalendarClock className="w-3 h-3" />
-                {formatDateShort(task.dueDate)}
+                {formatDateShort(task.dueDate)}{task.dueTime && <span className="mr-1">· {task.dueTime}</span>}
+              </span>
+            )}
+            {!task.dueDate && task.dueTime && (
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                {task.dueTime}
               </span>
             )}
           </div>
@@ -1051,14 +1067,28 @@ export function Tasks() {
                     </Select>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق (اختياري)</Label>
-                  <Input
-                    type="date"
-                    value={formDueDate}
-                    onChange={(e) => setFormDueDate(e.target.value)}
-                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق (اختياري)</Label>
+                    <Input
+                      type="date"
+                      value={formDueDate}
+                      onChange={(e) => setFormDueDate(e.target.value)}
+                      className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium mb-1.5 block flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      وقت الاستحقاق (اختياري)
+                    </Label>
+                    <Input
+                      type="time"
+                      value={formDueTime}
+                      onChange={(e) => setFormDueTime(e.target.value)}
+                      className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                    />
+                  </div>
                 </div>
                 {/* Dependencies */}
                 {tasks.length > 0 && (

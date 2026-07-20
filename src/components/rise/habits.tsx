@@ -317,6 +317,17 @@ export function HabitsView() {
   /* ---- Add habit ---- */
   async function handleAddHabit() {
     if (!formName.trim()) return
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const optimistic: Habit = {
+      id: tempId,
+      name: formName,
+      icon: formIcon,
+      color: formColor,
+      frequency: formFrequency,
+      targetCount: parseInt(formTarget) || 1,
+      xpReward: 10,
+    }
+    setHabits((prev) => [...prev, optimistic])
     setSaving(true)
     try {
       const res = await apiPost('/api/rise/habits', {
@@ -326,14 +337,33 @@ export function HabitsView() {
           frequency: formFrequency,
           targetCount: parseInt(formTarget) || 1,
         })
-      if (res.ok) {
-        const data = await res.json()
-        setHabits((prev) => [...prev, data])
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setHabits((prev) => prev.filter((h) => h.id !== tempId))
+        toast.error('فشل في إضافة العادة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+
+      // Check if response is an offline queued response
+      const isOfflineQueued = res.headers.get('X-Offline-Queued') === 'true'
+      if (isOfflineQueued) {
         setAddOpen(false)
         resetForm()
+        playSound('save')
+        toast.success('تمت إضافة العادة (سيتم المزامنة لاحقاً)')
+        return
       }
+
+      const data = await res.json()
+      if (data && data.id && data.name) {
+        setHabits((prev) => prev.map((h) => h.id === tempId ? data : h))
+      }
+      setAddOpen(false)
+      resetForm()
+      playSound('save')
     } catch {
-      // silently fail
+      setHabits((prev) => prev.filter((h) => h.id !== tempId))
+      toast.error('فشل في إضافة العادة')
     } finally {
       setSaving(false)
     }

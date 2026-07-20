@@ -29,6 +29,7 @@ import {
   PartyPopper,
   Eye,
   Moon,
+  StopCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -172,6 +173,18 @@ function formatElapsed(ms: number): string {
 function arabicNum(n: number): string {
   const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩']
   return String(n).replace(/[0-9]/g, (d) => digits[parseInt(d)])
+}
+
+function getSessionStorageKey(): string {
+  try {
+    const stored = localStorage.getItem('rise-auth')
+    if (stored) {
+      const session = JSON.parse(stored)
+      const userId = session.user?.id || session.access_token?.slice(0, 20) || 'default'
+      return `rise-morning-session-${userId}`
+    }
+  } catch { /* ignore */ }
+  return 'rise-morning-session-default'
 }
 
 /* ────────────── Timer Hook ────────────── */
@@ -499,7 +512,6 @@ export default function MorningRoutine() {
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
   const sessionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const SESSION_STORAGE_KEY = 'rise-morning-session-start'
   const prevAllDoneRef = useRef(false)
 
   const movementTimer = useSectionTimer(SECTIONS[0].timerDefault)
@@ -535,10 +547,10 @@ export default function MorningRoutine() {
     }
   }, [sessionActive, sessionStartTime])
 
-  // Restore session from localStorage
+  // Restore session from localStorage + listen for auth changes
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(SESSION_STORAGE_KEY)
+      const stored = localStorage.getItem(getSessionStorageKey())
       if (stored) {
         const startTime = parseInt(stored)
         const today = new Date().toISOString().split('T')[0]
@@ -548,10 +560,29 @@ export default function MorningRoutine() {
           setSessionStartTime(startTime)
           setElapsedMs(Date.now() - startTime)
         } else {
-          localStorage.removeItem(SESSION_STORAGE_KEY)
+          localStorage.removeItem(getSessionStorageKey())
         }
       }
     } catch { /* ignore */ }
+
+    const handleSessionChange = () => {
+      localStorage.removeItem(getSessionStorageKey())
+      setSessionActive(false)
+      setSessionStartTime(null)
+      setElapsedMs(0)
+      // Also reset section timers
+      movementTimer.reset()
+      reflectionTimer.reset()
+      growthTimer.reset()
+    }
+
+    window.addEventListener('rise:session-expired', handleSessionChange)
+    window.addEventListener('rise:auth-refreshed', handleSessionChange)
+
+    return () => {
+      window.removeEventListener('rise:session-expired', handleSessionChange)
+      window.removeEventListener('rise:auth-refreshed', handleSessionChange)
+    }
   }, [])
 
   const handleStartMorning = () => {
@@ -559,8 +590,29 @@ export default function MorningRoutine() {
     setSessionActive(true)
     setSessionStartTime(now)
     setElapsedMs(0)
-    localStorage.setItem(SESSION_STORAGE_KEY, String(now))
+    localStorage.setItem(getSessionStorageKey(), String(now))
   }
+
+  const handleStopMorning = () => {
+    if (sessionIntervalRef.current) clearInterval(sessionIntervalRef.current)
+    localStorage.removeItem(getSessionStorageKey())
+    setSessionActive(false)
+    // Don't reset elapsedMs so user can see final time briefly
+    setTimeout(() => {
+      setElapsedMs(0)
+      setSessionStartTime(null)
+    }, 3000)
+  }
+
+  // Clear session timer when all items are completed
+  useEffect(() => {
+    if (isAllDone && sessionActive) {
+      if (sessionIntervalRef.current) clearInterval(sessionIntervalRef.current)
+      localStorage.removeItem(getSessionStorageKey())
+      setSessionActive(false)
+      // Keep elapsed time visible
+    }
+  }, [isAllDone, sessionActive])
 
   // Load data from API
   useEffect(() => {
@@ -731,6 +783,14 @@ export default function MorningRoutine() {
                   <span className="text-sm font-mono font-semibold text-foreground tabular-nums">
                     {formatElapsed(elapsedMs)}
                   </span>
+                  <motion.button
+                    whileTap={{ scale: 0.92 }}
+                    onClick={handleStopMorning}
+                    className="flex items-center justify-center w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all mr-1"
+                    title="إيقاف"
+                  >
+                    <StopCircle className="w-4 h-4" />
+                  </motion.button>
                 </motion.div>
               )}
               {!sessionActive && (

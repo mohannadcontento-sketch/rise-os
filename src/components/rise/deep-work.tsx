@@ -761,22 +761,40 @@ export default function DeepWork() {
         completedAt: completed ? new Date().toISOString() : null,
         notes: sessionNotes,
       })
-      if (res.ok) {
-        const sessionData = await res.json()
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        toast.error('فشل في حفظ الجلسة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+
+      // Check if response is an offline queued response
+      const isOfflineQueued = res.headers.get('X-Offline-Queued') === 'true'
+      if (isOfflineQueued) {
         if (completed) {
           const xp = Math.round(elapsedMin * 2)
           notifyFocusComplete(elapsedMin, xp)
-          apiPost('/api/rise/earn-xp', { amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }).catch(() => {})
-          // Open task linking dialog
-          setLastSessionXp(xp)
-          setLastSessionMin(elapsedMin)
-          setLastSessionId(sessionData.id)
-          fetchTasksForLinking()
+          toast.success('تم حفظ الجلسة (سيتم المزامنة لاحقاً)')
         } else {
-          toast.success('تم حفظ الجلسة')
+          toast.success('تم حفظ الجلسة (سيتم المزامنة لاحقاً)')
         }
         fetchSessions()
+        return
       }
+
+      const sessionData = await res.json()
+      if (completed) {
+        const xp = Math.round(elapsedMin * 2)
+        notifyFocusComplete(elapsedMin, xp)
+        apiPost('/api/rise/earn-xp', { amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }).catch(() => {})
+        // Open task linking dialog
+        setLastSessionXp(xp)
+        setLastSessionMin(elapsedMin)
+        setLastSessionId(sessionData.id)
+        fetchTasksForLinking()
+      } else {
+        toast.success('تم حفظ الجلسة')
+      }
+      fetchSessions()
     } catch {
       toast.error('فشل في حفظ الجلسة')
     } finally {

@@ -247,6 +247,19 @@ export function GoalsView() {
   /* ---- Add goal ---- */
   async function handleAddGoal() {
     if (!formTitle.trim()) return
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const optimistic: Goal = {
+      id: tempId,
+      title: formTitle,
+      vision: formVision,
+      why: formWhy,
+      type: formType,
+      progress: 0,
+      status: 'active',
+      deadline: formDeadline,
+      milestones: [],
+    }
+    setGoals((prev) => [...prev, optimistic])
     setSaving(true)
     try {
       const res = await apiPost('/api/rise/goals', {
@@ -256,15 +269,33 @@ export function GoalsView() {
           type: formType,
           deadline: formDeadline,
         })
-      if (res.ok) {
-        const data = await res.json()
-        setGoals((prev) => [...prev, data])
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setGoals((prev) => prev.filter((g) => g.id !== tempId))
+        toast.error('فشل في إضافة الهدف', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+
+      // Check if response is an offline queued response
+      const isOfflineQueued = res.headers.get('X-Offline-Queued') === 'true'
+      if (isOfflineQueued) {
         setAddOpen(false)
         resetForm()
         playSound('save')
+        toast.success('تمت إضافة الهدف (سيتم المزامنة لاحقاً)')
+        return
       }
+
+      const data = await res.json()
+      if (data && data.id && data.title) {
+        setGoals((prev) => prev.map((g) => g.id === tempId ? data : g))
+      }
+      setAddOpen(false)
+      resetForm()
+      playSound('save')
     } catch {
-      // Silently fail
+      setGoals((prev) => prev.filter((g) => g.id !== tempId))
+      toast.error('فشل في إضافة الهدف')
     } finally {
       setSaving(false)
     }

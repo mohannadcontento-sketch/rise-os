@@ -60,6 +60,12 @@ interface PlannerItem {
   order: number
   createdAt: string
   updatedAt: string
+  // Linked task fields (from tasks system)
+  taskId?: string
+  priority?: string
+  projectName?: string | null
+  projectColor?: string | null
+  isLinkedTask?: boolean
 }
 
 interface PlannerSection {
@@ -286,6 +292,7 @@ function PlannerItemRow({
   onDelete: (id: string) => void
 }) {
   const timeStr = item.time || ''
+  const isLinked = item.isLinkedTask
 
   return (
     <motion.div
@@ -296,7 +303,8 @@ function PlannerItemRow({
       className={cn(
         'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
         'hover:bg-background/80 hover:shadow-md hover:scale-[1.005] backdrop-blur-sm',
-        item.completed && 'opacity-50'
+        item.completed && 'opacity-50',
+        isLinked && 'bg-muted/30 border border-dashed border-border/40'
       )}
     >
       {/* Time indicator */}
@@ -307,10 +315,20 @@ function PlannerItemRow({
         </div>
       )}
 
+      {/* Linked task badge */}
+      {isLinked && (
+        <Badge className="text-[9px] px-1.5 py-0 h-4 rounded-full bg-emerald-accent/10 text-emerald-accent border-emerald-accent/20 shrink-0">
+          <ListTodo className="w-2.5 h-2.5 ml-0.5" />
+          مهمة
+        </Badge>
+      )}
+
       {/* Drag handle (visual only) */}
-      <div className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
-      </div>
+      {!isLinked && (
+        <div className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+        </div>
+      )}
 
       {/* Checkbox */}
       <motion.div whileTap={{ scale: 0.9 }}>
@@ -326,24 +344,36 @@ function PlannerItemRow({
         />
       </motion.div>
 
-      {/* Text */}
-      <span
-        className={cn(
-          'flex-1 text-sm transition-all duration-300 leading-relaxed',
-          item.completed ? 'line-through text-muted-foreground' : 'text-foreground'
-        )}
-      >
-        {item.title}
-      </span>
+      {/* Text + project badge */}
+      <div className="flex-1 min-w-0">
+        <span
+          className={cn(
+            'text-sm transition-all duration-300 leading-relaxed',
+            item.completed ? 'line-through text-muted-foreground' : 'text-foreground'
+          )}
+        >
+          {item.title}
+        </span>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {item.projectName && item.projectColor && (
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.projectColor }} />
+              {item.projectName}
+            </span>
+          )}
+        </div>
+      </div>
 
-      {/* Delete button */}
-      <motion.button
-        whileTap={{ scale: 0.85 }}
-        onClick={() => onDelete(item.id)}
-        className="p-1 rounded-lg text-muted-foreground/0 group-hover:text-muted-foreground/40 hover:!text-destructive/70 hover:!bg-destructive/10 transition-all duration-200"
-      >
-        <X className="w-3.5 h-3.5" />
-      </motion.button>
+      {/* Delete button (hide for linked tasks - they are managed from tasks) */}
+      {!isLinked && (
+        <motion.button
+          whileTap={{ scale: 0.85 }}
+          onClick={() => onDelete(item.id)}
+          className="p-1 rounded-lg text-muted-foreground/0 group-hover:text-muted-foreground/40 hover:!text-destructive/70 hover:!bg-destructive/10 transition-all duration-200"
+        >
+          <X className="w-3.5 h-3.5" />
+        </motion.button>
+      )}
     </motion.div>
   )
 }
@@ -610,11 +640,26 @@ function TimelineView({
   const currentHour = getCurrentHour()
   const timelineHours = Array.from({ length: 17 }, (_, i) => i + 6)
 
+  // Build a map of hour -> items for that hour
+  const hourItemsMap = useMemo(() => {
+    const map = new Map<number, PlannerItem[]>()
+    items.forEach((item) => {
+      if (!item.time) return
+      const h = parseInt(item.time.split(':')[0], 10)
+      if (h >= 6 && h <= 22) {
+        if (!map.has(h)) map.set(h, [])
+        map.get(h)!.push(item)
+      }
+    })
+    return map
+  }, [items])
+
   return (
     <div className="relative">
       <div className="space-y-0">
         {timelineHours.map((hour) => {
           const isNow = hour === currentHour
+          const hourItems = hourItemsMap.get(hour) || []
 
           return (
             <div
@@ -640,8 +685,8 @@ function TimelineView({
                   {formatHour(hour)}
                 </span>
               </div>
-              <div className="flex-1 min-h-[2rem] flex items-center">
-                {isNow && (
+              <div className="flex-1 min-h-[2rem] flex flex-col gap-0.5">
+                {isNow && hourItems.length === 0 && (
                   <motion.div
                     initial={{ opacity: 0, x: 8 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -651,6 +696,32 @@ function TimelineView({
                     <span className="text-xs text-emerald-accent font-medium">الوقت الحالي</span>
                   </motion.div>
                 )}
+                {hourItems.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1 rounded-lg text-xs transition-all',
+                      item.completed ? 'opacity-40 line-through text-muted-foreground' : 'text-foreground',
+                      item.isLinkedTask && 'bg-muted/40 border border-dashed border-border/30'
+                    )}
+                  >
+                    <Checkbox
+                      checked={item.completed}
+                      onCheckedChange={() => onToggleItem(item.id)}
+                      className="w-3.5 h-3.5 rounded border-muted-foreground/30 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+                    />
+                    {item.isLinkedTask && (
+                      <Badge className="text-[8px] px-1 py-0 h-3 rounded-full bg-emerald-accent/10 text-emerald-accent border-0 shrink-0">
+                        مهمة
+                      </Badge>
+                    )}
+                    <span className="truncate">{item.title}</span>
+                    {item.projectName && (
+                      <span className="text-[10px] text-muted-foreground/60 mr-auto shrink-0">{item.projectName}</span>
+                    )}
+                  </motion.div>
+                ))}
               </div>
             </div>
           )
@@ -676,6 +747,9 @@ export default function DailyPlanner() {
     return () => clearInterval(timer)
   }, [])
 
+  // Linked tasks from the tasks system (with dueTime for today)
+  const [linkedTasks, setLinkedTasks] = useState<PlannerItem[]>([])
+
   // Fetch items from API
   const fetchItems = useCallback(async () => {
     try {
@@ -683,6 +757,7 @@ export default function DailyPlanner() {
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setItems(data.items || [])
+      setLinkedTasks(data.linkedTasks || [])
     } catch {
       // ignore
     } finally {
@@ -710,7 +785,7 @@ export default function DailyPlanner() {
     try { localStorage.setItem(QUICK_NOTE_TEXT_KEY, quickNoteText) } catch { /* ignore */ }
   }, [quickNoteText])
 
-  // Derive section items from flat list
+  // Derive section items from flat list, merged with linked tasks
   const sectionItems = useMemo(() => {
     const morning: PlannerItem[] = []
     const noon: PlannerItem[] = []
@@ -722,8 +797,35 @@ export default function DailyPlanner() {
       else if (item.section === 'evening') evening.push(item)
     })
 
-    return { morning, noon, evening }
-  }, [items])
+    // Add linked tasks, sorted by their dueTime
+    linkedTasks.forEach((lt) => {
+      if (lt.section === 'morning') morning.push(lt)
+      else if (lt.section === 'noon') noon.push(lt)
+      else if (lt.section === 'evening') evening.push(lt)
+    })
+
+    // Sort each section: linked tasks first (sorted by time), then regular items (sorted by order)
+    const sortItems = (arr: PlannerItem[]) => {
+      return arr.sort((a, b) => {
+        // Linked tasks come before regular items
+        const aLinked = a.isLinkedTask ? 0 : 1
+        const bLinked = b.isLinkedTask ? 0 : 1
+        if (aLinked !== bLinked) return aLinked - bLinked
+        // Within linked tasks, sort by time
+        if (a.isLinkedTask && b.isLinkedTask) {
+          return (a.time || '').localeCompare(b.time || '')
+        }
+        // Within regular items, sort by order
+        return a.order - b.order
+      })
+    }
+
+    return {
+      morning: sortItems(morning),
+      noon: sortItems(noon),
+      evening: sortItems(evening),
+    }
+  }, [items, linkedTasks])
 
   const addItem = useCallback(async (sectionId: string, text: string) => {
     // Optimistic
@@ -750,8 +852,22 @@ export default function DailyPlanner() {
         toast.error('فشل في إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+
+      // Check if response is an offline queued response
+      const isOfflineQueued = res.headers.get('X-Offline-Queued') === 'true'
+
+      if (isOfflineQueued) {
+        // Keep the optimistic item as-is — don't replace with offline response
+        playSound('save')
+        toast.success('تمت إضافة المهمة (سيتم المزامنة لاحقاً)')
+        return
+      }
+
       const created = await res.json()
-      setItems((prev) => prev.map((i) => i.id === tempId ? created : i))
+      // Only replace if the server response has the expected fields
+      if (created && created.id && created.title) {
+        setItems((prev) => prev.map((i) => i.id === tempId ? created : i))
+      }
       playSound('save')
     } catch {
       setItems((prev) => prev.filter((i) => i.id !== tempId))
@@ -760,31 +876,59 @@ export default function DailyPlanner() {
   }, [todayStr])
 
   const toggleItem = useCallback(async (id: string) => {
-    const item = items.find((i) => i.id === id)
+    // Check if this is a linked task
+    const linkedItem = linkedTasks.find((i) => i.id === id)
+    const regularItem = items.find((i) => i.id === id)
+    const item = linkedItem || regularItem
     if (!item) return
 
     const newCompleted = !item.completed
     if (newCompleted) playSound('task-complete')
-    // Optimistic
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))
-    )
 
-    try {
-      const res = await apiPut('/api/rise/planner', { id, completed: newCompleted })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
+    if (linkedItem) {
+      // For linked tasks, toggle via the tasks API
+      const taskId = id.replace('task-', '')
+      setLinkedTasks((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))
+      )
+      try {
+        const res = await apiPut('/api/rise/tasks', {
+          id: taskId,
+          status: newCompleted ? 'done' : 'todo',
+          completedAt: newCompleted ? new Date().toISOString() : null,
+        })
+        if (!res.ok) {
+          setLinkedTasks((prev) =>
+            prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
+          )
+          toast.error('فشل تحديث المهمة')
+        }
+      } catch {
+        setLinkedTasks((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
+        )
+      }
+    } else {
+      // Regular planner items
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))
+      )
+      try {
+        const res = await apiPut('/api/rise/planner', { id, completed: newCompleted })
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          setItems((prev) =>
+            prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
+          )
+          toast.error('فشل تحديث العنصر', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        }
+      } catch {
         setItems((prev) =>
           prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
         )
-        toast.error('فشل تحديث العنصر', { description: errData.error || errData.details || 'حاول مرة أخرى' })
       }
-    } catch {
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
-      )
     }
-  }, [items])
+  }, [items, linkedTasks])
 
   const deleteItem = useCallback(async (id: string) => {
     const prev = [...items]
@@ -837,8 +981,8 @@ export default function DailyPlanner() {
     toast.success('تم تحديث الملاحظة')
   }
 
-  const totalItems = items.length
-  const completedItems = items.filter((i) => i.completed).length
+  const totalItems = items.length + linkedTasks.length
+  const completedItems = items.filter((i) => i.completed).length + linkedTasks.filter((i) => i.completed).length
   const overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
 
   // Arabic clock time
@@ -983,7 +1127,7 @@ export default function DailyPlanner() {
                 </div>
               </div>
               <CardContent className="p-4 pt-2">
-                <TimelineView items={items} onToggleItem={toggleItem} />
+                <TimelineView items={[...items, ...linkedTasks]} onToggleItem={toggleItem} />
               </CardContent>
             </Card>
           </motion.div>
