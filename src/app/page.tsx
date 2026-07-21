@@ -213,6 +213,12 @@ export default function RiseOSApp() {
   const { activeModule, setActiveModule, toggleSidebar, auth, setAuth, logout } = useRiseStore()
   const { theme, setTheme } = useTheme()
   const [searchOpen, setSearchOpen] = useState(false)
+  // Track visited modules to keep them mounted (preserves state across tab switches)
+  const [visitedModules, setVisitedModules] = useState<Set<ModuleId>>(() => new Set([activeModule]))
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync visited modules with external store
+    setVisitedModules(prev => prev.has(activeModule) ? prev : new Set([...prev, activeModule]))
+  }, [activeModule])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<{
     tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[]
@@ -499,7 +505,6 @@ export default function RiseOSApp() {
     setTimeout(() => setThemeRotating(false), 500)
   }, [theme, setTheme])
 
-  const ActiveComponent = moduleComponents[activeModule]
   const ModuleIcon = moduleIconMap[activeModule]
 
   // Show login if not authenticated (after all hooks)
@@ -592,31 +597,41 @@ export default function RiseOSApp() {
           )}
         </header>
 
-        {/* Content */}
+        {/* Content — render ALL visited modules, show only active one (preserves state) */}
         <div className="flex-1 overflow-y-auto">
-            <div
-              key={activeModule}
-              className="p-4 md:p-6 animate-[fadeSlideIn_0.2s_ease-out]"
-            >
-              {/* Module title with accent bar & date */}
-              <div className="mb-6 flex items-stretch gap-3 module-title-animate" key={`title-${activeModule}`}>
-                <div className={cn(
-                  'w-1 rounded-full shrink-0',
-                  moduleAccentMap[activeModule]
-                )} />
-                <div className="flex flex-col justify-center">
-                  <h2 className="text-2xl font-bold tracking-tight">
-                    {moduleNames[activeModule]}
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">{todayArabic}</p>
+          {(Object.keys(moduleComponents) as ModuleId[]).map((modId) => {
+            if (!visitedModules.has(modId)) return null
+            const Comp = moduleComponents[modId]
+            const isActive = modId === activeModule
+            return (
+              <div
+                key={modId}
+                className={cn(
+                  'p-4 md:p-6',
+                  isActive ? 'animate-[fadeSlideIn_0.2s_ease-out]' : 'hidden'
+                )}
+              >
+                {/* Module title with accent bar & date */}
+                <div className="mb-6 flex items-stretch gap-3">
+                  <div className={cn(
+                    'w-1 rounded-full shrink-0',
+                    moduleAccentMap[modId]
+                  )} />
+                  <div className="flex flex-col justify-center">
+                    <h2 className="text-2xl font-bold tracking-tight">
+                      {moduleNames[modId]}
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">{todayArabic}</p>
+                  </div>
                 </div>
+                <Suspense fallback={<LoadingFallback />}>
+                  <ModuleErrorBoundary moduleName={moduleNames[modId]}>
+                    <Comp />
+                  </ModuleErrorBoundary>
+                </Suspense>
               </div>
-              <Suspense fallback={<LoadingFallback />}>
-                <ModuleErrorBoundary moduleName={moduleNames[activeModule]}>
-                  <ActiveComponent />
-                </ModuleErrorBoundary>
-              </Suspense>
-            </div>
+            )
+          })}
         </div>
       </main>
 

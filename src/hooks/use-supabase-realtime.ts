@@ -6,12 +6,10 @@ import { useEffect, useRef } from 'react'
  * useSupabaseRealtime — subscribes to Supabase Realtime changes on key
  * tables filtered by user_id.  When any INSERT / UPDATE / DELETE is
  * received it dispatches the existing `rise:data-changed` CustomEvent so
- * that every component already using `useDataRefresh()` re-fetches
- * automatically — zero changes needed in downstream components.
+ * that the dashboard (which still uses refreshKey) re-fetches automatically.
  *
- * The Supabase JS client is imported lazily (dynamic import) to keep
- * this module safe for SSR / bundle analysis — same pattern as
- * `next-themes` and the existing `src/lib/supabase.ts`.
+ * Uses a SINGLE shared Supabase client instance to avoid
+ * "Multiple GoTrueClient instances" warnings.
  */
 
 // ── Config ──
@@ -38,11 +36,31 @@ const WATCHED_TABLES = [
   'knowledge_items',
 ] as const
 
-// Use `any` for the client & channel since we dynamic-import Supabase
-// and defining exact generics would require importing the types at module
-// level (which defeats the lazy-load purpose).
 type AnyChannel = any
 type AnyClient = any
+
+// Shared client singleton — avoids multiple GoTrueClient instances
+let sharedClient: AnyClient | null = null
+let sharedClientToken: string | null = null
+
+async function getSharedClient(accessToken: string): Promise<AnyClient> {
+  // Reuse client if token hasn't changed
+  if (sharedClient && sharedClientToken === accessToken) {
+    return sharedClient
+  }
+  // Clean up old client
+  if (sharedClient) {
+    try { sharedClient.removeAllChannels() } catch { /* ignore */ }
+  }
+  const { createClient } = await import('@supabase/supabase-js')
+  sharedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  })
+  sharedClientToken = accessToken
+  return sharedClient
+}
 
 export function useSupabaseRealtime(
   userId: string | null,
@@ -51,59 +69,28 @@ export function useSupabaseRealtime(
   const channelsRef = useRef<AnyChannel[]>([])
   const mountedRef = useRef(true)
 
-  // Track previous userId/accessToken to re-subscribe on auth change
-  const prevRef = useRef({ userId, accessToken })
-
   useEffect(() => {
     mountedRef.current = true
 
-    // Cleanup helper
     function cleanup() {
       channelsRef.current.forEach((ch: AnyChannel) => {
-        try {
-          ch.unsubscribe()
-        } catch {
-          /* channel may already be closed */
-        }
+        try { ch.unsubscribe() } catch { /* channel may already be closed */ }
       })
       channelsRef.current = []
     }
 
-    // Guard: need URL, anon key, userId and accessToken
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !userId || !accessToken) {
       cleanup()
       return
     }
 
-    // Skip if nothing changed
-    if (
-      prevRef.current.userId === userId &&
-      prevRef.current.accessToken === accessToken &&
-      channelsRef.current.length > 0
-    ) {
-      return
-    }
-    prevRef.current = { userId, accessToken }
-
     cleanup()
-
-    let client: AnyClient | null = null
 
     async function subscribe() {
       try {
-        // Lazy-import Supabase (SSR-safe)
-        const { createClient } = await import('@supabase/supabase-js')
+        const client = await getSharedClient(accessToken)
 
-        client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          global: {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          },
-        })
-
-        if (!mountedRef.current) {
-          client.removeAllChannels()
-          return
-        }
+        if (!mountedRef.current) return
 
         const channels: AnyChannel[] = []
 
@@ -118,7 +105,7 @@ export function useSupabaseRealtime(
                 filter: `user_id=eq.${userId}`,
               } as any,
               () => {
-                // Dispatch the same event that apiFetch dispatches on writes
+                // Only dispatch for dashboard (other components use optimistic state)
                 if (typeof window !== 'undefined') {
                   window.dispatchEvent(new CustomEvent('rise:data-changed'))
                 }
@@ -135,7 +122,6 @@ export function useSupabaseRealtime(
           channels.forEach((ch: AnyChannel) => ch.unsubscribe())
         }
       } catch (err) {
-        // Graceful degradation — realtime is optional
         if (process.env.NODE_ENV === 'development') {
           console.warn('[useSupabaseRealtime] Failed to subscribe:', err)
         }
@@ -147,11 +133,7 @@ export function useSupabaseRealtime(
     return () => {
       mountedRef.current = false
       cleanup()
-      try {
-        client?.removeAllChannels()
-      } catch {
-        /* ignore */
-      }
+      // Don't remove all channels — shared client might be used by other instances
     }
   }, [userId, accessToken])
 }
