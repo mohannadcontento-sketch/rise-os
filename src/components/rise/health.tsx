@@ -42,6 +42,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -141,6 +142,8 @@ export default function Health() {
   const today = new Date().toISOString().split('T')[0]
 
   /* ─── Fetch ─── */
+  const { refreshKey } = useDataRefresh()
+
   const fetchHealth = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/health')
@@ -173,7 +176,7 @@ export default function Health() {
 
   useEffect(() => {
     fetchHealth()
-  }, [fetchHealth])
+  }, [fetchHealth, refreshKey])
 
   /* ─── Save ─── */
   const handleSave = async () => {

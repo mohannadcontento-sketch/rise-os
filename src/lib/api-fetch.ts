@@ -276,6 +276,10 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // Invalidate cache on successful POST/PUT/DELETE
   if (response.ok && options.method && options.method !== 'GET') {
     invalidateCache()
+    // Notify all components to re-fetch their data
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rise:data-changed'))
+    }
   }
 
   // If 401 and this is an API request, try to refresh and retry

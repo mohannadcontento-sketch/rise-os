@@ -46,6 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { apiFetch, isFromCache } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
@@ -1088,9 +1089,11 @@ export default function Dashboard() {
     }
   }, [])
 
+  const { refreshKey } = useDataRefresh()
+
   useEffect(() => {
     fetchDashboard()
-  }, [fetchDashboard])
+  }, [fetchDashboard, refreshKey])
 
   // Play achievement sound on first load if there are achievements
   const achievementSoundPlayed = useRef(false)

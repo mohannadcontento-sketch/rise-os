@@ -58,6 +58,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiDelete, apiPut } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -230,6 +231,8 @@ export default function Finance() {
     }
   }, [])
 
+  const { refreshKey } = useDataRefresh()
+
   /* ─── Fetch ─── */
   const fetchFinance = useCallback(async () => {
     try {
@@ -247,7 +250,7 @@ export default function Finance() {
 
   useEffect(() => {
     fetchFinance()
-  }, [fetchFinance])
+  }, [fetchFinance, refreshKey])
 
   /* ─── Save Record ─── */
   const handleSave = async () => {

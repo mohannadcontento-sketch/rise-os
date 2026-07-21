@@ -52,6 +52,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -145,6 +146,8 @@ export default function SecondBrain() {
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
 
+  const { refreshKey } = useDataRefresh()
+
   const fetchItems = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/knowledge')
@@ -160,7 +163,7 @@ export default function SecondBrain() {
 
   useEffect(() => {
     fetchItems()
-  }, [fetchItems])
+  }, [fetchItems, refreshKey])
 
   // Quick Capture handler
   const handleQuickCapture = useCallback(async () => {

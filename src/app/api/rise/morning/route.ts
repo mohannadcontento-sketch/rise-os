@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
-    const body = await req.json()
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
     const today = getToday()
     const date = body.date || today
 

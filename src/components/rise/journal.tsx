@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -203,6 +204,8 @@ export default function Journal() {
   const today = new Date().toISOString().split('T')[0]
 
   /* ─── Fetch ─── */
+  const { refreshKey } = useDataRefresh()
+
   const fetchJournal = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/journal')
@@ -232,7 +235,7 @@ export default function Journal() {
 
   useEffect(() => {
     fetchJournal()
-  }, [fetchJournal])
+  }, [fetchJournal, refreshKey])
 
   /* ─── Save ─── */
   const handleSave = async () => {

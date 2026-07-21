@@ -48,8 +48,6 @@ const Sidebar = lazy(() => import('@/components/rise/sidebar').then(m => ({ defa
 const LoginPage = lazy(() => import('@/components/rise/login-page'))
 // PWA components — lazy loaded
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
-const ConnectionStatus = lazy(() => import('@/lib/pwa').then(m => ({ default: m.ConnectionStatus })))
-const OfflineBanner = lazy(() => import('@/lib/pwa').then(m => ({ default: m.OfflineBanner })))
 
 const Onboarding = lazy(() => import('@/components/rise/onboarding'))
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
@@ -540,9 +538,6 @@ export default function RiseOSApp() {
             </kbd>
           </Button>
 
-          {/* Connection Status */}
-          <Suspense fallback={null}><ConnectionStatus /></Suspense>
-
           {/* Notifications */}
           <Suspense fallback={null}><NotificationBell /></Suspense>
 
@@ -810,9 +805,8 @@ export default function RiseOSApp() {
           </div>
         )}
 
-      {/* PWA: install prompt, connection status, offline banner */}
+      {/* PWA: install prompt */}
       <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
-      <Suspense fallback={null}><OfflineBanner /></Suspense>
 
       {/* Onboarding for first-time users */}
       <Suspense fallback={null}><Onboarding /></Suspense>

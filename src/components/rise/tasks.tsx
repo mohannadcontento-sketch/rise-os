@@ -78,6 +78,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
@@ -235,9 +236,11 @@ export function Tasks() {
     }
   }, [])
 
+  const { refreshKey } = useDataRefresh()
+
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+  }, [fetchData, refreshKey])
 
   /* ── Filtering ── */
   const isTaskBlocked = useCallback((task: Task): boolean => {

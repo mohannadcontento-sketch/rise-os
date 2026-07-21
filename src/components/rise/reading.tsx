@@ -47,6 +47,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -155,6 +156,8 @@ export default function Reading() {
   const [editHighlight, setEditHighlight] = useState<Record<string, string>>({})
   const [editPage, setEditPage] = useState<Record<string, string>>({})
 
+  const { refreshKey } = useDataRefresh()
+
   const fetchBooks = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/books')
@@ -170,7 +173,7 @@ export default function Reading() {
 
   useEffect(() => {
     fetchBooks()
-  }, [fetchBooks])
+  }, [fetchBooks, refreshKey])
 
   const handleAddBook = async () => {
     if (!newTitle.trim()) return

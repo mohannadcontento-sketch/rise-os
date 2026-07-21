@@ -49,6 +49,7 @@ import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { cn } from '@/lib/utils'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
 
@@ -214,6 +215,8 @@ export function HabitsView() {
 
   const todayStr = getTodayStr()
 
+  const { refreshKey } = useDataRefresh()
+
   /* ---- Fetch ---- */
   useEffect(() => {
     async function fetchHabits() {
@@ -231,7 +234,7 @@ export function HabitsView() {
       }
     }
     fetchHabits()
-  }, [])
+  }, [refreshKey])
 
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(

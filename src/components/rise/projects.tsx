@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
@@ -323,6 +324,8 @@ export function Projects() {
   const [newTaskDueDate, setNewTaskDueDate] = useState('')
   const [taskSubmitting, setTaskSubmitting] = useState(false)
 
+  const { refreshKey } = useDataRefresh()
+
   const fetchData = useCallback(async () => {
     try {
       const [projRes, taskRes] = await Promise.all([
@@ -344,7 +347,7 @@ export function Projects() {
 
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+  }, [fetchData, refreshKey])
 
   /* ── Computed ── */
   const filteredProjects = useMemo(() => {

@@ -30,6 +30,7 @@ import {
   Eye,
   Moon,
   StopCircle,
+  CalendarClock,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -39,6 +40,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { notifyMorningComplete } from '@/lib/notifications'
@@ -217,8 +219,12 @@ function useSectionTimer(defaultSeconds: number) {
     setIsRunning(false)
     setSeconds(defaultSeconds)
   }
+  const stop = () => {
+    setIsRunning(false)
+    setSeconds(0)
+  }
 
-  return { seconds, isRunning, start, pause, reset, setSeconds }
+  return { seconds, isRunning, start, pause, reset, stop, setSeconds }
 }
 
 /* ────────────── Section Timer Component ────────────── */
@@ -277,6 +283,13 @@ function SectionTimer({
           )}
         >
           {timer.isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+        </motion.button>
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={timer.stop}
+          className="flex items-center justify-center w-7 h-7 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
+        >
+          <StopCircle className="w-3.5 h-3.5" />
         </motion.button>
         <motion.button
           whileTap={{ scale: 0.92 }}
@@ -506,6 +519,7 @@ export default function MorningRoutine() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [startedAt, setStartedAt] = useState<string | null>(null)
+  const [scheduledTasks, setScheduledTasks] = useState<{ id: string; title: string; dueTime: string }[]>([])
 
   // Session timer state
   const [sessionActive, setSessionActive] = useState(false)
@@ -614,7 +628,9 @@ export default function MorningRoutine() {
     }
   }, [isAllDone, sessionActive])
 
-  // Load data from API
+  const { refreshKey } = useDataRefresh()
+
+  // Load data from API + scheduled tasks
   useEffect(() => {
     async function load() {
       try {
@@ -629,6 +645,20 @@ export default function MorningRoutine() {
             setStartedAt(data.todayLog.startedAt)
           }
         }
+
+        // Fetch today's scheduled tasks (tasks with dueDate = today and dueTime set)
+        try {
+          const tasksRes = await apiFetch('/api/rise/tasks')
+          if (tasksRes.ok) {
+            const tasksData = await tasksRes.json()
+            const todayStr = new Date().toISOString().split('T')[0]
+            const todayScheduled = (tasksData.tasks || []).filter(
+              (t: any) => t.dueDate === todayStr && t.dueTime && t.status !== 'done'
+            ).map((t: any) => ({ id: t.id, title: t.title, dueTime: t.dueTime }))
+            todayScheduled.sort((a: any, b: any) => a.dueTime.localeCompare(b.dueTime))
+            setScheduledTasks(todayScheduled)
+          }
+        } catch { /* ignore */ }
       } catch {
         // Use empty state
       } finally {
@@ -636,7 +666,7 @@ export default function MorningRoutine() {
       }
     }
     load()
-  }, [])
+  }, [refreshKey])
 
   // Generate mock history for last 7 days if no logs
   const displayLogs = (() => {
@@ -1048,6 +1078,44 @@ export default function MorningRoutine() {
           )
         })}
       </div>
+
+      {/* ── Today's Scheduled Tasks ── */}
+      <AnimatePresence>
+        {scheduledTasks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.5, delay: 0.35 }}
+          >
+            <Card className="overflow-hidden rounded-2xl border-0 shadow-sm gap-0">
+              <div className="px-5 pt-5 pb-3 flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gold/10 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-gold" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">مهمات مجدولة اليوم</h3>
+                  <p className="text-[11px] text-muted-foreground">مهام لديها وقت محدد لهذا اليوم</p>
+                </div>
+              </div>
+              <CardContent className="pb-5 pt-1 space-y-2">
+                {scheduledTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-muted/50 hover:bg-muted/80 transition-colors"
+                  >
+                    <CalendarClock className="w-4 h-4 text-gold shrink-0" />
+                    <span className="text-sm flex-1 text-foreground">{task.title}</span>
+                    <Badge variant="secondary" className="text-[10px] font-mono tabular-nums">
+                      {task.dueTime}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── History Section ── */}
       <motion.div

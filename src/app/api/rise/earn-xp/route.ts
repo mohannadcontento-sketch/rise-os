@@ -75,7 +75,8 @@ export async function POST(req: NextRequest) {
       leveled,
       newLevel,
     })
-  } catch {
+  } catch (error) {
+    console.error('Earn XP error:', error)
     return NextResponse.json({ success: true, offline: true })
   }
 }
