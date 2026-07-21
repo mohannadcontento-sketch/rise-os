@@ -40,7 +40,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { notifyMorningComplete } from '@/lib/notifications'
@@ -628,8 +627,6 @@ export default function MorningRoutine() {
     }
   }, [isAllDone, sessionActive])
 
-  const { refreshKey } = useDataRefresh()
-
   // Load data from API + scheduled tasks
   useEffect(() => {
     async function load() {
@@ -666,7 +663,7 @@ export default function MorningRoutine() {
       }
     }
     load()
-  }, [refreshKey])
+  }, [])
 
   // Generate mock history for last 7 days if no logs
   const displayLogs = (() => {

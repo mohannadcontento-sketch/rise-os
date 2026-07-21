@@ -57,8 +57,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiDelete, apiPut, signalDataChanged } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { apiFetch, apiPost, apiDelete, apiPut } from '@/lib/api-fetch'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -231,8 +230,6 @@ export default function Finance() {
     }
   }, [])
 
-  const { refreshKey } = useDataRefresh()
-
   /* ─── Fetch ─── */
   const fetchFinance = useCallback(async () => {
     try {
@@ -250,7 +247,7 @@ export default function Finance() {
 
   useEffect(() => {
     fetchFinance()
-  }, [fetchFinance, refreshKey])
+  }, [fetchFinance])
 
   /* ─── Save Record ─── */
   const handleSave = async () => {
@@ -295,16 +292,20 @@ export default function Finance() {
   /* ─── Delete Record ─── */
   const handleDelete = async (id: string) => {
     playSound('delete')
+    const prevData = data
+    // Optimistic: remove from local state
+    setData(prev => prev ? { records: prev.records.filter(r => r.id !== id) } : prev)
     setDeleting(id)
     try {
       const res = await apiDelete(`/api/rise/finance?id=${id}`)
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${res.status}`)
+        setData(prevData) // Revert
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `HTTP ${res.status}`)
       }
       toast.success('تم حذف السجل')
-      fetchFinance()
     } catch (err) {
+      // Already reverted above or will show error
       toast.error('فشل في حذف السجل', {
         description: err instanceof Error ? err.message : 'حاول مرة أخرى',
       })

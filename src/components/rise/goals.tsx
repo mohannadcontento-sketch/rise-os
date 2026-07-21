@@ -51,8 +51,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiDelete, apiPost, apiPut, signalDataChanged } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { apiFetch, apiDelete, apiPost, apiPut } from '@/lib/api-fetch'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -133,7 +132,6 @@ export function GoalsView() {
   const [formType, setFormType] = useState<Goal['type']>('monthly')
   const [formDeadline, setFormDeadline] = useState('')
 
-  const { refreshKey } = useDataRefresh()
 
   /* ---- Fetch ---- */
   const fetchGoals = useCallback(async () => {
@@ -157,7 +155,7 @@ export function GoalsView() {
 
   useEffect(() => {
     fetchGoals()
-  }, [refreshKey, fetchGoals])
+  }, [fetchGoals])
 
   /* ---- Filtered goals ---- */
   const filteredGoals = useMemo(() => {

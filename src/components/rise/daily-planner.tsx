@@ -46,7 +46,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -766,11 +765,10 @@ export default function DailyPlanner() {
     }
   }, [todayStr])
 
-  const { refreshKey } = useDataRefresh()
 
   useEffect(() => {
     fetchItems()
-  }, [fetchItems, refreshKey])
+  }, [fetchItems])
 
   // Quick Notes (keep in localStorage)
   const [notes, setNotes] = useState<QuickNote[]>(() => loadNotes())

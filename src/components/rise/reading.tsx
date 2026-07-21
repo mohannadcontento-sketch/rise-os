@@ -46,8 +46,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut, signalDataChanged } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 
@@ -156,8 +155,6 @@ export default function Reading() {
   const [editHighlight, setEditHighlight] = useState<Record<string, string>>({})
   const [editPage, setEditPage] = useState<Record<string, string>>({})
 
-  const { refreshKey } = useDataRefresh()
-
   const fetchBooks = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/books')
@@ -173,7 +170,7 @@ export default function Reading() {
 
   useEffect(() => {
     fetchBooks()
-  }, [fetchBooks, refreshKey])
+  }, [fetchBooks])
 
   const handleAddBook = async () => {
     if (!newTitle.trim()) return
@@ -205,16 +202,20 @@ export default function Reading() {
   }
 
   const handleUpdateBook = async (id: string, data: Partial<Book>) => {
+    const prevBooks = [...books]
+    // Optimistic update
+    setBooks(prev => prev.map(b => b.id === id ? { ...b, ...data } : b))
     try {
       const res = await apiPut('/api/rise/books', { id, ...data })
       if (!res.ok) {
+        setBooks(prevBooks) // Revert on error
         const errData = await res.json().catch(() => ({}))
         toast.error('فشل في تحديث الكتاب', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
       toast.success('تم التحديث بنجاح')
-      fetchBooks()
     } catch {
+      setBooks(prevBooks) // Revert on error
       toast.error('فشل في تحديث الكتاب')
     }
   }

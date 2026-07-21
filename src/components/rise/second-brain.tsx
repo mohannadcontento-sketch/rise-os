@@ -51,8 +51,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut, apiDelete, signalDataChanged } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 
 /* ────────────── Types ────────────── */
@@ -146,8 +145,6 @@ export default function SecondBrain() {
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
 
-  const { refreshKey } = useDataRefresh()
-
   const fetchItems = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/knowledge')
@@ -163,7 +160,7 @@ export default function SecondBrain() {
 
   useEffect(() => {
     fetchItems()
-  }, [fetchItems, refreshKey])
+  }, [fetchItems])
 
   // Quick Capture handler
   const handleQuickCapture = useCallback(async () => {
@@ -226,30 +223,37 @@ export default function SecondBrain() {
     }
   }
 
-  const handleUpdate = async (id: string, data: Partial<KnowledgeItem>) => {
+  const handleUpdate = async (id: string, updateData: Partial<KnowledgeItem>) => {
+    const prevItems = [...items]
+    // Optimistic update
+    setItems(prev => prev.map(item => item.id === id ? { ...item, ...updateData } : item))
     try {
-      const res = await apiPut('/api/rise/knowledge', { id, ...data })
+      const res = await apiPut('/api/rise/knowledge', { id, ...updateData })
       if (!res.ok) {
+        setItems(prevItems) // Revert
         const errData = await res.json().catch(() => ({}))
         toast.error('فشل في التحديث', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
       toast.success('تم التحديث بنجاح')
-      fetchItems()
     } catch {
+      setItems(prevItems) // Revert
       toast.error('فشل في التحديث')
     }
   }
 
   const handleDelete = async (id: string) => {
+    const prevItems = [...items]
+    // Optimistic: remove from local state
+    setItems(prev => prev.filter(item => item.id !== id))
     try {
       const res = await apiDelete(`/api/rise/knowledge?id=${id}`)
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${res.status}`)
+        setItems(prevItems) // Revert
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `HTTP ${res.status}`)
       }
       toast.success('تم الحذف بنجاح')
-      fetchItems()
     } catch (err) {
       toast.error('فشل في الحذف', {
         description: err instanceof Error ? err.message : 'حاول مرة أخرى',
