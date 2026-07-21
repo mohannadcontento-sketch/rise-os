@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   BookOpen,
@@ -190,7 +191,7 @@ function AnimatedNumber({ value }: { value: number }) {
 /* ────────────── Component ────────────── */
 
 export default function Journal() {
-  const [data, setData] = useState<JournalData | null>(null)
+  const [data, setData] = usePersistedData<JournalData | null>('journals', null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')

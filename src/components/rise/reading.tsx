@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BookOpen,
@@ -136,7 +137,7 @@ function StarRating({ rating, onRate, readonly = false }: { rating: number; onRa
 /* ────────────── Component ────────────── */
 
 export default function Reading() {
-  const [books, setBooks] = useState<Book[]>([])
+  const [books, setBooks] = usePersistedData<Book[]>('books', [])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('reading')
   const [expandedBook, setExpandedBook] = useState<string | null>(null)

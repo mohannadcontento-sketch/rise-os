@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Network,
@@ -120,7 +121,7 @@ const folders = [
 /* ────────────── Component ────────────── */
 
 export default function SecondBrain() {
-  const [items, setItems] = useState<KnowledgeItem[]>([])
+  const [items, setItems] = usePersistedData<KnowledgeItem[]>('knowledge-items', [])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeType, setActiveType] = useState('all')

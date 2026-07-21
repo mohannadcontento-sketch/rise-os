@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PieChart,
@@ -173,7 +174,7 @@ function toArabicNum(n: number | null | undefined | string | object): string {
 /* ────────────── Component ────────────── */
 
 export default function Finance() {
-  const [data, setData] = useState<FinanceData | null>(null)
+  const [data, setData] = usePersistedData<FinanceData | null>('finance-records', null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)

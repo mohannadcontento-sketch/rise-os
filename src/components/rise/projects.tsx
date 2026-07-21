@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
@@ -302,8 +303,8 @@ function EmptyState() {
 /* ────────────── Main Component ────────────── */
 
 export function Projects() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [projects, setProjects] = usePersistedData<Project[]>('projects', [])
+  const [tasks, setTasks] = usePersistedData<Task[]>('tasks-list', [])
   const [loading, setLoading] = useState(true)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')

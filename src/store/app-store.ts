@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { clearAllCache } from '@/lib/api-fetch'
+import { clearPersistedData } from '@/hooks/use-persisted-data'
 
 export type ModuleId =
   | 'dashboard'
@@ -71,6 +72,7 @@ export const useRiseStore = create<RiseStore>((set) => ({
   logout: () => {
     if (typeof window !== 'undefined') {
       clearAllCache() // Clear per-user cache to prevent cross-user data leaks
+      clearPersistedData() // Clear in-memory persisted data
       localStorage.removeItem('rise-auth')
       localStorage.removeItem('rise-user-info')
       window.dispatchEvent(new CustomEvent('rise:session-expired'))

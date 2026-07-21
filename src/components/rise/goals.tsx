@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Target,
@@ -118,7 +119,7 @@ const TYPE_GRADIENT_STOPS: Record<Goal['type'], { from: string; to: string }> = 
 /* ────────────── Component ────────────── */
 
 export function GoalsView() {
-  const [goals, setGoals] = useState<Goal[]>([])
+  const [goals, setGoals] = usePersistedData<Goal[]>('goals', [])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [activeType, setActiveType] = useState<string>('all')

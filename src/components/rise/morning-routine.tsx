@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun,
@@ -513,7 +514,7 @@ function RoutineItemRow({
 
 export default function MorningRoutine() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
-  const [logs, setLogs] = useState<MorningLog[]>([])
+  const [logs, setLogs] = usePersistedData<MorningLog[]>('morning-routine', [])
   const [todayLog, setTodayLog] = useState<MorningLog | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

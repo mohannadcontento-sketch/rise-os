@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
@@ -195,8 +196,8 @@ const priorityDotColors: Record<string, string> = {
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
+  const [tasks, setTasks] = usePersistedData<Task[]>('tasks', [])
+  const [projects, setProjects] = usePersistedData<Project[]>('projects-list', [])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
   const [addOpen, setAddOpen] = useState(false)

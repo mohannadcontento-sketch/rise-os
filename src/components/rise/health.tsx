@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   BarChart,
@@ -131,7 +132,7 @@ function AnimatedCounter({ target }: { target: number }) {
 /* ────────────── Component ────────────── */
 
 export default function Health() {
-  const [data, setData] = useState<HealthData | null>(null)
+  const [data, setData] = usePersistedData<HealthData | null>('health-logs', null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 

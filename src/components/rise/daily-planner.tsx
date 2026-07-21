@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun,
@@ -734,7 +735,7 @@ function TimelineView({
 /* ────────────── Main Component ────────────── */
 
 export default function DailyPlanner() {
-  const [items, setItems] = useState<PlannerItem[]>([])
+  const [items, setItems] = usePersistedData<PlannerItem[]>('planner-items', [])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
