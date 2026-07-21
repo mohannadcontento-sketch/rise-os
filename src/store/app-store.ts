@@ -66,7 +66,7 @@ export const useRiseStore = create<RiseStore>((set) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setUser: (user) => set({ user }),
-  setAuth: (auth) => set({ auth, isAuthenticated: !!auth }),
+  setAuth: (auth) => set({ auth }),
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('rise-auth')

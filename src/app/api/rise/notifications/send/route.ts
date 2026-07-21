@@ -43,13 +43,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Get user's push subscription
-    const { data: settings } = await admin
+    const sb = admin as any
+    const { data: settings } = await sb
       .from('user_settings')
       .select('push_subscription')
       .eq('user_id', userId)
       .single()
 
-    const subscriptionJson = settings?.push_subscription
+    const subscriptionJson = (settings as any)?.push_subscription
     if (!subscriptionJson) {
       return NextResponse.json({ success: false, reason: 'no_subscription' })
     }
@@ -74,14 +75,14 @@ export async function POST(req: NextRequest) {
     // If subscription is invalid/expired, clear it
     if (error?.statusCode === 404 || error?.statusCode === 410) {
       try {
-        const admin = await getSupabaseAdmin()
-        if (admin) {
-          const userId = await requireAuth(req)
-          if (userId) {
-            await admin
+        const admin2 = await getSupabaseAdmin()
+        if (admin2) {
+          const userId2 = await requireAuth(req)
+          if (userId2) {
+            await (admin2 as any)
               .from('user_settings')
               .update({ push_subscription: null })
-              .eq('user_id', userId)
+              .eq('user_id', userId2)
           }
         }
       } catch { /* ignore cleanup error */ }

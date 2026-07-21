@@ -13,12 +13,14 @@ async function checkAdminRole(userId: string, email: string | undefined): Promis
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const { data } = await admin
+        const sb = admin as any
+        const { data } = await sb
           .from('profiles')
           .select('role')
           .eq('id', userId)
           .single()
-        if (data?.role === 'admin') return true
+        const d = data as { role?: string } | null
+        if (d?.role === 'admin') return true
       }
     } catch { /* ignore */ }
   }
@@ -48,12 +50,14 @@ export async function GET(request: NextRequest) {
             try {
               const admin = await getSupabaseAdmin()
               if (admin) {
-                const { data: profile } = await admin
+                const sb = admin as any
+                const { data: profile } = await sb
                   .from('profiles')
                   .select('avatar')
                   .eq('id', user.id)
                   .single()
-                avatar = profile?.avatar || null
+                const av = profile as { avatar?: string } | null
+                avatar = av?.avatar || null
               }
             } catch { /* ignore */ }
 
@@ -65,7 +69,7 @@ export async function GET(request: NextRequest) {
                 isAdmin,
                 avatar,
               },
-              expires: new Date((user.exp || 0) * 1000).toISOString() || null,
+              expires: new Date(((user as any).exp || 0) * 1000).toISOString() || null,
             })
           }
         } catch { /* fall through */ }

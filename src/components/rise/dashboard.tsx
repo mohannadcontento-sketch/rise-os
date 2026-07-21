@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import {
   AreaChart,
   Area,
@@ -336,7 +336,7 @@ function MiniSparkline({ data, color }: { data: number[]; color: string }) {
 
 /* ────────────── Animation Variants ────────────── */
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -344,7 +344,7 @@ const containerVariants = {
   },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
 }
@@ -1098,7 +1098,7 @@ export default function Dashboard() {
   // Play achievement sound on first load if there are achievements
   const achievementSoundPlayed = useRef(false)
   useEffect(() => {
-    if (data?.achievements?.length > 0 && !achievementSoundPlayed.current) {
+    if ((data?.achievements?.length ?? 0) > 0 && !achievementSoundPlayed.current) {
       achievementSoundPlayed.current = true
       playSound('achievement')
     }

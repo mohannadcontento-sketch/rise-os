@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest) {
     }
 
     for (const id of ids) {
-      await data.notifications.update(id, { isRead: true })
+      await data.notifications.update(id, userId, { isRead: true })
     }
 
     return NextResponse.json({ success: true })

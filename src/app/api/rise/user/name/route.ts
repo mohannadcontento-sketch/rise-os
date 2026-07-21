@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (isSupabaseConfigured()) {
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const { error } = await admin
+        const { error } = await (admin as any)
           .from('profiles')
           .update({ name: trimmed })
           .eq('id', userId)

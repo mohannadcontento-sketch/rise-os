@@ -290,13 +290,16 @@ export default function RiseOSApp() {
         apiGet('/api/auth/session').then(r => r.json()).then(data => {
           if (data.user) {
             // Session valid — update with fresh server data
-            setAuth(prev => prev ? {
-              ...prev,
-              userName: data.user.name || prev.userName,
-              userEmail: data.user.email || prev.userEmail,
-              userId: data.user.id,
-              isAdmin: data.user.isAdmin,
-            } : prev)
+            const current = useRiseStore.getState().auth
+            if (current) {
+              setAuth({
+                ...current,
+                userName: data.user.name || current.userName,
+                userEmail: data.user.email || current.userEmail,
+                userId: data.user.id,
+                isAdmin: data.user.isAdmin,
+              })
+            }
           } else if (isSupabaseSession) {
             // Supabase session invalid — try refresh
             fetch('/api/auth/refresh', {
@@ -382,11 +385,14 @@ export default function RiseOSApp() {
           if (data.user) {
             const storedInfo = localStorage.getItem('rise-user-info')
             const parsed = storedInfo ? JSON.parse(storedInfo) : {}
-            setAuth(prev => prev ? {
-              ...prev,
-              userName: data.user.name || parsed?.name || prev.userName,
-              userEmail: data.user.email || prev.userEmail,
-            } : prev)
+            const current = useRiseStore.getState().auth
+            if (current) {
+              setAuth({
+                ...current,
+                userName: data.user.name || parsed?.name || current.userName,
+                userEmail: data.user.email || current.userEmail,
+              })
+            }
             // Also update localStorage
             localStorage.setItem('rise-user-info', JSON.stringify({
               ...parsed,
@@ -491,7 +497,7 @@ export default function RiseOSApp() {
 
   // Show login if not authenticated (after all hooks)
   if (!auth) {
-    return <Suspense fallback={<LoadingFallback />}><LoginPage onLogin={handleLogin} /></Suspense>
+    return <Suspense fallback={<LoadingFallback />}><LoginPage onLogin={handleLogin as any} /></Suspense>
   }
 
   return (

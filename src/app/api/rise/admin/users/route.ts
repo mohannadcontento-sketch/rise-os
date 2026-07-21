@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ users: [] })
     }
 
-    const { data: profiles, error } = await admin
+    const sb = admin as any
+
+    const { data: profiles, error } = await sb
       .from('profiles')
       .select('id, name, email, role, avatar, created_at')
       .order('created_at', { ascending: false })
@@ -63,9 +65,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
     }
 
+    const sb = admin as any
+
     // Update role in profiles table
     if (role) {
-      const { error } = await admin
+      const { error } = await sb
         .from('profiles')
         .update({ role })
         .eq('id', targetUserId)
@@ -98,8 +102,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
     }
 
+    const sb = admin as any
+
     // Delete profile (cascade should handle related data via RLS or triggers)
-    const { error } = await admin
+    const { error } = await sb
       .from('profiles')
       .delete()
       .eq('id', targetUserId)

@@ -54,49 +54,55 @@ export async function GET(req: NextRequest) {
       // Daily scores — direct supabase (no list method)
       (async () => {
         if (!supabase) return []
-        const { data: rows } = await supabase
-          .from('daily_scores')
-          .select('*')
-          .eq('user_id', userId)
-          .catch(() => ({ data: null }))
-        return (rows ?? []).map((d: any) => ({
-          date: d.date,
-          score: d.score,
-          morningScore: d.morning_score,
-          taskScore: d.task_score,
-          habitScore: d.habit_score,
-          focusScore: d.focus_score,
-          healthScore: d.health_score,
-          journalScore: d.journal_score,
-        }))
+        const sb = supabase as any
+        try {
+          const { data: rows } = await sb
+            .from('daily_scores')
+            .select('*')
+            .eq('user_id', userId)
+          return (rows ?? []).map((d: any) => ({
+            date: d.date,
+            score: d.score,
+            morningScore: d.morning_score,
+            taskScore: d.task_score,
+            habitScore: d.habit_score,
+            focusScore: d.focus_score,
+            healthScore: d.health_score,
+            journalScore: d.journal_score,
+          }))
+        } catch { return [] }
       })(),
       data.userAchievements.list(userId),
       // User profile from Supabase instead of Prisma
       (async () => {
         if (!supabase) return null
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name, level, xp, streak, longest_streak, total_focus_min, total_tasks_done')
-          .eq('id', userId)
-          .single()
-          .catch(() => ({ data: null }))
-        return profile
+        const sb = supabase as any
+        try {
+          const { data: profile } = await sb
+            .from('profiles')
+            .select('name, level, xp, streak, longest_streak, total_focus_min, total_tasks_done')
+            .eq('id', userId)
+            .single()
+          return profile
+        } catch { return null }
       })(),
       // All habit logs — direct supabase for completeness
       (async () => {
         if (!supabase) return []
-        const { data: rows } = await supabase
-          .from('habit_logs')
-          .select('*, habits!inner(user_id)')
-          .eq('habits.user_id', userId)
-          .catch(() => ({ data: null }))
-        return (rows ?? []).map((r: any) => ({
-          id: r.id,
-          habitId: r.habit_id,
-          date: r.date,
-          completed: r.completed,
-          count: r.count,
-        }))
+        const sb = supabase as any
+        try {
+          const { data: rows } = await sb
+            .from('habit_logs')
+            .select('*, habits!inner(user_id)')
+            .eq('habits.user_id', userId)
+          return (rows ?? []).map((r: any) => ({
+            id: r.id,
+            habitId: r.habit_id,
+            date: r.date,
+            completed: r.completed,
+            count: r.count,
+          }))
+        } catch { return [] }
       })(),
     ])
 

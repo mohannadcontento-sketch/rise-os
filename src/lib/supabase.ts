@@ -109,18 +109,19 @@ export async function resolveUserId(apiKey: string): Promise<string | null> {
   if (!admin) return null
 
   try {
-    const { data } = await admin
+    const sb = admin as any
+    const { data } = await sb
       .from('user_api_keys')
       .select('user_id')
       .eq('key', apiKey)
       .maybeSingle()
 
-    if (data?.user_id) {
-      await admin
+    if ((data as any)?.user_id) {
+      await sb
         .from('user_api_keys')
         .update({ last_used_at: new Date().toISOString() })
         .eq('key', apiKey)
-      return data.user_id
+      return (data as any).user_id
     }
   } catch (err) {
     console.error('[resolveUserId] error:', err)

@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const { data: profile } = await admin
+        const sb = admin as any
+        const { data: profile } = await sb
           .from('profiles')
           .select('id')
           .eq('id', userId)
@@ -63,14 +64,15 @@ export async function POST(req: NextRequest) {
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const { data: existingProfile } = await admin
+        const sb = admin as any
+        const { data: existingProfile } = await sb
           .from('profiles')
           .select('id')
           .eq('id', userId)
           .maybeSingle()
 
         if (!existingProfile) {
-          await admin.from('profiles').upsert({
+          await sb.from('profiles').upsert({
             id: userId,
             name: 'مستخدم RiseOS',
             email: '',
@@ -86,14 +88,15 @@ export async function POST(req: NextRequest) {
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const { data: existingSettings } = await admin
+        const sb = admin as any
+        const { data: existingSettings } = await sb
           .from('user_settings')
           .select('user_id')
           .eq('user_id', userId)
           .maybeSingle()
 
         if (!existingSettings) {
-          await admin.from('user_settings').insert({
+          await sb.from('user_settings').insert({
             user_id: userId,
             theme: 'system',
             language: 'ar',
@@ -175,9 +178,10 @@ export async function POST(req: NextRequest) {
       if (habitLogRows.length > 0) {
         const supabase = await getSupabaseAdmin()
         if (supabase) {
+          const sb = supabase as any
           // Insert in batches of 100
           for (let i = 0; i < habitLogRows.length; i += 100) {
-            await supabase.from('habit_logs').insert(habitLogRows.slice(i, i + 100))
+            await sb.from('habit_logs').insert(habitLogRows.slice(i, i + 100))
           }
         }
       }
@@ -215,8 +219,9 @@ export async function POST(req: NextRequest) {
       if (milestoneRows.length > 0) {
         const supabase = await getSupabaseAdmin()
         if (supabase) {
+          const sb = supabase as any
           for (let i = 0; i < milestoneRows.length; i += 100) {
-            await supabase.from('milestones').insert(milestoneRows.slice(i, i + 100))
+            await sb.from('milestones').insert(milestoneRows.slice(i, i + 100))
           }
         }
       }
@@ -357,8 +362,9 @@ export async function POST(req: NextRequest) {
       if (dailyScoreRows.length > 0) {
         const supabase = await getSupabaseAdmin()
         if (supabase) {
+          const sb = supabase as any
           for (let i = 0; i < dailyScoreRows.length; i += 100) {
-            await supabase.from('daily_scores').insert(dailyScoreRows.slice(i, i + 100))
+            await sb.from('daily_scores').insert(dailyScoreRows.slice(i, i + 100))
           }
         }
       }

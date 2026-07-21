@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
                   .select('role')
                   .eq('id', data.user.id)
                   .single()
-                if (profile?.role === 'admin') isAdmin = true
+                const p = profile as { role?: string } | null
+                if (p?.role === 'admin') isAdmin = true
               }
             } catch { /* ignore */ }
 

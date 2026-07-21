@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const { data: profile } = await admin
+        const sb = admin as any
+        const { data: profile } = await sb
           .from('profiles')
           .select('name, email, avatar, role')
           .eq('id', userId)
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
         try {
           const supabase = await getSupabaseAdmin()
           if (!supabase) return []
-          const { data: rows } = await supabase
+          const { data: rows } = await (supabase as any)
             .from('daily_scores')
             .select('*')
             .eq('user_id', userId)
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
     ])
 
     // Re-sort tasks by createdAt desc and take top 10
-    const tasks = [...tasksResult]
+    const tasks = [...(tasksResult as any[])]
       .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       .slice(0, 10)
 

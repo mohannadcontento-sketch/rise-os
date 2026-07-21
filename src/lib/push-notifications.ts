@@ -69,7 +69,7 @@ export function useBrowserNotifications() {
 
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as any,
       })
 
       await saveSubscription(subscription)

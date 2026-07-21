@@ -865,7 +865,7 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('notifications')

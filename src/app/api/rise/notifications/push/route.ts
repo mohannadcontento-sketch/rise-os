@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Store or update push subscription in user_settings
-    const { error } = await admin
+    const { error } = await (admin as any)
       .from('user_settings')
       .update({
         push_subscription: JSON.stringify(subscription),
@@ -52,7 +52,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
     }
 
-    await admin
+    await (admin as any)
       .from('user_settings')
       .update({ push_subscription: null })
       .eq('user_id', userId)

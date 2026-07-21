@@ -36,11 +36,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    const sb = admin as any
+
     // Helper to safely count rows from Supabase
     async function countTable(tableName: string): Promise<number> {
       try {
-        const { count, error } = await admin
-          .from(tableName as any)
+        const { count, error } = await sb
+          .from(tableName)
           .select('*', { count: 'exact', head: true })
         if (error) {
           console.warn(`[admin/stats] count ${tableName} error:`, error.message)
@@ -59,32 +61,29 @@ export async function GET(request: NextRequest) {
     // Active users in last 7 days (users with recent activity — use daily_scores as proxy)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     let activeUsers7d = 0
-    if (admin) {
-      try {
-        const { data: recentScores } = await admin
-          .from('daily_scores')
+    try {
+      const { data: recentScores } = await sb
+        .from('daily_scores')
           .select('user_id')
           .gte('date', sevenDaysAgo)
         if (recentScores) {
           activeUsers7d = new Set(recentScores.map((r: any) => r.user_id)).size
         }
       } catch { /* ignore */ }
-    }
 
     // User growth over last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     let userGrowth: { date: string; count: number }[] = []
 
-    if (admin) {
-      try {
-        const { data: users } = await admin
-          .from('profiles')
+    try {
+      const { data: users } = await sb
+        .from('profiles')
           .select('created_at')
           .gte('created_at', thirtyDaysAgo.toISOString())
           .order('created_at', { ascending: true })
 
         // Count users before period
-        const { count: usersBefore } = await admin
+        const { count: usersBefore } = await sb
           .from('profiles')
           .select('*', { count: 'exact', head: true })
           .lt('created_at', thirtyDaysAgo.toISOString())
@@ -97,7 +96,7 @@ export async function GET(request: NextRequest) {
           dateMap.set(d.toISOString().slice(0, 10), 0)
         }
 
-        for (const u of (users ?? [])) {
+        for (const u of (users as any[] ?? [])) {
           const day = new Date(u.created_at).toISOString().slice(0, 10)
           dateMap.set(day, (dateMap.get(day) || 0) + 1)
         }
@@ -111,7 +110,6 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.warn('[admin/stats] user growth error:', err)
       }
-    }
 
     // Table counts (all from Supabase)
     const [
@@ -143,11 +141,10 @@ export async function GET(request: NextRequest) {
     // Recent activity
     const recentActivity: { time: string; action: string; user: string }[] = []
 
-    if (admin) {
-      try {
-        // Recent tasks
-        const { data: recentTasks } = await admin
-          .from('tasks')
+    try {
+      // Recent tasks
+      const { data: recentTasks } = await sb
+        .from('tasks')
           .select('title, user_id, updated_at')
           .order('updated_at', { ascending: false })
           .limit(5)
@@ -156,11 +153,11 @@ export async function GET(request: NextRequest) {
         const taskUserIds = [...new Set((recentTasks ?? []).map((t: any) => t.user_id))]
         const userNameMap = new Map<string, string>()
         if (taskUserIds.length > 0) {
-          const { data: profiles } = await admin
+          const { data: profiles } = await sb
             .from('profiles')
             .select('id, name')
             .in('id', taskUserIds)
-          for (const p of (profiles ?? [])) {
+          for (const p of (profiles as any[] ?? [])) {
             userNameMap.set(p.id, p.name || 'مستخدم')
           }
         }
@@ -176,7 +173,7 @@ export async function GET(request: NextRequest) {
 
       try {
         // Recent journals
-        const { data: recentJournals } = await admin
+        const { data: recentJournals } = await sb
           .from('journals')
           .select('content, user_id, created_at')
           .order('created_at', { ascending: false })
@@ -190,7 +187,6 @@ export async function GET(request: NextRequest) {
           })
         }
       } catch { /* ignore */ }
-    }
 
     // Sort by time desc and limit
     recentActivity.sort((a, b) => b.time.localeCompare(a.time))

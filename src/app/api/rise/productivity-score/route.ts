@@ -13,7 +13,8 @@ async function getUserStreak(supabase: any, userId: string): Promise<number> {
     .eq('id', userId)
     .single()
     .catch(() => ({ data: null }))
-  return profile?.streak || 0
+  const pr = profile as { streak?: number } | null
+  return pr?.streak || 0
 }
 
 async function calculateScoreForDate(userId: string, date: string) {

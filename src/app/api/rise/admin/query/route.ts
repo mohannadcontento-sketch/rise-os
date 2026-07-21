@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute raw SQL via Supabase RPC
-    const { data, error } = await supabase.rpc('exec_sql', { query: trimmedSql })
+    const { data, error } = await (supabase as any).rpc('exec_sql', { query: trimmedSql })
 
     if (error) {
       return NextResponse.json(

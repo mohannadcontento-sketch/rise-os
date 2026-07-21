@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('user_api_keys')
       .insert({
         user_id: userId,
@@ -65,14 +65,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ apiKey: null, hasKey: false })
     }
 
-    const { data: keyRecord } = await supabase
+    const sb = supabase as any
+    const { data: keyRecord } = await sb
       .from('user_api_keys')
       .select('key')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
-      .catch(() => ({ data: null }))
 
     if (keyRecord?.key) {
       const key = keyRecord.key
@@ -103,7 +103,7 @@ export async function DELETE(req: NextRequest) {
       )
     }
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('user_api_keys')
       .delete()
       .eq('user_id', userId)

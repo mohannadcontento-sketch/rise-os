@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ keys: [] })
     }
 
+    const sb = supabase as any
+
     // Fetch all API keys
-    const { data: keys, error } = await supabase
+    const { data: keys, error } = await sb
       .from('user_api_keys')
       .select('*')
       .order('created_at', { ascending: false })
@@ -34,11 +36,14 @@ export async function GET(request: NextRequest) {
     let profileMap: Record<string, { name: string | null; email: string | null }> = {}
 
     if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name, email')
-        .in('id', userIds)
-        .catch(() => ({ data: null }))
+      let profiles: any[] = []
+      try {
+        const res = await sb
+          .from('profiles')
+          .select('id, name, email')
+          .in('id', userIds)
+        profiles = res.data || []
+      } catch { /* ignore */ }
 
       if (profiles) {
         profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, { name: p.name, email: p.email }]))
@@ -90,7 +95,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Supabase admin not available' }, { status: 503 })
     }
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('user_api_keys')
       .delete()
       .eq('id', keyId)

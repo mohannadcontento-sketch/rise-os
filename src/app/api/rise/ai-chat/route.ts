@@ -84,7 +84,7 @@ async function callAI(messages: { role: string; content: string }[]): Promise<st
           role: 'assistant',
           content: 'أنت مدرب حياة شخصي ذكي في تطبيق RiseOS. تتحدث بالعربية دائماً. أسلوبك محفز وداعم ومختصر. إجاباتك تكون عملية وقابلة للتطبيق (أقل من 120 كلمة). استخدم الإيموجي بشكل معتدل. لا تذكر أنك AI أو نموذج لغوي.',
         },
-        ...messages,
+        ...(messages as any),
       ],
       thinking: { type: 'disabled' },
     })
@@ -117,7 +117,8 @@ export async function POST(request: NextRequest) {
 
     if (supabase) {
       try {
-        const { data: usageRow } = await supabase
+        const sb = supabase as any
+        const { data: usageRow } = await sb
           .from('user_ai_usage')
           .select('*')
           .eq('user_id', userId)
@@ -167,12 +168,13 @@ export async function POST(request: NextRequest) {
     // Track usage (only for real API calls) via Supabase
     if (!isFallback && supabase) {
       try {
+        const sb = supabase as any
         const newUsed = (usage?.monthlyUsed || 0) + 1
         const newTotal = (usage?.totalUsed || 0) + 1
         const limit = usage?.monthlyLimit || defaultLimit
 
         if (usage) {
-          await supabase
+          await sb
             .from('user_ai_usage')
             .update({
               monthly_used: newUsed,
@@ -182,7 +184,7 @@ export async function POST(request: NextRequest) {
             })
             .eq('user_id', userId)
         } else {
-          await supabase
+          await sb
             .from('user_ai_usage')
             .insert({
               user_id: userId,
@@ -201,7 +203,8 @@ export async function POST(request: NextRequest) {
     let updatedUsage = usage
     if (supabase && !isFallback) {
       try {
-        const { data: u } = await supabase
+        const sb = supabase as any
+        const { data: u } = await sb
           .from('user_ai_usage')
           .select('monthly_used, monthly_limit, total_used')
           .eq('user_id', userId)

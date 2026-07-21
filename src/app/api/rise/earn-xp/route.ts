@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     if (!supabase) {
       return NextResponse.json({ success: true, offline: true })
     }
+    const sb = supabase as any
 
     // Fetch current user XP data from profiles table
     let currentXp = 0
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     let currentXpToNext = calculateXpForLevel(1)
 
     try {
-      const { data: profile, error } = await supabase
+      const { data: profile, error } = await sb
         .from('profiles')
         .select('xp, level, xp_to_next_level')
         .eq('id', userId)
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     // Update user in profiles table
     try {
-      await supabase
+      await sb
         .from('profiles')
         .update({
           xp: newXp,
