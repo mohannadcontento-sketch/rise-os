@@ -20,24 +20,40 @@ function isOnline(): boolean {
   return navigator.onLine !== false
 }
 
-// ─── Cache layer (localStorage) ───
+// ─── Cache layer (localStorage) — scoped per user ───
 const CACHE_PREFIX = 'rise-cache:'
 
 interface CacheEntry {
   data: any
   ts: number
+  uid: string // user id this cache belongs to
+}
+
+function getCurrentUserId(): string {
+  try {
+    const info = localStorage.getItem('rise-user-info')
+    if (info) return JSON.parse(info).id || ''
+  } catch { /* ignore */ }
+  return ''
 }
 
 function getCacheKey(url: string): string {
-  return CACHE_PREFIX + url
+  return CACHE_PREFIX + getCurrentUserId() + ':' + url
 }
 
 function getCached<T = any>(url: string): T | null {
   if (typeof window === 'undefined') return null
   try {
+    const uid = getCurrentUserId()
+    if (!uid) return null // No user = no cache
     const raw = localStorage.getItem(getCacheKey(url))
     if (!raw) return null
     const entry: CacheEntry = JSON.parse(raw)
+    // Verify cache belongs to current user
+    if (entry.uid && entry.uid !== uid) {
+      localStorage.removeItem(getCacheKey(url))
+      return null
+    }
     const age = Date.now() - entry.ts
     // Return cached data even if stale (we use stale-while-revalidate)
     if (age < 24 * 60 * 60 * 1000) { // Max 24h old
@@ -52,8 +68,10 @@ function getCached<T = any>(url: string): T | null {
 
 function setCache(url: string, data: any): void {
   if (typeof window === 'undefined') return
+  const uid = getCurrentUserId()
+  if (!uid) return // Don't cache without a user
   try {
-    localStorage.setItem(getCacheKey(url), JSON.stringify({ data, ts: Date.now() }))
+    localStorage.setItem(getCacheKey(url), JSON.stringify({ data, ts: Date.now(), uid }))
   } catch {
     // localStorage full — clear old cache entries
     try {
@@ -87,6 +105,11 @@ function invalidateCache(urlPrefix?: string): void {
     }
     keys.forEach(k => localStorage.removeItem(k))
   } catch { /* ignore */ }
+}
+
+/** Clear ALL cached data (used on login/logout to prevent cross-user data leaks) */
+export function clearAllCache(): void {
+  invalidateCache() // no prefix = clear all
 }
 
 export { invalidateCache }
@@ -177,6 +200,8 @@ async function tryRefreshToken(): Promise<boolean> {
 
 function clearAuth() {
   if (typeof window === 'undefined') return
+  // Clear all cached data for this user to prevent cross-user data leaks
+  invalidateCache()
   localStorage.removeItem('rise-auth')
   localStorage.removeItem('rise-user-info')
   // Dispatch logout event so the app can react

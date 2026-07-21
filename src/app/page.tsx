@@ -29,7 +29,7 @@ import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
-import { apiPost, apiGet } from '@/lib/api-fetch'
+import { apiPost, apiGet, clearAllCache } from '@/lib/api-fetch'
 import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 
 // Keyboard shortcuts (uses a hook — must be eagerly imported)
@@ -341,6 +341,8 @@ export default function RiseOSApp() {
   }, [setAuth])
 
   const handleLogin = useCallback((data: { user: { id: string; email: string; name: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
+    // Clear any leftover cache from previous user to prevent cross-user data leaks
+    clearAllCache()
     // Store full session (including refresh_token for Supabase)
     localStorage.setItem('rise-auth', JSON.stringify(data.session))
     localStorage.setItem('rise-user-info', JSON.stringify(data.user))

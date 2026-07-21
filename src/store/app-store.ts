@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { clearAllCache } from '@/lib/api-fetch'
 
 export type ModuleId =
   | 'dashboard'
@@ -69,8 +70,10 @@ export const useRiseStore = create<RiseStore>((set) => ({
   setAuth: (auth) => set({ auth }),
   logout: () => {
     if (typeof window !== 'undefined') {
+      clearAllCache() // Clear per-user cache to prevent cross-user data leaks
       localStorage.removeItem('rise-auth')
       localStorage.removeItem('rise-user-info')
+      window.dispatchEvent(new CustomEvent('rise:session-expired'))
     }
     set({ auth: null, user: null, activeModule: 'dashboard' })
   },
