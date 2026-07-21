@@ -371,9 +371,11 @@ export default function RiseOSApp() {
   useKeyboardShortcuts()
 
   // Seed sample data on first login (seed route deduplicates internally)
+  const seedCalledRef = useRef(false)
   useEffect(() => {
-    if (auth && auth.accessToken) {
-      apiPost('/api/rise/seed', {}).catch(() => {})
+    if (auth && auth.accessToken && !seedCalledRef.current) {
+      seedCalledRef.current = true
+      apiPost('/api/rise/seed', { createProfileOnly: true }).catch(() => {})
     }
   }, [auth])
 

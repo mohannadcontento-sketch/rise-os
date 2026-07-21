@@ -26,6 +26,8 @@ export function hasServiceRole(): boolean {
 let _anonClient: ReturnType<typeof import('@supabase/supabase-js').createClient> | null = null
 let _adminClient: ReturnType<typeof import('@supabase/supabase-js').createClient> | null = null
 let _sbModule: typeof import('@supabase/supabase-js') | null = null
+let _tokenClient: any = null
+let _tokenClientToken: string | null = null
 
 /** Lazy load the supabase module */
 async function loadSupabase() {
@@ -68,12 +70,20 @@ export async function getSupabaseWithAuth(req?: NextRequest) {
 
   // If we have a real JWT token (from Supabase Auth), use it with anon client
   if (token && !token.startsWith('rise_') && token.length > 50) {
+    if (_tokenClient && _tokenClientToken === token) {
+      return _tokenClient
+    }
+    if (_tokenClient) {
+      try { _tokenClient.removeAllChannels() } catch { /* ignore */ }
+    }
     const { createClient } = await loadSupabase()
-    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    _tokenClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: `Bearer ${token}` },
       },
     })
+    _tokenClientToken = token
+    return _tokenClient
   }
 
   // For rise_ API keys — resolve user ID first, then return anon client with that user's context

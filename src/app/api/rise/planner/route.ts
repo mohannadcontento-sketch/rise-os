@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const body = await req.json()
+    const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
     const { date, section } = body
 
     // Get next order for this section/date
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
       .reduce((max: number, i: any) => Math.max(max, i.order ?? 0), -1)
     const nextOrder = maxOrder + 1
 
-    const item = await data.plannerItems.create(userId, { ...body, order: nextOrder })
+    const item = await data.plannerItems.create(userId, { ...dataFields, order: nextOrder })
     return NextResponse.json(item)
   } catch (error) {
     console.error('Planner POST error:', error)

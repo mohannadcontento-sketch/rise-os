@@ -154,14 +154,14 @@ interface BudgetCategory {
 }
 
 const DEFAULT_BUDGET_CATEGORIES: BudgetCategory[] = [
-  { name: 'سكن', limit: 2000, icon: Home },
-  { name: 'غذاء', limit: 1500, icon: Utensils },
-  { name: 'تنقل', limit: 800, icon: Car },
-  { name: 'اشتراكات', limit: 300, icon: CreditCard },
-  { name: 'صحة', limit: 500, icon: Heart },
-  { name: 'ترفيه', limit: 400, icon: Gift },
-  { name: 'تعليم', limit: 600, icon: GraduationCap },
-  { name: 'أخرى', limit: 500, icon: Receipt },
+  { name: 'سكن', limit: 0, icon: Home },
+  { name: 'غذاء', limit: 0, icon: Utensils },
+  { name: 'تنقل', limit: 0, icon: Car },
+  { name: 'اشتراكات', limit: 0, icon: CreditCard },
+  { name: 'صحة', limit: 0, icon: Heart },
+  { name: 'ترفيه', limit: 0, icon: Gift },
+  { name: 'تعليم', limit: 0, icon: GraduationCap },
+  { name: 'أخرى', limit: 0, icon: Receipt },
 ]
 
 function toArabicNum(n: number | null | undefined | string | object): string {

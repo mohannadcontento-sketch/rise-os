@@ -39,28 +39,9 @@ const WATCHED_TABLES = [
 type AnyChannel = any
 type AnyClient = any
 
-// Shared client singleton — avoids multiple GoTrueClient instances
-let sharedClient: AnyClient | null = null
-let sharedClientToken: string | null = null
-
-async function getSharedClient(accessToken: string): Promise<AnyClient> {
-  // Reuse client if token hasn't changed
-  if (sharedClient && sharedClientToken === accessToken) {
-    return sharedClient
-  }
-  // Clean up old client
-  if (sharedClient) {
-    try { sharedClient.removeAllChannels() } catch { /* ignore */ }
-  }
-  const { createClient } = await import('@supabase/supabase-js')
-  sharedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    },
-  })
-  sharedClientToken = accessToken
-  return sharedClient
-}
+// Cached realtime client — avoids multiple GoTrueClient instances
+let _realtimeClient: any = null
+let _realtimeClientToken: string | null = null
 
 export function useSupabaseRealtime(
   userId: string | null,
@@ -89,7 +70,20 @@ export function useSupabaseRealtime(
     async function subscribe() {
       try {
         if (!accessToken) return
-        const client = await getSharedClient(accessToken)
+        let client: AnyClient
+        if (_realtimeClient && _realtimeClientToken === accessToken) {
+          client = _realtimeClient
+        } else {
+          if (_realtimeClient) {
+            try { _realtimeClient.removeAllChannels() } catch { /* ignore */ }
+          }
+          const { createClient } = await import('@supabase/supabase-js')
+          _realtimeClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: `Bearer ${accessToken}` } },
+          })
+          _realtimeClientToken = accessToken
+          client = _realtimeClient
+        }
 
         if (!mountedRef.current) return
 

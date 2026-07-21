@@ -5,10 +5,17 @@ import { getSupabaseAdmin, getSupabaseAnon, isSupabaseConfigured } from '@/lib/s
 // ============================================================
 
 let _currentAuthToken: string | undefined
+let _tokenClient: any = null
+let _tokenClientToken: string | undefined
 
 /** Set the current request's auth token so sb() can create an authenticated client */
 export function setCurrentAuthToken(token: string | undefined) {
   _currentAuthToken = token
+  if (_tokenClientToken !== token) {
+    try { _tokenClient?.removeAllChannels() } catch { /* ignore */ }
+    _tokenClient = null
+    _tokenClientToken = token
+  }
 }
 
 // ============================================================
@@ -69,19 +76,25 @@ async function sb() {
     const adminClient = await getSupabaseAdmin()
     if (adminClient) return adminClient
 
-    // 2. Try anon client with current request's JWT
+    // 2. Try cached per-token client
+    if (_currentAuthToken && _tokenClient && _tokenClientToken === _currentAuthToken) {
+      return _tokenClient
+    }
+    // 3. Create new per-token client
     if (_currentAuthToken) {
       const { createClient } = await import('@supabase/supabase-js')
       const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
       if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-        return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        _tokenClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
           global: { headers: { Authorization: `Bearer ${_currentAuthToken}` } },
         })
+        _tokenClientToken = _currentAuthToken
+        return _tokenClient
       }
     }
 
-    // 3. Fall back to plain anon client
+    // 4. Fall back to plain anon client
     const anonClient = await getSupabaseAnon()
     if (anonClient) return anonClient
   } catch (err) {
