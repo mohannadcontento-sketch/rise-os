@@ -383,7 +383,7 @@ export function Tasks() {
       }
       // Optimistic: immediately add the new task from server response
       const newTask = await res.json().catch(() => null)
-      if (newTask) {
+      if (newTask && newTask.id) {
         setTasks((prev) => [newTask, ...prev])
       }
       setFormTitle('')
@@ -395,8 +395,6 @@ export function Tasks() {
       setFormDependsOn([])
       setAddOpen(false)
       toast.success('تمت إضافة المهمة بنجاح')
-      // Background re-fetch to get full data (subtasks, project join, etc.)
-      setTimeout(() => { fetchData() }, 300)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {

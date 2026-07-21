@@ -199,8 +199,6 @@ export default function Reading() {
       setNewType('book')
       setNewTotalPages('')
       setAddDialogOpen(false)
-      signalDataChanged()
-      setTimeout(() => { fetchBooks() }, 300)
     } catch {
       toast.error('فشل في إضافة الكتاب')
     }

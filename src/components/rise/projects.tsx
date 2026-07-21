@@ -407,15 +407,13 @@ export function Projects() {
       } else {
         // Optimistic: immediately add the new project from server response
         const newProject = await res.json().catch(() => null)
-        if (newProject) {
+        if (newProject && newProject.id) {
           setProjects(prev => [newProject, ...prev])
         }
-        signalDataChanged()
         toast.success('تم إنشاء المشروع بنجاح')
       }
       playSound('save')
       setDialogOpen(false)
-      setTimeout(() => { fetchData() }, 300)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {
@@ -462,16 +460,14 @@ export function Projects() {
       }
       // Optimistic: immediately add the new task from server response
       const newTask = await res.json().catch(() => null)
-      if (newTask) {
+      if (newTask && newTask.id) {
         setTasks(prev => [newTask, ...prev])
       }
-      signalDataChanged()
       toast.success('تمت إضافة المهمة بنجاح')
       setNewTaskTitle('')
       setNewTaskPriority('medium')
       setNewTaskDueDate('')
       setAddTaskOpen(false)
-      setTimeout(() => { fetchData() }, 300)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {

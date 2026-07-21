@@ -364,8 +364,6 @@ export function HabitsView() {
       setAddOpen(false)
       resetForm()
       playSound('save')
-      signalDataChanged()
-      setTimeout(() => { signalDataChanged() }, 300)
     } catch {
       setHabits((prev) => prev.filter((h) => h.id !== tempId))
       toast.error('فشل في إضافة العادة')

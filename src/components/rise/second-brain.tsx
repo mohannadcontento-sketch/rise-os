@@ -189,8 +189,6 @@ export default function SecondBrain() {
       setItems(prev => [newItem, ...prev])
       setQuickCapture('')
       toast.success('تم التقاط الفكرة بسرعة!')
-      signalDataChanged()
-      setTimeout(() => { fetchItems() }, 300)
     } catch {
       toast.error('فشل في الحفظ')
     } finally {
@@ -223,8 +221,6 @@ export default function SecondBrain() {
       setNewTags('')
       setNewSource('')
       setAddDialogOpen(false)
-      signalDataChanged()
-      setTimeout(() => { fetchItems() }, 300)
     } catch {
       toast.error('فشل في الإضافة')
     }

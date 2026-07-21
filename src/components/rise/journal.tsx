@@ -261,8 +261,6 @@ export default function Journal() {
         toast.success('تم حفظ اليوميات بنجاح ✨')
         playSound('save')
         setIsEditing(false)
-        signalDataChanged()
-        setTimeout(() => { fetchJournal() }, 300)
       } else {
         toast.error('فشل في حفظ اليوميات')
       }

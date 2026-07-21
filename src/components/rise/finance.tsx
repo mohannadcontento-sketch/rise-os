@@ -282,8 +282,6 @@ export default function Finance() {
         }
         setDialogOpen(false)
         setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
-        signalDataChanged()
-        setTimeout(() => { fetchFinance() }, 300)
       } else {
         toast.error('فشل في إضافة السجل')
       }

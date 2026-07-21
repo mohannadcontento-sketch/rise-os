@@ -200,8 +200,6 @@ export default function Health() {
           }
         })
         toast.success('تم حفظ بيانات الصحة بنجاح 💪')
-        signalDataChanged()
-        setTimeout(() => { fetchHealth() }, 300)
       } else {
         toast.error('فشل في حفظ البيانات')
       }

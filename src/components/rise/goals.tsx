@@ -271,12 +271,10 @@ export function GoalsView() {
       if (newGoal) {
         setGoals(prev => [newGoal, ...prev])
       }
-      signalDataChanged()
       setAddOpen(false)
       resetForm()
       playSound('save')
       toast.success('تم إضافة الهدف بنجاح')
-      setTimeout(() => { fetchGoals() }, 300)
     } catch {
       toast.error('فشل في إضافة الهدف')
     } finally {
