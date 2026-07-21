@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { apiPost, apiGet, clearAllCache } from '@/lib/api-fetch'
 import { ModuleErrorBoundary } from '@/components/module-error-boundary'
+import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime'
 
 // Keyboard shortcuts (uses a hook — must be eagerly imported)
 import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
@@ -219,6 +220,10 @@ export default function RiseOSApp() {
   }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
   const [fabOpen, setFabOpen] = useState(false)
   const [themeRotating, setThemeRotating] = useState(false)
+
+  // ── Supabase Realtime: live data sync across tabs/devices ──
+  useSupabaseRealtime(auth?.userId ?? null, auth?.accessToken ?? null)
+
   const mountedRef = useRef(false)
   const mounted = useSyncExternalStore(
     () => () => {},
