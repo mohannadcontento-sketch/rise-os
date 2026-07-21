@@ -41,7 +41,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { apiFetch, apiPost, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { toast } from 'sonner'
 
@@ -188,8 +188,20 @@ export default function Health() {
         exerciseNotes,
       })
       if (res.ok) {
+        const result = await res.json()
+        // Optimistically update local state
+        setData(prev => {
+          if (!prev) return { logs: [result], todayLog: result }
+          const existsInLogs = prev.logs.some(l => l.date === result.date)
+          return {
+            ...prev,
+            todayLog: result,
+            logs: existsInLogs ? prev.logs.map(l => l.date === result.date ? result : l) : [result, ...prev.logs],
+          }
+        })
         toast.success('تم حفظ بيانات الصحة بنجاح 💪')
-        fetchHealth()
+        signalDataChanged()
+        setTimeout(() => { fetchHealth() }, 300)
       } else {
         toast.error('فشل في حفظ البيانات')
       }

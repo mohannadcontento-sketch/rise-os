@@ -57,7 +57,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiDelete, apiPut } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiDelete, apiPut, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
@@ -262,6 +262,9 @@ export default function Finance() {
     try {
       const res = await apiPost('/api/rise/finance', form)
       if (res.ok) {
+        const newRecord = await res.json()
+        // Optimistically add to local state
+        setData(prev => prev ? { records: [newRecord, ...prev.records] } : { records: [newRecord] })
         toast.success('تم إضافة السجل بنجاح ✨')
         playSound('save')
         // Show budget impact
@@ -279,7 +282,8 @@ export default function Finance() {
         }
         setDialogOpen(false)
         setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
-        fetchFinance()
+        signalDataChanged()
+        setTimeout(() => { fetchFinance() }, 300)
       } else {
         toast.error('فشل في إضافة السجل')
       }

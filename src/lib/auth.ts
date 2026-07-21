@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAnon, isSupabaseConfigured, resolveUserId } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 /**
  * Verify a Supabase JWT and return the user ID.
@@ -24,7 +25,7 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
 
 /**
  * Extract authenticated user ID from request.
- * Supports: Supabase JWT and rise_ API keys (both verified server-side).
+ * Supports: Supabase JWT, rise_ API keys, and local mode (CUID as token).
  * Returns null for any unauthenticated request.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
@@ -41,6 +42,16 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
     // 2. Supabase JWT (must be verified, never trust the token value as a user ID)
     if (token.length >= 50) {
       return await verifySupabaseToken(token)
+    }
+
+    // 3. Local mode fallback: token is a CUID (user ID) — verify it exists in local DB
+    if (!isSupabaseConfigured() && token.length > 5) {
+      try {
+        const user = await db.user.findUnique({ where: { id: token } })
+        if (user) return user.id
+      } catch {
+        // DB not available
+      }
     }
 
     return null

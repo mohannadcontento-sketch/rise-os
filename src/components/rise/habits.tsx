@@ -48,7 +48,7 @@ import {
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { cn } from '@/lib/utils'
-import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { apiDelete, apiFetch, apiPost, apiPut, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
@@ -364,6 +364,8 @@ export function HabitsView() {
       setAddOpen(false)
       resetForm()
       playSound('save')
+      signalDataChanged()
+      setTimeout(() => { signalDataChanged() }, 300)
     } catch {
       setHabits((prev) => prev.filter((h) => h.id !== tempId))
       toast.error('فشل في إضافة العادة')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Target,
@@ -51,7 +51,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiDelete, apiPost, apiPut } from '@/lib/api-fetch'
+import { apiFetch, apiDelete, apiPost, apiPut, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
@@ -136,27 +136,28 @@ export function GoalsView() {
   const { refreshKey } = useDataRefresh()
 
   /* ---- Fetch ---- */
-  useEffect(() => {
-    async function fetchGoals() {
-      try {
-        const res = await apiFetch('/api/rise/goals')
-        if (res.ok) {
-          const data: GoalsResponse = await res.json()
-          // Ensure goals is always an array, and each goal has a milestones array
-          const safeGoals = (Array.isArray(data.goals) ? data.goals : []).map((g: Goal) => ({
-            ...g,
-            milestones: Array.isArray(g.milestones) ? g.milestones : [],
-          }))
-          setGoals(safeGoals)
-        }
-      } catch {
-        // Use empty state
-      } finally {
-        setLoading(false)
+  const fetchGoals = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/rise/goals')
+      if (res.ok) {
+        const data: GoalsResponse = await res.json()
+        // Ensure goals is always an array, and each goal has a milestones array
+        const safeGoals = (Array.isArray(data.goals) ? data.goals : []).map((g: Goal) => ({
+          ...g,
+          milestones: Array.isArray(g.milestones) ? g.milestones : [],
+        }))
+        setGoals(safeGoals)
       }
+    } catch {
+      // Use empty state
+    } finally {
+      setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
     fetchGoals()
-  }, [refreshKey])
+  }, [refreshKey, fetchGoals])
 
   /* ---- Filtered goals ---- */
   const filteredGoals = useMemo(() => {
@@ -250,19 +251,6 @@ export function GoalsView() {
   /* ---- Add goal ---- */
   async function handleAddGoal() {
     if (!formTitle.trim()) return
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-    const optimistic: Goal = {
-      id: tempId,
-      title: formTitle,
-      vision: formVision,
-      why: formWhy,
-      type: formType,
-      progress: 0,
-      status: 'active',
-      deadline: formDeadline,
-      milestones: [],
-    }
-    setGoals((prev) => [...prev, optimistic])
     setSaving(true)
     try {
       const res = await apiPost('/api/rise/goals', {
@@ -274,30 +262,22 @@ export function GoalsView() {
         })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setGoals((prev) => prev.filter((g) => g.id !== tempId))
         toast.error('فشل في إضافة الهدف', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
 
-      // Check if response is an offline queued response
-      const isOfflineQueued = res.headers.get('X-Offline-Queued') === 'true'
-      if (isOfflineQueued) {
-        setAddOpen(false)
-        resetForm()
-        playSound('save')
-        toast.success('تمت إضافة الهدف (سيتم المزامنة لاحقاً)')
-        return
+      // Optimistic: immediately add the new goal from server response
+      const newGoal = await res.json().catch(() => null)
+      if (newGoal) {
+        setGoals(prev => [newGoal, ...prev])
       }
-
-      const data = await res.json()
-      if (data && data.id && data.title) {
-        setGoals((prev) => prev.map((g) => g.id === tempId ? data : g))
-      }
+      signalDataChanged()
       setAddOpen(false)
       resetForm()
       playSound('save')
+      toast.success('تم إضافة الهدف بنجاح')
+      setTimeout(() => { fetchGoals() }, 300)
     } catch {
-      setGoals((prev) => prev.filter((g) => g.id !== tempId))
       toast.error('فشل في إضافة الهدف')
     } finally {
       setSaving(false)

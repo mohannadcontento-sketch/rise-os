@@ -112,6 +112,18 @@ export function clearAllCache(): void {
   invalidateCache() // no prefix = clear all
 }
 
+/**
+ * Explicitly signal that data has changed.
+ * Components using useDataRefresh() will re-fetch their data.
+ * Call this after any mutation for guaranteed immediate UI update.
+ */
+export function signalDataChanged(): void {
+  if (typeof window !== 'undefined') {
+    invalidateCache()
+    window.dispatchEvent(new CustomEvent('rise:data-changed'))
+  }
+}
+
 export { invalidateCache }
 
 // ─── Auth helpers ───
@@ -332,10 +344,17 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           signal: retryController.signal,
         })
 
-        // Cache successful retry
+        // Cache successful retry GET
         if (response.ok && (options.method === 'GET' || !options.method)) {
           const clone = response.clone()
           clone.json().then(data => setCache(url, data)).catch(() => {})
+        }
+        // Invalidate cache + notify on successful retry POST/PUT/DELETE
+        if (response.ok && options.method && options.method !== 'GET') {
+          invalidateCache()
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('rise:data-changed'))
+          }
         }
       } catch {
         clearTimeout(retryTimeout)

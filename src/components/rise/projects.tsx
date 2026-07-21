@@ -55,7 +55,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiPut, apiDelete, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
@@ -402,10 +402,20 @@ export function Projects() {
         toast.error('فشلت العملية', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
-      toast.success(editingProject ? 'تم تحديث المشروع بنجاح' : 'تم إنشاء المشروع بنجاح')
+      if (editingProject) {
+        toast.success('تم تحديث المشروع بنجاح')
+      } else {
+        // Optimistic: immediately add the new project from server response
+        const newProject = await res.json().catch(() => null)
+        if (newProject) {
+          setProjects(prev => [newProject, ...prev])
+        }
+        signalDataChanged()
+        toast.success('تم إنشاء المشروع بنجاح')
+      }
       playSound('save')
       setDialogOpen(false)
-      fetchData()
+      setTimeout(() => { fetchData() }, 300)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {
@@ -450,12 +460,18 @@ export function Projects() {
         toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+      // Optimistic: immediately add the new task from server response
+      const newTask = await res.json().catch(() => null)
+      if (newTask) {
+        setTasks(prev => [newTask, ...prev])
+      }
+      signalDataChanged()
       toast.success('تمت إضافة المهمة بنجاح')
       setNewTaskTitle('')
       setNewTaskPriority('medium')
       setNewTaskDueDate('')
       setAddTaskOpen(false)
-      fetchData()
+      setTimeout(() => { fetchData() }, 300)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {

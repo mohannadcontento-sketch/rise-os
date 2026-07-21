@@ -77,7 +77,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiPut, apiDelete, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
@@ -381,6 +381,11 @@ export function Tasks() {
         toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+      // Optimistic: immediately add the new task from server response
+      const newTask = await res.json().catch(() => null)
+      if (newTask) {
+        setTasks((prev) => [newTask, ...prev])
+      }
       setFormTitle('')
       setFormDesc('')
       setFormPriority('medium')
@@ -390,7 +395,8 @@ export function Tasks() {
       setFormDependsOn([])
       setAddOpen(false)
       toast.success('تمت إضافة المهمة بنجاح')
-      fetchData()
+      // Background re-fetch to get full data (subtasks, project join, etc.)
+      setTimeout(() => { fetchData() }, 300)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {

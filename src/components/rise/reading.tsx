@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiPut, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
@@ -190,13 +190,17 @@ export default function Reading() {
         toast.error('فشل في إضافة الكتاب', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+      const newBook = await res.json()
+      // Optimistically add to local state
+      setBooks(prev => [newBook, ...prev])
       toast.success('تمت إضافة الكتاب بنجاح')
       setNewTitle('')
       setNewAuthor('')
       setNewType('book')
       setNewTotalPages('')
       setAddDialogOpen(false)
-      fetchBooks()
+      signalDataChanged()
+      setTimeout(() => { fetchBooks() }, 300)
     } catch {
       toast.error('فشل في إضافة الكتاب')
     }

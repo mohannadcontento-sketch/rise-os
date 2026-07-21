@@ -51,7 +51,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiPut, apiDelete, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { toast } from 'sonner'
 
@@ -184,9 +184,13 @@ export default function SecondBrain() {
         toast.error('فشل في الحفظ', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+      const newItem = await res.json()
+      // Optimistically add to local state
+      setItems(prev => [newItem, ...prev])
       setQuickCapture('')
       toast.success('تم التقاط الفكرة بسرعة!')
-      fetchItems()
+      signalDataChanged()
+      setTimeout(() => { fetchItems() }, 300)
     } catch {
       toast.error('فشل في الحفظ')
     } finally {
@@ -210,13 +214,17 @@ export default function SecondBrain() {
         toast.error('فشل في الإضافة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+      const created = await res.json()
+      // Optimistically add to local state
+      setItems(prev => [created, ...prev])
       toast.success('تمت الإضافة بنجاح')
       setNewTitle('')
       setNewContent('')
       setNewTags('')
       setNewSource('')
       setAddDialogOpen(false)
-      fetchItems()
+      signalDataChanged()
+      setTimeout(() => { fetchItems() }, 300)
     } catch {
       toast.error('فشل في الإضافة')
     }

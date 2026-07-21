@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { apiFetch, apiPost, signalDataChanged } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
@@ -247,10 +247,22 @@ export default function Journal() {
           date: today,
         })
       if (res.ok) {
+        const result = await res.json()
+        // Optimistically update local state
+        setData(prev => {
+          if (!prev) return { journal: result, recentJournals: [result] }
+          const exists = prev.recentJournals.some(j => j.date === result.date)
+          return {
+            ...prev,
+            journal: result,
+            recentJournals: exists ? prev.recentJournals.map(j => j.date === result.date ? result : j) : [result, ...prev.recentJournals],
+          }
+        })
         toast.success('تم حفظ اليوميات بنجاح ✨')
         playSound('save')
         setIsEditing(false)
-        fetchJournal()
+        signalDataChanged()
+        setTimeout(() => { fetchJournal() }, 300)
       } else {
         toast.error('فشل في حفظ اليوميات')
       }
