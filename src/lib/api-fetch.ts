@@ -3,13 +3,16 @@
  * Automatically attaches the Supabase auth token from localStorage.
  * Includes automatic token refresh on 401 responses.
  * Includes request timeout (8s) to fail fast when offline.
- * Includes localStorage cache for GET requests (stale-while-revalidate).
+ * Includes dual-layer cache (in-memory + localStorage) for GET requests.
+ * In-memory cache provides instant data on tab switches (component re-mounts).
+ * localStorage cache provides offline fallback.
  * All frontend components should use this instead of raw fetch().
  */
 
 // ─── Config ───
 const REQUEST_TIMEOUT_MS = 8000
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes (localStorage)
+const MEMORY_CACHE_TTL_MS = 30_000 // 30 seconds (in-memory, for tab switches)
 
 // Refresh lock to prevent concurrent refresh requests
 let _refreshPromise: Promise<boolean> | null = null
@@ -20,7 +23,40 @@ function isOnline(): boolean {
   return navigator.onLine !== false
 }
 
-// ─── Cache layer (localStorage) — scoped per user ───
+// ─── In-Memory Cache (survives component re-mounts, NOT page refresh) ───
+// This is the KEY fix for tab-switching data loss.
+// When a component re-mounts after a tab switch, it gets instant data from here.
+// IMPORTANT: This cache is cleared on mutations to prevent stale data.
+const _memoryCache = new Map<string, { data: any; ts: number }>()
+
+export function getMemoryCache(url: string): any {
+  const entry = _memoryCache.get(url)
+  if (!entry) return null
+  if (Date.now() - entry.ts > MEMORY_CACHE_TTL_MS) {
+    _memoryCache.delete(url)
+    return null
+  }
+  return entry.data
+}
+
+function setMemoryCache(url: string, data: any): void {
+  _memoryCache.set(url, { data, ts: Date.now() })
+}
+
+/** Clear in-memory cache entries matching a URL prefix (or all if no prefix) */
+function invalidateMemoryCache(urlPrefix?: string): void {
+  if (!urlPrefix) {
+    _memoryCache.clear()
+    return
+  }
+  for (const key of _memoryCache.keys()) {
+    if (key.includes(urlPrefix)) {
+      _memoryCache.delete(key)
+    }
+  }
+}</arg_value><arg_key>old_str:  
+
+// ─── localStorage Cache layer — scoped per user ───
 const CACHE_PREFIX = 'rise-cache:'
 
 interface CacheEntry {
@@ -109,7 +145,8 @@ function invalidateCache(urlPrefix?: string): void {
 
 /** Clear ALL cached data (used on login/logout to prevent cross-user data leaks) */
 export function clearAllCache(): void {
-  invalidateCache() // no prefix = clear all
+  invalidateCache() // no prefix = clear all localStorage cache
+  clearMemoryCache() // also clear in-memory cache
 }
 
 /**
@@ -119,6 +156,8 @@ export function clearAllCache(): void {
  */
 export function signalDataChanged(): void {
   if (typeof window !== 'undefined') {
+    // Only invalidate localStorage cache (offline fallback), NOT in-memory cache.
+    // In-memory cache preserves data across tab switches for optimistic updates.
     invalidateCache()
     window.dispatchEvent(new CustomEvent('rise:data-changed'))
   }
@@ -213,14 +252,14 @@ async function tryRefreshToken(): Promise<boolean> {
 function clearAuth() {
   if (typeof window === 'undefined') return
   // Clear all cached data for this user to prevent cross-user data leaks
-  invalidateCache()
+  clearAllCache()
   localStorage.removeItem('rise-auth')
   localStorage.removeItem('rise-user-info')
   // Dispatch logout event so the app can react
   window.dispatchEvent(new CustomEvent('rise:session-expired'))
 }
 
-// ─── Main fetch with timeout + cache ───
+// ─── Main fetch with timeout + dual cache ───
 
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers || {})
@@ -236,6 +275,20 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // Set Content-Type for JSON if not already set and has body
   if (options.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
+  }
+
+  // ── For GET requests: check in-memory cache FIRST for instant response ──
+  // This is the key fix for tab-switching data loss.
+  // If we have recent data in memory (< 30s old), return it immediately.
+  if ((options.method === 'GET' || !options.method)) {
+    const memData = getMemoryCache(url)
+    if (memData) {
+      // Return in-memory data immediately — no network request needed
+      return new Response(JSON.stringify(memData), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'X-From-Memory': 'true' },
+      })
+    }
   }
 
   // Create abort controller with timeout
@@ -259,8 +312,9 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   } catch (err: any) {
     clearTimeout(timeoutId)
     if (err?.name === 'AbortError') {
-      // Timeout — for GET requests, try to return cached data as a synthetic response
+      // Timeout — for GET requests, try in-memory cache first, then localStorage cache
       if (options.method === 'GET' || !options.method) {
+        // In-memory cache is already checked above, try localStorage
         const cached = getCached(url)
         if (cached) {
           return new Response(JSON.stringify(cached), {
@@ -304,16 +358,20 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
 
   clearTimeout(timeoutId)
 
-  // Cache successful GET responses
+  // Cache successful GET responses in BOTH caches
   if (response.ok && (options.method === 'GET' || !options.method)) {
     const clone = response.clone()
-    clone.json().then(data => setCache(url, data)).catch(() => {})
+    clone.json().then(data => {
+      setMemoryCache(url, data) // In-memory: instant tab switch
+      setCache(url, data)       // localStorage: offline fallback
+    }).catch(() => {})
   }
 
-  // Invalidate cache on successful POST/PUT/DELETE
+  // On successful POST/PUT/DELETE: notify but DON'T clear in-memory cache
+  // In-memory cache preserves data across tab switches for optimistic updates
   if (response.ok && options.method && options.method !== 'GET') {
-    invalidateCache()
-    // Notify all components to re-fetch their data
+    invalidateCache() // Only clear localStorage cache (offline fallback)
+    // Notify dashboard and other listeners to re-fetch
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rise:data-changed'))
     }
@@ -347,9 +405,12 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         // Cache successful retry GET
         if (response.ok && (options.method === 'GET' || !options.method)) {
           const clone = response.clone()
-          clone.json().then(data => setCache(url, data)).catch(() => {})
+          clone.json().then(data => {
+            setMemoryCache(url, data)
+            setCache(url, data)
+          }).catch(() => {})
         }
-        // Invalidate cache + notify on successful retry POST/PUT/DELETE
+        // Notify on successful retry POST/PUT/DELETE (don't clear memory cache)
         if (response.ok && options.method && options.method !== 'GET') {
           invalidateCache()
           if (typeof window !== 'undefined') {
@@ -418,6 +479,13 @@ export async function apiDelete(url: string) {
  */
 export function isFromCache(response: Response): boolean {
   return response.headers.get('X-From-Cache') === 'true'
+}
+
+/**
+ * Check if a response came from the in-memory cache.
+ */
+export function isFromMemory(response: Response): boolean {
+  return response.headers.get('X-From-Memory') === 'true'
 }
 
 // ─── Offline Write Queue ───

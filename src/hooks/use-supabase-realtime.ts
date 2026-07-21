@@ -88,6 +88,7 @@ export function useSupabaseRealtime(
 
     async function subscribe() {
       try {
+        if (!accessToken) return
         const client = await getSharedClient(accessToken)
 
         if (!mountedRef.current) return
