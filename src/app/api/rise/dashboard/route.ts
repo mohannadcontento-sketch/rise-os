@@ -118,13 +118,13 @@ export async function GET(req: NextRequest) {
       .slice(0, 10)
 
     // Filter habits to only include today's logs
-    const habits = habitsWithLogs.map((h: any) => ({
+    const habits = (habitsWithLogs as any[]).map((h: any) => ({
       ...h,
       logs: (h.logs || []).filter((l: any) => l.date === today),
     }))
 
     // Filter focus sessions to last 30 days
-    const focusSessions = focusSessionsResult.filter(
+    const focusSessions = (focusSessionsResult as any[]).filter(
       (s: any) => s.startedAt && s.startedAt >= last30[0],
     )
 
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length
 
     // ✅ FIX: Calculate actual user totals instead of hardcoded zeros
-    const totalFocusMin = focusSessionsResult
+    const totalFocusMin = (focusSessionsResult as any[])
       .filter((s: any) => s.completed)
       .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
     const totalTasksDone = (tasksResult as any[]).filter(
@@ -159,17 +159,17 @@ export async function GET(req: NextRequest) {
     ).length
 
     // Extract single records from arrays
-    const healthLog = healthResult.length > 0 ? healthResult[0] : null
-    const morningLog = morningResult.length > 0 ? morningResult[0] : null
+    const healthLog = (healthResult as any[]).length > 0 ? (healthResult as any[])[0] : null
+    const morningLog = (morningResult as any[]).length > 0 ? (morningResult as any[])[0] : null
 
     // ✅ FIX: Calculate & save today's productivity score so charts have data
     try {
       const { score: todayScore, breakdown: todayBreakdown } =
         await calculateDailyScore(userId, today, {
           tasks: tasksResult as any[],
-          habitsWithLogs,
-          focusSessions: focusSessionsResult,
-          morningLogs: morningResult,
+          habitsWithLogs: habitsWithLogs as any[],
+          focusSessions: focusSessionsResult as any[],
+          morningLogs: morningResult as any[],
         })
       await saveDailyScore(userId, today, todayScore, todayBreakdown)
     } catch (e) {
@@ -220,8 +220,8 @@ export async function GET(req: NextRequest) {
       ),
       projects: projects.map((p: any) => ({
         ...p,
-        taskCount: tasksResult.filter((t: any) => t.projectId === p.id).length,
-        doneTaskCount: tasksResult.filter(
+        taskCount: (tasksResult as any[]).filter((t: any) => t.projectId === p.id).length,
+        doneTaskCount: (tasksResult as any[]).filter(
           (t: any) => t.projectId === p.id && t.status === 'done',
         ).length,
       })),
