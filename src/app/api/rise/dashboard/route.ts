@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
+import { calculateDailyScore, saveDailyScore } from '@/lib/productivity'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return NextResponse.json(
         { error: 'مطلوب تسجيل الدخول', code: 'UNAUTHORIZED' },
-        { status: 401 }
+        { status: 401 },
       )
     }
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
@@ -24,20 +25,40 @@ export async function GET(req: NextRequest) {
     const last30 = getLast30Days()
     const weekDays = getWeekDays()
 
-    // Fetch user profile from Supabase
+    // ✅ FIX: Fetch user profile INCLUDING xp, level, streak from profiles table
     let userProfile: any = null
+    let profileStats = {
+      level: 1,
+      xp: 0,
+      streak: 0,
+      longestStreak: 0,
+      xpToNextLevel: 100,
+    }
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
         const sb = admin as any
         const { data: profile } = await sb
           .from('profiles')
-          .select('name, email, avatar, role')
+          .select(
+            'name, email, avatar, role, xp, level, streak, longest_streak, xp_to_next_level',
+          )
           .eq('id', userId)
           .maybeSingle()
         userProfile = profile
+        if (profile) {
+          profileStats = {
+            level: profile.level || 1,
+            xp: profile.xp || 0,
+            streak: profile.streak || 0,
+            longestStreak: profile.longest_streak || 0,
+            xpToNextLevel: profile.xp_to_next_level || 100,
+          }
+        }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Fetch all data in parallel
     const [
@@ -79,7 +100,9 @@ export async function GET(req: NextRequest) {
             healthScore: d.health_score,
             journalScore: d.journal_score,
           }))
-        } catch { return [] }
+        } catch {
+          return []
+        }
       })(),
       data.projects.list(userId).catch(() => []),
       data.goals.list(userId).catch(() => []),
@@ -89,7 +112,9 @@ export async function GET(req: NextRequest) {
 
     // Re-sort tasks by createdAt desc and take top 10
     const tasks = [...(tasksResult as any[])]
-      .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .sort((a: any, b: any) =>
+        (b.createdAt || '').localeCompare(a.createdAt || ''),
+      )
       .slice(0, 10)
 
     // Filter habits to only include today's logs
@@ -100,7 +125,7 @@ export async function GET(req: NextRequest) {
 
     // Filter focus sessions to last 30 days
     const focusSessions = focusSessionsResult.filter(
-      (s: any) => s.startedAt && s.startedAt >= last30[0]
+      (s: any) => s.startedAt && s.startedAt >= last30[0],
     )
 
     // Extract today habit logs
@@ -112,7 +137,9 @@ export async function GET(req: NextRequest) {
     const completedTasksToday = tasks.filter(
       (t: any) => t.completedAt && String(t.completedAt).startsWith(today),
     ).length
-    const completedHabitsToday = todayHabitsLogs.filter((l: any) => l.completed).length
+    const completedHabitsToday = todayHabitsLogs.filter(
+      (l: any) => l.completed,
+    ).length
     const totalHabits = habits.length
     const todayFocusMin = focusSessions
       .filter(
@@ -123,20 +150,43 @@ export async function GET(req: NextRequest) {
     const totalTasks = tasks.length
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length
 
+    // ✅ FIX: Calculate actual user totals instead of hardcoded zeros
+    const totalFocusMin = focusSessionsResult
+      .filter((s: any) => s.completed)
+      .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
+    const totalTasksDone = (tasksResult as any[]).filter(
+      (t: any) => t.status === 'done',
+    ).length
+
     // Extract single records from arrays
     const healthLog = healthResult.length > 0 ? healthResult[0] : null
     const morningLog = morningResult.length > 0 ? morningResult[0] : null
 
+    // ✅ FIX: Calculate & save today's productivity score so charts have data
+    try {
+      const { score: todayScore, breakdown: todayBreakdown } =
+        await calculateDailyScore(userId, today, {
+          tasks: tasksResult as any[],
+          habitsWithLogs,
+          focusSessions: focusSessionsResult,
+          morningLogs: morningResult,
+        })
+      await saveDailyScore(userId, today, todayScore, todayBreakdown)
+    } catch (e) {
+      console.warn('[dashboard] Failed to calculate/save daily score:', e)
+    }
+
     return NextResponse.json({
       user: {
         name: userProfile?.name || 'مستخدم RiseOS',
-        level: 1,
-        xp: 0,
-        streak: 0,
-        longestStreak: 0,
-        totalFocusMin: 0,
-        totalTasksDone: 0,
-        xpToNextLevel: 100,
+        // ✅ FIX: Use actual profile stats instead of hardcoded values
+        level: profileStats.level,
+        xp: profileStats.xp,
+        streak: profileStats.streak,
+        longestStreak: profileStats.longestStreak,
+        totalFocusMin,
+        totalTasksDone,
+        xpToNextLevel: profileStats.xpToNextLevel,
         avatar: userProfile?.avatar || null,
       },
       today: {
@@ -156,7 +206,8 @@ export async function GET(req: NextRequest) {
       habits: habits.map((h: any) => ({
         ...h,
         todayCompleted:
-          todayHabitsLogs.find((l: any) => l.habitId === h.id)?.completed || false,
+          todayHabitsLogs.find((l: any) => l.habitId === h.id)?.completed ||
+          false,
         todayCount:
           todayHabitsLogs.find((l: any) => l.habitId === h.id)?.count || 0,
       })),
@@ -164,7 +215,9 @@ export async function GET(req: NextRequest) {
       health: healthLog,
       morning: morningLog,
       achievements,
-      dailyScores: (dailyScoresRaw || []).sort((a: any, b: any) => a.date.localeCompare(b.date)),
+      dailyScores: (dailyScoresRaw || []).sort((a: any, b: any) =>
+        a.date.localeCompare(b.date),
+      ),
       projects: projects.map((p: any) => ({
         ...p,
         taskCount: tasksResult.filter((t: any) => t.projectId === p.id).length,
@@ -181,7 +234,7 @@ export async function GET(req: NextRequest) {
     console.error('Dashboard error:', error)
     return NextResponse.json(
       { error: 'حدث خطأ في تحميل لوحة التحكم' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

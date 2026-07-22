@@ -43,7 +43,10 @@ export function clearPersistedData(key?: string): void {
  * @param initial  Fallback initial value if nothing is persisted
  * @returns [state, setState] — same API as useState
  */
-export function usePersistedData<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+export function usePersistedData<T>(
+  key: string,
+  initial: T,
+): [T, React.Dispatch<React.SetStateAction<T>>] {
   // Initialize from persisted store (instant on re-mount)
   const [state, setStateRaw] = useState<T>(() => {
     const persisted = _store.get(key)
@@ -53,18 +56,24 @@ export function usePersistedData<T>(key: string, initial: T): [T, React.Dispatch
   // Track if this is the first render (to avoid overwriting persisted data with initial)
   const isFirstRender = useRef(true)
 
-  // 1. الاستماع لحدث التغيير العالمي وإعادة تعيين الحالة لإجبار إعادة الجلب
+  // ✅ FIX: Use a ref for `initial` to avoid re-registering the listener on every
+  // render when `initial` is a new reference (e.g., [] or {} created inline).
+  const initialRef = useRef(initial)
+  initialRef.current = initial
+
+  // Listen for global data-changed events and reset state to force re-fetch
   useEffect(() => {
     const handleDataChange = () => {
-      // مسح الذاكرة المؤقتة لهذا المفتاح يجبر المكون على قراءة البيانات الجديدة من الخادم
+      // Clear the in-memory cache for this key so the component re-fetches from server
       _store.delete(key)
-      // إعادة تعيين الحالة إلى القيمة الأولية مؤقتاً حتى يكتمل الجلب
-      setStateRaw(initial)
+      // Reset state to initial value temporarily until fetch completes
+      setStateRaw(initialRef.current)
     }
-    
+
     window.addEventListener('rise:data-changed', handleDataChange)
     return () => window.removeEventListener('rise:data-changed', handleDataChange)
-  }, [key, initial])
+    // ✅ FIX: Only depend on `key`, NOT `initial` (which changes reference every render)
+  }, [key])
 
   // Sync state to persisted store on every change
   useEffect(() => {
@@ -81,14 +90,20 @@ export function usePersistedData<T>(key: string, initial: T): [T, React.Dispatch
   }, [key, state])
 
   // Wrap setState to also update the store
-  const setState = useCallback<React.Dispatch<React.SetStateAction<T>>>((action) => {
-    setStateRaw((prev) => {
-      const next = typeof action === 'function' ? (action as (prev: T) => T)(prev) : action
-      // Update store immediately (before React re-render)
-      _store.set(key, next)
-      return next
-    })
-  }, [key])
+  const setState = useCallback<React.Dispatch<React.SetStateAction<T>>>(
+    (action) => {
+      setStateRaw((prev) => {
+        const next =
+          typeof action === 'function'
+            ? (action as (prev: T) => T)(prev)
+            : action
+        // Update store immediately (before React re-render)
+        _store.set(key, next)
+        return next
+      })
+    },
+    [key],
+  )
 
   return [state, setState]
 }
