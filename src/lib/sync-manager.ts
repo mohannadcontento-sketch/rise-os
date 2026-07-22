@@ -10,6 +10,8 @@ import { apiFetch } from './api-fetch';
 interface SyncOptions {
   /** Interval in ms for periodic background sync (default 60 000 = 1 min) */
   intervalMs?: number;
+  /** Max retry attempts before marking a record as permanently failed */
+  maxRetries?: number;
 }
 
 // ─── SyncManager Class ──────────────────────────────────────────────────
@@ -17,10 +19,14 @@ interface SyncOptions {
 class SyncManager {
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private intervalMs: number;
+  private maxRetries: number;
   private syncing = false;
+  /** Track retry counts per record to avoid infinite retry loops */
+  private retryCounts = new Map<number, number>();
 
   constructor(options: SyncOptions = {}) {
     this.intervalMs = options.intervalMs ?? 60_000;
+    this.maxRetries = options.maxRetries ?? 5;
   }
 
   /** Whether the browser currently reports online status. */
@@ -99,12 +105,18 @@ class SyncManager {
    * Push all unsynced IndexedDB records to the server API.
    * Uses server-wins: if the server rejects or returns different data, we
    * accept the server version.
+   *
+   * FIX: Records that fail due to server errors (5xx) or network issues are
+   * NOT marked as synced. They will be retried on the next cycle, up to
+   * `maxRetries` times. Only client errors (4xx) are treated as permanent
+   * failures (server-wins).
    */
   private async pushUnsynced(): Promise<void> {
     const unsynced = await getOfflineDB().getUnsynced();
     if (unsynced.length === 0) return;
 
     const processedIds: number[] = [];
+    const failedIds: number[] = [];
 
     for (const record of unsynced) {
       try {
@@ -132,6 +144,7 @@ class SyncManager {
         if (response.ok) {
           // Server accepted — mark as synced
           processedIds.push(record.id!);
+          this.retryCounts.delete(record.id!);
 
           // Server-wins: if the server returned data, update local store
           if (method !== 'DELETE') {
@@ -140,25 +153,64 @@ class SyncManager {
               await getOfflineDB().update(record.storeName, serverData);
             }
           }
-        } else {
-          // Server rejected — server wins, still mark synced to avoid retry loop
+        } else if (response.status >= 400 && response.status < 500) {
+          // Client error (4xx) — server-wins, mark as synced to avoid retry loop
+          // The data is invalid or unauthorized; retrying won't help.
           processedIds.push(record.id!);
+          this.retryCounts.delete(record.id!);
           console.warn(
-            `[SyncManager] Server rejected ${record.action} on ${record.storeName}/${record.recordId}: ${response.status}`
+            `[SyncManager] Server rejected (4xx) ${record.action} on ${record.storeName}/${record.recordId}: ${response.status}. Discarding.`
           );
+        } else {
+          // Server error (5xx) — transient failure, will retry
+          failedIds.push(record.id!);
+          const retries = (this.retryCounts.get(record.id!) ?? 0) + 1;
+          this.retryCounts.set(record.id!, retries);
+
+          if (retries >= this.maxRetries) {
+            // Exceeded max retries — mark as synced to prevent infinite loop
+            processedIds.push(record.id!);
+            this.retryCounts.delete(record.id!);
+            console.error(
+              `[SyncManager] Record ${record.id} (${record.storeName}/${record.recordId}) exceeded max retries (${this.maxRetries}). Discarding.`
+            );
+          } else {
+            console.warn(
+              `[SyncManager] Server error (5xx) for ${record.action} on ${record.storeName}/${record.recordId}: ${response.status}. Retry ${retries}/${this.maxRetries}.`
+            );
+          }
         }
       } catch (error) {
         // Network error — don't mark as synced, will retry next cycle
-        console.warn(
-          `[SyncManager] Failed to push ${record.storeName}/${record.recordId}:`,
-          error
-        );
+        failedIds.push(record.id!);
+        const retries = (this.retryCounts.get(record.id!) ?? 0) + 1;
+        this.retryCounts.set(record.id!, retries);
+
+        if (retries >= this.maxRetries) {
+          processedIds.push(record.id!);
+          this.retryCounts.delete(record.id!);
+          console.error(
+            `[SyncManager] Record ${record.id} (${record.storeName}/${record.recordId}) exceeded max retries after network errors. Discarding.`
+          );
+        } else {
+          console.warn(
+            `[SyncManager] Network error pushing ${record.storeName}/${record.recordId} (retry ${retries}/${this.maxRetries}):`,
+            error
+          );
+        }
       }
     }
 
     // Mark processed records as synced
     if (processedIds.length > 0) {
       await getOfflineDB().markSynced(processedIds);
+    }
+
+    // Log summary if there were failures
+    if (failedIds.length > 0) {
+      console.warn(
+        `[SyncManager] ${failedIds.length} record(s) failed to sync and will be retried next cycle.`
+      );
     }
   }
 

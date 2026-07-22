@@ -20,6 +20,8 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 // Module-level store — survives component unmount/remount, cleared on page refresh
 const _store = new Map<string, any>()
 
+const DATA_CHANGED_EVENT = 'rise:data-changed'
+
 /** Read persisted data (used internally, also exported for advanced use) */
 export function getPersistedData<T = any>(key: string): T | undefined {
   return _store.get(key) as T | undefined
@@ -52,6 +54,19 @@ export function usePersistedData<T>(key: string, initial: T): [T, React.Dispatch
 
   // Track if this is the first render (to avoid overwriting persisted data with initial)
   const isFirstRender = useRef(true)
+
+  // ─── FIX: Listen for global data-changed events ───────────────────────────
+  // When any API mutation (POST/PUT/DELETE) or Supabase realtime change occurs,
+  // clear the cached data for this key so the component re-fetches from server.
+  useEffect(() => {
+    const handleDataChange = () => {
+      // Remove stale cache — forces component to re-fetch from server
+      _store.delete(key)
+    }
+
+    window.addEventListener(DATA_CHANGED_EVENT, handleDataChange)
+    return () => window.removeEventListener(DATA_CHANGED_EVENT, handleDataChange)
+  }, [key])
 
   // Sync state to persisted store on every change
   useEffect(() => {
