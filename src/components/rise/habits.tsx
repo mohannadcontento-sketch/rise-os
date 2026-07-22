@@ -200,7 +200,7 @@ function getCompletionRate(logs: HabitLog[], habitId: string): number {
 /* ────────────── Component ────────────── */
 
 export function HabitsView() {
-  const [habits, setHabits, habitsVersion] = usePersistedData<Habit[]>('habits', [])
+  const [h[habits, setHabitss, habitsVersion] = usePersistedData<Habit[]>('habits', [])
   const [logs, setLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
