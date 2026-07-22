@@ -200,7 +200,7 @@ function getCompletionRate(logs: HabitLog[], habitId: string): number {
 /* ────────────── Component ────────────── */
 
 export function HabitsView() {
-  const [habits, setHabits, habitsVersion] = usePersistedData<Habit[]>('habits', [])
+  const [habits, setHabits] = usePersistedData<Habit[]>('habits', [])
   const [logs, setLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -217,23 +217,24 @@ export function HabitsView() {
   const todayStr = getTodayStr()
 
   /* ---- Fetch ---- */
-  useEffect(() => {
-    async function fetchHabits() {
-      try {
-        const res = await apiFetch('/api/rise/habits')
-        if (res.ok) {
-          const data: HabitsResponse = await res.json()
-          setHabits(data.habits)
-          setLogs(data.logs)
-        }
-      } catch {
-        // empty
-      } finally {
-        setLoading(false)
+  const fetchHabits = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/rise/habits')
+      if (res.ok) {
+        const data: HabitsResponse = await res.json()
+        setHabits(data.habits)
+        setLogs(data.logs)
       }
+    } catch {
+      // empty
+    } finally {
+      setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
     fetchHabits()
-  }, [habitsVersion])
+  }, [fetchHabits])
 
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(

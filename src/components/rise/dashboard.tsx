@@ -46,7 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { apiFetch, isFromCache } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
@@ -1066,7 +1066,7 @@ function OnThisDayWidget() {
    ══════════════════════════════════════════════════════════════════════ */
 
 export default function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null)
+  const [data, setData] = usePersistedData<DashboardData | null>('dashboard', null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
@@ -1090,11 +1090,9 @@ export default function Dashboard() {
     }
   }, [])
 
-  const { refreshKey } = useDataRefresh()
-
   useEffect(() => {
     fetchDashboard()
-  }, [fetchDashboard, refreshKey])
+  }, [fetchDashboard])
 
   // Play achievement sound on first load if there are achievements
   const timeOfDay = useTimeOfDay()

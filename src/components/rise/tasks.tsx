@@ -197,8 +197,8 @@ const priorityDotColors: Record<string, string> = {
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
-  const [tasks, setTasks, tasksVersion] = usePersistedData<Task[]>('tasks', [])
-  const [projects, setProjects, projectsVersion] = usePersistedData<Project[]>('projects-list', [])
+  const [tasks, setTasks] = usePersistedData<Task[]>('tasks', [])
+  const [projects, setProjects] = usePersistedData<Project[]>('projects-list', [])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
   const [addOpen, setAddOpen] = useState(false)
@@ -239,7 +239,7 @@ export function Tasks() {
 
   useEffect(() => {
     fetchData()
-  }, [fetchData, tasksVersion, projectsVersion])
+  }, [fetchData])
 
   /* ── Filtering ── */
   const isTaskBlocked = useCallback((task: Task): boolean => {

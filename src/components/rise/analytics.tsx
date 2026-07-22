@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   BarChart3,
@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api-fetch'
+import { usePersistedData } from '@/hooks/use-persisted-data'
 import {
   LineChart,
   Line,
@@ -175,10 +176,10 @@ function getGrade(score: number): { letter: string; color: string; glow: string 
 
 export default function Analytics() {
   const [period, setPeriod] = useState<Period>('weekly')
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
-  const [habits, setHabits] = useState<HabitData | null>(null)
-  const [focus, setFocus] = useState<FocusData | null>(null)
-  const [health, setHealth] = useState<HealthData | null>(null)
+  const [dashboard, setDashboard] = usePersistedData<DashboardData | null>('analytics-dashboard', null)
+  const [habits, setHabits] = usePersistedData<HabitData | null>('analytics-habits', null)
+  const [focus, setFocus] = usePersistedData<FocusData | null>('analytics-focus', null)
+  const [health, setHealth] = usePersistedData<HealthData | null>('analytics-health', null)
   const [loading, setLoading] = useState(true)
   const [compareMode, setCompareMode] = useState(false)
 
@@ -192,35 +193,36 @@ export default function Analytics() {
 
   const grade = getGrade(avgScore)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
-          apiFetch('/api/rise/dashboard'),
-          apiFetch('/api/rise/habits'),
-          apiFetch('/api/rise/focus'),
-          apiFetch('/api/rise/health'),
-        ])
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
+        apiFetch('/api/rise/dashboard'),
+        apiFetch('/api/rise/habits'),
+        apiFetch('/api/rise/focus'),
+        apiFetch('/api/rise/health'),
+      ])
 
-        let dash: any = null, habit: any = null, foc: any = null, hlt: any = null
+      let dash: any = null, habit: any = null, foc: any = null, hlt: any = null
 
-        try { if (!dashRes.ok) throw new Error(); dash = await dashRes.json() } catch { /* ignore */ }
-        try { if (!habitRes.ok) throw new Error(); habit = await habitRes.json() } catch { /* ignore */ }
-        try { if (!focusRes.ok) throw new Error(); foc = await focusRes.json() } catch { /* ignore */ }
-        try { if (!healthRes.ok) throw new Error(); hlt = await healthRes.json() } catch { /* ignore */ }
+      try { if (!dashRes.ok) throw new Error(); dash = await dashRes.json() } catch { /* ignore */ }
+      try { if (!habitRes.ok) throw new Error(); habit = await habitRes.json() } catch { /* ignore */ }
+      try { if (!focusRes.ok) throw new Error(); foc = await focusRes.json() } catch { /* ignore */ }
+      try { if (!healthRes.ok) throw new Error(); hlt = await healthRes.json() } catch { /* ignore */ }
 
-        if (dash) setDashboard(dash)
-        if (habit) setHabits(habit)
-        if (foc) setFocus(foc)
-        if (hlt) setHealth(hlt)
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
-      }
+      if (dash) setDashboard(dash)
+      if (habit) setHabits(habit)
+      if (foc) setFocus(foc)
+      if (hlt) setHealth(hlt)
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
     }
-    load()
   }, [])
+
+  useEffect(() => {
+    fetchAnalytics()
+  }, [fetchAnalytics])
 
   // ─── Computed Charts ───
 

@@ -629,42 +629,43 @@ export default function MorningRoutine() {
   }, [isAllDone, sessionActive])
 
   // Load data from API + scheduled tasks
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await apiFetch('/api/rise/morning')
-        if (res.ok) {
-          const data = await res.json()
-          setLogs(data.logs || [])
-          if (data.todayLog) {
-            setTodayLog(data.todayLog)
-            const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
-            setCompletedIds(new Set(items))
-            setStartedAt(data.todayLog.startedAt)
-          }
+  const fetchMorningData = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/rise/morning')
+      if (res.ok) {
+        const data = await res.json()
+        setLogs(data.logs || [])
+        if (data.todayLog) {
+          setTodayLog(data.todayLog)
+          const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
+          setCompletedIds(new Set(items))
+          setStartedAt(data.todayLog.startedAt)
         }
-
-        // Fetch today's scheduled tasks (tasks with dueDate = today and dueTime set)
-        try {
-          const tasksRes = await apiFetch('/api/rise/tasks')
-          if (tasksRes.ok) {
-            const tasksData = await tasksRes.json()
-            const todayStr = new Date().toISOString().split('T')[0]
-            const todayScheduled = (tasksData.tasks || []).filter(
-              (t: any) => t.dueDate === todayStr && t.dueTime && t.status !== 'done'
-            ).map((t: any) => ({ id: t.id, title: t.title, dueTime: t.dueTime }))
-            todayScheduled.sort((a: any, b: any) => a.dueTime.localeCompare(b.dueTime))
-            setScheduledTasks(todayScheduled)
-          }
-        } catch { /* ignore */ }
-      } catch {
-        // Use empty state
-      } finally {
-        setLoading(false)
       }
+
+      // Fetch today's scheduled tasks (tasks with dueDate = today and dueTime set)
+      try {
+        const tasksRes = await apiFetch('/api/rise/tasks')
+        if (tasksRes.ok) {
+          const tasksData = await tasksRes.json()
+          const todayStr = new Date().toISOString().split('T')[0]
+          const todayScheduled = (tasksData.tasks || []).filter(
+            (t: any) => t.dueDate === todayStr && t.dueTime && t.status !== 'done'
+          ).map((t: any) => ({ id: t.id, title: t.title, dueTime: t.dueTime }))
+          todayScheduled.sort((a: any, b: any) => a.dueTime.localeCompare(b.dueTime))
+          setScheduledTasks(todayScheduled)
+        }
+      } catch { /* ignore */ }
+    } catch {
+      // Use empty state
+    } finally {
+      setLoading(false)
     }
-    load()
   }, [])
+
+  useEffect(() => {
+    fetchMorningData()
+  }, [fetchMorningData])
 
   // Generate mock history for last 7 days if no logs
   const displayLogs = (() => {
