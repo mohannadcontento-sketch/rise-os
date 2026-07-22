@@ -310,10 +310,11 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     clone.json().then(data => setCache(url, data)).catch(() => {})
   }
 
-  // Notify all components to re-fetch their data on successful POST/PUT/DELETE
-  // (don't invalidateCache — let stale data serve as offline fallback)
+  // ✅ FIX: Invalidate GET cache AND notify components on successful POST/PUT/DELETE
+  // Previously cache was NOT invalidated, causing stale data for up to 24 hours
   if (response.ok && options.method && options.method !== 'GET') {
     if (typeof window !== 'undefined') {
+      invalidateCache()
       window.dispatchEvent(new CustomEvent('rise:data-changed'))
     }
   }
@@ -348,9 +349,10 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           const clone = response.clone()
           clone.json().then(data => setCache(url, data)).catch(() => {})
         }
-        // Notify on successful retry POST/PUT/DELETE
+        // ✅ FIX: Also invalidate cache on successful retry POST/PUT/DELETE
         if (response.ok && options.method && options.method !== 'GET') {
           if (typeof window !== 'undefined') {
+            invalidateCache()
             window.dispatchEvent(new CustomEvent('rise:data-changed'))
           }
         }
