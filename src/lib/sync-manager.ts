@@ -105,6 +105,7 @@ class SyncManager {
     if (unsynced.length === 0) return;
 
     const processedIds: number[] = [];
+    const failedIds: number[] = []; // <-- إضافة لتتبع الفشل
 
     for (const record of unsynced) {
       try {
@@ -141,14 +142,15 @@ class SyncManager {
             }
           }
         } else {
-          // Server rejected — server wins, still mark synced to avoid retry loop
-          processedIds.push(record.id!);
+          // Server rejected — DO NOT mark as synced, keep for retry
+          failedIds.push(record.id!);
           console.warn(
             `[SyncManager] Server rejected ${record.action} on ${record.storeName}/${record.recordId}: ${response.status}`
           );
         }
       } catch (error) {
         // Network error — don't mark as synced, will retry next cycle
+        failedIds.push(record.id!);
         console.warn(
           `[SyncManager] Failed to push ${record.storeName}/${record.recordId}:`,
           error
@@ -159,6 +161,10 @@ class SyncManager {
     // Mark processed records as synced
     if (processedIds.length > 0) {
       await getOfflineDB().markSynced(processedIds);
+    }
+    
+    if (failedIds.length > 0) {
+      console.warn(`[SyncManager] ${failedIds.length} records failed to sync and will be retried.`);
     }
   }
 

@@ -463,13 +463,21 @@ export default function RiseOSApp() {
     }
   }, [])
 
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
     if (!searchOpen || searchQuery.length < 2 || !auth) {
       return
     }
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
     const q = searchQuery.toLowerCase()
     const controller = new AbortController()
-    const timer = setTimeout(() => {
+
+    searchTimeoutRef.current = setTimeout(() => {
       Promise.all([
         apiGet('/api/rise/tasks').then(r => r.json()).catch(() => ({ tasks: [] })),
         apiGet('/api/rise/habits').then(r => r.json()).catch(() => ({ habits: [] })),
@@ -488,8 +496,12 @@ export default function RiseOSApp() {
           knowledge: ((knowledgeData as any).items || []).filter((k: SearchKnowledge) => k.title.toLowerCase().includes(q)).slice(0, 5),
         })
       })
-    }, 300)
-    return () => { clearTimeout(timer); controller.abort() }
+    }, 500)
+
+    return () => { 
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+      controller.abort() 
+    }
   }, [searchQuery, searchOpen, auth])
 
   /* Today's date in Arabic */

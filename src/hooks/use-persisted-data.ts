@@ -53,6 +53,19 @@ export function usePersistedData<T>(key: string, initial: T): [T, React.Dispatch
   // Track if this is the first render (to avoid overwriting persisted data with initial)
   const isFirstRender = useRef(true)
 
+  // 1. الاستماع لحدث التغيير العالمي وإعادة تعيين الحالة لإجبار إعادة الجلب
+  useEffect(() => {
+    const handleDataChange = () => {
+      // مسح الذاكرة المؤقتة لهذا المفتاح يجبر المكون على قراءة البيانات الجديدة من الخادم
+      _store.delete(key)
+      // إعادة تعيين الحالة إلى القيمة الأولية مؤقتاً حتى يكتمل الجلب
+      setStateRaw(initial)
+    }
+    
+    window.addEventListener('rise:data-changed', handleDataChange)
+    return () => window.removeEventListener('rise:data-changed', handleDataChange)
+  }, [key, initial])
+
   // Sync state to persisted store on every change
   useEffect(() => {
     if (isFirstRender.current) {
