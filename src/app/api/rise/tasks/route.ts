@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(task)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'بيانات غير صالحة', details: error.errors }, { status: 400 })
+      return NextResponse.json({ error: 'بيانات غير صالحة', details: error.issues }, { status: 400 })
     }
     console.error('Tasks POST error:', error)
     return NextResponse.json({ error: 'فشل في إنشاء المهمة' }, { status: 500 })
@@ -75,7 +75,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(task)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'بيانات غير صالحة', details: error.errors }, { status: 400 })
+      return NextResponse.json({ error: 'بيانات غير صالحة', details: error.issues }, { status: 400 })
     }
     console.error('Tasks PUT error:', error)
     return NextResponse.json({ error: 'فشل في تحديث المهمة' }, { status: 500 })
