@@ -1,227 +1,105 @@
-// RiseOS — Sync Manager
-// Handles bidirectional sync between IndexedDB (offline) and the server API.
-// Strategy: server-wins on conflict, periodic background sync when online.
+import { getOfflineDB } from './offline-db'
+import { apiFetch } from './api-fetch'
 
-import { getOfflineDB, type StoreName, type SyncStatusRecord } from './offline-db';
-import { apiFetch } from './api-fetch';
+export class SyncManager {
+  private isSyncing = false
+  private syncInterval: NodeJS.Timeout | null = null
+  private retryCounts = new Map<string, number>()
+  private MAX_RETRIES = 5
 
-// ─── Types ──────────────────────────────────────────────────────────────
-
-interface SyncOptions {
-  /** Interval in ms for periodic background sync (default 60 000 = 1 min) */
-  intervalMs?: number;
-}
-
-// ─── SyncManager Class ──────────────────────────────────────────────────
-
-class SyncManager {
-  private intervalId: ReturnType<typeof setInterval> | null = null;
-  private intervalMs: number;
-  private syncing = false;
-
-  constructor(options: SyncOptions = {}) {
-    this.intervalMs = options.intervalMs ?? 60_000;
+  constructor() {
+    this.startAutoSync()
+    window.addEventListener('online', () => this.pushUnsynced())
   }
 
-  /** Whether the browser currently reports online status. */
-  get isOnline(): boolean {
-    if (typeof navigator === 'undefined') return true;
-    return navigator.onLine;
-  }
-
-  /**
-   * Start the sync loop.
-   * Immediately syncs if online, then sets up periodic sync + online listener.
-   */
-  startSync(): void {
-    if (typeof window === 'undefined') return;
-
-    // Initial sync if online
-    if (this.isOnline) {
-      void this.sync();
-    }
-
-    // Periodic background sync
-    this.intervalId = setInterval(() => {
-      if (this.isOnline) {
-        void this.sync();
+  private startAutoSync() {
+    if (this.syncInterval) return
+    this.syncInterval = setInterval(() => {
+      if (navigator.onLine && !this.isSyncing) {
+        this.pushUnsynced()
       }
-    }, this.intervalMs);
-
-    // When coming back online, push all queued changes immediately
-    window.addEventListener('online', this.handleOnline);
+    }, 30000) // Every 30 seconds
   }
 
-  /** Stop the sync loop. */
-  stopSync(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+  public stopAutoSync() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval)
+      this.syncInterval = null
     }
-    window.removeEventListener('online', this.handleOnline);
   }
 
-  /** Force an immediate sync regardless of timer. */
-  async forceSync(): Promise<void> {
-    if (!this.isOnline) return;
-    await this.sync();
-  }
-
-  // ─── Internal ────────────────────────────────────────────────────────
-
-  private handleOnline = (): void => {
-    void this.sync();
-  };
-
-  /**
-   * Full sync cycle:
-   *  1. Push unsynced local changes to the server (server-wins on conflict).
-   *  2. Pull latest data from the server and update IndexedDB.
-   */
-  private async sync(): Promise<void> {
-    if (this.syncing) return; // prevent concurrent syncs
-    this.syncing = true;
+  public async pushUnsynced(): Promise<void> {
+    if (this.isSyncing || !navigator.onLine) return
+    this.isSyncing = true
 
     try {
-      // 1. Push unsynced records
-      await this.pushUnsynced();
+      const unsynced = await getOfflineDB().getUnsynced()
+      if (unsynced.length === 0) return
 
-      // 2. Pull fresh data from server
-      await this.pullFromServer();
-    } catch (error) {
-      console.warn('[SyncManager] Sync failed:', error);
-    } finally {
-      this.syncing = false;
-    }
-  }
+      const processedIds: number[] = []
+      const failedIds: number[] = []
 
-  /**
-   * Push all unsynced IndexedDB records to the server API.
-   * Uses server-wins: if the server rejects or returns different data, we
-   * accept the server version.
-   */
-  private async pushUnsynced(): Promise<void> {
-    const unsynced = await getOfflineDB().getUnsynced();
-    if (unsynced.length === 0) return;
+      for (const record of unsynced) {
+        try {
+          const data = await getOfflineDB().getById(record.storeName, record.recordId)
+          if (!data) {
+            processedIds.push(record.id!)
+            continue
+          }
 
-    const processedIds: number[] = [];
-    const failedIds: number[] = []; // <-- إضافة لتتبع الفشل
+          const url = `/api/${record.storeName}`
+          const method = record.action === 'create' ? 'POST' : record.action === 'delete' ? 'DELETE' : 'PUT'
 
-    for (const record of unsynced) {
-      try {
-        // Fetch the full record from its store
-        const data = await getOfflineDB().getById(record.storeName, record.recordId);
-        if (!data) {
-          // Record was deleted locally — skip
-          processedIds.push(record.id!);
-          continue;
-        }
+          const response = await apiFetch(url, {
+            method,
+            body: JSON.stringify(data),
+          })
 
-        const url = `/api/${record.storeName}`;
-        const method =
-          record.action === 'create'
-            ? 'POST'
-            : record.action === 'delete'
-              ? 'DELETE'
-              : 'PUT';
-
-        const response = await apiFetch(url, {
-          method,
-          body: JSON.stringify(data),
-        });
-
-        if (response.ok) {
-          // Server accepted — mark as synced
-          processedIds.push(record.id!);
-
-          // Server-wins: if the server returned data, update local store
-          if (method !== 'DELETE') {
-            const serverData = await response.json();
-            if (serverData && typeof serverData === 'object') {
-              await getOfflineDB().update(record.storeName, serverData);
+          if (response.ok) {
+            processedIds.push(record.id!)
+            this.retryCounts.delete(record.recordId)
+            if (method !== 'DELETE') {
+              const serverData = await response.json()
+              if (serverData && typeof serverData === 'object') {
+                await getOfflineDB().update(record.storeName, serverData)
+              }
+            }
+          } else {
+            const retries = this.retryCounts.get(record.recordId) || 0
+            if (retries >= this.MAX_RETRIES) {
+              processedIds.push(record.id!)
+              this.retryCounts.delete(record.recordId)
+              console.error(`[SyncManager] Max retries reached for ${record.storeName}/${record.recordId}`)
+            } else {
+              failedIds.push(record.id!)
+              this.retryCounts.set(record.recordId, retries + 1)
+              console.warn(`[SyncManager] Server rejected ${record.action} on ${record.storeName}/${record.recordId}: ${response.status} (Retry ${retries + 1}/${this.MAX_RETRIES})`)
             }
           }
-        } else {
-          // Server rejected — DO NOT mark as synced, keep for retry
-          failedIds.push(record.id!);
-          console.warn(
-            `[SyncManager] Server rejected ${record.action} on ${record.storeName}/${record.recordId}: ${response.status}`
-          );
+        } catch (error) {
+          failedIds.push(record.id!)
+          const retries = this.retryCounts.get(record.recordId) || 0
+          this.retryCounts.set(record.recordId, retries + 1)
+          console.warn(`[SyncManager] Failed to push ${record.storeName}/${record.recordId}:`, error)
         }
-      } catch (error) {
-        // Network error — don't mark as synced, will retry next cycle
-        failedIds.push(record.id!);
-        console.warn(
-          `[SyncManager] Failed to push ${record.storeName}/${record.recordId}:`,
-          error
-        );
       }
-    }
 
-    // Mark processed records as synced
-    if (processedIds.length > 0) {
-      await getOfflineDB().markSynced(processedIds);
-    }
-    
-    if (failedIds.length > 0) {
-      console.warn(`[SyncManager] ${failedIds.length} records failed to sync and will be retried.`);
+      if (processedIds.length > 0) {
+        await getOfflineDB().markSynced(processedIds)
+      }
+
+      if (failedIds.length > 0) {
+        console.warn(`[SyncManager] ${failedIds.length} records failed to sync and will be retried.`)
+      }
+    } finally {
+      this.isSyncing = false
     }
   }
 
-  /**
-   * Pull latest data from each API endpoint and update IndexedDB.
-   * Server data overwrites local data (server-wins).
-   */
-  private async pullFromServer(): Promise<void> {
-    const stores: StoreName[] = [
-      'tasks',
-      'habits',
-      'goals',
-      'projects',
-      'journals',
-      'health',
-      'finance',
-      'books',
-      'knowledge',
-      'settings',
-    ];
-
-    for (const store of stores) {
-      try {
-        const response = await apiFetch(`/api/${store}`);
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        if (!Array.isArray(data)) continue;
-
-        // Clear local store and repopulate from server
-        await getOfflineDB().clear(store);
-
-        for (const item of data) {
-          await getOfflineDB().add(store, item);
-        }
-      } catch {
-        // If one store fails, continue with the rest
-        console.warn(`[SyncManager] Failed to pull ${store}`);
-      }
-    }
+  public async forceSync(): Promise<void> {
+    this.retryCounts.clear()
+    await this.pushUnsynced()
   }
 }
 
-// ─── Lazy Singleton (safe for SSR) ─────────────────────────────────────────
-
-let _syncManager: SyncManager | null = null;
-
-export function getSyncManager(): SyncManager {
-  if (!_syncManager) {
-    _syncManager = new SyncManager();
-  }
-  return _syncManager;
-}
-
-/** Backwards-compatible alias */
-export const syncManager = new Proxy({} as SyncManager, {
-  get(_target, prop) {
-    return Reflect.get(getSyncManager(), prop);
-  },
-});
+export const syncManager = new SyncManager()

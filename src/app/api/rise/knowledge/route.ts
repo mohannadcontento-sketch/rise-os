@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
+
+const createKnowledgeSchema = z.object({
+  type: z.enum(['note', 'article', 'video', 'audio', 'link']).optional(),
+  title: z.string().min(1).max(300),
+  content: z.string().max(50000).optional(),
+  folder: z.string().max(100).optional(),
+  tags: z.string().optional(),
+  source: z.string().max(500).optional(),
+  isFavorite: z.boolean().optional(),
+})
+
+const updateKnowledgeSchema = z.object({
+  id: z.string().uuid('معرف العنصر غير صالح'),
+  type: z.enum(['note', 'article', 'video', 'audio', 'link']).optional(),
+  title: z.string().min(1).max(300).optional(),
+  content: z.string().max(50000).optional(),
+  folder: z.string().max(100).optional(),
+  tags: z.string().optional(),
+  source: z.string().max(500).optional(),
+  isFavorite: z.boolean().optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,11 +48,15 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
-    const record = await data.knowledgeItems.create(userId, dataFields)
+    const validated = createKnowledgeSchema.parse(dataFields)
+    const record = await data.knowledgeItems.create(userId, validated)
     return NextResponse.json(record)
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'بيانات غير صالحة', details: error.issues }, { status: 400 })
+    }
     console.error('Knowledge POST error:', error)
-    return NextResponse.json({ error: 'Failed to create knowledge item' }, { status: 500 })
+    return NextResponse.json({ error: 'فشل في إنشاء العنصر' }, { status: 500 })
   }
 }
 
@@ -41,13 +67,18 @@ export async function PUT(req: NextRequest) {
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
-    if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
+    if (!id) return NextResponse.json({ error: 'معرف العنصر مطلوب' }, { status: 400 })
 
-    const record = await data.knowledgeItems.update(id, body)
+    const validated = updateKnowledgeSchema.parse({ id, ...body })
+    const { id: _id, ...updateData } = validated
+    const record = await data.knowledgeItems.update(id, updateData)
     return NextResponse.json(record)
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'بيانات غير صالحة', details: error.issues }, { status: 400 })
+    }
     console.error('Knowledge PUT error:', error)
-    return NextResponse.json({ error: 'Failed to update knowledge item' }, { status: 500 })
+    return NextResponse.json({ error: 'فشل في تحديث العنصر' }, { status: 500 })
   }
 }
 
@@ -58,13 +89,14 @@ export async function DELETE(req: NextRequest) {
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
-    if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
+    const body = await req.json().catch(() => ({}))
+    const id = body.id || searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'معرف العنصر مطلوب' }, { status: 400 })
 
     await data.knowledgeItems.remove(id, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Knowledge DELETE error:', error)
-    return NextResponse.json({ error: 'Failed to delete knowledge item' }, { status: 500 })
+    return NextResponse.json({ error: 'فشل في حذف العنصر' }, { status: 500 })
   }
 }
