@@ -7,24 +7,27 @@ export const dynamic = 'force-dynamic'
 
 const createHabitSchema = z.object({
   name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
+  description: z.string().max(500).nullable().optional(),
   icon: z.string().optional(),
   color: z.string().optional(),
-  frequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  // Matches the actual frequency select in habits.tsx — 'weekly'/'monthly' were
+  // never offered in the UI, while 'weekdays'/'weekends'/'custom' (3 of the 4
+  // real options) were rejected by this enum, failing with 400.
+  frequency: z.enum(['daily', 'weekdays', 'weekends', 'custom']).optional(),
   targetCount: z.number().int().min(1).optional(),
-  reminderTime: z.string().optional(),
+  reminderTime: z.string().nullable().optional(),
   xpReward: z.number().int().min(0).optional(),
 })
 
 const updateHabitSchema = z.object({
   id: z.string().uuid('معرف العادة غير صالح'),
   name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).optional(),
+  description: z.string().max(500).nullable().optional(),
   icon: z.string().optional(),
   color: z.string().optional(),
-  frequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  frequency: z.enum(['daily', 'weekdays', 'weekends', 'custom']).optional(),
   targetCount: z.number().int().min(1).optional(),
-  reminderTime: z.string().optional(),
+  reminderTime: z.string().nullable().optional(),
   xpReward: z.number().int().min(0).optional(),
 })
 

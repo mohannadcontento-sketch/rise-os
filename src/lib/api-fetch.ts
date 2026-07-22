@@ -483,12 +483,19 @@ async function flushQueue(): Promise<void> {
       })
       clearTimeout(timeoutId)
 
-      if (!res.ok && res.status !== 408) {
+      // A 4xx response (bad request, validation error, not found, etc.) will
+      // never succeed by retrying it unchanged — retrying forever just re-fires
+      // the same error on every page load. Only retry on network-level
+      // failures / timeouts / 5xx, and drop the item after a few attempts.
+      const isClientError = res.status >= 400 && res.status < 500 && res.status !== 408
+      if (!res.ok && !isClientError && res.status !== 408 && item.retries < 5) {
         remaining.push({ ...item, retries: item.retries + 1 })
       }
-      // Success or timeout → remove from queue
+      // Success, timeout, permanent client error, or retry limit reached → drop from queue
     } catch {
-      remaining.push({ ...item, retries: item.retries + 1 })
+      if (item.retries < 5) {
+        remaining.push({ ...item, retries: item.retries + 1 })
+      }
     }
   }
 

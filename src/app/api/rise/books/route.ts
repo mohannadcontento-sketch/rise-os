@@ -5,37 +5,41 @@ import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
+// 'video' matches the actual type select in reading.tsx ('podcast' was never
+// offered in the UI). Nullable fields below are ones the UI sends as explicit
+// `null` when empty (e.g. `author: newAuthor || null`), which plain
+// `.optional()` rejects — this made adding a book without an author fail.
 const createBookSchema = z.object({
   title: z.string().min(1).max(300),
-  author: z.string().max(200).optional(),
-  type: z.enum(['book', 'article', 'course', 'podcast']).optional(),
+  author: z.string().max(200).nullable().optional(),
+  type: z.enum(['book', 'article', 'course', 'video']).optional(),
   status: z.enum(['want-to-read', 'reading', 'completed', 'abandoned']).optional(),
-  currentPage: z.number().int().min(0).optional(),
-  totalPages: z.number().int().min(0).optional(),
-  notes: z.string().max(5000).optional(),
-  highlights: z.string().max(5000).optional(),
-  favoriteQuote: z.string().max(1000).optional(),
-  rating: z.number().int().min(1).max(5).optional(),
-  coverUrl: z.string().url().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  currentPage: z.number().int().min(0).nullable().optional(),
+  totalPages: z.number().int().min(0).nullable().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+  highlights: z.string().max(5000).nullable().optional(),
+  favoriteQuote: z.string().max(1000).nullable().optional(),
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  coverUrl: z.string().url().nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
 })
 
 const updateBookSchema = z.object({
   id: z.string().uuid('معرف الكتاب غير صالح'),
   title: z.string().min(1).max(300).optional(),
-  author: z.string().max(200).optional(),
-  type: z.enum(['book', 'article', 'course', 'podcast']).optional(),
+  author: z.string().max(200).nullable().optional(),
+  type: z.enum(['book', 'article', 'course', 'video']).optional(),
   status: z.enum(['want-to-read', 'reading', 'completed', 'abandoned']).optional(),
-  currentPage: z.number().int().min(0).optional(),
-  totalPages: z.number().int().min(0).optional(),
-  notes: z.string().max(5000).optional(),
-  highlights: z.string().max(5000).optional(),
-  favoriteQuote: z.string().max(1000).optional(),
-  rating: z.number().int().min(1).max(5).optional(),
-  coverUrl: z.string().url().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  currentPage: z.number().int().min(0).nullable().optional(),
+  totalPages: z.number().int().min(0).nullable().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+  highlights: z.string().max(5000).nullable().optional(),
+  favoriteQuote: z.string().max(1000).nullable().optional(),
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  coverUrl: z.string().url().nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
 })
 
 export async function GET(req: NextRequest) {

@@ -5,24 +5,28 @@ import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
+// 'idea' is added because the Quick Capture box (the primary way items get
+// added here) always sends `type: 'idea'`, which this enum previously
+// rejected — every Quick Capture save failed with 400. tags/source are
+// nullable because Quick Capture also sends `tags: null, source: null`.
 const createKnowledgeSchema = z.object({
-  type: z.enum(['note', 'article', 'video', 'audio', 'link']).optional(),
+  type: z.enum(['note', 'article', 'video', 'audio', 'link', 'idea']).optional(),
   title: z.string().min(1).max(300),
   content: z.string().max(50000).optional(),
   folder: z.string().max(100).optional(),
-  tags: z.string().optional(),
-  source: z.string().max(500).optional(),
+  tags: z.string().nullable().optional(),
+  source: z.string().max(500).nullable().optional(),
   isFavorite: z.boolean().optional(),
 })
 
 const updateKnowledgeSchema = z.object({
   id: z.string().uuid('معرف العنصر غير صالح'),
-  type: z.enum(['note', 'article', 'video', 'audio', 'link']).optional(),
+  type: z.enum(['note', 'article', 'video', 'audio', 'link', 'idea']).optional(),
   title: z.string().min(1).max(300).optional(),
   content: z.string().max(50000).optional(),
   folder: z.string().max(100).optional(),
-  tags: z.string().optional(),
-  source: z.string().max(500).optional(),
+  tags: z.string().nullable().optional(),
+  source: z.string().max(500).nullable().optional(),
   isFavorite: z.boolean().optional(),
 })
 

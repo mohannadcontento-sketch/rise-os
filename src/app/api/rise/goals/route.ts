@@ -5,23 +5,27 @@ import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
+// The goal type select (and every tab/filter/label in goals.tsx) uses 'annual',
+// not 'yearly' — the mismatch here made creating or editing any yearly goal fail
+// with 400. Fields are `.nullable()` because the UI sends `null` for empty
+// optional text fields, which `.optional()` alone rejects.
 const createGoalSchema = z.object({
   title: z.string().min(1).max(200),
-  vision: z.string().max(1000).optional(),
-  why: z.string().max(1000).optional(),
-  type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
-  deadline: z.string().optional(),
+  vision: z.string().max(1000).nullable().optional(),
+  why: z.string().max(1000).nullable().optional(),
+  type: z.enum(['annual', 'quarterly', 'monthly', 'weekly']).optional(),
+  deadline: z.string().nullable().optional(),
 })
 
 const updateGoalSchema = z.object({
   id: z.string().uuid('معرف الهدف غير صالح'),
   title: z.string().min(1).max(200).optional(),
-  vision: z.string().max(1000).optional(),
-  why: z.string().max(1000).optional(),
-  type: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).optional(),
+  vision: z.string().max(1000).nullable().optional(),
+  why: z.string().max(1000).nullable().optional(),
+  type: z.enum(['annual', 'quarterly', 'monthly', 'weekly']).optional(),
   progress: z.number().min(0).max(100).optional(),
   status: z.enum(['active', 'completed', 'archived']).optional(),
-  deadline: z.string().optional(),
+  deadline: z.string().nullable().optional(),
 })
 
 export async function GET(req: NextRequest) {

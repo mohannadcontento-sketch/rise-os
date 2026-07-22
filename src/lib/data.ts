@@ -250,6 +250,24 @@ export const data = {
       return toCamel(data)
     },
 
+    async updateSubtasks(subtasks: { id: string; title?: string; completed?: boolean }[]) {
+      const client = await sb()
+      for (const s of subtasks) {
+        const { id, ...fields } = s
+        if (Object.keys(fields).length === 0) continue
+        const { error } = await client.from('subtasks').update(toSnake(fields)).eq('id', id)
+        if (error) throw error
+      }
+    },
+
+    async get(id: string) {
+      const client = await sb()
+      const { data: task, error } = await client.from('tasks').select('*').eq('id', id).single()
+      if (error) throw error
+      const { data: subtasks } = await client.from('subtasks').select('*').eq('task_id', id)
+      return toCamel({ ...task, subtasks: subtasks ?? [] })
+    },
+
     async remove(id: string, userId: string) {
       const client = await sb()
       const { error } = await client
