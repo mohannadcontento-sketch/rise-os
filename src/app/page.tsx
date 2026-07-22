@@ -51,6 +51,8 @@ const LoginPage = lazy(() => import('@/components/rise/login-page'))
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
 
 const Onboarding = lazy(() => import('@/components/rise/onboarding'))
+const CelebrationOverlay = lazy(() => import('@/components/celebration-overlay'))
+const MobileBottomNav = lazy(() => import('@/components/mobile-bottom-nav'))
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
 
 // Lazy load all modules
@@ -612,7 +614,7 @@ export default function RiseOSApp() {
         </header>
 
         {/* Content — render ALL visited modules, show only active one (preserves state) */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-16 lg:pb-0">
           {(Object.keys(moduleComponents) as ModuleId[]).map((modId) => {
             if (!visitedModules.has(modId)) return null
             const Comp = moduleComponents[modId]
@@ -849,6 +851,12 @@ export default function RiseOSApp() {
 
       {/* PWA: install prompt */}
       <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
+
+      {/* Celebration particles on completions */}
+      <Suspense fallback={null}><CelebrationOverlay /></Suspense>
+
+      {/* Mobile bottom navigation */}
+      <Suspense fallback={null}><MobileBottomNav /></Suspense>
 
       {/* Onboarding for first-time users */}
       <Suspense fallback={null}><Onboarding /></Suspense>

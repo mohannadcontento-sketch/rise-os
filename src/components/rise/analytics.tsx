@@ -513,6 +513,53 @@ export default function Analytics() {
         </motion.div>
       </div>
 
+      {/* Weekly Snapshot with Sparklines */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
+        <Card className="glass">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-gold" />
+              صورة الأسبوع
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {([
+                { label: 'المهام', data: (dashboard?.dailyScores || []).slice(-7).map(d => d.taskScore || 0), color: '#059669', value: (dashboard?.dailyScores || []).slice(-7).reduce((s, d) => s + (d.taskScore || 0), 0) },
+                { label: 'التركيز', data: (dashboard?.dailyScores || []).slice(-7).map(d => d.focusScore || 0), color: '#6366F1', value: Math.round((dashboard?.dailyScores || []).slice(-7).reduce((s, d) => s + (d.focusScore || 0), 0) / 7 * 10) / 10 },
+                { label: 'العادات', data: (dashboard?.dailyScores || []).slice(-7).map(d => d.habitScore || 0), color: '#F97316', value: Math.round((dashboard?.dailyScores || []).slice(-7).reduce((s, d) => s + (d.habitScore || 0), 0) / 7 * 10) / 10 },
+                { label: 'اليوميات', data: (dashboard?.dailyScores || []).slice(-7).map(d => d.journalScore || 0), color: '#0EA5E9', value: (dashboard?.dailyScores || []).slice(-7).filter(d => d.journalScore > 0).length },
+                { label: 'الصحة', data: (dashboard?.dailyScores || []).slice(-7).map(d => d.healthScore || 0), color: '#EF4444', value: Math.round((dashboard?.dailyScores || []).slice(-7).reduce((s, d) => s + (d.healthScore || 0), 0) / 7 * 10) / 10 },
+              ] as const).map((metric) => (
+                <div key={metric.label} className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-muted/30 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground font-medium">{metric.label}</span>
+                    <span className="text-sm font-bold" style={{ color: metric.color }}>{metric.value}</span>
+                  </div>
+                  <svg viewBox="0 0 100 28" className="w-full h-7" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id={`spark-${metric.label}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={metric.color} stopOpacity="0.3" />
+                        <stop offset="100%" stopColor={metric.color} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    {metric.data.length > 1 && (() => {
+                      const max = Math.max(...metric.data, 1)
+                      const points = metric.data.map((v, i) => `${(i / (metric.data.length - 1)) * 100},${28 - (v / max) * 24}`).join(' ')
+                      const areaPoints = `0,28 ${points} 100,28`
+                      return <>
+                        <polygon points={areaPoints} fill={`url(#spark-${metric.label})`} />
+                        <polyline points={points} fill="none" stroke={metric.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </>
+                    })()}
+                  </svg>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Overview Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[

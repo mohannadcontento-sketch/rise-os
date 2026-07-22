@@ -83,6 +83,7 @@ import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday
 import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
+import { triggerCelebration } from '@/components/celebration-overlay'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
 import { ar } from 'date-fns/locale'
 
@@ -196,8 +197,8 @@ const priorityDotColors: Record<string, string> = {
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
-  const [tasks, setTasks] = usePersistedData<Task[]>('tasks', [])
-  const [projects, setProjects] = usePersistedData<Project[]>('projects-list', [])
+  const [tasks, setTasks, tasksVersion] = usePersistedData<Task[]>('tasks', [])
+  const [projects, setProjects, projectsVersion] = usePersistedData<Project[]>('projects-list', [])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
   const [addOpen, setAddOpen] = useState(false)
@@ -238,7 +239,7 @@ export function Tasks() {
 
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+  }, [fetchData, tasksVersion, projectsVersion])
 
   /* ── Filtering ── */
   const isTaskBlocked = useCallback((task: Task): boolean => {
@@ -289,6 +290,7 @@ export function Tasks() {
       if (!isDone) {
         playSound('task-complete')
         notifyTaskComplete(task.title, task.xpReward)
+        triggerCelebration('task', `+${task.xpReward || 10} XP`)
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
         // Check if completing this task unblocks dependent tasks
         checkUnblockedTasks(task.id)
@@ -311,6 +313,7 @@ export function Tasks() {
       }
       if (newStatus === 'done') {
         playSound('task-complete')
+        triggerCelebration('task', `+${task.xpReward || 10} XP`)
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
         // Check if completing this task unblocks dependent tasks
         checkUnblockedTasks(task.id)

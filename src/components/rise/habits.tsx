@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
+import { triggerCelebration } from '@/components/celebration-overlay'
 import { cn } from '@/lib/utils'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { notifyHabitComplete } from '@/lib/notifications'
@@ -199,7 +200,7 @@ function getCompletionRate(logs: HabitLog[], habitId: string): number {
 /* ────────────── Component ────────────── */
 
 export function HabitsView() {
-  const [habits, setHabits] = usePersistedData<Habit[]>('habits', [])
+  const [habits, setHabits, habitsVersion] = usePersistedData<Habit[]>('habits', [])
   const [logs, setLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -232,7 +233,7 @@ export function HabitsView() {
       }
     }
     fetchHabits()
-  }, [])
+  }, [habitsVersion])
 
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(
@@ -286,6 +287,7 @@ export function HabitsView() {
         if (newCompleted) {
           playSound('habit-check')
           const habit = habits.find((h) => h.id === habitId)
+          triggerCelebration('habit', `+${habit?.xpReward || 15} XP`)
           if (habit) {
             const streak = calcStreak(
               [...logs, { habitId, date: todayStr, completed: true, count: 1 }],

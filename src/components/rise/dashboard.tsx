@@ -50,6 +50,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
+import { useTimeOfDay } from '@/hooks/use-time-of-day'
 import {
   Tooltip,
   TooltipContent,
@@ -1096,6 +1097,7 @@ export default function Dashboard() {
   }, [fetchDashboard, refreshKey])
 
   // Play achievement sound on first load if there are achievements
+  const timeOfDay = useTimeOfDay()
   const achievementSoundPlayed = useRef(false)
   useEffect(() => {
     if ((data?.achievements?.length ?? 0) > 0 && !achievementSoundPlayed.current) {
@@ -1186,19 +1188,21 @@ export default function Dashboard() {
     >
       {/* ══════════ 1. Top Welcome & Stats Bar ══════════ */}
       <motion.div variants={itemVariants} className="relative">
-        {/* Star field / particle background */}
-        <div className="absolute inset-0 -m-4 lg:-m-6 rounded-3xl bg-gradient-to-bl from-forest/[0.04] via-emerald-accent/[0.03] to-transparent dark:from-emerald-accent/[0.06] dark:via-forest/[0.04] pointer-events-none overflow-hidden">
+        {/* Time-aware ambient background */}
+        <div className="absolute inset-0 -m-4 lg:-m-6 rounded-3xl pointer-events-none overflow-hidden transition-all duration-[3000ms]" style={{ backgroundImage: `linear-gradient(to bottom left, ${timeOfDay.glowFrom}, ${timeOfDay.glowTo})` }}>
           {Array.from({ length: 12 }).map((_, i) => (
             <motion.div
               key={`star-${i}`}
-              className="absolute rounded-full bg-emerald-accent/25 dark:bg-emerald-accent/40"
+              className="absolute rounded-full"
               style={{
                 top: `${8 + (i * 7) % 85}%`,
                 left: `${5 + (i * 13) % 90}%`,
                 width: `${2 + (i % 3)}px`,
                 height: `${2 + (i % 3)}px`,
+                backgroundColor: timeOfDay.accent,
+                opacity: 0.25,
               }}
-              animate={{ opacity: [0.15, 0.6, 0.15], scale: [1, 1.4, 1] }}
+              animate={{ opacity: [0.1, 0.5, 0.1], scale: [1, 1.5, 1] }}
               transition={{ type: 'tween', duration: 3 + (i % 3), repeat: Infinity, delay: i * 0.4, ease: 'easeInOut' }}
             />
           ))}
@@ -1206,12 +1210,8 @@ export default function Dashboard() {
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              {new Date().getHours() >= 4 && new Date().getHours() < 17 ? (
-                <Sun className="w-4 h-4 text-gold" />
-              ) : (
-                <Moon className="w-4 h-4 text-emerald-accent" />
-              )}
-              <span>{greeting}،</span>
+              <span className="text-base">{timeOfDay.icon}</span>
+              <span style={{ color: timeOfDay.accent }}>{timeOfDay.greeting}،</span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-gradient-forest">{displayName}</h1>
             <div className="flex items-center gap-2 mt-1">
