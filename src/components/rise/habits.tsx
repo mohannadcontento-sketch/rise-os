@@ -200,7 +200,7 @@ function getCompletionRate(logs: HabitLog[], habitId: string): number {
 /* ────────────── Component ────────────── */
 
 export function HabitsView() {
-  const [habits, setHabits] = usePersistedData<Habit[]>('habits', [])
+  const [habits, setHabits, , getHabitsVersion] = usePersistedData<Habit[]>('habits', [])
   const [logs, setLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -218,10 +218,14 @@ export function HabitsView() {
 
   /* ---- Fetch ---- */
   const fetchHabits = useCallback(async () => {
+    const versionAtStart = getHabitsVersion()
     try {
       const res = await apiFetch('/api/rise/habits')
       if (res.ok) {
         const data: HabitsResponse = await res.json()
+        // Skip if a local mutation (add/edit) landed while this was in flight —
+        // applying a stale response here would silently erase the newer item.
+        if (getHabitsVersion() !== versionAtStart) return
         setHabits(data.habits)
         setLogs(data.logs)
       }

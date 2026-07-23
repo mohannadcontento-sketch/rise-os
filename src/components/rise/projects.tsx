@@ -303,8 +303,8 @@ function EmptyState() {
 /* ────────────── Main Component ────────────── */
 
 export function Projects() {
-  const [projects, setProjects] = usePersistedData<Project[]>('projects', [])
-  const [tasks, setTasks] = usePersistedData<Task[]>('tasks-list', [])
+  const [projects, setProjects, , getProjectsVersion] = usePersistedData<Project[]>('projects', [])
+  const [tasks, setTasks, , getTasksVersion] = usePersistedData<Task[]>('tasks-list', [])
   const [loading, setLoading] = useState(true)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -325,6 +325,8 @@ export function Projects() {
   const [taskSubmitting, setTaskSubmitting] = useState(false)
 
   const fetchData = useCallback(async () => {
+    const projVersionAtStart = getProjectsVersion()
+    const taskVersionAtStart = getTasksVersion()
     try {
       const [projRes, taskRes] = await Promise.all([
         apiFetch('/api/rise/projects'),
@@ -334,8 +336,10 @@ export function Projects() {
       if (!taskRes.ok) throw new Error('Failed')
       const projData = await projRes.json()
       const taskData = await taskRes.json()
-      setProjects(projData.projects || [])
-      setTasks(taskData.tasks || [])
+      // Skip whichever list had a local mutation (add/edit) land while this
+      // request was in flight — applying that stale half would erase it.
+      if (getProjectsVersion() === projVersionAtStart) setProjects(projData.projects || [])
+      if (getTasksVersion() === taskVersionAtStart) setTasks(taskData.tasks || [])
     } catch {
       /* ignore */
     } finally {

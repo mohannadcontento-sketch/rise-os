@@ -197,7 +197,7 @@ const priorityDotColors: Record<string, string> = {
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
-  const [tasks, setTasks] = usePersistedData<Task[]>('tasks', [])
+  const [tasks, setTasks, , getTasksVersion] = usePersistedData<Task[]>('tasks', [])
   const [projects, setProjects] = usePersistedData<Project[]>('projects-list', [])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
@@ -224,10 +224,15 @@ export function Tasks() {
   const [calendarMonth, setCalendarMonth] = useState(new Date())
 
   const fetchData = useCallback(async () => {
+    const versionAtStart = getTasksVersion()
     try {
       const res = await apiFetch('/api/rise/tasks')
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
+      // If a local mutation (add/edit/move) happened while this request was in
+      // flight, this response is now stale — applying it would silently erase
+      // the newer optimistic change. Skip it; the next fetch will catch up.
+      if (getTasksVersion() !== versionAtStart) return
       setTasks(data.tasks || [])
       setProjects(data.projects || [])
     } catch {

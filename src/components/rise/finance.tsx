@@ -153,14 +153,21 @@ interface BudgetCategory {
   icon: React.ElementType
 }
 
+// Matches the expense categories in CATEGORY_ICONS exactly (minus the two
+// income-only ones راتب/حر) — previously this list used different words for
+// the same concepts (طعام→غذاء, مواصلات→تنقل) and had no line at all for
+// فواتير/تسوق/هدايا, so those expenses were silently invisible to the budget
+// tracker no matter how much was spent in them.
 const DEFAULT_BUDGET_CATEGORIES: BudgetCategory[] = [
+  { name: 'طعام', limit: 0, icon: Utensils },
+  { name: 'مواصلات', limit: 0, icon: Car },
   { name: 'سكن', limit: 0, icon: Home },
-  { name: 'غذاء', limit: 0, icon: Utensils },
-  { name: 'تنقل', limit: 0, icon: Car },
-  { name: 'اشتراكات', limit: 0, icon: CreditCard },
+  { name: 'فواتير', limit: 0, icon: Zap },
+  { name: 'تسوق', limit: 0, icon: ShoppingBag },
+  { name: 'هدايا', limit: 0, icon: Gift },
+  { name: 'تعليم', limit: 0, icon: GraduationCap },
   { name: 'صحة', limit: 0, icon: Heart },
   { name: 'ترفيه', limit: 0, icon: Gift },
-  { name: 'تعليم', limit: 0, icon: GraduationCap },
   { name: 'أخرى', limit: 0, icon: Receipt },
 ]
 

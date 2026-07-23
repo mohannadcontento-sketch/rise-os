@@ -119,7 +119,7 @@ const TYPE_GRADIENT_STOPS: Record<Goal['type'], { from: string; to: string }> = 
 /* ────────────── Component ────────────── */
 
 export function GoalsView() {
-  const [goals, setGoals] = usePersistedData<Goal[]>('goals', [])
+  const [goals, setGoals, , getGoalsVersion] = usePersistedData<Goal[]>('goals', [])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [activeType, setActiveType] = useState<string>('all')
@@ -136,10 +136,14 @@ export function GoalsView() {
 
   /* ---- Fetch ---- */
   const fetchGoals = useCallback(async () => {
+    const versionAtStart = getGoalsVersion()
     try {
       const res = await apiFetch('/api/rise/goals')
       if (res.ok) {
         const data: GoalsResponse = await res.json()
+        // A local mutation (add goal, toggle milestone) while this was in
+        // flight means the response is stale — don't clobber the newer state.
+        if (getGoalsVersion() !== versionAtStart) return
         // Ensure goals is always an array, and each goal has a milestones array
         const safeGoals = (Array.isArray(data.goals) ? data.goals : []).map((g: Goal) => ({
           ...g,
@@ -199,7 +203,15 @@ export function GoalsView() {
           updatedMilestones.length > 0
             ? Math.round((completedCount / updatedMilestones.length) * 100)
             : 0
-        return { ...g, milestones: updatedMilestones, progress }
+        // Mirror the backend: all milestones done → goal auto-completes;
+        // unchecking one after that reopens it.
+        let status = g.status
+        if (updatedMilestones.length > 0 && completedCount === updatedMilestones.length) {
+          status = 'completed'
+        } else if (g.status === 'completed') {
+          status = 'active'
+        }
+        return { ...g, milestones: updatedMilestones, progress, status }
       })
     )
 
@@ -244,6 +256,74 @@ export function GoalsView() {
           return { ...g, milestones: reverted, progress }
         })
       )
+    }
+  }
+
+  /* ---- Add milestone ----
+   * There was previously no way at all to add a milestone (no input, no API
+   * call) — progress is entirely driven by milestone completion, so goals
+   * could never move past 0% or be marked complete except by editing the
+   * database directly. */
+  async function addMilestone(goalId: string, title: string) {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    const tempId = `temp-${Date.now()}`
+    setGoals((prev) =>
+      prev.map((g) =>
+        g.id === goalId
+          ? { ...g, milestones: [...(g.milestones || []), { id: tempId, title: trimmed, completed: false, order: (g.milestones || []).length }] }
+          : g
+      )
+    )
+    try {
+      const res = await apiPut('/api/rise/goals', { id: goalId, newMilestoneTitle: trimmed })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, milestones: (g.milestones || []).filter((m) => m.id !== tempId) } : g)))
+        toast.error('فشل في إضافة المعلم', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        return
+      }
+      const updatedGoal = await res.json().catch(() => null)
+      if (updatedGoal && updatedGoal.id) {
+        setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, ...updatedGoal, milestones: updatedGoal.milestones || [] } : g)))
+      }
+    } catch {
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, milestones: (g.milestones || []).filter((m) => m.id !== tempId) } : g)))
+      toast.error('فشل في إضافة المعلم')
+    }
+  }
+
+  /* ---- Manually mark a goal complete / reopen it ----
+   * Goals without milestones had no way to ever reach "completed" status —
+   * there was no button or control for it anywhere in the UI. */
+  async function toggleGoalComplete(goalId: string) {
+    const goal = goals.find((g) => g.id === goalId)
+    if (!goal) return
+    const willComplete = goal.status !== 'completed'
+    if (willComplete) playSound('complete')
+    const prevStatus = goal.status
+    const prevProgress = goal.progress
+    setGoals((prev) =>
+      prev.map((g) =>
+        g.id === goalId
+          ? { ...g, status: willComplete ? 'completed' : 'active', progress: willComplete ? 100 : g.progress }
+          : g
+      )
+    )
+    try {
+      const res = await apiPut('/api/rise/goals', {
+        id: goalId,
+        status: willComplete ? 'completed' : 'active',
+        progress: willComplete ? 100 : prevProgress,
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, status: prevStatus, progress: prevProgress } : g)))
+        toast.error('فشل تحديث الهدف', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+      }
+    } catch {
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, status: prevStatus, progress: prevProgress } : g)))
+      toast.error('فشل تحديث الهدف')
     }
   }
 
@@ -644,6 +724,8 @@ export function GoalsView() {
                         onToggleMilestone={(milestoneId) =>
                           toggleMilestone(goal.id, milestoneId)
                         }
+                        onAddMilestone={(title) => addMilestone(goal.id, title)}
+                        onToggleComplete={() => toggleGoalComplete(goal.id)}
                         onDelete={() => deleteGoal(goal.id)}
                         formatDate={formatDate}
                         getDeadlineInfo={getDeadlineInfo}
@@ -668,6 +750,8 @@ interface GoalCardProps {
   expanded: boolean
   onToggleExpand: () => void
   onToggleMilestone: (milestoneId: string) => void
+  onAddMilestone: (title: string) => void
+  onToggleComplete: () => void
   onDelete: () => void
   formatDate: (d: string) => string
   getDeadlineInfo: (d: string) => { text: string; urgent: boolean } | null
@@ -679,10 +763,13 @@ function GoalCard({
   expanded,
   onToggleExpand,
   onToggleMilestone,
+  onAddMilestone,
+  onToggleComplete,
   onDelete,
   formatDate,
   getDeadlineInfo,
 }: GoalCardProps) {
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState('')
   const deadlineInfo = getDeadlineInfo(goal.deadline)
   const milestones = goal.milestones || []
   const completedMilestones = milestones.filter((m) => m.completed).length
@@ -863,16 +950,16 @@ function GoalCard({
                 )}
 
                 {/* Milestones with timeline */}
-                {goal.milestones.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        المعالم ({completedMilestones}/{totalMilestones})
-                      </p>
-                    </div>
-                    <div className="relative max-h-48 overflow-y-auto pl-1">
-                      {/* Timeline connecting line */}
-                      <div className="absolute top-3 bottom-3 right-[17px] w-px bg-border/50" />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      المعالم ({completedMilestones}/{totalMilestones})
+                    </p>
+                  </div>
+                  {goal.milestones.length > 0 && (
+                  <div className="relative max-h-48 overflow-y-auto pl-1">
+                    {/* Timeline connecting line */}
+                    <div className="absolute top-3 bottom-3 right-[17px] w-px bg-border/50" />
                       <div className="space-y-1.5">
                         {goal.milestones
                           .sort((a, b) => a.order - b.order)
@@ -934,9 +1021,59 @@ function GoalCard({
                             </motion.div>
                           ))}
                       </div>
-                    </div>
                   </div>
-                )}
+                  )}
+                  {/* Add milestone — there was previously no way to add one at all */}
+                  <div
+                    className="flex items-center gap-2 pt-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Input
+                      value={newMilestoneTitle}
+                      onChange={(e) => setNewMilestoneTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newMilestoneTitle.trim()) {
+                          onAddMilestone(newMilestoneTitle)
+                          setNewMilestoneTitle('')
+                        }
+                      }}
+                      placeholder="أضف معلماً جديداً..."
+                      className="h-8 text-xs rounded-lg"
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 rounded-lg shrink-0"
+                      disabled={!newMilestoneTitle.trim()}
+                      onClick={() => {
+                        if (newMilestoneTitle.trim()) {
+                          onAddMilestone(newMilestoneTitle)
+                          setNewMilestoneTitle('')
+                        }
+                      }}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Mark complete / reopen — there was previously no way to
+                    manually mark a goal as done (relevant especially for
+                    goals with no milestones, where progress can never move) */}
+                <div className="flex justify-start pt-1">
+                  <Button
+                    variant={goal.status === 'completed' ? 'secondary' : 'default'}
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onToggleComplete()
+                    }}
+                    className="rounded-xl text-xs h-8 bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 ml-1" />
+                    {goal.status === 'completed' ? 'إعادة فتح الهدف' : 'وضع علامة كمكتمل'}
+                  </Button>
+                </div>
 
                 {/* Delete */}
                 <div className="flex justify-start pt-1">

@@ -534,7 +534,7 @@ export default function RiseOSApp() {
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 px-3 sm:px-4 md:px-6 py-2.5 bg-background/90 backdrop-blur-md header-gradient-border">
+        <header className="sticky top-0 z-30 flex items-center gap-3 px-3 sm:px-4 md:px-6 py-2.5 bg-background/90 backdrop-blur-md header-gradient-border pt-[max(0.625rem,env(safe-area-inset-top))]">
           <Button
             variant="ghost"
             size="icon"
@@ -614,7 +614,7 @@ export default function RiseOSApp() {
         </header>
 
         {/* Content — render ALL visited modules, show only active one (preserves state) */}
-        <div className="flex-1 overflow-y-auto pb-16 lg:pb-0">
+        <div className="flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
           {(Object.keys(moduleComponents) as ModuleId[]).map((modId) => {
             if (!visitedModules.has(modId)) return null
             const Comp = moduleComponents[modId]

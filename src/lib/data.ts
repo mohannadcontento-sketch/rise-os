@@ -347,14 +347,79 @@ export const data = {
 
     async toggleMilestone(milestoneId: string, completed: boolean) {
       const client = await sb()
-      const { data, error } = await client
+      const { data: ms, error } = await client
         .from('milestones')
         .update({ completed })
         .eq('id', milestoneId)
         .select()
         .single()
       if (error) throw error
-      return toCamel(data)
+
+      // Recompute and persist the parent goal's progress from all its
+      // milestones. Previously only the milestone's own `completed` flag was
+      // saved — the goal's `progress` column (and `status`) never actually
+      // updated in the database, so it looked right until the next refetch,
+      // then reverted. Auto-complete the goal when every milestone is done,
+      // and revert an auto-completed goal back to active if unchecked again.
+      const goalId = ms.goal_id
+      const { data: allMs } = await client.from('milestones').select('*').eq('goal_id', goalId)
+      const milestones = allMs ?? []
+      const total = milestones.length
+      const doneCount = milestones.filter((m: any) => m.completed).length
+      const progress = total > 0 ? Math.round((doneCount / total) * 100) : 0
+
+      const { data: goalRow } = await client.from('goals').select('status').eq('id', goalId).single()
+      const goalUpdate: Record<string, any> = { progress }
+      if (total > 0 && doneCount === total) {
+        goalUpdate.status = 'completed'
+      } else if (goalRow?.status === 'completed') {
+        goalUpdate.status = 'active'
+      }
+
+      const { data: goal, error: goalErr } = await client
+        .from('goals')
+        .update(goalUpdate)
+        .eq('id', goalId)
+        .select()
+        .single()
+      if (goalErr) throw goalErr
+
+      return toCamel({ ...goal, milestones })
+    },
+
+    async addMilestone(goalId: string, title: string) {
+      const client = await sb()
+      const { data: existing } = await client.from('milestones').select('id').eq('goal_id', goalId)
+      const order = existing?.length ?? 0
+      const { error: insertErr } = await client
+        .from('milestones')
+        .insert({ goal_id: goalId, title, completed: false, order })
+      if (insertErr) throw insertErr
+
+      // Adding an (incomplete) milestone lowers the completed ratio, so
+      // progress needs recalculating here too, and a goal previously marked
+      // 'completed' should reopen since it's no longer actually 100% done.
+      const { data: allMs } = await client.from('milestones').select('*').eq('goal_id', goalId).order('order', { ascending: true })
+      const milestones = allMs ?? []
+      const total = milestones.length
+      const doneCount = milestones.filter((m: any) => m.completed).length
+      const progress = total > 0 ? Math.round((doneCount / total) * 100) : 0
+
+      const { data: goalRow } = await client.from('goals').select('status').eq('id', goalId).single()
+      const goalUpdate: Record<string, any> = { progress }
+      if (goalRow?.status === 'completed' && doneCount < total) {
+        goalUpdate.status = 'active'
+      }
+
+      const { data: goal, error: goalErr } = await client
+        .from('goals')
+        .update(goalUpdate)
+        .eq('id', goalId)
+        .select()
+        .single()
+      if (goalErr) throw goalErr
+
+      return toCamel({ ...goal, milestones })
     },
 
     async remove(id: string, userId: string) {
@@ -764,6 +829,35 @@ export const data = {
         .eq('id', id)
         .eq('user_id', userId)
       if (error) throw error
+    },
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // Budgets  →  table: budgets
+  // Previously this had no table at all — GET always returned an empty
+  // list and PUT was a no-op that just echoed the input back, so every
+  // budget limit reset the moment the page reloaded.
+  // ────────────────────────────────────────────────────────────
+  budgets: {
+    async list(userId: string) {
+      const client = await sb()
+      const { data, error } = await client
+        .from('budgets')
+        .select('*')
+        .eq('user_id', userId)
+      if (error) throw error
+      return toCamel(data ?? [])
+    },
+
+    async upsert(userId: string, budgets: { category: string; limit: number }[]) {
+      const client = await sb()
+      const rows = budgets.map((b) => ({ user_id: userId, category: b.category, limit: b.limit }))
+      const { data, error } = await client
+        .from('budgets')
+        .upsert(rows, { onConflict: 'user_id,category' })
+        .select()
+      if (error) throw error
+      return toCamel(data ?? [])
     },
   },
 

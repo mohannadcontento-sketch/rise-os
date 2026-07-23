@@ -70,8 +70,16 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
 
     if (body.milestoneId) {
-      const updated = await data.goals.toggleMilestone(body.milestoneId, body.completed)
-      return NextResponse.json(updated)
+      const goal = await data.goals.toggleMilestone(body.milestoneId, body.completed)
+      return NextResponse.json(goal)
+    }
+
+    // Adding a milestone was previously impossible — there was no UI or API
+    // path to create one, so progress (which is driven entirely by milestone
+    // completion) could never move and a goal could never reach 100%.
+    if (typeof body.newMilestoneTitle === 'string' && body.newMilestoneTitle.trim()) {
+      const goal = await data.goals.addMilestone(body.id, body.newMilestoneTitle.trim())
+      return NextResponse.json(goal)
     }
 
     const validated = updateGoalSchema.parse(body)

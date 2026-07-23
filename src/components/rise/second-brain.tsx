@@ -121,7 +121,7 @@ const folders = [
 /* ────────────── Component ────────────── */
 
 export default function SecondBrain() {
-  const [items, setItems] = usePersistedData<KnowledgeItem[]>('knowledge-items', [])
+  const [items, setItems, , getItemsVersion] = usePersistedData<KnowledgeItem[]>('knowledge-items', [])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeType, setActiveType] = useState('all')
@@ -147,10 +147,15 @@ export default function SecondBrain() {
   const [editContent, setEditContent] = useState('')
 
   const fetchItems = useCallback(async () => {
+    const versionAtStart = getItemsVersion()
     try {
       const res = await apiFetch('/api/rise/knowledge')
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
+      // A Quick Capture (or any add/edit) that lands while this request is
+      // still in flight makes this response stale — applying it would wipe
+      // out the item that was just added. Skip it in that case.
+      if (getItemsVersion() !== versionAtStart) return
       setItems(data.items || [])
     } catch {
       toast.error('فشل في تحميل البيانات')

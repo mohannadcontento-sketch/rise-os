@@ -137,7 +137,7 @@ function StarRating({ rating, onRate, readonly = false }: { rating: number; onRa
 /* ────────────── Component ────────────── */
 
 export default function Reading() {
-  const [books, setBooks] = usePersistedData<Book[]>('books', [])
+  const [books, setBooks, , getBooksVersion] = usePersistedData<Book[]>('books', [])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('reading')
   const [expandedBook, setExpandedBook] = useState<string | null>(null)
@@ -157,10 +157,12 @@ export default function Reading() {
   const [editPage, setEditPage] = useState<Record<string, string>>({})
 
   const fetchBooks = useCallback(async () => {
+    const versionAtStart = getBooksVersion()
     try {
       const res = await apiFetch('/api/rise/books')
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
+      if (getBooksVersion() !== versionAtStart) return
       setBooks(data.books || [])
     } catch {
       toast.error('فشل في تحميل الكتب')
