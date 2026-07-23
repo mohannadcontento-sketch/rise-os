@@ -315,19 +315,19 @@ function MiniSparkline({ data, color }: { data: number[]; color: string }) {
   const max = Math.max(...data, 1)
   const min = Math.min(...data, 0)
   const range = max - min || 1
-  const barCount = data.length
   return (
-    <div className="flex items-end gap-[2px] h-6">
+    <div className="flex items-end gap-[3px] h-8">
       {data.map((val, i) => {
-        const height = Math.max(((val - min) / range) * 100, 8)
+        const height = Math.max(((val - min) / range) * 100, 12)
+        const isLast = i === data.length - 1
         return (
           <motion.div
             key={i}
-            className={cn('w-[3px] rounded-full', color)}
+            className={cn('w-1 rounded-full', color, isLast && 'ring-1 ring-offset-1 ring-offset-transparent')}
             initial={{ height: 0 }}
             animate={{ height: `${height}%` }}
             transition={{ delay: 0.6 + i * 0.04, duration: 0.3, ease: 'easeOut' }}
-            style={{ opacity: 0.3 + (val / max) * 0.5 }}
+            style={{ opacity: isLast ? 1 : 0.45 + (val / max) * 0.4 }}
           />
         )
       })}
@@ -1066,33 +1066,44 @@ function OnThisDayWidget() {
    ══════════════════════════════════════════════════════════════════════ */
 
 export default function Dashboard() {
-  const [data, setData] = usePersistedData<DashboardData | null>('dashboard', null)
+  const [data, setData, dataVersion, getVersion] = usePersistedData<DashboardData | null>('dashboard', null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
 
-  const fetchDashboard = useCallback(async () => {
+  const fetchDashboard = useCallback(async (isBackgroundRefresh: boolean) => {
+    const versionAtStart = getVersion()
     try {
-      setLoading(true)
+      if (!isBackgroundRefresh) setLoading(true)
       setError(null)
       const res = await apiFetch('/api/rise/dashboard')
       if (res.ok) {
         const json = await res.json()
+        // Skip applying a response that started before a newer local change —
+        // it would overwrite fresher data with a stale snapshot.
+        if (getVersion() !== versionAtStart) return
         setFromCache(isFromCache(res))
         setData(json)
       } else {
         throw new Error('فشل في تحميل البيانات')
       }
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ غير متوقع')
+      if (!isBackgroundRefresh) setError(err.message || 'حدث خطأ غير متوقع')
     } finally {
       setLoading(false)
     }
   }, [])
 
+  // Previously this only ran once on mount — completing a task, habit, or
+  // focus session anywhere else in the app never updated the dashboard until
+  // a full page reload. `dataVersion` bumps whenever any module's mutation
+  // fires the shared `rise:data-changed` event, so this now re-fetches live.
+  // Subsequent refreshes run quietly in the background (no skeleton flash).
+  const isFirstLoad = useRef(true)
   useEffect(() => {
-    fetchDashboard()
-  }, [fetchDashboard])
+    fetchDashboard(!isFirstLoad.current)
+    isFirstLoad.current = false
+  }, [fetchDashboard, dataVersion])
 
   // Play achievement sound on first load if there are achievements
   const timeOfDay = useTimeOfDay()
@@ -1115,7 +1126,7 @@ export default function Dashboard() {
           </div>
           <p className="text-muted-foreground">{error || 'لا توجد بيانات'}</p>
           <button
-            onClick={fetchDashboard}
+            onClick={() => fetchDashboard(false)}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             إعادة المحاولة
@@ -1350,8 +1361,8 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+            <div className="mt-3 sm:mt-4 flex items-center justify-between rounded-xl bg-muted/30 px-2.5 py-2">
+              <span className="text-[10px] font-medium text-muted-foreground">الاتجاه (٧ أيام)</span>
               <MiniSparkline data={morningTrend} color="bg-gold" />
             </div>
           </PremiumGlass>
@@ -1374,8 +1385,8 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+            <div className="mt-3 sm:mt-4 flex items-center justify-between rounded-xl bg-muted/30 px-2.5 py-2">
+              <span className="text-[10px] font-medium text-muted-foreground">الاتجاه (٧ أيام)</span>
               <MiniSparkline data={taskTrend} color="bg-emerald-accent" />
             </div>
           </PremiumGlass>
@@ -1398,8 +1409,8 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+            <div className="mt-3 sm:mt-4 flex items-center justify-between rounded-xl bg-muted/30 px-2.5 py-2">
+              <span className="text-[10px] font-medium text-muted-foreground">الاتجاه (٧ أيام)</span>
               <MiniSparkline data={habitTrend} color="bg-forest" />
             </div>
           </PremiumGlass>
@@ -1420,8 +1431,8 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
+            <div className="mt-3 sm:mt-4 flex items-center justify-between rounded-xl bg-muted/30 px-2.5 py-2">
+              <span className="text-[10px] font-medium text-muted-foreground">الاتجاه (٧ أيام)</span>
               <MiniSparkline data={focusTrend} color="bg-gold" />
             </div>
           </PremiumGlass>

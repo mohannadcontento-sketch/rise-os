@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/auth'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { setCurrentAuthToken } from '@/lib/data'
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     // Guard: require admin access
-    const userId = await requireAuth(request)
+    const userId = await requireAdmin(request)
     if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
     }

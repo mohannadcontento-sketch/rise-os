@@ -70,3 +70,42 @@ export async function requireAuth(req: NextRequest): Promise<string | null> {
 
 /** Alias */
 export const optionalAuth = requireAuth
+
+/**
+ * Verify the request belongs to an actual admin (role = 'admin' or email
+ * matches ADMIN_EMAIL), not just any logged-in user.
+ *
+ * SECURITY: the four /api/rise/admin/* routes were previously gated only by
+ * `requireAuth` — i.e. "is this a logged-in user at all" — while internally
+ * using the Supabase *service role* client, which bypasses Row Level
+ * Security entirely. That meant any signed-up user (not just the admin)
+ * could: dump every user's profile, read raw `user_api_keys` (bearer tokens
+ * that fully impersonate any account), and run arbitrary read-only SQL
+ * against the whole database. This closes that gap; see usage in
+ * /api/rise/admin/*.
+ *
+ * Returns the admin's userId, or null if unauthenticated OR authenticated
+ * but not an admin.
+ */
+export async function requireAdmin(req: NextRequest): Promise<string | null> {
+  const userId = await getUserId(req)
+  if (!userId) return null
+
+  try {
+    const { getSupabaseAdmin, ADMIN_EMAIL } = await import('@/lib/supabase')
+    const admin = await getSupabaseAdmin()
+    if (!admin) return null
+
+    const { data: profile, error } = await (admin as any)
+      .from('profiles')
+      .select('role, email')
+      .eq('id', userId)
+      .single()
+    if (error || !profile) return null
+
+    const isAdmin = profile.role === 'admin' || (!!ADMIN_EMAIL && profile.email === ADMIN_EMAIL)
+    return isAdmin ? userId : null
+  } catch {
+    return null
+  }
+}
