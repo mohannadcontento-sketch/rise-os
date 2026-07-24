@@ -167,51 +167,28 @@ export const data = {
     async list(userId: string) {
       const client = await sb()
 
-      // Fetch tasks ordered by "order"
+      // P2#4 FIX: Single query with joins (was 3 separate queries = 1+N problem)
+      // Supabase supports nested selection: tasks → subtasks + project in one call
       const { data: tasks, error } = await client
         .from('tasks')
-        .select('*')
+        .select(`
+          *,
+          subtasks!inner(*),
+          project:projects(id, name, color)
+        `)
         .eq('user_id', userId)
         .order('order', { ascending: true })
       if (error) throw error
 
       const taskList = tasks ?? []
-      const taskIds = taskList.map((t: any) => t.id)
 
-      // Fetch subtasks for these tasks
-      let subtaskRows: any[] = []
-      if (taskIds.length > 0) {
-        const { data: st } = await client
-          .from('subtasks')
-          .select('*')
-          .in('task_id', taskIds)
-        subtaskRows = st ?? []
-      }
-
-      // Fetch user projects (only name & colour) for join
-      const { data: projRows } = await client
-        .from('projects')
-        .select('id, name, color')
-        .eq('user_id', userId)
-
-      const projectMap = new Map<string, { name: string; color: string }>()
-      for (const p of projRows ?? []) {
-        projectMap.set(p.id, { name: p.name, color: p.color })
-      }
-
-      const subtaskMap = new Map<string, any[]>()
-      for (const st of subtaskRows) {
-        const tid = st.task_id
-        if (!subtaskMap.has(tid)) subtaskMap.set(tid, [])
-        subtaskMap.get(tid)!.push(st)
-      }
-
+      // Normalize: ensure subtasks is always an array, project is null-safe
       return toCamel(
         taskList.map((t: any) => ({
           ...t,
-          subtasks: subtaskMap.get(t.id) ?? [],
-          project: t.project_id ? projectMap.get(t.project_id) ?? null : null,
-        })),
+          subtasks: t.subtasks ?? [],
+          project: t.project ?? null,
+        }))
       )
     },
 
@@ -493,30 +470,15 @@ export const data = {
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
+      // P2#5 FIX: Atomic upsert via Supabase native .upsert() (race-condition safe)
+      // Relies on unique constraint (user_id, date) from migration 005.
       const client = await sb()
-
-      // Check if a journal exists for this user + date
-      const { data: existing } = await client
-        .from('journals')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('date', date)
-        .maybeSingle()
-
-      if (existing) {
-        const { data, error } = await client
-          .from('journals')
-          .update(toSnake(body))
-          .eq('id', existing.id)
-          .select()
-          .single()
-        if (error) throw error
-        return toCamel(data)
-      }
-
       const { data, error } = await client
         .from('journals')
-        .insert(toSnake({ ...body, userId, date }))
+        .upsert(
+          toSnake({ ...body, userId, date }),
+          { onConflict: 'user_id,date' }
+        )
         .select()
         .single()
       if (error) throw error
@@ -585,29 +547,14 @@ export const data = {
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
+      // P2#5 FIX: Atomic upsert (race-condition safe)
       const client = await sb()
-
-      const { data: existing } = await client
-        .from('health_logs')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('date', date)
-        .maybeSingle()
-
-      if (existing) {
-        const { data, error } = await client
-          .from('health_logs')
-          .update(toSnake(body))
-          .eq('id', existing.id)
-          .select()
-          .single()
-        if (error) throw error
-        return toCamel(data)
-      }
-
       const { data, error } = await client
         .from('health_logs')
-        .insert(toSnake({ ...body, userId, date }))
+        .upsert(
+          toSnake({ ...body, userId, date }),
+          { onConflict: 'user_id,date' }
+        )
         .select()
         .single()
       if (error) throw error
@@ -822,29 +769,14 @@ export const data = {
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
+      // P2#5 FIX: Atomic upsert (race-condition safe)
       const client = await sb()
-
-      const { data: existing } = await client
-        .from('morning_logs')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('date', date)
-        .maybeSingle()
-
-      if (existing) {
-        const { data, error } = await client
-          .from('morning_logs')
-          .update(toSnake(body))
-          .eq('id', existing.id)
-          .select()
-          .single()
-        if (error) throw error
-        return toCamel(data)
-      }
-
       const { data, error } = await client
         .from('morning_logs')
-        .insert(toSnake({ ...body, userId, date }))
+        .upsert(
+          toSnake({ ...body, userId, date }),
+          { onConflict: 'user_id,date' }
+        )
         .select()
         .single()
       if (error) throw error
@@ -919,30 +851,28 @@ export const data = {
       return data ? toCamel(data) : null
     },
 
-    async upsert(userId: string, date: string, body: Record<string, any>) {
+    async list(userId: string, dates: string[]) {
+      // P2#3: New method for fetching multiple days (used by weekly chart)
       const client = await sb()
-
-      const { data: existing } = await client
-        .from('daily_scores')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('date', date)
-        .maybeSingle()
-
-      if (existing) {
-        const { data, error } = await client
-          .from('daily_scores')
-          .update(toSnake(body))
-          .eq('id', existing.id)
-          .select()
-          .single()
-        if (error) throw error
-        return toCamel(data)
-      }
-
       const { data, error } = await client
         .from('daily_scores')
-        .insert(toSnake({ ...body, userId, date }))
+        .select('*')
+        .eq('user_id', userId)
+        .in('date', dates)
+        .order('date', { ascending: true })
+      if (error) throw error
+      return toCamel(data ?? [])
+    },
+
+    async upsert(userId: string, date: string, body: Record<string, any>) {
+      // P2#5 FIX: Atomic upsert (race-condition safe)
+      const client = await sb()
+      const { data, error } = await client
+        .from('daily_scores')
+        .upsert(
+          toSnake({ ...body, userId, date }),
+          { onConflict: 'user_id,date' }
+        )
         .select()
         .single()
       if (error) throw error

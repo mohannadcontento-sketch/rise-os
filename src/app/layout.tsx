@@ -3,6 +3,7 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PWAInit } from "@/components/pwa-init";
+import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {
   title: "RiseOS — امتلك صباحك. امتلك حياتك.",
@@ -57,9 +58,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <PWAInit />
-          {children}
-          <Toaster />
+          <QueryProvider>
+            <PWAInit />
+            {children}
+            <Toaster />
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
