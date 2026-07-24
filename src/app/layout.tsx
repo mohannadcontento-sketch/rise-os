@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PWAInit } from "@/components/pwa-init";
 import { QueryProvider } from "@/components/query-provider";
+import { PerformanceMonitor } from "@/components/performance-monitor";
 
 export const metadata: Metadata = {
   title: "RiseOS — امتلك صباحك. امتلك حياتك.",
@@ -18,18 +19,14 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "RiseOS",
   },
-  other: {
-    "mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "RiseOS",
-    "theme-color": "#166534",
-  },
+  // P3#7: Additional meta tags in <head> below
+  other: {},
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 5, // Allow zoom for accessibility but prevent accidental zoom
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f0fdf4" },
     { media: "(prefers-color-scheme: dark)", color: "#0a1f15" },
@@ -45,6 +42,12 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* P3#7: DNS prefetch for Supabase (faster API calls) */}
+        {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
+          <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
+        ) : null}
         <meta name="theme-color" content="#166534" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -60,6 +63,7 @@ export default function RootLayout({
         >
           <QueryProvider>
             <PWAInit />
+            <PerformanceMonitor />
             {children}
             <Toaster />
           </QueryProvider>
