@@ -46,7 +46,8 @@ CREATE POLICY "profiles_admin_select" ON public.profiles
 -- PART 2: P1#8 — Composite indexes for common queries
 -- ═══════════════════════════════════════════════════════════
 
-CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON public.tasks(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_tasks_user_duedate ON public.tasks(user_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_user_status ON public.tasks(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_habits_user_date ON public.habits(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_habit_logs_habit_date ON public.habit_logs(habit_id, date);
 CREATE INDEX IF NOT EXISTS idx_journals_user_date ON public.journals(user_id, date);
