@@ -58,19 +58,15 @@ function toCamel<T = Record<string, any>>(obj: unknown): T {
 /**
  * Get a Supabase client for data operations.
  * Priority:
- * 1. Admin client (bypasses RLS) — best for server-side operations
- * 2. Anon client with user JWT (respects RLS, needs proper policies)
- * 3. Anon client without JWT (may be blocked by RLS)
+ * 1. Anon client with user JWT (respects RLS, per-user isolation)
+ * 2. Anon client without JWT (may be blocked by RLS — correct behavior)
+ * Admin client is NEVER used here — use getAdminSb() explicitly for admin ops.
  * Throws if no client can be created.
  */
 async function sb() {
   try {
-    // 1. Try admin client (bypasses RLS)
-    const adminClient = await getSupabaseAdmin()
-    if (adminClient) return adminClient
-
-    // 2. Try anon client with current request's JWT
-    if (_currentAuthToken) {
+    // P1#1 FIX: Try anon client WITH user JWT FIRST (RLS enforced)
+    if (_currentAuthToken && isSupabaseConfigured()) {
       const { createClient } = await import('@supabase/supabase-js')
       const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -81,14 +77,32 @@ async function sb() {
       }
     }
 
-    // 3. Fall back to plain anon client
+    // 2. Fall back to plain anon client (RLS blocks unauthenticated access)
     const anonClient = await getSupabaseAnon()
     if (anonClient) return anonClient
+
+    // 3. Local mock mode (development)
+    const { getDefaultUser } = await import('@/lib/supabase')
+    await getDefaultUser()  // ensure user exists
+    const { createMockClient } = await import('@/lib/mock-client')
+    return createMockClient()
   } catch (err) {
     console.error('[data/sb] Error creating Supabase client:', err)
   }
 
   throw new Error('Database client unavailable — check SUPABASE_URL and SUPABASE_ANON_KEY env vars')
+}
+
+/**
+ * P1#1 FIX: Admin-only data client. Use ONLY in requireAdmin() routes.
+ * Bypasses RLS — never use for regular user data access.
+ */
+async function adminSb() {
+  const adminClient = await getSupabaseAdmin()
+  if (adminClient) return adminClient
+  // Local mock fallback
+  const { createMockClient } = await import('@/lib/mock-client')
+  return createMockClient()
 }
 
 // ============================================================

@@ -1,23 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, ADMIN_EMAIL } from '@/lib/supabase'
+import { setAuthCookies } from '@/lib/cookie-auth'
 
 export const dynamic = 'force-dynamic'
 
+// P1#5: Zod validation
+const LoginSchema = z.object({
+  email: z.string().email('بريد إلكتروني غير صالح'),
+  password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
+})
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
-
-    if (!email || !password) {
-      return NextResponse.json({ error: 'البريد وكلمة المرور مطلوبان' }, { status: 400 })
+    const body = await request.json().catch(() => null)
+    if (!body) {
+      return NextResponse.json({ error: 'جسم الطلب غير صالح' }, { status: 400 })
     }
 
-    // Supabase Auth Flow (only auth method)
-    if (!isSupabaseConfigured()) {
+    // P1#5: Validate input
+    const parsed = LoginSchema.safeParse(body)
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'خدمة المصادقة غير متوفرة حالياً. يرجى المحاولة لاحقاً.' },
-        { status: 503 }
+        { error: parsed.error.issues[0]?.message || 'بيانات غير صالحة' },
+        { status: 400 }
       )
     }
+
+    const { email, password } = parsed.data
+
+    // ── Local Mock Mode (development without Supabase) ──
+    if (!isSupabaseConfigured()) {
+      const { createMockClient } = await import('@/lib/mock-client')
+      const mock = createMockClient()
+      const { data: mockData, error: mockError } = await mock.auth.signInWithPassword({ email, password })
+      if (mockError || !mockData.user || !mockData.session) {
+        return NextResponse.json(
+          { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' },
+          { status: 401 }
+        )
+      }
+      const userInfo = {
+        id: mockData.user.id,
+        email: mockData.user.email || email,
+        name: (mockData.user as any).user_metadata?.name || email.split('@')[0],
+        isAdmin: false,
+        avatar: null,
+      }
+      const res = NextResponse.json({
+        user: userInfo,
+        session: {
+          access_token: mockData.session.access_token,
+          refresh_token: mockData.session.refresh_token,
+          expires_at: mockData.session.expires_at,
+        },
+      })
+      const { setAuthCookies } = await import('@/lib/cookie-auth')
+      return setAuthCookies(res, {
+        access_token: mockData.session.access_token,
+        refresh_token: mockData.session.refresh_token,
+        expires_at: mockData.session.expires_at,
+      }, userInfo)
+    }
+
+    // ── Supabase Auth Flow (production) ──
 
     const supabase = await getSupabaseAnon()
     if (!supabase) {
@@ -68,20 +114,28 @@ export async function POST(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.user_metadata?.name || email.split('@')[0],
-        isAdmin,
-        avatar,
-      },
+    const userInfo = {
+      id: user.id,
+      email: user.email || email,
+      name: (user as any).user_metadata?.name || email.split('@')[0],
+      isAdmin,
+      avatar,
+    }
+
+    // P1#3: Set httpOnly cookies (not accessible to JS → XSS protection)
+    const res = NextResponse.json({
+      user: userInfo,
       session: {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        expires_at: data.session.expires_at,
+        access_token: data.session!.access_token,
+        refresh_token: data.session!.refresh_token,
+        expires_at: data.session!.expires_at,
       },
     })
+    return setAuthCookies(res, {
+      access_token: data.session!.access_token,
+      refresh_token: data.session!.refresh_token,
+      expires_at: data.session!.expires_at!,
+    }, userInfo)
   } catch (error) {
     console.error('[auth/login] error:', error)
     return NextResponse.json(

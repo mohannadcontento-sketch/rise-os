@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
+
+// P1#5: Zod validation for notifications
+const NotificationCreateSchema = z.object({
+  title: z.string().min(1, 'العنوان مطلوب').max(200),
+  body: z.string().max(1000).optional(),
+  type: z.enum(['info', 'success', 'warning', 'error', 'achievement']).optional(),
+  icon: z.string().max(10).optional(),
+  actionUrl: z.string().max(500).optional().nullable(),
+}).strict()
+
+const NotificationUpdateSchema = z.object({
+  ids: z.array(z.string()).min(1, 'معرّفات مطلوبة').max(100),
+}).strict()
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,19 +48,20 @@ export async function POST(req: NextRequest) {
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
-    const body = await req.json()
-    const { title, body: notifBody, type, icon, actionUrl } = body
+    const body = await req.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
-    if (!title) {
-      return NextResponse.json({ error: 'العنوان مطلوب' }, { status: 400 })
+    // P1#5: Validate input
+    const parsed = NotificationCreateSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || 'بيانات غير صالحة' },
+        { status: 400 }
+      )
     }
 
     const notification = await data.notifications.create(userId, {
-      title,
-      body: notifBody || '',
-      type: type || 'info',
-      icon: icon || '🔔',
-      actionUrl: actionUrl || '',
+      ...parsed.data,
       isRead: false,
     })
 
@@ -63,12 +78,19 @@ export async function PUT(req: NextRequest) {
     setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
-    const { ids } = await req.json()
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ error: 'معرّفات مطلوبة' }, { status: 400 })
+    const body = await req.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
+
+    // P1#5: Validate input
+    const parsed = NotificationUpdateSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || 'بيانات غير صالحة' },
+        { status: 400 }
+      )
     }
 
-    for (const id of ids) {
+    for (const id of parsed.data.ids) {
       await data.notifications.update(id, userId, { isRead: true })
     }
 

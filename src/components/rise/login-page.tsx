@@ -162,7 +162,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   className="pr-10 pl-10 h-11 rounded-xl bg-background/50 border-border/50 focus:border-emerald-accent/50"
                   dir="ltr"
                   required
-                  minLength={6}
+                  minLength={8}
                 />
                 <button
                   type="button"
