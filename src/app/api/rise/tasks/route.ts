@@ -15,10 +15,14 @@ const TaskCreateSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   label: z.string().max(50).optional().nullable(),
   projectId: z.string().optional().nullable(),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  dueDate: z.string().optional().nullable(),
   dueTime: z.string().optional().nullable(),
   estimatedMin: z.number().int().min(0).max(600).optional().nullable(),
   xpReward: z.number().int().min(0).max(500).optional(),
+  dependsOn: z.string().optional().nullable(),
+  isRecurring: z.boolean().optional(),
+  recurringPattern: z.string().optional().nullable(),
+  order: z.number().int().optional(),
 }).strict()
 
 const TaskUpdateSchema = z.object({
