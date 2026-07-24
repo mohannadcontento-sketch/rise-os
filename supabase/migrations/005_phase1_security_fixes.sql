@@ -124,7 +124,51 @@ ALTER TABLE public.user_api_keys ENABLE ROW LEVEL SECURITY;
 -- PART 5: P1#8 — Unique constraints to prevent duplicate upserts (race conditions)
 -- ═══════════════════════════════════════════════════════════
 
--- These unique constraints allow upsert() to work atomically (no read-then-write)
+-- STEP 1: Deduplicate existing rows BEFORE adding unique constraints.
+-- For each table, keep only the most recent row per (user_id, date) or (habit_id, date).
+-- Delete older duplicates created by the read-then-write race condition bug.
+
+-- Deduplicate journals (keep most recent by created_at)
+DELETE FROM public.journals
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, date) id
+  FROM public.journals
+  ORDER BY user_id, date, created_at DESC
+);
+
+-- Deduplicate health_logs (keep most recent by created_at)
+DELETE FROM public.health_logs
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, date) id
+  FROM public.health_logs
+  ORDER BY user_id, date, created_at DESC
+);
+
+-- Deduplicate morning_logs (keep most recent by created_at)
+DELETE FROM public.morning_logs
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, date) id
+  FROM public.morning_logs
+  ORDER BY user_id, date, created_at DESC
+);
+
+-- Deduplicate daily_scores (keep most recent by created_at)
+DELETE FROM public.daily_scores
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, date) id
+  FROM public.daily_scores
+  ORDER BY user_id, date, created_at DESC
+);
+
+-- Deduplicate habit_logs (keep most recent by created_at)
+DELETE FROM public.habit_logs
+WHERE id NOT IN (
+  SELECT DISTINCT ON (habit_id, date) id
+  FROM public.habit_logs
+  ORDER BY habit_id, date, created_at DESC
+);
+
+-- STEP 2: Now add unique constraints (will succeed since duplicates are removed)
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
