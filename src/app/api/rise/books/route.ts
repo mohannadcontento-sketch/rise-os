@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ books: [] })
 
     const books = await data.books.list(userId)
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const body = await req.json()
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { searchParams } = new URL(req.url)

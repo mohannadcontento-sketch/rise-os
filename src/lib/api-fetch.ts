@@ -213,7 +213,8 @@ function clearAuth() {
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers || {})
 
-  // Add auth header
+  // P1#3: Auth via httpOnly cookie (credentials: 'include' sends cookies automatically).
+  // Fallback: Authorization header from localStorage (legacy/migration).
   const authHeaders = getAuthHeaders()
   for (const [key, value] of Object.entries(authHeaders)) {
     if (!headers.has(key)) {
@@ -236,13 +237,14 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     existingSignal.addEventListener('abort', () => controller.abort(), { once: true })
   }
 
-  // Make the request
+  // Make the request — credentials: 'include' sends httpOnly cookies (P1#3)
   let response: Response
   try {
     response = await fetch(url, {
       ...options,
       headers,
       signal: controller.signal,
+      credentials: 'include',
     })
   } catch (err: any) {
     clearTimeout(timeoutId)

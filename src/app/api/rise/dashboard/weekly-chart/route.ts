@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) {
       return NextResponse.json({ scores: [] })
     }

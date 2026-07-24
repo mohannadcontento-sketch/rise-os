@@ -76,20 +76,41 @@ type FilterOp = { col: string; op: string; val: any }
 
 class MockQueryBuilder {
   private table: string
-  private operation: 'select' | 'insert' | 'update' | 'delete' | null = null
+  private operation: 'select' | 'insert' | 'update' | 'delete' | 'upsert' | null = null
   private filters: FilterOp[] = []
   private orders: { col: string; ascending: boolean }[] = []
   private limitN: number | null = null
   private insertData: any = null
   private updateData: any = null
+  private upsertConflict: string | undefined
   private selectCols: string | null = null
   private singleMode: 'single' | 'maybeSingle' | null = null
 
   constructor(table: string) { this.table = table }
-  select(cols: string = '*') { this.operation = 'select'; this.selectCols = cols; return this }
+  select(cols: string = '*') {
+    // If called after insert/update/upsert/delete, just mark that we want the result returned
+    // (Supabase .insert().select() returns the inserted row, not a separate select)
+    if (this.operation === 'insert' || this.operation === 'update' || this.operation === 'upsert' || this.operation === 'delete') {
+      this.selectCols = cols
+      return this
+    }
+    this.operation = 'select'
+    this.selectCols = cols
+    return this
+  }
   insert(data: any) { this.operation = 'insert'; this.insertData = data; return this }
   update(data: any) { this.operation = 'update'; this.updateData = data; return this }
   delete() { this.operation = 'delete'; return this }
+  /**
+   * P2#5: Atomic upsert. In mock mode, tries update first, then insert.
+   * Uses filters (eq) to find existing row.
+   */
+  upsert(data: any, opts?: { onConflict?: string }) {
+    this.operation = 'upsert'
+    this.insertData = data
+    this.upsertConflict = opts?.onConflict
+    return this
+  }
   eq(col: string, val: any) { this.filters.push({ col, op: 'eq', val }); return this }
   neq(col: string, val: any) { this.filters.push({ col, op: 'neq', val }); return this }
   in(col: string, vals: any[]) { this.filters.push({ col, op: 'in', val: vals }); return this }
@@ -133,14 +154,25 @@ class MockQueryBuilder {
       const take = this.limitN ?? undefined
 
       if (this.operation === 'select') {
+        // P2#4: Handle nested join syntax (e.g., "*, subtasks!inner(*), project:projects(id, name)")
+        // In mock mode, we fetch flat rows and add empty subtask arrays + null projects.
+        // The real Supabase client handles joins natively.
+        let selectCols = this.selectCols
+        if (selectCols && (selectCols.includes('(') || selectCols.includes('!'))) {
+          // Complex join query — simplify to '*'
+          selectCols = '*'
+        }
+
         let rows: any[] = await model.findMany({ where, orderBy, take })
-        if (this.selectCols && this.selectCols !== '*') {
-          const cols = this.selectCols.split(',').map((c) => c.trim())
-          rows = rows.map((r: any) => {
-            const out: Record<string, any> = {}
-            for (const c of cols) out[c] = r[toCamelKey(c)]
-            return out
-          })
+        if (selectCols && selectCols !== '*') {
+          const cols = selectCols.split(',').map((c) => c.trim()).filter(c => !c.includes('(') && !c.includes('!'))
+          if (cols.length > 0) {
+            rows = rows.map((r: any) => {
+              const out: Record<string, any> = {}
+              for (const c of cols) out[c] = r[toCamelKey(c)]
+              return out
+            })
+          }
         }
         if (this.singleMode === 'single') {
           if (rows.length === 0) return { data: null, error: { message: 'No rows found', code: '', status: 0 } }
@@ -156,14 +188,57 @@ class MockQueryBuilder {
         const camelRows = rows.map((r: any) => toCamel(r))
         if (camelRows.length === 1) {
           const created = await model.create({ data: camelRows[0] })
-          return { data: toSnake(created), error: null }
+          // .single() / .maybeSingle() after insert → return the created row directly
+          if (this.singleMode === 'single' || this.singleMode === 'maybeSingle') {
+            return { data: toSnake(created), error: null }
+          }
+          // .select() after insert → return as array (Supabase behavior)
+          if (this.selectCols) {
+            return { data: [toSnake(created)], error: null }
+          }
+          // No .select() — just return null (Supabase behavior without select)
+          return { data: null, error: null }
         }
+        // Bulk insert
         await model.createMany({ data: camelRows })
         if (this.selectCols) {
           const all = await model.findMany({ where })
           return { data: toSnake(all), error: null }
         }
         return { data: null, error: null }
+      }
+      if (this.operation === 'upsert') {
+        // P2#5: Atomic upsert (mock implementation)
+        // Parse conflict columns (e.g., "user_id,date")
+        const conflictCols = (this.upsertConflict || '').split(',').filter(Boolean).map(toCamelKey)
+        const camelData = toCamel(this.insertData)
+
+        // Try to find existing row by conflict columns
+        let existing: any = null
+        if (conflictCols.length > 0) {
+          const where: Record<string, any> = {}
+          for (const col of conflictCols) {
+            where[col] = camelData[col]
+          }
+          existing = await model.findFirst({ where })
+        }
+
+        let result: any
+        if (existing) {
+          // Update existing row
+          result = await model.update({ where: { id: existing.id }, data: camelData })
+        } else {
+          // Insert new row
+          result = await model.create({ data: camelData })
+        }
+
+        if (this.singleMode === 'single' || this.singleMode === 'maybeSingle') {
+          return { data: toSnake(result), error: null }
+        }
+        if (this.selectCols) {
+          return { data: [toSnake(result)], error: null }
+        }
+        return { data: toSnake(result), error: null }
       }
       if (this.operation === 'update') {
         const camelData = toCamel(this.updateData)

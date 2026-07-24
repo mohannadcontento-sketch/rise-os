@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const { amount, reason } = await req.json()

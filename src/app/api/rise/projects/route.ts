@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const userId = await requireAuth(req)
-  setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+  setCurrentAuthToken(req)
   if (!userId) {
     return NextResponse.json({ projects: [] })
   }
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const userId = await requireAuth(req)
-  setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+  setCurrentAuthToken(req)
   if (!userId) return NextResponse.json({ success: true, offline: true })
 
   try {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const userId = await requireAuth(req)
-  setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+  setCurrentAuthToken(req)
   if (!userId) return NextResponse.json({ success: true, offline: true })
 
   try {
@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const userId = await requireAuth(req)
-  setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+  setCurrentAuthToken(req)
   if (!userId) return NextResponse.json({ success: true, offline: true })
 
   try {

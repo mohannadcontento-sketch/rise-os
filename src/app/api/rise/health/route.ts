@@ -21,7 +21,7 @@ const FIELD_MAP: Record<string, string> = {
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ logs: [], todayLog: null })
 
     const today = getToday()
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const body = await req.json().catch(() => ({}))

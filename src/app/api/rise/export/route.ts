@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) {
       const fb = {
         metadata: { application: 'RiseOS', version: '1.0.0', exportDate: new Date().toISOString(), note: 'تسجيل الدخول مطلوب' },

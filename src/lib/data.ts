@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { getSupabaseAdmin, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
 
 // ============================================================
@@ -6,9 +7,28 @@ import { getSupabaseAdmin, getSupabaseAnon, isSupabaseConfigured } from '@/lib/s
 
 let _currentAuthToken: string | undefined
 
-/** Set the current request's auth token so sb() can create an authenticated client */
-export function setCurrentAuthToken(token: string | undefined) {
-  _currentAuthToken = token
+/**
+ * Set the current request's auth token so sb() can create an authenticated client.
+ * P1#3: Reads from httpOnly cookie FIRST, then Authorization header.
+ */
+export function setCurrentAuthToken(tokenOrReq: string | undefined | NextRequest) {
+  if (typeof tokenOrReq === 'string') {
+    _currentAuthToken = tokenOrReq || undefined
+    return
+  }
+  // NextRequest — read cookie first, then header
+  if (tokenOrReq && typeof tokenOrReq === 'object' && 'cookies' in tokenOrReq) {
+    const req = tokenOrReq as NextRequest
+    const cookieToken = req.cookies.get('rise-access')?.value
+    if (cookieToken) {
+      _currentAuthToken = cookieToken
+      return
+    }
+    const headerToken = req.headers.get('Authorization')?.replace('Bearer ', '')
+    _currentAuthToken = headerToken || undefined
+    return
+  }
+  _currentAuthToken = tokenOrReq as string | undefined
 }
 
 // ============================================================
@@ -291,6 +311,17 @@ export const data = {
         .single()
       if (error) throw error
       return toCamel({ ...data, milestones: [] })
+    },
+
+    async addMilestone(goalId: string, title: string) {
+      const client = await sb()
+      const { data, error } = await client
+        .from('milestones')
+        .insert(toSnake({ goalId, title }))
+        .select()
+        .single()
+      if (error) throw error
+      return toCamel(data)
     },
 
     async update(id: string, body: Record<string, any>) {

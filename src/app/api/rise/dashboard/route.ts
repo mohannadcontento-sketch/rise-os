@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
         { status: 401 }
       )
     }
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
 
     const today = getToday()
     const last30 = getLast30Days()

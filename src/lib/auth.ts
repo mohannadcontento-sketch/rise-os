@@ -59,11 +59,20 @@ export async function verifySupabaseToken(token: string): Promise<string | null>
 
 /**
  * Extract authenticated user ID from request.
- * Supports: Supabase JWT and rise_ API keys (both verified server-side).
+ * Supports: httpOnly cookie (P1#3), Authorization header, rise_ API keys.
+ * Priority: cookie first (most secure), then header, then API key.
  * Returns null for any unauthenticated request.
  */
 export async function getUserId(req: NextRequest): Promise<string | null> {
   try {
+    // P1#3: Check httpOnly cookie FIRST (most secure — not accessible to JS)
+    const cookieToken = req.cookies.get('rise-access')?.value
+    if (cookieToken) {
+      const userId = await verifySupabaseToken(cookieToken)
+      if (userId) return userId
+    }
+
+    // Fallback: Authorization header (for API keys + legacy clients)
     const authHeader = req.headers.get('Authorization') || ''
     const token = authHeader.replace('Bearer ', '')
     if (!token) return null

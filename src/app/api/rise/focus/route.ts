@@ -25,7 +25,7 @@ const FocusUpdateSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
 
     const sessions = await data.focusSessions.list(userId, 50)
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const body = await req.json().catch(() => null)
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     const body = await req.json().catch(() => null)

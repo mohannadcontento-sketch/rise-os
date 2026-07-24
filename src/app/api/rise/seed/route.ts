@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ success: true, offline: true })
 
     // Set auth token for data layer
-    setCurrentAuthToken(req.headers.get('Authorization')?.replace('Bearer ', ''))
+    setCurrentAuthToken(req)
 
     // If Supabase is not configured, return early
     if (!isSupabaseConfigured()) {

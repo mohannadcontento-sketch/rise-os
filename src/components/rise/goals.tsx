@@ -247,6 +247,29 @@ export function GoalsView() {
     }
   }
 
+  /* ---- Add milestone to goal ---- */
+  async function addMilestone(goalId: string, title: string) {
+    try {
+      const res = await apiPost('/api/rise/goals', { goalId, milestoneTitle: title })
+      if (!res.ok) {
+        toast.error('فشلت إضافة المعلم')
+        return
+      }
+      const milestone = await res.json()
+      // Update local state
+      setGoals((prev) =>
+        prev.map((g) =>
+          g.id === goalId
+            ? { ...g, milestones: [...(g.milestones || []), milestone] }
+            : g
+        )
+      )
+      toast.success('تمت إضافة المعلم')
+    } catch {
+      toast.error('حدث خطأ أثناء إضافة المعلم')
+    }
+  }
+
   /* ---- Add goal ---- */
   async function handleAddGoal() {
     if (!formTitle.trim()) return
@@ -667,6 +690,9 @@ export function GoalsView() {
                         onToggleMilestone={(milestoneId) =>
                           toggleMilestone(goal.id, milestoneId)
                         }
+                        onAddMilestone={(title) =>
+                          addMilestone(goal.id, title)
+                        }
                         onDelete={() => deleteGoal(goal.id)}
                         formatDate={formatDate}
                         getDeadlineInfo={getDeadlineInfo}
@@ -691,6 +717,7 @@ interface GoalCardProps {
   expanded: boolean
   onToggleExpand: () => void
   onToggleMilestone: (milestoneId: string) => void
+  onAddMilestone?: (title: string) => void
   onDelete: () => void
   formatDate: (d: string) => string
   getDeadlineInfo: (d: string) => { text: string; urgent: boolean } | null
@@ -702,6 +729,7 @@ function GoalCard({
   expanded,
   onToggleExpand,
   onToggleMilestone,
+  onAddMilestone,
   onDelete,
   formatDate,
   getDeadlineInfo,
@@ -960,6 +988,41 @@ function GoalCard({
                     </div>
                   </div>
                 )}
+
+                {/* Add milestone input */}
+                <div className="flex gap-2 pt-1">
+                  <input
+                    type="text"
+                    placeholder="أضف معلماً جديداً..."
+                    className="flex-1 h-9 px-3 text-sm rounded-xl border border-border/60 bg-background/50 focus:border-emerald-accent/50 focus:outline-none transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const input = e.target as HTMLInputElement
+                        if (input.value.trim()) {
+                          onAddMilestone?.(input.value.trim())
+                          input.value = ''
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-xl text-xs shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const btn = e.currentTarget as HTMLButtonElement
+                      const input = btn.parentElement?.querySelector('input') as HTMLInputElement
+                      if (input?.value.trim()) {
+                        onAddMilestone?.(input.value.trim())
+                        input.value = ''
+                      }
+                    }}
+                  >
+                    <Plus className="w-3.5 h-3.5 ml-1" />
+                    إضافة
+                  </Button>
+                </div>
 
                 {/* Delete */}
                 <div className="flex justify-start pt-1">
