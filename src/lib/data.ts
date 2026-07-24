@@ -187,27 +187,37 @@ export const data = {
     async list(userId: string) {
       const client = await sb()
 
-      // P2#4 FIX: Single query with joins (was 3 separate queries = 1+N problem)
-      // Use left join (not inner) so tasks without subtasks still appear
-      const { data: tasks, error } = await client
-        .from('tasks')
-        .select(`
-          *,
-          subtasks(*),
-          project:projects(id, name, color)
-        `)
-        .eq('user_id', userId)
-        .order('order', { ascending: true })
-      if (error) throw error
+      // P2#4: Fetch tasks + subtasks + projects efficiently.
+      // Use 3 parallel queries instead of nested join (more reliable across
+      // Supabase RLS configs, and still O(1) round-trips via Promise.all).
+      const [tasksRes, subtasksRes, projectsRes] = await Promise.all([
+        client.from('tasks').select('*').eq('user_id', userId).order('order', { ascending: true }),
+        client.from('subtasks').select('*, task:tasks(id, user_id)').eq('task.user_id', userId),
+        client.from('projects').select('id, name, color').eq('user_id', userId),
+      ])
 
-      const taskList = tasks ?? []
+      if (tasksRes.error) throw tasksRes.error
+      const taskList = tasksRes.data ?? []
 
-      // Normalize: ensure subtasks is always an array, project is null-safe
+      // Build subtask map (group by task_id)
+      const subtaskMap = new Map<string, any[]>()
+      for (const st of (subtasksRes.data ?? [])) {
+        const tid = st.task_id
+        if (!subtaskMap.has(tid)) subtaskMap.set(tid, [])
+        subtaskMap.get(tid)!.push(st)
+      }
+
+      // Build project map
+      const projectMap = new Map<string, { name: string; color: string }>()
+      for (const p of (projectsRes.data ?? [])) {
+        projectMap.set(p.id, { name: p.name, color: p.color })
+      }
+
       return toCamel(
         taskList.map((t: any) => ({
           ...t,
-          subtasks: t.subtasks ?? [],
-          project: t.project ?? null,
+          subtasks: subtaskMap.get(t.id) ?? [],
+          project: t.project_id ? projectMap.get(t.project_id) ?? null : null,
         }))
       )
     },
