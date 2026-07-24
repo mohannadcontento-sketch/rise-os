@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
 import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
 
 export const dynamic = 'force-dynamic'
@@ -27,19 +27,30 @@ export async function GET(req: NextRequest) {
     // Fetch user profile (full profile with level/xp/streak)
     let userProfile: any = null
     try {
+      // Try admin client first (has full access)
       const admin = await getSupabaseAdmin()
       if (admin) {
-        const sb = admin as any
-        const { data: profile } = await sb
+        const { data: profile } = await admin
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .maybeSingle()
         userProfile = profile
       } else {
-        // Mock mode: fetch from local Prisma DB
-        const { db } = await import('@/lib/db')
-        userProfile = await (db as any).user.findUnique({ where: { id: userId } })
+        // Try per-user client (RLS allows reading own profile)
+        const userClient = await getSupabaseWithAuth(req)
+        if (userClient) {
+          const { data: profile } = await userClient
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle()
+          userProfile = profile
+        } else {
+          // Mock mode: fetch from local Prisma DB
+          const { db } = await import('@/lib/db')
+          userProfile = await (db as any).user.findUnique({ where: { id: userId } })
+        }
       }
     } catch { /* ignore */ }
 
