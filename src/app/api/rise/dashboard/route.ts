@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     const last30 = getLast30Days()
     const weekDays = getWeekDays()
 
-    // Fetch user profile from Supabase
+    // Fetch user profile (full profile with level/xp/streak)
     let userProfile: any = null
     try {
       const admin = await getSupabaseAdmin()
@@ -32,10 +32,14 @@ export async function GET(req: NextRequest) {
         const sb = admin as any
         const { data: profile } = await sb
           .from('profiles')
-          .select('name, email, avatar, role')
+          .select('*')
           .eq('id', userId)
           .maybeSingle()
         userProfile = profile
+      } else {
+        // Mock mode: fetch from local Prisma DB
+        const { db } = await import('@/lib/db')
+        userProfile = await (db as any).user.findUnique({ where: { id: userId } })
       }
     } catch { /* ignore */ }
 
@@ -59,28 +63,8 @@ export async function GET(req: NextRequest) {
       data.healthLogs.list(userId, [today]).catch(() => []),
       data.morningLogs.list(userId, [today]).catch(() => []),
       data.userAchievements.list(userId).catch(() => []),
-      // Daily scores for last 30 days
-      (async () => {
-        try {
-          const supabase = await getSupabaseAdmin()
-          if (!supabase) return []
-          const { data: rows } = await (supabase as any)
-            .from('daily_scores')
-            .select('*')
-            .eq('user_id', userId)
-            .in('date', last30)
-          return (rows ?? []).map((d: any) => ({
-            date: d.date,
-            score: d.score,
-            morningScore: d.morning_score,
-            taskScore: d.task_score,
-            habitScore: d.habit_score,
-            focusScore: d.focus_score,
-            healthScore: d.health_score,
-            journalScore: d.journal_score,
-          }))
-        } catch { return [] }
-      })(),
+      // Daily scores for last 30 days — use data layer (works in both Supabase + mock mode)
+      data.dailyScores.list(userId, last30).catch(() => []),
       data.projects.list(userId).catch(() => []),
       data.goals.list(userId).catch(() => []),
       data.books.list(userId).catch(() => []),
@@ -127,16 +111,36 @@ export async function GET(req: NextRequest) {
     const healthLog = healthResult.length > 0 ? healthResult[0] : null
     const morningLog = morningResult.length > 0 ? morningResult[0] : null
 
+    // FIX: Calculate + save today's productivity score to daily_scores
+    const taskScore = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
+    const habitScore = totalHabits > 0 ? Math.round((completedHabitsToday / totalHabits) * 100) : 0
+    const morningScore = morningLog?.score || 0
+    const focusScore = Math.min(100, Math.round((todayFocusMin / 50) * 100))
+    const overallScore = Math.round(
+      taskScore * 0.35 + habitScore * 0.25 + morningScore * 0.2 + focusScore * 0.2
+    )
+
+    try {
+      await data.dailyScores.upsert(userId, today, {
+        score: overallScore,
+        morningScore,
+        taskScore,
+        habitScore,
+        focusScore,
+        journalScore: 0,
+      })
+    } catch { /* non-critical */ }
+
     return NextResponse.json({
       user: {
         name: userProfile?.name || 'مستخدم RiseOS',
-        level: 1,
-        xp: 0,
-        streak: 0,
-        longestStreak: 0,
-        totalFocusMin: 0,
-        totalTasksDone: 0,
-        xpToNextLevel: 100,
+        level: userProfile?.level || 1,
+        xp: userProfile?.xp || 0,
+        streak: userProfile?.streak || 0,
+        longestStreak: userProfile?.longestStreak || 0,
+        totalFocusMin: userProfile?.totalFocusMin || 0,
+        totalTasksDone: userProfile?.totalTasksDone || 0,
+        xpToNextLevel: userProfile?.xpToNextLevel || 100,
         avatar: userProfile?.avatar || null,
       },
       today: {
@@ -164,7 +168,16 @@ export async function GET(req: NextRequest) {
       health: healthLog,
       morning: morningLog,
       achievements,
-      dailyScores: (dailyScoresRaw || []).sort((a: any, b: any) => a.date.localeCompare(b.date)),
+      dailyScores: (dailyScoresRaw || []).map((s: any) => ({
+        date: s.date,
+        score: s.score || 0,
+        morningScore: s.morningScore || 0,
+        taskScore: s.taskScore || 0,
+        habitScore: s.habitScore || 0,
+        focusScore: s.focusScore || 0,
+        healthScore: s.healthScore || 0,
+        journalScore: s.journalScore || 0,
+      })).sort((a: any, b: any) => a.date.localeCompare(b.date)),
       projects: projects.map((p: any) => ({
         ...p,
         taskCount: tasksResult.filter((t: any) => t.projectId === p.id).length,

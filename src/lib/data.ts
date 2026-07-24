@@ -439,32 +439,14 @@ export const data = {
     },
 
     async toggleLog(habitId: string, date: string, completed: boolean, count: number) {
+      // P2#5 FIX: Atomic upsert (race-condition safe)
       const client = await sb()
-
-      // Find existing log for this habit + date
-      const { data: existing } = await client
-        .from('habit_logs')
-        .select('*')
-        .eq('habit_id', habitId)
-        .eq('date', date)
-        .maybeSingle()
-
-      if (existing) {
-        // Update
-        const { data, error } = await client
-          .from('habit_logs')
-          .update({ completed, count })
-          .eq('id', existing.id)
-          .select()
-          .single()
-        if (error) throw error
-        return toCamel(data)
-      }
-
-      // Insert
       const { data, error } = await client
         .from('habit_logs')
-        .insert({ habit_id: habitId, date, completed, count })
+        .upsert(
+          { habit_id: habitId, date, completed, count },
+          { onConflict: 'habit_id,date' }
+        )
         .select()
         .single()
       if (error) throw error
