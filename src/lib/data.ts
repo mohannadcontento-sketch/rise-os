@@ -188,12 +188,12 @@ export const data = {
       const client = await sb()
 
       // P2#4 FIX: Single query with joins (was 3 separate queries = 1+N problem)
-      // Supabase supports nested selection: tasks → subtasks + project in one call
+      // Use left join (not inner) so tasks without subtasks still appear
       const { data: tasks, error } = await client
         .from('tasks')
         .select(`
           *,
-          subtasks!inner(*),
+          subtasks(*),
           project:projects(id, name, color)
         `)
         .eq('user_id', userId)
