@@ -2,19 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
-import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-async function getUserStreak(supabase: any, userId: string): Promise<number> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('streak')
-    .eq('id', userId)
-    .single()
-    .catch(() => ({ data: null }))
-  const pr = profile as { streak?: number } | null
-  return pr?.streak || 0
+async function getUserStreak(userId: string): Promise<number> {
+  // Try Supabase admin first
+  const supabase = await getSupabaseAdmin()
+  if (supabase) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('streak')
+      .eq('id', userId)
+      .single()
+      .catch(() => ({ data: null }))
+    const pr = profile as { streak?: number } | null
+    return pr?.streak || 0
+  }
+  // Mock mode: fetch from Prisma
+  try {
+    const { db } = await import('@/lib/db')
+    const user = await (db as any).user.findUnique({ where: { id: userId }, select: { streak: true } })
+    return user?.streak || 0
+  } catch { return 0 }
 }
 
 async function calculateScoreForDate(userId: string, date: string) {
@@ -51,8 +61,8 @@ async function calculateScoreForDate(userId: string, date: string) {
   const morningLog = morningResult.length > 0 ? morningResult[0] : null
   const morningScore = morningLog?.score || 0
 
-  const supabase = await getSupabaseAdmin()
-  const streak = supabase ? await getUserStreak(supabase, userId) : 0
+  
+  const streak = await getUserStreak(userId)
   const streakScore = Math.min((streak / 30) * 100, 100)
 
   return Math.min(Math.round(
@@ -66,10 +76,7 @@ export async function GET(req: NextRequest) {
     setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
 
-    // If no Supabase, return empty score
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json({ score: 0, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: 'يحتاج تحسين' })
-    }
+    // Works in both Supabase + mock mode (data layer handles the difference)
 
     const { searchParams } = new URL(req.url)
     const datesParam = searchParams.get('dates')
@@ -120,8 +127,8 @@ export async function GET(req: NextRequest) {
     const morningLog = morningResult.length > 0 ? morningResult[0] : null
     const morningScoreVal = morningLog?.score || 0
 
-    const supabase = await getSupabaseAdmin()
-    const streak = supabase ? await getUserStreak(supabase, userId) : 0
+    
+    const streak = await getUserStreak(userId)
     const streakScore = Math.min((streak / 30) * 100, 100)
 
     let grade: string

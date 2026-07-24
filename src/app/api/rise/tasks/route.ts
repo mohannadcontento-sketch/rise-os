@@ -87,7 +87,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const task = await data.tasks.create(userId, parsed.data)
+    // Convert empty strings to null (Supabase rejects empty strings in some configs)
+    const cleanData: Record<string, any> = {}
+    for (const [k, v] of Object.entries(parsed.data)) {
+      cleanData[k] = v === '' ? null : v
+    }
+
+    const task = await data.tasks.create(userId, cleanData)
     return NextResponse.json(task)
   } catch (error) {
     console.error('Tasks POST error:', error)

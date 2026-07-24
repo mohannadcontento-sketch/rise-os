@@ -359,12 +359,8 @@ export default function RiseOSApp() {
   // Keyboard shortcuts (must be before conditional return)
   useKeyboardShortcuts()
 
-  // Seed sample data on first login (seed route deduplicates internally)
-  useEffect(() => {
-    if (auth && auth.accessToken) {
-      apiPost('/api/rise/seed', {}).catch(() => {})
-    }
-  }, [auth])
+  // NOTE: Auto-seed removed — new accounts start empty (no fake data).
+  // Users can manually seed via Settings if they want demo data.
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
