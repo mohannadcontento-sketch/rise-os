@@ -140,9 +140,19 @@ export async function GET(req: NextRequest) {
         focusScore,
         journalScore: 0,
       })
+      // Update the dailyScoresRaw with today's new score so the response
+      // includes the freshly calculated score (not the old cached one)
+      const todayIdx = (dailyScoresRaw || []).findIndex((s: any) => s.date === today)
+      const todayScore = { date: today, score: overallScore, morningScore, taskScore, habitScore, focusScore, healthScore: 0, journalScore: 0 }
+      if (todayIdx >= 0) {
+        (dailyScoresRaw as any[])[todayIdx] = todayScore
+      } else {
+        (dailyScoresRaw as any[]).push(todayScore)
+      }
     } catch { /* non-critical */ }
 
     return NextResponse.json({
+      productivityScore: overallScore,
       user: {
         name: userProfile?.name || 'مستخدم RiseOS',
         level: userProfile?.level || 1,
