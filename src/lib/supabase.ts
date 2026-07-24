@@ -79,13 +79,19 @@ export async function getSupabaseAdmin() {
 
 /**
  * P1#1 FIX: Server-side client with user JWT (respects RLS).
+ * P1#3: Reads token from httpOnly cookie FIRST, then Authorization header.
  * Priority: per-user anon client (RLS enforced) FIRST.
  * Admin client only returned by getAdminSb() for admin routes.
  */
 export async function getSupabaseWithAuth(req?: NextRequest) {
   if (!isSupabaseConfigured()) return null
 
-  const token = req?.headers.get('Authorization')?.replace('Bearer ', '') || ''
+  // P1#3: Check httpOnly cookie FIRST
+  let token = req?.cookies?.get('rise-access')?.value || ''
+  // Fallback: Authorization header
+  if (!token) {
+    token = req?.headers.get('Authorization')?.replace('Bearer ', '') || ''
+  }
 
   // P1#1: If we have a real JWT, use anon client WITH the token (RLS enforced)
   if (token && !token.startsWith('rise_') && token.length > 50) {
