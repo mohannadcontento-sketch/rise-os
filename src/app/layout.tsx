@@ -32,8 +32,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5, // Allow zoom for accessibility but prevent accidental zoom
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f0fdf4" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a1f15" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a1628" },
   ],
 };
 
@@ -60,7 +60,7 @@ export default function RootLayout({
         {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
           <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
         ) : null}
-        <meta name="theme-color" content="#166534" />
+        <meta name="theme-color" content="#0a1628" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="RiseOS" />

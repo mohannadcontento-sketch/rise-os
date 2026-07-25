@@ -35,23 +35,22 @@ import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 
 // Keyboard shortcuts hook — lightweight, can be eagerly imported
 import { useKeyboardShortcuts } from '@/components/rise/keyboard-shortcuts'
-// Command Dialog components — import eagerly (cmdk is tree-shakeable)
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
-// Keyboard Shortcuts Dialog — lazy (only needed when user presses ?)
+// Command Dialog — lazy loaded (only needed when ⌘K pressed, heavy: cmdk)
+const CommandDialog = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandDialog })))
+const CommandInput = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandInput })))
+const CommandList = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandList })))
+const CommandEmpty = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandEmpty })))
+const CommandGroup = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandGroup })))
+const CommandItem = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandItem })))
+// Keyboard Shortcuts Dialog — lazy
 const KeyboardShortcutsDialog = lazy(() =>
   import('@/components/rise/keyboard-shortcuts').then(m => ({ default: m.KeyboardShortcutsDialog }))
 )
 
 // Heavy components — lazy loaded to reduce initial JS bundle
 const Sidebar = lazy(() => import('@/components/rise/sidebar').then(m => ({ default: m.Sidebar })))
-const LoginPage = lazy(() => import('@/components/rise/login-page'))
+// LoginPage: NOT lazy — it's the LCP element (first thing users see)
+import LoginPage from '@/components/rise/login-page'
 // PWA components — lazy loaded
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
 
@@ -628,7 +627,8 @@ export default function RiseOSApp() {
         </div>
       </main>
 
-      {/* Command palette */}
+      {/* Command palette — lazy loaded */}
+      <Suspense fallback={null}>
       <CommandDialog open={searchOpen} onOpenChange={handleSearchOpenChange}>
         <CommandInput placeholder="ابحث عن أي شيء..." dir="rtl" onInput={(e) => handleSearchQuery((e.target as HTMLInputElement).value)} />
         <CommandList>
@@ -769,6 +769,7 @@ export default function RiseOSApp() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+      </Suspense>
 
       {/* Keyboard Shortcuts Dialog */}
       <Suspense fallback={null}>
