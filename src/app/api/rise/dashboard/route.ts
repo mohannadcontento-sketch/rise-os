@@ -116,6 +116,9 @@ export async function GET(req: NextRequest) {
       )
       .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
 
+    // FIX: Calculate score using ALL tasks (not just the 10 displayed)
+    const totalTasksAll = allTasks.length
+    const doneTasksAll = allTasks.filter((t: any) => t.status === 'done').length
     const totalTasks = totalTasksAll
     const doneTasks = doneTasksAll
 
@@ -123,9 +126,6 @@ export async function GET(req: NextRequest) {
     const healthLog = healthResult.length > 0 ? healthResult[0] : null
     const morningLog = morningResult.length > 0 ? morningResult[0] : null
 
-    // FIX: Calculate score using ALL tasks (not just the 10 displayed)
-    const totalTasksAll = allTasks.length
-    const doneTasksAll = allTasks.filter((t: any) => t.status === 'done').length
     const taskScore = totalTasksAll > 0 ? Math.round((doneTasksAll / totalTasksAll) * 100) : 0
     const habitScore = totalHabits > 0 ? Math.round((completedHabitsToday / totalHabits) * 100) : 0
     const morningScore = morningLog?.score || 0
