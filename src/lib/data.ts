@@ -248,9 +248,16 @@ export const data = {
 
     async update(id: string, body: Record<string, any>) {
       const client = await sb()
+      // FIX: set completedAt when status changes to 'done', clear when not
+      const updateBody: Record<string, any> = { ...body }
+      if (body.status === 'done') {
+        updateBody.completedAt = new Date().toISOString()
+      } else if (body.status && body.status !== 'done') {
+        updateBody.completedAt = null
+      }
       const { data, error } = await client
         .from('tasks')
-        .update(toSnake(body))
+        .update(toSnake(updateBody))
         .eq('id', id)
         .select()
         .single()

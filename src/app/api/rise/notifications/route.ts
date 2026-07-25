@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 const NotificationCreateSchema = z.object({
   title: z.string().min(1, 'العنوان مطلوب').max(200),
   body: z.string().max(1000).optional(),
-  type: z.enum(['info', 'success', 'warning', 'error', 'achievement']).optional(),
+  type: z.enum(['info', 'success', 'warning', 'error', 'achievement', 'reminder', 'habit', 'task', 'goal']).optional(),
   icon: z.string().max(10).optional(),
   actionUrl: z.string().max(500).optional().nullable(),
 }).strict()
