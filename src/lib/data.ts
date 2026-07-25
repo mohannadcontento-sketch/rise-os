@@ -343,10 +343,18 @@ export const data = {
 
     async update(id: string, body: Record<string, any>) {
       const client = await sb()
+      // FIX: Add user_id filter for RLS compliance
+      const { data: existing } = await client
+        .from('goals')
+        .select('user_id')
+        .eq('id', id)
+        .maybeSingle()
+      if (!existing) throw new Error('Goal not found')
       const { data, error } = await client
         .from('goals')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', existing.user_id)
         .select()
         .single()
       if (error) throw error
