@@ -60,6 +60,7 @@ import {
 /* ────────────── Types ────────────── */
 
 interface DashboardData {
+  productivityScore?: number
   user: {
     name: string
     level: number
