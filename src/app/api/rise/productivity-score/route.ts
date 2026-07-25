@@ -35,9 +35,13 @@ async function calculateScoreForDate(userId: string, date: string) {
     data.morningLogs.list(userId, [date]),
   ])
 
-  // Extract habit logs for the given date
+  // Extract habit logs for the given date (handle DATE type returning timestamp)
   const habitLogs = habitsWithLogs.flatMap((h: any) =>
-    (h.logs || []).filter((l: any) => l.date === date)
+    (h.logs || []).filter((l: any) => {
+      if (!l.date) return false
+      // Match by first 10 chars (handles both "2026-07-25" and "2026-07-25T00:00:00Z")
+      return String(l.date).slice(0, 10) === date
+    })
   )
 
   // Filter focus sessions for the given date
@@ -46,12 +50,12 @@ async function calculateScoreForDate(userId: string, date: string) {
   )
 
   const totalTasks = tasks.length
-  const completedTasks = tasks.filter(
-    (t: any) => t.status === 'done' && t.completedAt && String(t.completedAt).slice(0, 10) === date
-  ).length
+  // FIX: count by status='done' (not completedAt — may be null for older tasks)
+  const completedTasks = tasks.filter((t: any) => t.status === 'done').length
   const tasksScore = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
 
   const totalHabits = habitsWithLogs.length
+  // FIX: check habit logs by date string match (date may be DATE type now)
   const completedHabits = habitLogs.filter((l: any) => l.completed).length
   const habitsScore = totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0
 
@@ -105,13 +109,15 @@ export async function GET(req: NextRequest) {
     ])
 
     const todayHabitLogs = habitsWithLogs.flatMap((h: any) =>
-      (h.logs || []).filter((l: any) => l.date === today)
+      (h.logs || []).filter((l: any) => {
+        if (!l.date) return false
+        return String(l.date).slice(0, 10) === today
+      })
     )
 
     const totalTasks = tasks.length
-    const completedTasksToday = tasks.filter(
-      (t: any) => t.status === 'done' && t.completedAt && String(t.completedAt).slice(0, 10) === today
-    ).length
+    // FIX: count by status='done' (same as calculateScoreForDate)
+    const completedTasksToday = tasks.filter((t: any) => t.status === 'done').length
     const tasksScore = totalTasks > 0 ? (completedTasksToday / totalTasks) * 100 : 0
 
     const totalHabits = habitsWithLogs.length

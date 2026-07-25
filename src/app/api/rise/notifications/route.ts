@@ -31,10 +31,10 @@ export async function GET(req: NextRequest) {
 
     let filtered = notifications
     if (unreadOnly) {
-      filtered = notifications.filter((n: any) => !n.isRead)
+      filtered = notifications.filter((n: any) => !n.read)
     }
 
-    const unreadCount = notifications.filter((n: any) => !n.isRead).length
+    const unreadCount = notifications.filter((n: any) => !n.read).length
     return NextResponse.json({ notifications: filtered, unreadCount })
   } catch (error) {
     console.error('Notifications GET error:', error)
@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest) {
     }
 
     for (const id of parsed.data.ids) {
-      await data.notifications.update(id, userId, { isRead: true })
+      await data.notifications.update(id, userId, { read: true })
     }
 
     return NextResponse.json({ success: true })
