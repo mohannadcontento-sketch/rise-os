@@ -500,7 +500,7 @@ export default function RiseOSApp() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Suspense fallback={<div className="w-16 lg:w-60 h-screen bg-background" />}><Sidebar /></Suspense>
+      <Suspense fallback={<div className="w-16 lg:w-72 h-screen bg-sidebar" />}><Sidebar /></Suspense>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
@@ -584,10 +584,10 @@ export default function RiseOSApp() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{ containIntrinsicSize: 'auto' }}>
             <div
               key={activeModule}
-              className="p-4 md:p-6 animate-[fadeSlideIn_0.2s_ease-out]"
+              className="p-4 md:p-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
             >
               {/* Module title with accent bar & date */}
               <div className="mb-6 flex items-stretch gap-3 module-title-animate" key={`title-${activeModule}`}>

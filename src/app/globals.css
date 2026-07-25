@@ -612,3 +612,32 @@ button, a, input, textarea, select, [role="button"], .glass, .premium-card {
     transition-duration: 0.01ms !important;
   }
 }
+/* ─── CLS Prevention (Cumulative Layout Shift) ─── */
+
+/* Reserve space for lazy-loaded images */
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent layout shift from async content */
+[data-lazy], [data-async] {
+  min-height: 200px;
+}
+
+/* Smooth scrollbar appearance (prevents layout shift) */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Prevent font swap layout shift */
+body {
+  font-display: swap;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Reserve space for sticky header */
+main {
+  scroll-padding-top: 60px;
+}

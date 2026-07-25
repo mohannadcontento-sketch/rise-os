@@ -44,6 +44,14 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Preload main font to prevent CLS from font swap */}
+        <link
+          rel="preload"
+          href="https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiA.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         {/* P3#7: DNS prefetch for Supabase (faster API calls) */}
         {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
           <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />

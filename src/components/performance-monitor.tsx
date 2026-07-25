@@ -66,16 +66,19 @@ export function PerformanceMonitor() {
     })
     try { lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true }) } catch {}
 
-    // Track CLS
+    // Track CLS — only report if >0.25 (poor) and after page is fully loaded
+    let clsValue = 0
+    let clsReported = false
     const clsObserver = new PerformanceObserver((list) => {
-      let clsValue = 0
       for (const entry of list.getEntries()) {
         const layoutShift = entry as any
         if (!layoutShift.hadRecentInput) {
           clsValue += layoutShift.value
         }
       }
-      if (clsValue > 0) {
+      // Only report once, after accumulation, and only if truly poor (>0.25)
+      if (!clsReported && clsValue > 0.25 && document.readyState === 'complete') {
+        clsReported = true
         const metric: VitalMetric = {
           name: 'CLS',
           value: clsValue,
@@ -83,7 +86,7 @@ export function PerformanceMonitor() {
           page: window.location.pathname,
           device: getDevice(),
         }
-        if (metric.rating !== 'good') {
+        if (metric.rating === 'poor') {
           reportError(`Performance: ${metric.name}=${clsValue.toFixed(3)} (${metric.rating}, ${metric.device})`)
         }
       }
