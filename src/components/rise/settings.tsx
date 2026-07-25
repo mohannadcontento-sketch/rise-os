@@ -70,7 +70,7 @@ import {
 import { useTheme } from 'next-themes'
 import { useRiseStore } from '@/store/app-store'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost } from '@/lib/api-fetch'
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { AVATARS, type AvatarItem } from '@/lib/avatars'
