@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+
+// FIX: Prevent fetchHabits from running right after a toggle (causes revert)
+let _skipHabitRefresh = false
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Flame,
@@ -219,6 +222,11 @@ export function HabitsView() {
 
   /* ---- Fetch ---- */
   useEffect(() => {
+    // FIX: Skip refresh right after a toggle to prevent revert
+    if (_skipHabitRefresh) {
+      _skipHabitRefresh = false
+      return
+    }
     async function fetchHabits() {
       try {
         const res = await apiFetch('/api/rise/habits')
@@ -263,6 +271,9 @@ export function HabitsView() {
       }
 
       try {
+        // FIX: Prevent the rise:data-changed event from triggering a refetch
+        // that would overwrite our optimistic update
+        _skipHabitRefresh = true
         const res = await apiPut('/api/rise/habits', {
           habitId,
           date: todayStr,
