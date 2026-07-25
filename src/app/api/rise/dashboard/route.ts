@@ -103,9 +103,9 @@ export async function GET(req: NextRequest) {
       (h.logs || []).map((l: any) => ({ ...l, habitId: h.id })),
     )
 
-    // Computed metrics
+    // Computed metrics — count tasks completed today
     const completedTasksToday = tasks.filter(
-      (t: any) => t.completedAt && String(t.completedAt).startsWith(today),
+      (t: any) => t.status === 'done' || (t.completedAt && String(t.completedAt).slice(0, 10) === today),
     ).length
     const completedHabitsToday = todayHabitsLogs.filter((l: any) => l.completed).length
     const totalHabits = habits.length

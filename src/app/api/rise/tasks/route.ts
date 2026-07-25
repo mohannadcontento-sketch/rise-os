@@ -31,6 +31,14 @@ const TaskUpdateSchema = z.object({
   description: z.string().max(2000).optional().nullable(),
   status: z.enum(['todo', 'in-progress', 'done']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  completedAt: z.string().optional().nullable(),
+  label: z.string().max(50).optional().nullable(),
+  projectId: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  dueTime: z.string().optional().nullable(),
+  estimatedMin: z.number().int().min(0).max(600).optional().nullable(),
+  xpReward: z.number().int().min(0).max(500).optional(),
+  order: z.number().int().optional(),
 }).strict()
 
 export async function GET(req: NextRequest) {
