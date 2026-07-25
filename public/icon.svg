@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#1a2f4a"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd700"/>
+      <stop offset="50%" stop-color="#ffa500"/>
+      <stop offset="100%" stop-color="#ff6b00"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd700"/>
+      <stop offset="100%" stop-color="#ffa500"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="192" height="192" rx="40" fill="url(#bg)"/>
+  
+  <!-- Sun rays (13 rays radiating upward) -->
+  <g transform="translate(96, 120)">
+    <!-- Center ray (tallest) -->
+    <path d="M -3 -50 L 0 -80 L 3 -50 Z" fill="url(#ray)"/>
+    
+    <!-- Inner rays -->
+    <path d="M -18 -45 L -15 -72 L -12 -45 Z" fill="url(#ray)" opacity="0.95"/>
+    <path d="M 12 -45 L 15 -72 L 18 -45 Z" fill="url(#ray)" opacity="0.95"/>
+    
+    <!-- Middle rays -->
+    <path d="M -33 -40 L -28 -65 L -23 -38 Z" fill="url(#ray)" opacity="0.85"/>
+    <path d="M 23 -38 L 28 -65 L 33 -40 Z" fill="url(#ray)" opacity="0.85"/>
+    
+    <!-- Outer rays -->
+    <path d="M -48 -32 L -42 -55 L -36 -28 Z" fill="url(#ray)" opacity="0.75"/>
+    <path d="M 36 -28 L 42 -55 L 48 -32 Z" fill="url(#ray)" opacity="0.75"/>
+    
+    <!-- Far outer rays -->
+    <path d="M -60 -20 L -52 -40 L -44 -15 Z" fill="url(#ray)" opacity="0.6"/>
+    <path d="M 44 -15 L 52 -40 L 60 -20 Z" fill="url(#ray)" opacity="0.6"/>
+  </g>
+  
+  <!-- Sun semicircle -->
+  <path d="M 56 120 A 40 40 0 0 1 136 120 Z" fill="url(#sun)"/>
+  
+  <!-- Sun outline (thin arc) -->
+  <path d="M 56 120 A 40 40 0 0 1 136 120" fill="none" stroke="#1a1a2e" stroke-width="2"/>
+  
+  <!-- Water/horizon lines -->
+  <rect x="24" y="124" width="144" height="2" rx="1" fill="#2a3f5a" opacity="0.8"/>
+  <rect x="40" y="132" width="112" height="1.5" rx="0.75" fill="#2a3f5a" opacity="0.6"/>
+  <rect x="56" y="139" width="80" height="1" rx="0.5" fill="#2a3f5a" opacity="0.4"/>
+  <rect x="72" y="145" width="48" height="0.8" rx="0.4" fill="#2a3f5a" opacity="0.3"/>
+</svg>

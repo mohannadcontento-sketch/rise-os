@@ -231,8 +231,8 @@ export function Sidebar() {
         {/* Header */}
         <div className="flex items-center justify-between p-4 pb-3 relative">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-md shadow-emerald-accent/20">
-              <Zap className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-md">
+              <img src="/icon-192.png" alt="RiseOS" className="w-full h-full object-cover" />
             </div>
             <div>
               <h1 className="text-base font-bold tracking-tight text-sidebar-foreground">

@@ -10,7 +10,11 @@ export const metadata: Metadata = {
   title: "RiseOS — امتلك صباحك. امتلك حياتك.",
   description: "نظام تشغيل الحياة الشامل - إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم. يعمل بدون إنترنت!",
   icons: {
-    icon: "/icon-192.png",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
     apple: "/icon-192.png",
   },
   manifest: "/api/manifest",

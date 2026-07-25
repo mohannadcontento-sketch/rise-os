@@ -506,7 +506,7 @@ export default function RiseOSApp() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Suspense fallback={<div className="w-16 lg:w-72 h-screen bg-sidebar" />}><Sidebar /></Suspense>
+      <Suspense fallback={null}><Sidebar /></Suspense>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
@@ -535,7 +535,7 @@ export default function RiseOSApp() {
 
           <div className="flex-1" />
 
-          {/* Search trigger */}
+          {/* Search trigger — desktop */}
           <Button
             variant="outline"
             className="hidden sm:flex items-center gap-2 text-muted-foreground h-9 px-3 text-sm font-normal border-dashed search-glass-btn"
@@ -546,6 +546,17 @@ export default function RiseOSApp() {
             <kbd className="pointer-events-none ml-1 inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               ⌘K
             </kbd>
+          </Button>
+
+          {/* Search trigger — mobile (icon only) */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sm:hidden h-9 w-9"
+            onClick={() => setSearchOpen(true)}
+            aria-label="بحث"
+          >
+            <Search className="w-4 h-4" />
           </Button>
 
           {/* Notifications */}
@@ -593,16 +604,16 @@ export default function RiseOSApp() {
         <div className="flex-1 overflow-y-auto" style={{ containIntrinsicSize: 'auto' }}>
             <div
               key={activeModule}
-              className="p-4 md:p-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
+              className="p-3 sm:p-4 md:p-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
             >
               {/* Module title with accent bar & date */}
-              <div className="mb-6 flex items-stretch gap-3 module-title-animate" key={`title-${activeModule}`}>
+              <div className="mb-4 sm:mb-6 flex items-stretch gap-2 sm:gap-3 module-title-animate" key={`title-${activeModule}`}>
                 <div className={cn(
                   'w-1 rounded-full shrink-0',
                   moduleAccentMap[activeModule]
                 )} />
                 <div className="flex flex-col justify-center">
-                  <h2 className="text-2xl font-bold tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
                     {moduleNames[activeModule]}
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">{todayArabic}</p>
