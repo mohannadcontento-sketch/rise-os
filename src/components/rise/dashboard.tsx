@@ -516,7 +516,7 @@ interface ProductivityScoreData {
   grade: string
 }
 
-function ProductivityScoreCard() {
+function ProductivityScoreCard({ fallbackScore }: { fallbackScore?: number }) {
   const [prodData, setProdData] = useState<ProductivityScoreData | null>(null)
 
   useEffect(() => {
@@ -527,7 +527,6 @@ function ProductivityScoreCard() {
       })
       .then((data) => {
         if (!data) return
-        // Validate and sanitize the API response shape
         const score = typeof data.score === 'number' ? data.score : 0
         const rawBreakdown = data.breakdown && typeof data.breakdown === 'object' ? data.breakdown : {}
         const breakdown = {
@@ -538,10 +537,20 @@ function ProductivityScoreCard() {
           streak: typeof rawBreakdown.streak === 'number' ? rawBreakdown.streak : 0,
         }
         const grade = typeof data.grade === 'string' ? data.grade : '—'
-        setProdData({ score, breakdown, grade })
+        // FIX: If productivity-score returns 0 but dashboard has a score, use dashboard's
+        if (score === 0 && fallbackScore && fallbackScore > 0) {
+          setProdData({ score: fallbackScore, breakdown: { ...breakdown, tasks: fallbackScore }, grade })
+        } else {
+          setProdData({ score, breakdown, grade })
+        }
       })
-      .catch(() => {})
-  }, [])
+      .catch(() => {
+        // FIX: Fallback to dashboard score if productivity-score fails
+        if (fallbackScore !== undefined) {
+          setProdData({ score: fallbackScore, breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 }, grade: '—' })
+        }
+      })
+  }, [fallbackScore])
 
   if (!prodData) {
     return (
@@ -1324,7 +1333,7 @@ export default function Dashboard() {
 
       {/* ══════════ 2. Productivity Score (Full Width) ══════════ */}
       <motion.div variants={itemVariants}>
-        <ProductivityScoreCard />
+        <ProductivityScoreCard fallbackScore={typeof data?.productivityScore === 'number' ? data.productivityScore : undefined} />
       </motion.div>
 
       {/* ══════════ 2b. On This Day ══════════ */}
