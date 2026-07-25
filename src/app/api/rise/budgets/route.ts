@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
     const { budgets } = body as { budgets: { category: string; limit: number }[] }
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     // No UserBudget model — just return success
     return NextResponse.json({ success: true })

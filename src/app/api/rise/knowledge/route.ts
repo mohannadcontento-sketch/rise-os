@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
     const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
@@ -55,7 +55,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')

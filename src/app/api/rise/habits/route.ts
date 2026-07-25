@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
     const habit = await data.habits.create(userId, body)
@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
 
@@ -71,7 +71,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')

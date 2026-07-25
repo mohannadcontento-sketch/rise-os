@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { amount, reason } = await req.json()
     if (!amount || amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ xp: newXp, amount, reason: reason || 'unknown', leveled, newLevel })
         }
       } catch {}
-      return NextResponse.json({ success: true, offline: true })
+      return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
     }
 
     // Fetch current user XP data
@@ -101,6 +101,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('Earn XP error:', error)
-    return NextResponse.json({ success: true, offline: true })
+    return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
   }
 }

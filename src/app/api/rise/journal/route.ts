@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ success: true, offline: true })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
     const today = getToday()

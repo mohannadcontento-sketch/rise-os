@@ -381,6 +381,11 @@ export function Tasks() {
         toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
+      const result = await res.json().catch(() => ({}))
+      if (result.offline || result.success === true && !result.id) {
+        toast.error('فشل الاتصال بالخادم', { description: 'يرجى إعادة تسجيل الدخول' })
+        return
+      }
       setFormTitle('')
       setFormDesc('')
       setFormPriority('medium')
