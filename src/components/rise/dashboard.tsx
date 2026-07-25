@@ -517,44 +517,33 @@ interface ProductivityScoreData {
   grade: string
 }
 
-function ProductivityScoreCard({ fallbackScore }: { fallbackScore?: number }) {
+function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: number; todayData?: { tasksCompleted: number; tasksTotal: number; habitsCompleted: number; habitsTotal: number; focusMin: number; morningScore: number } }) {
   const [prodData, setProdData] = useState<ProductivityScoreData | null>(null)
 
   useEffect(() => {
-    // FIX: Use dashboard's productivityScore as primary source (always correct)
-    // Fetch breakdown from productivity-score API as secondary
-    if (fallbackScore !== undefined && fallbackScore > 0) {
-      // Dashboard score available — use it immediately
-      setProdData({
-        score: fallbackScore,
-        breakdown: { tasks: 0, habits: 0, focus: 0, morning: 0, streak: 0 },
-        grade: fallbackScore >= 90 ? 'متميز' : fallbackScore >= 70 ? 'جيد جداً' : fallbackScore >= 50 ? 'جيد' : 'يحتاج تحسين',
-      })
-    }
-    // Also fetch breakdown for more detail
-    apiFetch('/api/rise/productivity-score')
-      .then((r) => {
-        if (!r.ok) return null
-        return r.json()
-      })
-      .then((data) => {
-        if (!data) return
-        const apiScore = typeof data.score === 'number' ? data.score : 0
-        const rawBreakdown = data.breakdown && typeof data.breakdown === 'object' ? data.breakdown : {}
-        const breakdown = {
-          tasks: typeof rawBreakdown.tasks === 'number' ? rawBreakdown.tasks : 0,
-          habits: typeof rawBreakdown.habits === 'number' ? rawBreakdown.habits : 0,
-          focus: typeof rawBreakdown.focus === 'number' ? rawBreakdown.focus : 0,
-          morning: typeof rawBreakdown.morning === 'number' ? rawBreakdown.morning : 0,
-          streak: typeof rawBreakdown.streak === 'number' ? rawBreakdown.streak : 0,
-        }
-        const grade = typeof data.grade === 'string' ? data.grade : '—'
-        // Use the higher of the two scores (dashboard vs productivity-score)
-        const finalScore = Math.max(apiScore, fallbackScore || 0)
-        setProdData({ score: finalScore, breakdown, grade })
-      })
-      .catch(() => {})
-  }, [fallbackScore])
+    // FIX: Use dashboard's productivityScore as the ONLY source
+    // (the separate /api/rise/productivity-score has RLS issues returning 0)
+    // Calculate breakdown from todayData for display
+    const score = typeof fallbackScore === 'number' ? fallbackScore : 0
+    const tasksPct = todayData && todayData.tasksTotal > 0 ? Math.round((todayData.tasksCompleted / todayData.tasksTotal) * 100) : 0
+    const habitsPct = todayData && todayData.habitsTotal > 0 ? Math.round((todayData.habitsCompleted / todayData.habitsTotal) * 100) : 0
+    const focusPct = todayData ? Math.min(100, Math.round((todayData.focusMin / 50) * 100)) : 0
+    const morningPct = todayData ? todayData.morningScore || 0 : 0
+
+    const grade = score >= 90 ? 'متميز' : score >= 70 ? 'جيد جداً' : score >= 50 ? 'جيد' : score >= 30 ? 'مقبول' : 'يحتاج تحسين'
+
+    setProdData({
+      score,
+      breakdown: {
+        tasks: tasksPct,
+        habits: habitsPct,
+        focus: focusPct,
+        morning: morningPct,
+        streak: 0,
+      },
+      grade,
+    })
+  }, [fallbackScore, todayData])
 
   if (!prodData) {
     return (
@@ -1337,7 +1326,10 @@ export default function Dashboard() {
 
       {/* ══════════ 2. Productivity Score (Full Width) ══════════ */}
       <motion.div variants={itemVariants}>
-        <ProductivityScoreCard fallbackScore={typeof data?.productivityScore === 'number' ? data.productivityScore : undefined} />
+        <ProductivityScoreCard
+          fallbackScore={typeof data?.productivityScore === 'number' ? data.productivityScore : undefined}
+          todayData={data?.today}
+        />
       </motion.div>
 
       {/* ══════════ 2b. On This Day ══════════ */}
