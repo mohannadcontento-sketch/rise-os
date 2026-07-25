@@ -9,7 +9,7 @@
 
 // ─── Config ───
 const REQUEST_TIMEOUT_MS = 8000
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const CACHE_TTL_MS = 0 // Disabled — cache causes stale data issues
 
 // Refresh lock to prevent concurrent refresh requests
 let _refreshPromise: Promise<boolean> | null = null
@@ -238,13 +238,21 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 
   // Make the request — credentials: 'include' sends httpOnly cookies (P1#3)
+  // For GET requests, add cache-busting to prevent browser HTTP cache
+  let fetchUrl = url
+  if (!options.method || options.method === 'GET') {
+    const separator = url.includes('?') ? '&' : '?'
+    fetchUrl = `${url}${separator}_t=${Date.now()}`
+  }
+
   let response: Response
   try {
-    response = await fetch(url, {
+    response = await fetch(fetchUrl, {
       ...options,
       headers,
       signal: controller.signal,
       credentials: 'include',
+      cache: 'no-store', // Never use HTTP cache for API calls
     })
   } catch (err: any) {
     clearTimeout(timeoutId)
