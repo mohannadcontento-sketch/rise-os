@@ -18,6 +18,7 @@ import {
   Dumbbell,
   Download,
   Upload,
+  Loader2,
   Trash2,
   Zap,
   Shield,
@@ -267,14 +268,36 @@ export default function Settings() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const handleResetData = () => {
-    const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-') && k !== 'rise-auth' && k !== 'rise-user-info')
-    allKeys.forEach((key) => localStorage.removeItem(key))
-    setSettings(defaultSettings)
-    setResetDialogOpen(false)
-    setConfirmText('')
-    setStorageSize({ used: 0, total: 5 * 1024 * 1024, percent: 0, counts: {} })
-    toast.success('تم إعادة تعيين البيانات المحلية (تم الاحتفاظ بجلسة الدخول)')
+  const [deletingAll, setDeletingAll] = useState(false)
+
+  const handleResetData = async () => {
+    setDeletingAll(true)
+    try {
+      // Delete ALL data from server database
+      const res = await apiDelete('/api/rise/delete-all')
+      if (!res.ok) {
+        toast.error('فشل حذف البيانات من الخادم')
+        return
+      }
+      const result = await res.json().catch(() => ({}))
+
+      // Also clear local cache
+      const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-') && k !== 'rise-auth' && k !== 'rise-user-info')
+      allKeys.forEach((key) => localStorage.removeItem(key))
+      setSettings(defaultSettings)
+      setResetDialogOpen(false)
+      setConfirmText('')
+      setStorageSize({ used: 0, total: 10 * 1024 * 1024, percent: 0, counts: {} })
+
+      const msg = result.deleted >= 0
+        ? `تم حذف ${result.deleted} سجل من قاعدة البيانات`
+        : 'تم حذف جميع البيانات من قاعدة البيانات'
+      toast.success(msg)
+    } catch {
+      toast.error('فشل حذف البيانات')
+    } finally {
+      setDeletingAll(false)
+    }
   }
 
   const themes = [
@@ -925,8 +948,8 @@ export default function Settings() {
                   <Trash2 className="w-5 h-5 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-destructive">إعادة تعيين جميع البيانات</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">سيتم حذف جميع البيانات المحلية نهائياً</p>
+                  <p className="text-sm font-semibold text-destructive">حذف جميع البيانات</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">سيتم حذف جميع بياناتك من قاعدة البيانات على الخادم نهائياً</p>
                 </div>
               </div>
               <Dialog open={resetDialogOpen} onOpenChange={(open) => { setResetDialogOpen(open); if (!open) setConfirmText('') }}>
@@ -941,12 +964,12 @@ export default function Settings() {
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-destructive">
                       <AlertTriangle className="w-5 h-5" />
-                      تأكيد إعادة التعيين
+                      تأكيد حذف البيانات
                     </DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 mt-4">
                     <p className="text-sm text-muted-foreground">
-                      هل أنت متأكد من حذف جميع البيانات المحلية؟ هذا الإجراء لا يمكن التراجع عنه.
+                      هل أنت متأكد من حذف جميع بياناتك من قاعدة البيانات؟ سيتم حذف جميع المهام والعادات والأهداف واليوميات والمشاريع والمالية نهائياً. هذا الإجراء لا يمكن التراجع عنه.
                     </p>
                     <p className="text-sm text-muted-foreground">
                       يرجى كتابة <span className="font-bold text-destructive">تأكيد</span> أدناه للمتابعة:
@@ -966,10 +989,19 @@ export default function Settings() {
                       <Button
                         onClick={handleResetData}
                         className="bg-destructive hover:bg-destructive/90 text-white text-sm"
-                        disabled={confirmText !== 'تأكيد'}
+                        disabled={confirmText !== 'تأكيد' || deletingAll}
                       >
-                        <Trash2 className="w-4 h-4 ml-2" />
-                        حذف الكل نهائياً
+                        {deletingAll ? (
+                          <>
+                            <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                            جاري الحذف...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4 ml-2" />
+                            حذف الكل نهائياً
+                          </>
+                        )}
                       </Button>
                     </DialogFooter>
                   </div>
