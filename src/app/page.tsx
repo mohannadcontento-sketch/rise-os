@@ -19,11 +19,12 @@ if (typeof window !== 'undefined' && typeof SVGElement !== 'undefined') {
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import {
-  CheckCircle2, Circle, Flame, Menu, Moon, Sun, Search, Target,
-  LayoutDashboard, CalendarDays, CheckSquare, FolderKanban, BookOpen,
-  Brain, GraduationCap, Heart, HeartPulse, LogOut, PenLine,
-  Wallet, Calendar as CalendarIcon, Network, BarChart3,
-  Sparkles, Settings as SettingsIcon, Zap, ShieldCheck,
+  Menu, Moon, Sun, Search, Sparkles, Plus,
+  Flame, Target, CheckSquare, BookOpen, Brain, Wallet, BarChart3,
+  LayoutDashboard, CalendarDays, FolderKanban, GraduationCap,
+  HeartPulse, Calendar as CalendarIcon, Network, PenLine,
+  Heart, LogOut, Settings as SettingsIcon, Zap, ShieldCheck,
+  Circle, CheckCircle2,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -32,8 +33,9 @@ import type { ModuleId } from '@/store/app-store'
 import { apiPost, apiGet, clearAllCache } from '@/lib/api-fetch'
 import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 
-// Keyboard shortcuts (uses a hook — must be eagerly imported)
-import { useKeyboardShortcuts, KeyboardShortcutsDialog } from '@/components/rise/keyboard-shortcuts'
+// Keyboard shortcuts hook — lightweight, can be eagerly imported
+import { useKeyboardShortcuts } from '@/components/rise/keyboard-shortcuts'
+// Command Dialog components — import eagerly (cmdk is tree-shakeable)
 import {
   CommandDialog,
   CommandEmpty,
@@ -42,6 +44,10 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
+// Keyboard Shortcuts Dialog — lazy (only needed when user presses ?)
+const KeyboardShortcutsDialog = lazy(() =>
+  import('@/components/rise/keyboard-shortcuts').then(m => ({ default: m.KeyboardShortcutsDialog }))
+)
 
 // Heavy components — lazy loaded to reduce initial JS bundle
 const Sidebar = lazy(() => import('@/components/rise/sidebar').then(m => ({ default: m.Sidebar })))
@@ -754,7 +760,9 @@ export default function RiseOSApp() {
       </CommandDialog>
 
       {/* Keyboard Shortcuts Dialog */}
+      <Suspense fallback={null}>
       <KeyboardShortcutsDialog />
+      </Suspense>
 
       {/* ══════════ FAB - Quick Add ══════════ */}
         {activeModule !== 'dashboard' && activeModule !== 'settings' && (
