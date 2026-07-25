@@ -1,10 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-
-// FIX: Prevent fetchHabits from running right after a toggle (causes revert)
-// Use a counter to handle multiple data-changed events (PUT + earn-xp POST)
-let _skipHabitRefreshCount = 0
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Flame,
@@ -53,7 +49,7 @@ import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { cn } from '@/lib/utils'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+// useDataRefresh removed — causes toggle reverts (multiple data-changed events)
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
 
@@ -219,32 +215,29 @@ export function HabitsView() {
 
   const todayStr = getTodayStr()
 
-  const { refreshKey } = useDataRefresh()
-
-  /* ---- Fetch ---- */
-  useEffect(() => {
-    // FIX: Skip refresh right after a toggle to prevent revert
-    // Counter handles multiple data-changed events (PUT + earn-xp POST)
-    if (_skipHabitRefreshCount > 0) {
-      _skipHabitRefreshCount--
-      return
-    }
-    async function fetchHabits() {
-      try {
-        const res = await apiFetch('/api/rise/habits')
-        if (res.ok) {
-          const data: HabitsResponse = await res.json()
-          setHabits(data.habits)
-          setLogs(data.logs)
-        }
-      } catch {
-        // empty
-      } finally {
-        setLoading(false)
+  // FIX: Removed useDataRefresh — it caused toggle reverts because multiple
+  // API calls (PUT habits + POST earn-xp + POST notifications) each fire
+  // rise:data-changed, triggering fetchHabits() which overwrites the
+  // optimistic update. Now habits only fetch on mount.
+  const fetchHabits = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/rise/habits')
+      if (res.ok) {
+        const data: HabitsResponse = await res.json()
+        setHabits(data.habits)
+        setLogs(data.logs)
       }
+    } catch {
+      // empty
+    } finally {
+      setLoading(false)
     }
+  }, [])
+
+  /* ---- Fetch on mount only ---- */
+  useEffect(() => {
     fetchHabits()
-  }, [refreshKey])
+  }, [fetchHabits])
 
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(
@@ -273,12 +266,6 @@ export function HabitsView() {
       }
 
       try {
-        // FIX: Prevent the rise:data-changed events from triggering a refetch
-        // that would overwrite our optimistic update. Set counter to 3 to handle:
-        // 1. PUT /api/rise/habits → data-changed
-        // 2. POST /api/rise/earn-xp → data-changed
-        // 3. POST /api/rise/notifications (if any) → data-changed
-        _skipHabitRefreshCount = 3
         const res = await apiPut('/api/rise/habits', {
           habitId,
           date: todayStr,

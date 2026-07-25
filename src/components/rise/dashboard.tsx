@@ -518,12 +518,8 @@ interface ProductivityScoreData {
 }
 
 function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: number; todayData?: { tasksCompleted: number; tasksTotal: number; habitsCompleted: number; habitsTotal: number; focusMin: number; morningScore: number } }) {
-  const [prodData, setProdData] = useState<ProductivityScoreData | null>(null)
-
-  useEffect(() => {
-    // FIX: Use dashboard's productivityScore as the ONLY source
-    // (the separate /api/rise/productivity-score has RLS issues returning 0)
-    // Calculate breakdown from todayData for display
+  // FIX: Use useMemo instead of useEffect+setState (lint: set-state-in-effect)
+  const prodData = useMemo<ProductivityScoreData>(() => {
     const score = typeof fallbackScore === 'number' ? fallbackScore : 0
     const tasksPct = todayData && todayData.tasksTotal > 0 ? Math.round((todayData.tasksCompleted / todayData.tasksTotal) * 100) : 0
     const habitsPct = todayData && todayData.habitsTotal > 0 ? Math.round((todayData.habitsCompleted / todayData.habitsTotal) * 100) : 0
@@ -532,7 +528,7 @@ function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: n
 
     const grade = score >= 90 ? 'متميز' : score >= 70 ? 'جيد جداً' : score >= 50 ? 'جيد' : score >= 30 ? 'مقبول' : 'يحتاج تحسين'
 
-    setProdData({
+    return {
       score,
       breakdown: {
         tasks: tasksPct,
@@ -542,7 +538,7 @@ function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: n
         streak: 0,
       },
       grade,
-    })
+    }
   }, [fallbackScore, todayData])
 
   if (!prodData) {
