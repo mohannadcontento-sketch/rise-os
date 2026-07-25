@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     const notification = await data.notifications.create(userId, {
       ...parsed.data,
-      isRead: false,
+      read: false,
     })
 
     return NextResponse.json({ success: true, notification })
