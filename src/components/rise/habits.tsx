@@ -239,7 +239,7 @@ export function HabitsView() {
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(
     async (habitId: string) => {
-      const existingLog = logs.find((l) => l.habitId === habitId && l.date === todayStr)
+      const existingLog = logs.find((l) => l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)
       const newCompleted = existingLog ? !existingLog.completed : true
 
       // Flash animation
@@ -250,7 +250,7 @@ export function HabitsView() {
       if (existingLog) {
         setLogs((prev) =>
           prev.map((l) =>
-            l.habitId === habitId && l.date === todayStr
+            l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
               ? { ...l, completed: newCompleted, count: newCompleted ? 1 : 0 }
               : l
           )
@@ -274,13 +274,13 @@ export function HabitsView() {
           if (existingLog) {
             setLogs((prev) =>
               prev.map((l) =>
-                l.habitId === habitId && l.date === todayStr
+                l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
                   ? { ...l, completed: existingLog.completed, count: existingLog.count }
                   : l
               )
             )
           } else {
-            setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayStr)))
+            setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)))
           }
           toast.error('فشل تحديث العادة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
           return
@@ -304,13 +304,13 @@ export function HabitsView() {
         if (existingLog) {
           setLogs((prev) =>
             prev.map((l) =>
-              l.habitId === habitId && l.date === todayStr
+              l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
                 ? { ...l, completed: existingLog.completed, count: existingLog.count }
                 : l
             )
           )
         } else {
-          setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === todayStr)))
+          setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)))
         }
       }
     },
@@ -425,7 +425,7 @@ export function HabitsView() {
   /* ---- Stats ---- */
   const stats = useMemo((): { total: number; todayRate: number; longestStreak: number; currentStreak: number; bestHabit: Habit | null; bestRate: number } => {
     const total = habits.length
-    const todayLogs = logs.filter((l) => l.date === todayStr)
+    const todayLogs = logs.filter((l) => String(l.date).slice(0, 10) === todayStr)
     const todayCompleted = todayLogs.filter((l) => l.completed).length
     const todayRate = total > 0 ? Math.round((todayCompleted / total) * 100) : 0
 
@@ -671,7 +671,7 @@ export function HabitsView() {
                     {stats.todayRate >= 80 ? 'A' : stats.todayRate >= 60 ? 'B' : stats.todayRate >= 40 ? 'C' : 'D'}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {logs.filter((l) => l.date === todayStr && l.completed).length} من {habits.length} عادة مكتملة
+                    {logs.filter((l) => String(l.date).slice(0, 10) === todayStr && l.completed).length} من {habits.length} عادة مكتملة
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground/70 mt-2">
@@ -802,7 +802,7 @@ export function HabitsView() {
                 variant="secondary"
                 className="text-[10px] px-2 py-0 rounded-full bg-emerald-accent/10 text-emerald-accent border-0"
               >
-                {logs.filter((l) => l.date === todayStr && l.completed).length} / {habits.length}
+                {logs.filter((l) => String(l.date).slice(0, 10) === todayStr && l.completed).length} / {habits.length}
               </Badge>
             </div>
 
@@ -810,7 +810,7 @@ export function HabitsView() {
               <AnimatePresence mode="popLayout">
                 {habits.map((habit, index) => {
                   const todayLog = logs.find(
-                    (l) => l.habitId === habit.id && l.date === todayStr
+                    (l) => l.habitId === habit.id && String(l.date).slice(0, 10) === todayStr
                   )
                   const isCompleted = todayLog?.completed ?? false
                   const streak = calcStreak(logs, habit.id)
@@ -1051,7 +1051,7 @@ export function HabitsView() {
                                   let heatLevel = 0
                                   if (dayInWeek) {
                                     const log = logs.find(
-                                      (l) => l.habitId === habit.id && l.date === dayInWeek
+                                      (l) => l.habitId === habit.id && String(l.date).slice(0, 10) === dayInWeek
                                     )
                                     if (log) {
                                       heatLevel = getHeatLevel(
