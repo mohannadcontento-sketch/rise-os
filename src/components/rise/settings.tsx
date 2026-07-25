@@ -256,7 +256,8 @@ export default function Settings() {
           localStorage.setItem(key, JSON.stringify(value))
         })
         toast.success('تم استيراد البيانات بنجاح')
-        setStorageSize(getLocalStorageSize())
+        const ls = getLocalStorageSize()
+        setStorageSize({ used: ls.used, total: ls.total, percent: Math.round((ls.used / ls.total) * 100), counts: {} })
       } catch {
         toast.error('فشل في قراءة الملف')
       }
@@ -272,7 +273,7 @@ export default function Settings() {
     setSettings(defaultSettings)
     setResetDialogOpen(false)
     setConfirmText('')
-    setStorageSize({ used: 0, total: 5 * 1024 * 1024 })
+    setStorageSize({ used: 0, total: 5 * 1024 * 1024, percent: 0, counts: {} })
     toast.success('تم إعادة تعيين البيانات المحلية (تم الاحتفاظ بجلسة الدخول)')
   }
 
