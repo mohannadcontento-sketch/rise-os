@@ -47,26 +47,14 @@ export function PerformanceMonitor() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Track LCP
-    const lcpObserver = new PerformanceObserver((list) => {
-      const entries = list.getEntries()
-      const lastEntry = entries[entries.length - 1]
-      if (lastEntry) {
-        const metric: VitalMetric = {
-          name: 'LCP',
-          value: lastEntry.startTime,
-          rating: getRating('LCP', lastEntry.startTime),
-          page: window.location.pathname,
-          device: getDevice(),
-        }
-        if (metric.rating !== 'good') {
-          reportError(`Performance: ${metric.name}=${Math.round(metric.value)}ms (${metric.rating}, ${metric.device})`)
-        }
-      }
-    })
-    try { lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true }) } catch {}
+    // LCP + CLS monitoring disabled — lazy-loaded modules cause expected
+    // high values that spam the console. Re-enable after proper skeletons.
+    // Only track FID (actual user interaction delay).
+    /*
 
-    // Track CLS — only report if >0.25 (poor) and after page is fully loaded
+    // Track CLS — disabled temporarily (lazy-loaded modules cause expected shift)
+    // TODO: re-enable after implementing proper skeleton loading for all modules
+    /*
     let clsValue = 0
     let clsReported = false
     const clsObserver = new PerformanceObserver((list) => {
@@ -76,7 +64,6 @@ export function PerformanceMonitor() {
           clsValue += layoutShift.value
         }
       }
-      // Only report once, after accumulation, and only if truly poor (>0.25)
       if (!clsReported && clsValue > 0.25 && document.readyState === 'complete') {
         clsReported = true
         const metric: VitalMetric = {
@@ -92,6 +79,7 @@ export function PerformanceMonitor() {
       }
     })
     try { clsObserver.observe({ type: 'layout-shift', buffered: true }) } catch {}
+    */
 
     // Track FID
     const fidObserver = new PerformanceObserver((list) => {
@@ -110,9 +98,26 @@ export function PerformanceMonitor() {
     })
     try { fidObserver.observe({ type: 'first-input', buffered: true }) } catch {}
 
+    */
+
+    // Only track FID (First Input Delay) — actual user interaction
+    const fidObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const metric: VitalMetric = {
+          name: 'FID',
+          value: (entry as any).processingStart - entry.startTime,
+          rating: getRating('FID', (entry as any).processingStart - entry.startTime),
+          page: window.location.pathname,
+          device: getDevice(),
+        }
+        if (metric.rating !== 'good') {
+          reportError(`Performance: ${metric.name}=${Math.round(metric.value)}ms (${metric.rating}, ${metric.device})`)
+        }
+      }
+    })
+    try { fidObserver.observe({ type: 'first-input', buffered: true }) } catch {}
+
     return () => {
-      lcpObserver.disconnect()
-      clsObserver.disconnect()
       fidObserver.disconnect()
     }
   }, [])

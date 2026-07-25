@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 
 // FIX: Prevent fetchHabits from running right after a toggle (causes revert)
-let _skipHabitRefresh = false
+// Use a counter to handle multiple data-changed events (PUT + earn-xp POST)
+let _skipHabitRefreshCount = 0
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Flame,
@@ -223,8 +224,9 @@ export function HabitsView() {
   /* ---- Fetch ---- */
   useEffect(() => {
     // FIX: Skip refresh right after a toggle to prevent revert
-    if (_skipHabitRefresh) {
-      _skipHabitRefresh = false
+    // Counter handles multiple data-changed events (PUT + earn-xp POST)
+    if (_skipHabitRefreshCount > 0) {
+      _skipHabitRefreshCount--
       return
     }
     async function fetchHabits() {
@@ -271,9 +273,12 @@ export function HabitsView() {
       }
 
       try {
-        // FIX: Prevent the rise:data-changed event from triggering a refetch
-        // that would overwrite our optimistic update
-        _skipHabitRefresh = true
+        // FIX: Prevent the rise:data-changed events from triggering a refetch
+        // that would overwrite our optimistic update. Set counter to 3 to handle:
+        // 1. PUT /api/rise/habits → data-changed
+        // 2. POST /api/rise/earn-xp → data-changed
+        // 3. POST /api/rise/notifications (if any) → data-changed
+        _skipHabitRefreshCount = 3
         const res = await apiPut('/api/rise/habits', {
           habitId,
           date: todayStr,
