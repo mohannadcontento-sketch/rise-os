@@ -54,6 +54,20 @@ export async function PUT(req: NextRequest) {
     // Milestone toggle
     if (body.milestoneId) {
       const updated = await data.goals.toggleMilestone(body.milestoneId, body.completed)
+      // FIX: Recalculate and update goal progress after milestone toggle
+      try {
+        // Find the goal that owns this milestone
+        const allGoals = await data.goals.list(userId)
+        const goal = allGoals.find((g: any) =>
+          (g.milestones || []).some((m: any) => m.id === body.milestoneId)
+        )
+        if (goal) {
+          const milestones = goal.milestones || []
+          const completedCount = milestones.filter((m: any) => m.completed).length
+          const progress = milestones.length > 0 ? Math.round((completedCount / milestones.length) * 100) : 0
+          await data.goals.update(goal.id, { progress, status: progress === 100 ? 'done' : 'active' })
+        }
+      } catch { /* non-critical */ }
       return NextResponse.json(updated)
     }
 

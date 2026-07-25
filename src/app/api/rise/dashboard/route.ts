@@ -82,8 +82,9 @@ export async function GET(req: NextRequest) {
       data.journals.list(userId, 5).catch(() => []),
     ])
 
-    // Re-sort tasks by createdAt desc and take top 10
-    const tasks = [...(tasksResult as any[])]
+    // FIX: Use ALL tasks for score calculation, only limit for display
+    const allTasks = tasksResult as any[]
+    const tasks = [...allTasks]
       .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       .slice(0, 10)
 
@@ -115,15 +116,17 @@ export async function GET(req: NextRequest) {
       )
       .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
 
-    const totalTasks = tasks.length
-    const doneTasks = tasks.filter((t: any) => t.status === 'done').length
+    const totalTasks = totalTasksAll
+    const doneTasks = doneTasksAll
 
     // Extract single records from arrays
     const healthLog = healthResult.length > 0 ? healthResult[0] : null
     const morningLog = morningResult.length > 0 ? morningResult[0] : null
 
-    // FIX: Calculate + save today's productivity score to daily_scores
-    const taskScore = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
+    // FIX: Calculate score using ALL tasks (not just the 10 displayed)
+    const totalTasksAll = allTasks.length
+    const doneTasksAll = allTasks.filter((t: any) => t.status === 'done').length
+    const taskScore = totalTasksAll > 0 ? Math.round((doneTasksAll / totalTasksAll) * 100) : 0
     const habitScore = totalHabits > 0 ? Math.round((completedHabitsToday / totalHabits) * 100) : 0
     const morningScore = morningLog?.score || 0
     const focusScore = Math.min(100, Math.round((todayFocusMin / 50) * 100))

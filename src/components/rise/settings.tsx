@@ -164,10 +164,7 @@ export default function Settings() {
   })
   // Sync settings.userName from auth store
   const displayName = auth?.userName && auth.userName !== 'مستخدم' ? auth.userName : settings.userName
-  const [storageSize, setStorageSize] = useState(() => {
-    if (typeof window === 'undefined') return { used: 0, total: 5 * 1024 * 1024 }
-    return getLocalStorageSize()
-  })
+  const [storageSize, setStorageSize] = useState({ used: 0, total: 10 * 1024 * 1024, percent: 0, counts: {} as Record<string, number> })
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Fetch user stats
   const [userStats, setUserStats] = useState<{ level: number; xp: number; xpToNext: number; streak: number } | null>(null)
@@ -177,6 +174,14 @@ export default function Settings() {
       .then(r => r.json())
       .then(data => {
         if (data.user) setUserStats(data.user)
+      })
+    // Fetch real server storage
+    apiFetch('/api/rise/storage')
+      .then(r => r.json())
+      .then(data => {
+        if (data.limit) {
+          setStorageSize({ used: data.used || 0, total: data.limit, percent: data.percent || 0, counts: data.counts || {} })
+        }
       })
       .catch(() => {})
   }, [])
@@ -340,7 +345,7 @@ export default function Settings() {
     },
   ]
 
-  const storagePercent = Math.round((storageSize.used / storageSize.total) * 100)
+  const storagePercent = storageSize.percent || Math.min(100, Math.round((storageSize.used / storageSize.total) * 100))
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
