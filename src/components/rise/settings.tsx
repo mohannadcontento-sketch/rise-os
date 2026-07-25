@@ -809,20 +809,47 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Storage Usage */}
+            {/* Storage Usage — real server storage */}
             <div className="p-4 rounded-xl bg-muted/20 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <HardDrive className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">مساحة التخزين</span>
+                  <span className="text-sm font-medium">مساحة التخزين في الخادم</span>
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs font-semibold text-muted-foreground">
                   {formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}
                 </span>
               </div>
               <Progress value={storagePercent} className="h-2" />
-              <p className="text-[11px] text-muted-foreground">
-                البيانات مخزنة محلياً على جهازك فقط ولا تُرسل لأي خادم.
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{storagePercent}% مستخدم</span>
+                <span>{formatBytes(storageSize.total - storageSize.used)} متاح</span>
+              </div>
+              {/* Detailed breakdown */}
+              {storageSize.counts && Object.keys(storageSize.counts).length > 0 && (
+                <div className="pt-2 border-t border-border/40 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground">تفاصيل البيانات:</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-muted-foreground">
+                    {Object.entries(storageSize.counts).map(([key, count]) => {
+                      const labels: Record<string, string> = {
+                        tasks: 'المهام', habits: 'العادات', journals: 'اليوميات',
+                        focusSessions: 'جلسات التركيز', healthLogs: 'الصحة',
+                        financeRecords: 'المالية', books: 'الكتب', knowledgeItems: 'المعرفة',
+                        plannerItems: 'المخطط', morningLogs: 'الروتين', goals: 'الأهداف',
+                        projects: 'المشاريع', achievements: 'الإنجازات', dailyScores: 'الدرجات',
+                      }
+                      return count > 0 ? (
+                        <div key={key} className="flex justify-between">
+                          <span>{labels[key] || key}</span>
+                          <span className="font-mono">{count}</span>
+                        </div>
+                      ) : null
+                    })}
+                  </div>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                البيانات مخزنة بأمان في قاعدة البيانات على الخادم.
               </p>
             </div>
 
