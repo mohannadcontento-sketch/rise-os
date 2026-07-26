@@ -39,7 +39,7 @@ export function setAuthCookies(
     secure: isProduction,
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60, // 1 hour
+    maxAge: 60 * 60 * 24 * 7, // 7 days — stay logged in
   })
 
   // Refresh token: httpOnly, longer lived
@@ -57,7 +57,7 @@ export function setAuthCookies(
     secure: isProduction,
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60, // 1 hour
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   })
 
   return res
