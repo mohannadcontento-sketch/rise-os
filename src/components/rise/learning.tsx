@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import {
   GraduationCap,
   Plus,
@@ -72,6 +71,7 @@ interface Skill {
   name: string
   level: number // 1-5
   color: string
+  colorIdx: number // store index so reloads keep colors consistent
 }
 
 interface LearningLog {
@@ -88,7 +88,14 @@ interface LearningData {
   logs: LearningLog[]
 }
 
-const STORAGE_KEY = 'rise-learning'
+// No more localStorage — everything is server-backed via knowledge_items table.
+
+/** Safely parse the `tags` JSON field from a knowledge item. Returns {} on any error. */
+function safeParseTags(raw: any): Record<string, any> {
+  if (!raw) return {}
+  if (typeof raw === 'object') return raw
+  try { return JSON.parse(raw) } catch { return {} }
+}
 
 const defaultData: LearningData = {
   goals: [],
@@ -196,206 +203,316 @@ export default function Learning() {
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editSkillName, setEditSkillName] = useState('')
 
-  // FIX: Load from server API (syncs across devices)
-  const { refreshKey } = useDataRefresh()
+  // FIX: Load from server API ONCE on mount (no more infinite refresh loops).
+  // Each action (add/update/delete) makes a targeted API call and updates local state.
   useEffect(() => {
+    let cancelled = false
     async function loadFromServer() {
       try {
         const res = await apiFetch('/api/rise/knowledge?type=learning')
         if (res.ok) {
           const result = await res.json()
           const items = result.items || []
-          const goals = items.filter((i: any) => i.type === 'learning-goal').map((i: any) => ({
-            id: i.id, title: i.title, description: i.content || '', progress: 0, status: i.isFavorite ? 'completed' : 'active',
-            createdAt: i.createdAt,
-          }))
-          const courses = items.filter((i: any) => i.type === 'learning-course').map((i: any) => {
-            const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : (i.tags || {})
-            return {
-              id: i.id, name: i.title, platform: meta.platform || '',
-              progress: meta.progress || 0, status: meta.completed ? 'completed' : 'in_progress', certificate: false,
-            }
-          })
-          const skills = items.filter((i: any) => i.type === 'learning-skill').map((i: any) => {
-            const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : (i.tags || {})
-            return {
-              id: i.id, name: i.title, level: meta.level || 1,
-            }
-          })
-          const logs = items.filter((i: any) => i.type === 'learning-log').map((i: any) => {
-            const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : (i.tags || {})
-            return {
-              id: i.id, content: i.content || '', minutesSpent: meta.minutes || 0,
-              date: i.createdAt,
-            }
-          })
-          setData({ goals, courses, skills, logs })
-        }
-      } catch { /* silent */ }
-      finally { setLoading(false) }
-    }
-    loadFromServer()
-  }, [refreshKey])
-
-  // Save single item to server (called by add/edit functions)
-  const saveItem = async (type: string, title: string, content: string = '', tags: string = '') => {
-    try {
-      await apiPost('/api/rise/knowledge', { type, title, content, tags })
-    } catch { /* silent */ }
-  }
-
-  // FIX: Auto-save all learning data to server (debounced 1.5s)
-  useEffect(() => {
-    if (loading) return
-    const timer = setTimeout(async () => {
-      try {
-        // Delete existing learning items, then re-create
-        const existing = await apiFetch('/api/rise/knowledge?type=learning')
-        if (existing.ok) {
-          const result = await existing.json()
-          for (const item of (result.items || [])) {
-            await apiDelete(`/api/rise/knowledge?id=${item.id}`)
+          const goals = items
+            .filter((i: any) => i.type === 'learning-goal')
+            .map((i: any) => {
+              const meta = safeParseTags(i.tags)
+              return {
+                id: i.id,
+                title: i.title,
+                description: i.content || '',
+                progress: typeof meta.progress === 'number' ? meta.progress : 0,
+                status: (meta.status === 'completed' || meta.status === 'paused' ? meta.status : 'active') as 'active' | 'completed' | 'paused',
+                createdAt: i.createdAt,
+              }
+            })
+          const courses = items
+            .filter((i: any) => i.type === 'learning-course')
+            .map((i: any) => {
+              const meta = safeParseTags(i.tags)
+              const progress = typeof meta.progress === 'number' ? meta.progress : 0
+              return {
+                id: i.id,
+                name: i.title,
+                platform: meta.platform || '',
+                progress,
+                status: (meta.status === 'completed' || meta.status === 'not_started' ? meta.status : (progress > 0 ? 'in_progress' : 'not_started')) as 'in_progress' | 'completed' | 'not_started',
+                certificate: !!meta.certificate,
+              }
+            })
+          const skills = items
+            .filter((i: any) => i.type === 'learning-skill')
+            .map((i: any, idx: number) => {
+              const meta = safeParseTags(i.tags)
+              const colorIdx = typeof meta.colorIdx === 'number' ? meta.colorIdx : idx
+              return {
+                id: i.id,
+                name: i.title,
+                level: typeof meta.level === 'number' ? meta.level : 1,
+                color: skillGradientColors[colorIdx % skillGradientColors.length],
+                colorIdx,
+              }
+            })
+          const logs = items
+            .filter((i: any) => i.type === 'learning-log')
+            .map((i: any) => {
+              const meta = safeParseTags(i.tags)
+              return {
+                id: i.id,
+                content: i.content || '',
+                minutesSpent: typeof meta.minutes === 'number' ? meta.minutes : 0,
+                date: meta.date || i.createdAt,
+              }
+            })
+          if (!cancelled) {
+            setData({ goals, courses, skills, logs })
           }
         }
-        for (const goal of data.goals) {
-          await apiPost('/api/rise/knowledge', {
-            type: 'learning-goal', title: goal.title,
-            content: goal.description || '', isFavorite: goal.status === 'completed',
-          })
-        }
-        for (const course of data.courses) {
-          await apiPost('/api/rise/knowledge', {
-            type: 'learning-course', title: course.name,
-            content: '', tags: JSON.stringify({ platform: course.platform, progress: course.progress, completed: course.status === 'completed' }),
-          })
-        }
-        for (const skill of data.skills) {
-          await apiPost('/api/rise/knowledge', {
-            type: 'learning-skill', title: skill.name,
-            content: '', tags: JSON.stringify({ level: skill.level }),
-          })
-        }
-        for (const log of data.logs) {
-          await apiPost('/api/rise/knowledge', {
-            type: 'learning-log', title: 'سجل تعلم',
-            content: log.content, tags: JSON.stringify({ minutes: log.minutesSpent }),
-          })
-        }
       } catch { /* silent */ }
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [data, loading])
+      finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadFromServer()
+    return () => { cancelled = true }
+  }, [])
 
-  const deleteItem = async (id: string) => {
-    try {
-      await apiDelete(`/api/rise/knowledge?id=${id}`)
-    } catch { /* silent */ }
-  }
+  // Each action below makes ONE targeted API call (create / update / delete)
+  // and updates local state optimistically with the server-returned id.
 
-  const addGoal = () => {
+  const addGoal = async () => {
     if (!newGoalTitle.trim()) return
-    const goal: LearningGoal = {
-      id: crypto.randomUUID(),
-      title: newGoalTitle,
-      description: newGoalDesc,
+    const title = newGoalTitle.trim()
+    const description = newGoalDesc.trim()
+    // Optimistic local insert with a temp id
+    const tempId = `temp-${Date.now()}`
+    const optimistic: LearningGoal = {
+      id: tempId,
+      title,
+      description,
       progress: 0,
       status: 'active',
       createdAt: new Date().toISOString(),
     }
-    setData((prev) => ({ ...prev, goals: [goal, ...prev.goals] }))
+    setData((prev) => ({ ...prev, goals: [optimistic, ...prev.goals] }))
     setNewGoalTitle('')
     setNewGoalDesc('')
     setGoalDialogOpen(false)
-    toast.success('تمت إضافة الهدف')
+    try {
+      const res = await apiPost('/api/rise/knowledge', {
+        type: 'learning-goal',
+        title,
+        content: description,
+        tags: JSON.stringify({ progress: 0, status: 'active' }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        // Replace temp id with server id
+        setData((prev) => ({
+          ...prev,
+          goals: prev.goals.map((g) => (g.id === tempId ? { ...g, id: created.id } : g)),
+        }))
+        toast.success('تمت إضافة الهدف')
+      } else {
+        // Rollback on failure
+        setData((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== tempId) }))
+        toast.error('فشل في حفظ الهدف')
+      }
+    } catch {
+      setData((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== tempId) }))
+      toast.error('فشل في حفظ الهدف')
+    }
   }
 
   const updateGoalProgress = (id: string, progress: number) => {
+    const clamped = Math.min(100, Math.max(0, progress))
+    const status: LearningGoal['status'] = clamped >= 100 ? 'completed' : 'active'
     setData((prev) => ({
       ...prev,
-      goals: prev.goals.map((g) => {
-        if (g.id !== id) return g
-        const status = progress >= 100 ? 'completed' : progress > 0 ? 'active' : 'active'
-        return { ...g, progress: Math.min(100, progress), status }
-      }),
+      goals: prev.goals.map((g) => (g.id === id ? { ...g, progress: clamped, status } : g)),
     }))
+    // Persist to server (fire-and-forget; id is server id after addGoal succeeds)
+    if (!id.startsWith('temp-')) {
+      apiPut('/api/rise/knowledge', {
+        id,
+        tags: JSON.stringify({ progress: clamped, status }),
+      }).catch(() => { /* silent — local state is already updated */ })
+    }
   }
 
   const deleteGoal = (id: string) => {
     setData((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== id) }))
     toast.success('تم حذف الهدف')
+    if (!id.startsWith('temp-')) {
+      apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
+    }
   }
 
-  const addCourse = () => {
+  const addCourse = async () => {
     if (!newCourseName.trim()) return
-    const course: Course = {
-      id: crypto.randomUUID(),
-      name: newCourseName,
-      platform: newCoursePlatform,
+    const name = newCourseName.trim()
+    const platform = newCoursePlatform.trim()
+    const tempId = `temp-${Date.now()}`
+    const optimistic: Course = {
+      id: tempId,
+      name,
+      platform,
       progress: 0,
       status: 'not_started',
       certificate: false,
     }
-    setData((prev) => ({ ...prev, courses: [course, ...prev.courses] }))
+    setData((prev) => ({ ...prev, courses: [optimistic, ...prev.courses] }))
     setNewCourseName('')
     setNewCoursePlatform('')
     setCourseDialogOpen(false)
-    toast.success('تمت إضافة الدورة')
+    try {
+      const res = await apiPost('/api/rise/knowledge', {
+        type: 'learning-course',
+        title: name,
+        content: '',
+        tags: JSON.stringify({ platform, progress: 0, status: 'not_started', certificate: false }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setData((prev) => ({
+          ...prev,
+          courses: prev.courses.map((c) => (c.id === tempId ? { ...c, id: created.id } : c)),
+        }))
+        toast.success('تمت إضافة الدورة')
+      } else {
+        setData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== tempId) }))
+        toast.error('فشل في حفظ الدورة')
+      }
+    } catch {
+      setData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== tempId) }))
+      toast.error('فشل في حفظ الدورة')
+    }
   }
 
   const updateCourseProgress = (id: string, progress: number) => {
+    const clamped = Math.min(100, Math.max(0, progress))
+    const status: Course['status'] = clamped >= 100 ? 'completed' : clamped > 0 ? 'in_progress' : 'not_started'
     setData((prev) => ({
       ...prev,
-      courses: prev.courses.map((c) => {
-        if (c.id !== id) return c
-        return {
-          ...c,
-          progress: Math.min(100, progress),
-          status: progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started',
-        }
-      }),
+      courses: prev.courses.map((c) =>
+        c.id === id ? { ...c, progress: clamped, status } : c
+      ),
     }))
+    if (!id.startsWith('temp-')) {
+      // Fetch current certificate state to preserve it in tags
+      setData((prev) => {
+        const c = prev.courses.find((x) => x.id === id)
+        if (c) {
+          apiPut('/api/rise/knowledge', {
+            id,
+            tags: JSON.stringify({
+              platform: c.platform,
+              progress: clamped,
+              status,
+              certificate: c.certificate,
+            }),
+          }).catch(() => {})
+        }
+        return prev
+      })
+    }
   }
 
   const toggleCertificate = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      courses: prev.courses.map((c) => (c.id === id ? { ...c, certificate: !c.certificate } : c)),
-    }))
+    setData((prev) => {
+      const next = prev.courses.map((c) =>
+        c.id === id ? { ...c, certificate: !c.certificate } : c
+      )
+      const updated = next.find((c) => c.id === id)
+      if (updated && !id.startsWith('temp-')) {
+        apiPut('/api/rise/knowledge', {
+          id,
+          tags: JSON.stringify({
+            platform: updated.platform,
+            progress: updated.progress,
+            status: updated.status,
+            certificate: updated.certificate,
+          }),
+        }).catch(() => {})
+      }
+      return { ...prev, courses: next }
+    })
   }
 
   const deleteCourse = (id: string) => {
     setData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== id) }))
     toast.success('تم حذف الدورة')
+    if (!id.startsWith('temp-')) {
+      apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
+    }
   }
 
-  const addSkill = () => {
+  const addSkill = async () => {
     if (!newSkillName.trim()) return
-    const skill: Skill = {
-      id: crypto.randomUUID(),
-      name: newSkillName,
-      level: newSkillLevel,
-      color: skillGradientColors[data.skills.length % skillGradientColors.length],
-    }
-    setData((prev) => ({ ...prev, skills: [...prev.skills, skill] }))
+    const name = newSkillName.trim()
+    const level = newSkillLevel
+    const colorIdx = data.skills.length
+    const color = skillGradientColors[colorIdx % skillGradientColors.length]
+    const tempId = `temp-${Date.now()}`
+    const optimistic: Skill = { id: tempId, name, level, color, colorIdx }
+    setData((prev) => ({ ...prev, skills: [...prev.skills, optimistic] }))
     setNewSkillName('')
     setNewSkillLevel(1)
     setSkillDialogOpen(false)
-    toast.success('تمت إضافة المهارة')
+    try {
+      const res = await apiPost('/api/rise/knowledge', {
+        type: 'learning-skill',
+        title: name,
+        content: '',
+        tags: JSON.stringify({ level, colorIdx }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setData((prev) => ({
+          ...prev,
+          skills: prev.skills.map((s) => (s.id === tempId ? { ...s, id: created.id } : s)),
+        }))
+        toast.success('تمت إضافة المهارة')
+      } else {
+        setData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s.id !== tempId) }))
+        toast.error('فشل في حفظ المهارة')
+      }
+    } catch {
+      setData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s.id !== tempId) }))
+      toast.error('فشل في حفظ المهارة')
+    }
   }
 
   const updateSkillLevel = (id: string, level: number) => {
+    const clamped = Math.min(5, Math.max(1, level))
     setData((prev) => ({
       ...prev,
-      skills: prev.skills.map((s) => (s.id === id ? { ...s, level: Math.min(5, Math.max(1, level)) } : s)),
+      skills: prev.skills.map((s) => (s.id === id ? { ...s, level: clamped } : s)),
     }))
+    if (!id.startsWith('temp-')) {
+      setData((prev) => {
+        const s = prev.skills.find((x) => x.id === id)
+        if (s) {
+          apiPut('/api/rise/knowledge', {
+            id,
+            tags: JSON.stringify({ level: clamped, colorIdx: s.colorIdx }),
+          }).catch(() => {})
+        }
+        return prev
+      })
+    }
   }
 
   const saveSkillEdit = () => {
     if (!editingSkill || !editSkillName.trim()) return
+    const newName = editSkillName.trim()
     setData((prev) => ({
       ...prev,
-      skills: prev.skills.map((s) => s.id === editingSkill ? { ...s, name: editSkillName.trim() } : s),
+      skills: prev.skills.map((s) => (s.id === editingSkill ? { ...s, name: newName } : s)),
     }))
+    if (!editingSkill.startsWith('temp-')) {
+      apiPut('/api/rise/knowledge', { id: editingSkill, title: newName }).catch(() => {})
+    }
     setEditingSkill(null)
     setEditSkillName('')
     toast.success('تم تحديث المهارة')
@@ -404,21 +521,44 @@ export default function Learning() {
   const deleteSkill = (id: string) => {
     setData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s.id !== id) }))
     toast.success('تم حذف المهارة')
+    if (!id.startsWith('temp-')) {
+      apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
+    }
   }
 
-  const addLog = () => {
+  const addLog = async () => {
     if (!newLogContent.trim()) return
-    const log: LearningLog = {
-      id: crypto.randomUUID(),
-      date: new Date().toISOString().split('T')[0],
-      content: newLogContent,
-      minutesSpent: parseInt(newLogMinutes) || 0,
-    }
-    setData((prev) => ({ ...prev, logs: [log, ...prev.logs] }))
+    const content = newLogContent.trim()
+    const minutes = parseInt(newLogMinutes) || 0
+    const date = new Date().toISOString().split('T')[0]
+    const tempId = `temp-${Date.now()}`
+    const optimistic: LearningLog = { id: tempId, date, content, minutesSpent: minutes }
+    setData((prev) => ({ ...prev, logs: [optimistic, ...prev.logs] }))
     setNewLogContent('')
     setNewLogMinutes('')
     setLogDialogOpen(false)
-    toast.success('تمت إضافة السجل')
+    try {
+      const res = await apiPost('/api/rise/knowledge', {
+        type: 'learning-log',
+        title: 'سجل تعلم',
+        content,
+        tags: JSON.stringify({ minutes, date }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setData((prev) => ({
+          ...prev,
+          logs: prev.logs.map((l) => (l.id === tempId ? { ...l, id: created.id } : l)),
+        }))
+        toast.success('تمت إضافة السجل')
+      } else {
+        setData((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== tempId) }))
+        toast.error('فشل في حفظ السجل')
+      }
+    } catch {
+      setData((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== tempId) }))
+      toast.error('فشل في حفظ السجل')
+    }
   }
 
   const saveLogEdit = (id: string) => {
@@ -426,6 +566,9 @@ export default function Learning() {
       ...prev,
       logs: prev.logs.map((l) => (l.id === id ? { ...l, content: editLogContent } : l)),
     }))
+    if (!id.startsWith('temp-')) {
+      apiPut('/api/rise/knowledge', { id, content: editLogContent }).catch(() => {})
+    }
     setEditingLog(null)
     toast.success('تم تحديث السجل')
   }
@@ -433,6 +576,9 @@ export default function Learning() {
   const deleteLog = (id: string) => {
     setData((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== id) }))
     toast.success('تم حذف السجل')
+    if (!id.startsWith('temp-')) {
+      apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
+    }
   }
 
   const totalMinutes = data.logs.reduce((sum, l) => sum + l.minutesSpent, 0)
