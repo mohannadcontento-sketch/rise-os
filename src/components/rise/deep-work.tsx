@@ -41,6 +41,7 @@ import {
   Quote,
   Link2,
   Loader2,
+  Settings,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -98,6 +99,7 @@ const DURATION_OPTIONS = [
   { label: 'عميق ٥٠', value: 50, icon: Brain, color: 'text-emerald-accent', bgAccent: 'bg-emerald-accent/5' },
   { label: 'عميق ٩٠', value: 90, icon: Target, color: 'text-forest', bgAccent: 'bg-forest/5' },
   { label: 'عميق ١٢٠', value: 120, icon: Zap, color: 'text-gold', bgAccent: 'bg-gold/5' },
+  { label: 'مخصص', value: 0, icon: Settings, color: 'text-blue-400', bgAccent: 'bg-blue-400/5' },
 ]
 
 const AMBIENT_SOUNDS = [
@@ -610,6 +612,7 @@ export default function DeepWork() {
 
   // Timer state
   const [selectedDuration, setSelectedDuration] = useState(25)
+  const [customDuration, setCustomDuration] = useState('')
   const [timeRemaining, setTimeRemaining] = useState(25 * 60)
   const [isRunning, setIsRunning] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
@@ -900,6 +903,11 @@ export default function DeepWork() {
 
   const handleDurationSelect = (min: number) => {
     if (isRunning) return
+    if (min === 0) {
+      // Custom duration — show input
+      setSelectedDuration(0)
+      return
+    }
     setSelectedDuration(min)
     setTimeRemaining(min * 60)
     setSessionCompleted(false)
@@ -907,6 +915,18 @@ export default function DeepWork() {
     endTimeRef.current = null
     try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     playSound('navigate')
+  }
+
+  const handleCustomDurationSet = () => {
+    const min = parseInt(customDuration, 10)
+    if (min && min > 0 && min <= 480) {
+      setSelectedDuration(min)
+      setTimeRemaining(min * 60)
+      setSessionCompleted(false)
+      setSessionStartTime(null)
+      setCustomDuration('')
+      playSound('navigate')
+    }
   }
 
   const toggleSound = (label: string) => {
@@ -1069,6 +1089,37 @@ export default function DeepWork() {
           )
         })}
       </motion.div>
+
+      {/* Custom duration input (shown when "مخصص" is selected) */}
+      {selectedDuration === 0 && !isRunning && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="flex items-center gap-2 p-4 rounded-2xl glass"
+        >
+          <Clock className="w-5 h-5 text-blue-400 shrink-0" />
+          <input
+            type="number"
+            min="1"
+            max="480"
+            value={customDuration}
+            onChange={(e) => setCustomDuration(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCustomDurationSet() }}
+            placeholder="أدخل عدد الدقائق (1-480)"
+            className="flex-1 h-10 px-3 rounded-xl border border-border/60 bg-card/50 text-sm focus:border-blue-400/50 focus:outline-none"
+            autoFocus
+          />
+          <Button
+            onClick={handleCustomDurationSet}
+            size="sm"
+            className="bg-blue-500 hover:bg-blue-600 text-white shrink-0"
+          >
+            <Check className="w-4 h-4 ml-1" />
+            تعيين
+          </Button>
+        </motion.div>
+      )}
 
       {/* Timer with dramatic pulsing outer ring */}
       <motion.div variants={itemVariants} className="flex justify-center">

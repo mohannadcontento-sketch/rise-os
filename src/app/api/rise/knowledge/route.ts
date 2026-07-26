@@ -11,7 +11,12 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ items: [] })
 
     const items = await data.knowledgeItems.list(userId)
-    return NextResponse.json({ items })
+    // Support optional type filter: ?type=learning
+    const typeFilter = req.nextUrl.searchParams.get('type')
+    const filtered = typeFilter
+      ? items.filter((i: any) => String(i.type || '').startsWith(typeFilter))
+      : items
+    return NextResponse.json({ items: filtered })
   } catch (error) {
     console.error('Knowledge GET error:', error)
     return NextResponse.json({ items: [] })
