@@ -647,3 +647,20 @@ body {
 main {
   scroll-padding-top: 60px;
 }
+
+/* ─── Prevent layout issues on device rotation ─── */
+@media (orientation: portrait) and (max-width: 768px) {
+  html { -webkit-text-size-adjust: 100%; }
+}
+
+/* Smooth orientation change */
+@screen and (orientation: landscape) {
+  main { scroll-behavior: smooth; }
+}
+
+/* Prevent zoom on input focus (iOS Safari) */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea {
+    font-size: 16px;
+  }
+}

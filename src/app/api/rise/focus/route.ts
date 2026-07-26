@@ -7,12 +7,14 @@ export const dynamic = 'force-dynamic'
 
 // P1#5: Zod validation for focus sessions
 const FocusCreateSchema = z.object({
-  duration: z.number().int().min(1, 'المدة يجب أن تكون دقيقة واحدة على الأقل').max(480, 'المدة كبيرة جداً'),
+  duration: z.number().int().min(1).max(480),
   actualMin: z.number().int().min(0).max(480).optional(),
-  type: z.enum(['pomodoro', 'deep-work', 'break', 'custom']).optional(),
+  type: z.string().max(50).optional(),
   notes: z.string().max(1000).optional().nullable(),
   taskId: z.string().optional().nullable(),
-  startedAt: z.string().optional(),
+  startedAt: z.string().optional().nullable(),
+  completedAt: z.string().optional().nullable(),
+  completed: z.boolean().optional(),
 }).strict()
 
 const FocusUpdateSchema = z.object({
@@ -20,6 +22,7 @@ const FocusUpdateSchema = z.object({
   actualMin: z.number().int().min(0).max(480).optional(),
   completed: z.boolean().optional(),
   notes: z.string().max(1000).optional().nullable(),
+  taskId: z.string().optional().nullable(),
 }).strict()
 
 export async function GET(req: NextRequest) {

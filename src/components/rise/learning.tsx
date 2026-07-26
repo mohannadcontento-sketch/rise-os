@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import {
   GraduationCap,
   Plus,
@@ -162,14 +163,8 @@ function ProgressRing({ level, color, size = 48, strokeWidth = 3 }: { level: num
 /* ────────────── Component ────────────── */
 
 export default function Learning() {
-  const [data, setData] = useState<LearningData>(() => {
-    if (typeof window === 'undefined') return defaultData
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) return JSON.parse(stored)
-    } catch { /* ignore */ }
-    return defaultData
-  })
+  const [data, setData] = useState<LearningData>(defaultData)
+  const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<'goals' | 'courses' | 'skills' | 'logs'>('goals')
 
   // Add goal dialog
@@ -200,9 +195,95 @@ export default function Learning() {
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editSkillName, setEditSkillName] = useState('')
 
+  // FIX: Load from server API instead of localStorage (syncs across devices)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  }, [data])
+    async function loadFromServer() {
+      try {
+        // Load learning data from knowledge_items table (type: 'learning')
+        const res = await apiFetch('/api/rise/knowledge?type=learning')
+        if (res.ok) {
+          const result = await res.json()
+          const items = result.items || []
+          // Parse items back into LearningData structure
+          const goals = items.filter((i: any) => i.type === 'learning-goal').map((i: any) => ({
+            id: i.id, title: i.title, description: i.content, completed: i.isFavorite,
+            createdAt: i.createdAt,
+          }))
+          const courses = items.filter((i: any) => i.type === 'learning-course').map((i: any) => {
+            const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : {}
+            return {
+              id: i.id, name: i.title, platform: meta.platform || '',
+              progress: meta.progress || 0, completed: meta.completed || false,
+              createdAt: i.createdAt,
+            }
+          })
+          const skills = items.filter((i: any) => i.type === 'learning-skill').map((i: any) => {
+            const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : {}
+            return {
+              id: i.id, name: i.title, level: meta.level || 1,
+              createdAt: i.createdAt,
+            }
+          })
+          const logs = items.filter((i: any) => i.type === 'learning-log').map((i: any) => {
+            const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : {}
+            return {
+              id: i.id, content: i.content || '', minutes: meta.minutes || 0,
+              date: i.createdAt,
+            }
+          })
+          setData({ goals, courses, skills, logs })
+        }
+      } catch { /* silent */ }
+      finally { setLoading(false) }
+    }
+    loadFromServer()
+  }, [])
+
+  // Save to server whenever data changes
+  useEffect(() => {
+    if (loading) return // Don't save on initial load
+    // Save all learning items to knowledge_items table
+    const saveToServer = async () => {
+      try {
+        // Delete existing learning items, then re-create
+        const existing = await apiFetch('/api/rise/knowledge?type=learning')
+        if (existing.ok) {
+          const result = await existing.json()
+          for (const item of (result.items || [])) {
+            await apiDelete(`/api/rise/knowledge?id=${item.id}`)
+          }
+        }
+        // Create new items
+        for (const goal of data.goals) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-goal', title: goal.title,
+            content: goal.description || '', isFavorite: goal.completed,
+          })
+        }
+        for (const course of data.courses) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-course', title: course.name,
+            content: '', tags: JSON.stringify({ platform: course.platform, progress: course.progress, completed: course.completed }),
+          })
+        }
+        for (const skill of data.skills) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-skill', title: skill.name,
+            content: '', tags: JSON.stringify({ level: skill.level }),
+          })
+        }
+        for (const log of data.logs) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-log', title: 'سجل تعلم',
+            content: log.content, tags: JSON.stringify({ minutes: log.minutes }),
+          })
+        }
+      } catch { /* silent */ }
+    }
+    // Debounce saves to avoid too many requests
+    const timer = setTimeout(saveToServer, 1000)
+    return () => clearTimeout(timer)
+  }, [data, loading])
 
   const addGoal = () => {
     if (!newGoalTitle.trim()) return

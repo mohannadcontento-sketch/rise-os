@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { apiGet, apiPut, apiDelete } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { cn } from '@/lib/utils'
 import { playSound } from '@/lib/sounds'
 
@@ -150,10 +151,11 @@ export function NotificationBell() {
     finally { loadingRef.current = false }
   }, [])
 
-  // Fetch on open + initial
+  // Fetch on open + initial + when data changes (real-time)
+  const { refreshKey } = useDataRefresh()
   useEffect(() => {
     fetchNotifications()
-  }, [fetchNotifications])
+  }, [fetchNotifications, refreshKey])
 
   // Poll every 30s when panel is open
   useEffect(() => {
