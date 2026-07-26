@@ -257,13 +257,13 @@ export default function Learning() {
         for (const goal of data.goals) {
           await apiPost('/api/rise/knowledge', {
             type: 'learning-goal', title: goal.title,
-            content: goal.description || '', isFavorite: goal.completed,
+            content: goal.description || '', isFavorite: goal.status === 'completed',
           })
         }
         for (const course of data.courses) {
           await apiPost('/api/rise/knowledge', {
             type: 'learning-course', title: course.name,
-            content: '', tags: JSON.stringify({ platform: course.platform, progress: course.progress, completed: course.completed }),
+            content: '', tags: JSON.stringify({ platform: course.platform, progress: course.progress, completed: course.status === 'completed' }),
           })
         }
         for (const skill of data.skills) {
