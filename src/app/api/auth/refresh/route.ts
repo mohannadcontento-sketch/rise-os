@@ -6,7 +6,17 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const { refresh_token } = await request.json()
+    let refresh_token: string | undefined
+    try {
+      const body = await request.json()
+      refresh_token = body?.refresh_token
+    } catch { /* no body */ }
+
+    // FIX: Also check httpOnly cookie for refresh token
+    if (!refresh_token) {
+      refresh_token = request.cookies.get('rise-refresh')?.value
+    }
+
     if (!refresh_token) {
       return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
     }
@@ -33,19 +43,22 @@ export async function POST(request: NextRequest) {
               }
             } catch { /* ignore */ }
 
-            return NextResponse.json({
-              session: {
-                access_token: data.session.access_token,
-                refresh_token: data.session.refresh_token,
-                expires_at: data.session.expires_at,
-              },
-              user: {
-                id: data.user.id,
-                email: data.user.email,
-                name: data.user.user_metadata?.name || data.user.email?.split('@')[0],
-                isAdmin,
-              },
-            })
+            const userInfo = {
+              id: data.user.id,
+              email: data.user.email || '',
+              name: (data.user as any).user_metadata?.name || data.user.email?.split('@')[0] || 'مستخدم',
+              isAdmin,
+              avatar: null as string | null,
+            }
+            const sessionData = {
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+              expires_at: data.session.expires_at!,
+            }
+            // FIX: Set new httpOnly cookies with refreshed tokens
+            const { setAuthCookies } = await import('@/lib/cookie-auth')
+            const res = NextResponse.json({ session: sessionData, user: userInfo })
+            return setAuthCookies(res, sessionData, userInfo)
           }
         } catch { /* fall through */ }
       }

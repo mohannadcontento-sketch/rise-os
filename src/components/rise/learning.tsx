@@ -244,6 +244,48 @@ export default function Learning() {
     } catch { /* silent */ }
   }
 
+  // FIX: Auto-save all learning data to server (debounced 1.5s)
+  useEffect(() => {
+    if (loading) return
+    const timer = setTimeout(async () => {
+      try {
+        // Delete existing learning items, then re-create
+        const existing = await apiFetch('/api/rise/knowledge?type=learning')
+        if (existing.ok) {
+          const result = await existing.json()
+          for (const item of (result.items || [])) {
+            await apiDelete(`/api/rise/knowledge?id=${item.id}`)
+          }
+        }
+        for (const goal of data.goals) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-goal', title: goal.title,
+            content: goal.description || '', isFavorite: goal.status === 'completed',
+          })
+        }
+        for (const course of data.courses) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-course', title: course.name,
+            content: '', tags: JSON.stringify({ platform: course.platform, progress: course.progress, completed: course.status === 'completed' }),
+          })
+        }
+        for (const skill of data.skills) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-skill', title: skill.name,
+            content: '', tags: JSON.stringify({ level: skill.level }),
+          })
+        }
+        for (const log of data.logs) {
+          await apiPost('/api/rise/knowledge', {
+            type: 'learning-log', title: 'سجل تعلم',
+            content: log.content, tags: JSON.stringify({ minutes: log.minutesSpent }),
+          })
+        }
+      } catch { /* silent */ }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [data, loading])
+
   const deleteItem = async (id: string) => {
     try {
       await apiDelete(`/api/rise/knowledge?id=${id}`)

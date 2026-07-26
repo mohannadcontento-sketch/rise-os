@@ -135,25 +135,13 @@ function getAuthHeaders(): Record<string, string> {
  * Uses a lock to prevent concurrent refreshes.
  */
 async function tryRefreshToken(): Promise<boolean> {
-  // If offline, don't try refresh
   if (!isOnline()) return false
-
-  // If a refresh is already in progress, wait for it
   if (_refreshPromise) return _refreshPromise
 
   _refreshPromise = (async () => {
     try {
       const stored = localStorage.getItem('rise-auth')
-      if (!stored) return false
-
-      const session = JSON.parse(stored)
-      const isSupabaseSession = session.refresh_token && session.refresh_token.length > 20
-
-      if (!isSupabaseSession) {
-        // Local mode — don't clear auth offline, just return false
-        if (isOnline()) clearAuth()
-        return false
-      }
+      const refreshToken = stored ? JSON.parse(stored).refresh_token : undefined
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -161,14 +149,15 @@ async function tryRefreshToken(): Promise<boolean> {
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: session.refresh_token }),
+        body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
         signal: controller.signal,
+        credentials: 'include',
       })
 
       clearTimeout(timeoutId)
 
       if (!res.ok) {
-        clearAuth()
+        if (res.status === 401) clearAuth()
         return false
       }
 
