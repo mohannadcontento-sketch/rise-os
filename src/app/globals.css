@@ -665,17 +665,22 @@ main {
   }
 }
 
-/* ─── Prevent app rotation on mobile ─── */
-/* The app is designed for portrait — lock it */
-@media screen and (min-width: 320px) and (max-width: 767px) and (orientation: landscape) {
-  html {
-    transform: rotate(-90deg);
-    transform-origin: left top;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    width: 100vh;
-    height: 100vw;
-    overflow-x: hidden;
+/* ─── Prevent popup rotation on mobile ─── */
+/* Fix dialog/modal overflow in landscape mode */
+@media screen and (max-width: 767px) and (orientation: landscape) {
+  [role="dialog"],
+  [data-radix-dialog-content],
+  [data-radix-popper-content-wrapper] {
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    width: 95vw !important;
+    max-width: 95vw !important;
+  }
+
+  /* Prevent body scroll when dialog open */
+  body:has([role="dialog"]) {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
   }
 }
