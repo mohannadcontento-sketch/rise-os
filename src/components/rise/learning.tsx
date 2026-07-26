@@ -227,7 +227,7 @@ export default function Learning() {
           const logs = items.filter((i: any) => i.type === 'learning-log').map((i: any) => {
             const meta = typeof i.tags === 'string' ? JSON.parse(i.tags || '{}') : {}
             return {
-              id: i.id, content: i.content || '', minutes: meta.minutes || 0,
+              id: i.id, content: i.content || '', minutesSpent: meta.minutes || 0,
               date: i.createdAt,
             }
           })
@@ -275,7 +275,7 @@ export default function Learning() {
         for (const log of data.logs) {
           await apiPost('/api/rise/knowledge', {
             type: 'learning-log', title: 'سجل تعلم',
-            content: log.content, tags: JSON.stringify({ minutes: log.minutes }),
+            content: log.content, tags: JSON.stringify({ minutes: log.minutesSpent }),
           })
         }
       } catch { /* silent */ }
