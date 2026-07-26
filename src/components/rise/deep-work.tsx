@@ -42,6 +42,9 @@ import {
   Link2,
   Loader2,
   Settings,
+  Music,
+  Moon,
+  Piano,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -103,12 +106,14 @@ const DURATION_OPTIONS = [
 ]
 
 const AMBIENT_SOUNDS = [
-  { label: 'مطر', icon: CloudRain, color: 'bg-blue-400/10 text-blue-400', waveColor: 'rgba(96, 165, 250, 0.08)' },
-  { label: 'غابة', icon: TreePine, color: 'bg-emerald-accent/10 text-emerald-accent', waveColor: 'rgba(16, 185, 129, 0.08)' },
-  { label: 'قهوة', icon: Coffee, color: 'bg-amber-600/10 text-amber-600', waveColor: 'rgba(217, 119, 6, 0.08)' },
-  { label: 'محيط', icon: Waves, color: 'bg-cyan-500/10 text-cyan-500', waveColor: 'rgba(6, 182, 212, 0.08)' },
-  { label: 'نار', icon: Flame, color: 'bg-orange-500/10 text-orange-500', waveColor: 'rgba(249, 115, 22, 0.08)' },
-  { label: 'رياح', icon: Wind, color: 'bg-teal-400/10 text-teal-400', waveColor: 'rgba(45, 212, 191, 0.08)' },
+  { label: 'ضوء القمر', icon: Moon, color: 'bg-indigo-400/10 text-indigo-300', waveColor: 'rgba(129, 140, 248, 0.08)' },
+  { label: 'مدفأة دافئة', icon: Flame, color: 'bg-orange-400/10 text-orange-300', waveColor: 'rgba(251, 146, 60, 0.06)' },
+  { label: 'مطر', icon: CloudRain, color: 'bg-blue-400/10 text-blue-300', waveColor: 'rgba(96, 165, 250, 0.06)' },
+  { label: 'غابة', icon: TreePine, color: 'bg-emerald-400/10 text-emerald-300', waveColor: 'rgba(16, 185, 129, 0.06)' },
+  { label: 'قهوة', icon: Coffee, color: 'bg-amber-600/10 text-amber-400', waveColor: 'rgba(217, 119, 6, 0.06)' },
+  { label: 'محيط', icon: Waves, color: 'bg-cyan-500/10 text-cyan-300', waveColor: 'rgba(6, 182, 212, 0.06)' },
+  { label: 'نار', icon: Flame, color: 'bg-orange-500/10 text-orange-400', waveColor: 'rgba(249, 115, 22, 0.08)' },
+  { label: 'رياح', icon: Wind, color: 'bg-teal-400/10 text-teal-300', waveColor: 'rgba(45, 212, 191, 0.06)' },
 ]
 
 const containerVariants = {
@@ -459,6 +464,172 @@ function createWindSound(ctx: AudioContext, masterGain: GainNode, volume: number
   return { sources: [src, filter, lfo, lfoGain, lfo2, lfo2Gain, filterLfo, filterLfoGain], gain, timers: [], intervals: [] }
 }
 
+// ─── Beethoven Moonlight Sonata (1st movement) — gentle, calming ───
+function createMoonlightSonata(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.35, ctx.currentTime + 3)
+  gain.connect(masterGain)
+
+  const sources: any[] = []
+  const timers: ReturnType<typeof setTimeout>[] = []
+  const intervals: ReturnType<typeof setInterval>[] = []
+
+  // Moonlight Sonata 1st movement — triplets in C# minor
+  // Main triplet pattern: C#4 E4 G#4 (repeated with variations)
+  const notes = [
+    // Bar 1-4: Main theme
+    { freq: 277.18, dur: 0.4 }, // C#4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 415.30, dur: 0.4 }, // G#4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 277.18, dur: 0.4 }, // C#4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 415.30, dur: 0.4 }, // G#4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 261.63, dur: 0.4 }, // C4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 392.00, dur: 0.4 }, // G4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 246.94, dur: 0.4 }, // B3
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 392.00, dur: 0.4 }, // G4
+    { freq: 329.63, dur: 0.4 }, // E4
+    // Bar 5-8: Bass notes + arpeggios
+    { freq: 138.59, dur: 0.8 }, // C#3 (bass)
+    { freq: 277.18, dur: 0.4 }, // C#4
+    { freq: 349.23, dur: 0.4 }, // F4
+    { freq: 415.30, dur: 0.4 }, // G#4
+    { freq: 349.23, dur: 0.4 }, // F4
+    { freq: 277.18, dur: 0.4 }, // C#4
+    { freq: 349.23, dur: 0.4 }, // F4
+    { freq: 415.30, dur: 0.4 }, // G#4
+    { freq: 349.23, dur: 0.4 }, // F4
+    { freq: 130.81, dur: 0.8 }, // C3 (bass)
+    { freq: 261.63, dur: 0.4 }, // C4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 392.00, dur: 0.4 }, // G4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 261.63, dur: 0.4 }, // C4
+    { freq: 329.63, dur: 0.4 }, // E4
+    { freq: 392.00, dur: 0.4 }, // G4
+  ]
+
+  let noteIndex = 0
+
+  const playNote = (freq: number, dur: number, delay: number) => {
+    const timer = setTimeout(() => {
+      const osc = ctx.createOscillator()
+      const oscGain = ctx.createGain()
+      const filter = ctx.createBiquadFilter()
+
+      // Soft piano-like tone
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, ctx.currentTime)
+
+      // Lowpass filter for warmth
+      filter.type = 'lowpass'
+      filter.frequency.setValueAtTime(2000, ctx.currentTime)
+      filter.Q.setValueAtTime(0.5, ctx.currentTime)
+
+      // Gentle ADSR envelope (piano-like: quick attack, slow decay)
+      const now = ctx.currentTime
+      oscGain.gain.setValueAtTime(0, now)
+      oscGain.gain.linearRampToValueAtTime(0.3, now + 0.02)  // Quick attack
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.9) // Slow decay
+
+      osc.connect(filter).connect(oscGain).connect(gain)
+      osc.start(now)
+      osc.stop(now + dur)
+
+      // Add subtle harmonic for richness
+      const osc2 = ctx.createOscillator()
+      const osc2Gain = ctx.createGain()
+      osc2.type = 'triangle'
+      osc2.frequency.setValueAtTime(freq * 2, now)
+      osc2Gain.gain.setValueAtTime(0, now)
+      osc2Gain.gain.linearRampToValueAtTime(0.08, now + 0.02)
+      osc2Gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.7)
+      osc2.connect(osc2Gain).connect(gain)
+      osc2.start(now)
+      osc2.stop(now + dur)
+    }, delay * 1000)
+    timers.push(timer)
+  }
+
+  // Schedule notes in a loop
+  const scheduleNextBar = () => {
+    let delay = 0
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[(noteIndex + i) % notes.length]
+      playNote(note.freq, note.dur, delay)
+      delay += note.dur
+    }
+    noteIndex += notes.length
+  }
+
+  // Start immediately, then loop every ~12 seconds
+  scheduleNextBar()
+  const interval = setInterval(scheduleNextBar, notes.reduce((sum, n) => sum + n.dur, 0) * 1000)
+  intervals.push(interval)
+
+  return { sources: [gain], gain, timers, intervals }
+}
+
+// ─── Cozy fireplace crackling + soft ambient — very relaxing ───
+function createCozyFireSound(ctx: AudioContext, masterGain: GainNode, volume: number): AmbientSoundNodes {
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(volume * 0.5, ctx.currentTime + 2)
+  gain.connect(masterGain)
+
+  const sources: any[] = []
+  const timers: ReturnType<typeof setTimeout>[] = []
+
+  // Very soft low rumble (fire base)
+  const rumbleOsc = ctx.createOscillator()
+  const rumbleGain = ctx.createGain()
+  const rumbleFilter = ctx.createBiquadFilter()
+  rumbleOsc.type = 'sawtooth'
+  rumbleOsc.frequency.setValueAtTime(45, ctx.currentTime)
+  rumbleFilter.type = 'lowpass'
+  rumbleFilter.frequency.setValueAtTime(120, ctx.currentTime)
+  rumbleGain.gain.setValueAtTime(volume * 0.15, ctx.currentTime)
+  // Slow LFO for breathing effect
+  const lfo = ctx.createOscillator()
+  lfo.frequency.setValueAtTime(0.1, ctx.currentTime)
+  const lfoGain = ctx.createGain()
+  lfoGain.gain.setValueAtTime(0.08, ctx.currentTime)
+  lfo.connect(lfoGain).connect(rumbleGain.gain)
+  lfo.start()
+  rumbleOsc.connect(rumbleFilter).connect(rumbleGain).connect(gain)
+  rumbleOsc.start()
+
+  // Random crackles (softer, less frequent = more cozy)
+  const crackleTimer = setInterval(() => {
+    if (Math.random() > 0.4) return // Less frequent = calmer
+    const osc = ctx.createOscillator()
+    const oscGain = ctx.createGain()
+    const filter = ctx.createBiquadFilter()
+    const now = ctx.currentTime
+    osc.type = 'square'
+    osc.frequency.setValueAtTime(80 + Math.random() * 200, now)
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(300 + Math.random() * 800, now)
+    filter.Q.setValueAtTime(2, now)
+    oscGain.gain.setValueAtTime(0, now)
+    oscGain.gain.linearRampToValueAtTime(volume * 0.12, now + 0.005) // Softer
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+    osc.connect(filter).connect(oscGain).connect(gain)
+    osc.start(now)
+    osc.stop(now + 0.1)
+  }, 200 + Math.random() * 400)
+
+  sources.push(rumbleOsc, lfo, rumbleFilter, rumbleGain, lfoGain)
+
+  return { sources, gain, timers, intervals: [crackleTimer] }
+}
+
 const AMBIENT_SOUND_CREATORS: Record<string, (ctx: AudioContext, master: GainNode, vol: number) => AmbientSoundNodes> = {
   'مطر': createRainSound,
   'غابة': createForestSound,
@@ -466,6 +637,8 @@ const AMBIENT_SOUND_CREATORS: Record<string, (ctx: AudioContext, master: GainNod
   'محيط': createOceanSound,
   'نار': createFireSound,
   'رياح': createWindSound,
+  'ضوء القمر': createMoonlightSonata,
+  'مدفأة دافئة': createCozyFireSound,
 }
 
 function useAmbientSounds() {
