@@ -225,12 +225,19 @@ export function Tasks() {
   const fetchData = useCallback(async () => {
     try {
       const res = await apiFetch('/api/rise/tasks')
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) {
+        // FIX: Don't overwrite existing tasks with empty data on error.
+        // Just set loading to false and keep showing whatever we already have.
+        // Previously, a 503/network error would silently set tasks=[] causing
+        // the "tasks disappear" bug.
+        setLoading(false)
+        return
+      }
       const data = await res.json()
       setTasks(data.tasks || [])
       setProjects(data.projects || [])
     } catch {
-      /* ignore */
+      // Network/parse error — preserve existing state, don't wipe it
     } finally {
       setLoading(false)
     }

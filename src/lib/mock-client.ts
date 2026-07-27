@@ -291,7 +291,10 @@ class MockSupabaseClient {
           session: {
             access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`,
             refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`,
-            expires_at: Math.floor(ts / 1000) + 3600,
+            // FIX: 7 days (was 1 hour) — must match cookie maxAge in cookie-auth.ts.
+            // The 1-hour expiry caused the frontend to attempt refresh after 55 min,
+            // which hit the broken local fallback and cleared the session.
+            expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600,
           },
         },
         error: null,
@@ -308,7 +311,7 @@ class MockSupabaseClient {
       return {
         data: {
           user: { id: user.id, email: user.email, user_metadata: { name: user.name }, aud: 'authenticated', role: 'authenticated', app_metadata: {}, identities: [] },
-          session: { access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`, refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`, expires_at: Math.floor(ts / 1000) + 3600 },
+          session: { access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`, refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`, expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600 },
         },
         error: null,
       }
@@ -326,7 +329,7 @@ class MockSupabaseClient {
       const user = await (db as any).user.findUnique({ where: { id: match[1] } })
       if (!user) return { data: { user: null, session: null }, error: { message: 'User not found', code: '', status: 0 } }
       const ts = Date.now()
-      return { data: { user: { id: user.id, email: user.email }, session: { access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`, refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`, expires_at: Math.floor(ts / 1000) + 3600 } }, error: null }
+      return { data: { user: { id: user.id, email: user.email }, session: { access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`, refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`, expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600 } }, error: null }
     },
     async resend(): Promise<any> { return { data: {}, error: null } },
     async signOut(): Promise<any> { return { error: null } },

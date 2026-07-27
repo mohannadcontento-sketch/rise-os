@@ -160,7 +160,12 @@ async function tryRefreshToken(): Promise<boolean> {
       clearTimeout(timeoutId)
 
       if (!res.ok) {
-        if (res.status === 401) clearAuth()
+        // FIX: Do NOT call clearAuth() on refresh failure.
+        // The httpOnly cookie (rise-access) is still valid for 7 days and
+        // the mock token format never expires from the API's perspective.
+        // Calling clearAuth() here was prematurely logging users out and
+        // causing tasks to "disappear" (the UI lost auth state even though
+        // the backend would still accept the cookie).
         return false
       }
 
@@ -177,7 +182,8 @@ async function tryRefreshToken(): Promise<boolean> {
         return true
       }
 
-      clearAuth()
+      // FIX: Don't clearAuth() here either — just return false.
+      // The cookie may still be valid even if the refresh response is malformed.
       return false
     } catch {
       // Network error or timeout — don't clear auth, keep stored session
@@ -258,6 +264,12 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
             headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
           })
         }
+        // FIX: Return 408 (not fake 200) when no cache — prevents components
+        // from overwriting their state with empty data ({ tasks: [] } etc.)
+        return new Response(JSON.stringify({ error: 'timeout', message: 'انتهت مهلة الطلب' }), {
+          status: 408,
+          headers: { 'Content-Type': 'application/json' },
+        })
       }
       // For write requests, queue and return success
       if (options.method && options.method !== 'GET') {
@@ -282,6 +294,13 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' },
         })
       }
+      // FIX: Return 503 (not fake 200) when no cache — prevents components
+      // from wiping their UI with empty data on transient network errors.
+      // Components check `res.ok` and skip the state update on error.
+      return new Response(JSON.stringify({ error: 'network', message: 'لا يوجد اتصال' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
     } else {
       // POST/PUT/DELETE failed — queue for offline sync
       enqueueRequest(url, options.method || 'POST', options.body as string | undefined)

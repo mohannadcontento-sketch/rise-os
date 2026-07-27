@@ -64,16 +64,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Local Fallback ──
-    const user = await db.user.findUnique({ where: { id: refresh_token } })
+    // ── Local Fallback (mock mode) ──
+    // FIX: The mock refresh_token has format `local.refresh.{userId}.{ts}.risecos.local`.
+    // Previously this code passed the entire refresh_token string as a user ID to
+    // db.user.findUnique, which always returned null → 401 → clearAuth() → session lost.
+    // Now we extract the userId from the mock refresh_token via regex.
+    let userId: string | null = null
+    const mockMatch = refresh_token.match(/^local\.refresh\.(.+?)\.\d+\.risecos\.local/)
+    if (mockMatch) {
+      userId = mockMatch[1]
+    } else {
+      // Legacy: some older tokens used the raw user ID as the refresh_token
+      userId = refresh_token
+    }
+
+    const user = await db.user.findUnique({ where: { id: userId! } })
     if (!user) {
       return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
     }
 
-    return NextResponse.json({
-      session: { access_token: user.id, refresh_token: '', expires_at: 0 },
-      user: { id: user.id, email: user.email, name: user.name, isAdmin: user.email === ADMIN_EMAIL },
-    })
+    // Issue a fresh mock session (7-day expiry, matching cookie-auth.ts)
+    const ts = Date.now()
+    const newSession = {
+      access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`,
+      refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`,
+      expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600,
+    }
+    const userInfo = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      isAdmin: user.email === ADMIN_EMAIL,
+    }
+    const { setAuthCookies } = await import('@/lib/cookie-auth')
+    const res = NextResponse.json({ session: newSession, user: userInfo })
+    return setAuthCookies(res, newSession, userInfo)
   } catch {
     return NextResponse.json({ error: 'حدث خطأ' }, { status: 500 })
   }
