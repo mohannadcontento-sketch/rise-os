@@ -255,10 +255,19 @@ export default function RiseOSApp() {
 
         // ✅ INSTANT: Set auth from localStorage immediately (zero delay)
         const storedInfo = JSON.parse(userInfo)
-        const isSupabaseSession = session.refresh_token && session.refresh_token.length > 20
+        // FIX: Mock tokens start with "local." — they should NOT be treated as
+        // Supabase sessions. Treating them as Supabase sessions caused checkAuth
+        // to call /api/auth/refresh on every mount (because mock refresh_token
+        // length > 20), which could fail and log the user out.
+        const isMockSession = !!(session.access_token && session.access_token.startsWith('local.'))
+        const isSupabaseSession = !isMockSession && session.refresh_token && session.refresh_token.length > 20
         setAuth({
           isAuthenticated: true,
-          userId: isSupabaseSession ? (storedInfo?.id || session.access_token) : session.access_token,
+          // FIX: For mock sessions, use storedInfo.id (the real user ID from DB).
+          // Previously, mock sessions fell into the `else` branch and used
+          // session.access_token as the userId, which is the full token string
+          // (e.g. "local.cms3xxx.123.risecos.local...") — not a valid user ID.
+          userId: isMockSession ? (storedInfo?.id || '') : (isSupabaseSession ? (storedInfo?.id || session.access_token) : session.access_token),
           userEmail: storedInfo?.email || '',
           userName: storedInfo?.name || '',
           isAdmin: storedInfo?.isAdmin || false,
@@ -312,7 +321,13 @@ export default function RiseOSApp() {
                 isAdmin: data.user.isAdmin,
               })
             }
-          } else if (isSupabaseSession) {
+          } else if (isSupabaseSession && !isMockSession) {
+            // FIX: Only attempt Supabase refresh for REAL Supabase sessions.
+            // Mock sessions (token starts with "local.") are validated by the
+            // cookie-based session route above — if it returned {user: null},
+            // the mock token is genuinely invalid and we should NOT try to
+            // refresh it (the refresh route's Supabase branch would fail anyway
+            // because isSupabaseConfigured() is false in mock mode).
             // Supabase session invalid — try refresh
             fetch('/api/auth/refresh', {
               method: 'POST',
