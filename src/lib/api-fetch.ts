@@ -55,8 +55,11 @@ function getCached<T = any>(url: string): T | null {
       return null
     }
     const age = Date.now() - entry.ts
-    // Return cached data even if stale (we use stale-while-revalidate)
-    if (age < 24 * 60 * 60 * 1000) { // Max 24h old
+    // Return cached data even if stale (we use stale-while-revalidate).
+    // Reduced from 24h to 2h — a 24h window served yesterday's "today" data
+    // after midnight, causing the "must logout/login to start a new day" bug.
+    // 2h is enough for offline recovery without crossing midnight in most cases.
+    if (age < 2 * 60 * 60 * 1000) { // Max 2h old
       return entry.data as T
     }
     localStorage.removeItem(getCacheKey(url))

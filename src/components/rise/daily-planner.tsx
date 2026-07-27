@@ -741,7 +741,26 @@ export default function DailyPlanner() {
   const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
   const [currentTime, setCurrentTime] = useState(new Date())
 
-  const todayStr = useMemo(() => getTodayStr(), [])
+  // FIX: reactive today — updates at midnight so the planner doesn't get
+  // stuck on yesterday's date (which caused the "logout/login to start new day" bug).
+  const [todayStr, setTodayStr] = useState(() => getTodayStr())
+  useEffect(() => {
+    const update = () => setTodayStr(getTodayStr())
+    // Re-check on focus/visibility (covers overnight sleep)
+    const onVis = () => { if (document.visibilityState === 'visible') update() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', update)
+    // Re-check on global day-changed event (from useToday hook)
+    window.addEventListener('rise:day-changed', update)
+    // Poll every 30s as a safety net
+    const interval = setInterval(update, 30_000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', update)
+      window.removeEventListener('rise:day-changed', update)
+      clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)

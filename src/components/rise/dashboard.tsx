@@ -1093,6 +1093,14 @@ export default function Dashboard() {
     fetchDashboard()
   }, [fetchDashboard, refreshKey])
 
+  // Re-fetch when the calendar day changes (midnight rollover / tab refocus)
+  // so the dashboard shows the new day's data without requiring logout/login.
+  useEffect(() => {
+    const handler = () => fetchDashboard()
+    window.addEventListener('rise:day-changed', handler)
+    return () => window.removeEventListener('rise:day-changed', handler)
+  }, [fetchDashboard])
+
   // Play achievement sound on first load if there are achievements
   const achievementSoundPlayed = useRef(false)
   useEffect(() => {

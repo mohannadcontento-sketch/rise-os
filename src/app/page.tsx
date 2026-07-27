@@ -35,6 +35,7 @@ import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 
 // Keyboard shortcuts hook — lightweight, can be eagerly imported
 import { useKeyboardShortcuts } from '@/components/rise/keyboard-shortcuts'
+import { useToday } from '@/hooks/use-today'
 // Command Dialog — lazy loaded (only needed when ⌘K pressed, heavy: cmdk)
 const CommandDialog = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandDialog })))
 const CommandInput = lazy(() => import('@/components/ui/command').then(m => ({ default: m.CommandInput })))
@@ -225,6 +226,12 @@ export default function RiseOSApp() {
   const [fabOpen, setFabOpen] = useState(false)
   const [themeRotating, setThemeRotating] = useState(false)
   const mountedRef = useRef(false)
+
+  // ─── Day-rollover detection ───────────────────────────────────────────
+  // When midnight passes (or the tab regains focus after being inactive
+  // overnight), this hook clears the API cache and dispatches global events
+  // so every module re-fetches fresh "today" data — no logout/login needed.
+  useToday()
   const mounted = useSyncExternalStore(
     () => () => {},
     () => (mountedRef.current = true, true),

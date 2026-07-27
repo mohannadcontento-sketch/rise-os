@@ -239,6 +239,13 @@ export function HabitsView() {
     fetchHabits()
   }, [fetchHabits])
 
+  /* ---- Re-fetch on day rollover so habits show fresh "today" state ---- */
+  useEffect(() => {
+    const handler = () => fetchHabits()
+    window.addEventListener('rise:day-changed', handler)
+    return () => window.removeEventListener('rise:day-changed', handler)
+  }, [fetchHabits])
+
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(
     async (habitId: string) => {
