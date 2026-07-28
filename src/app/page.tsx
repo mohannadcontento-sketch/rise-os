@@ -287,6 +287,11 @@ export default function RiseOSApp() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ refresh_token: session.refresh_token }),
+              // FIX: credentials:'include' is REQUIRED so the browser accepts
+              // the Set-Cookie headers in the refresh response. Without it,
+              // the new httpOnly cookies are never stored → the old expired
+              // cookie persists → next session check fails → user appears logged out.
+              credentials: 'include',
             }).then(r => r.json()).then(data => {
               if (data.session) {
                 localStorage.setItem('rise-auth', JSON.stringify(data.session))
@@ -333,6 +338,8 @@ export default function RiseOSApp() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ refresh_token: session.refresh_token }),
+              // FIX: credentials:'include' so new cookies are stored by browser
+              credentials: 'include',
             }).then(r => r.json()).then(refreshData => {
               if (refreshData.session) {
                 localStorage.setItem('rise-auth', JSON.stringify(refreshData.session))
@@ -345,12 +352,14 @@ export default function RiseOSApp() {
                   isAdmin: refreshData.user.isAdmin,
                   accessToken: refreshData.session.access_token,
                 })
-              } else {
-                // Both session and refresh failed — clear
-                localStorage.removeItem('rise-auth')
-                localStorage.removeItem('rise-user-info')
-                setAuth(null)
               }
+              // FIX: Do NOT call setAuth(null) when refresh fails.
+              // The user might have a transient network issue or the Supabase
+              // service might be temporarily unavailable. Logging them out
+              // forces them to re-enter credentials, which is terrible UX.
+              // Instead, keep the existing auth state and let them keep using
+              // the app. If the token is truly invalid, API calls will return
+              // 401 and apiFetch will handle it gracefully.
             }).catch(() => {
               // Network error — keep showing UI with stored session
             })
@@ -360,8 +369,9 @@ export default function RiseOSApp() {
           // Network error — already showing UI with stored session
         })
       } catch {
-        localStorage.removeItem('rise-auth')
-        localStorage.removeItem('rise-user-info')
+        // FIX: Don't remove localStorage on parse errors.
+        // The session might be valid but just have an unexpected format.
+        // Removing it would log the user out unnecessarily.
       }
     }
     checkAuth()

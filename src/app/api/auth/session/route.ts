@@ -32,11 +32,6 @@ async function checkAdminRole(userId: string, email: string | undefined): Promis
 export async function GET(request: NextRequest) {
   try {
     // FIX: Read token from httpOnly cookie FIRST, then Authorization header.
-    // Previously this route ONLY read the Authorization header, which meant
-    // it returned {user: null} whenever the frontend called it with
-    // credentials:'include' (cookie sent) but no explicit Authorization header.
-    // This caused checkAuth() in page.tsx to think the session was invalid
-    // and repeatedly trigger refresh → eventually logging users out.
     let token = request.cookies.get('rise-access')?.value || ''
     if (!token) {
       token = request.headers.get('Authorization')?.replace('Bearer ', '') || ''
@@ -46,7 +41,74 @@ export async function GET(request: NextRequest) {
     }
 
     // Use verifySupabaseToken — it handles both mock tokens and real Supabase JWTs
-    const userId = await verifySupabaseToken(token)
+    let userId = await verifySupabaseToken(token)
+
+    // FIX: If the access token is invalid (e.g. expired Supabase JWT),
+    // try to refresh it using the httpOnly refresh cookie.
+    // This prevents the "user appears logged out after token expiry" bug
+    // where the cookie has an expired JWT but the refresh token is still valid.
+    if (!userId) {
+      const refreshToken = request.cookies.get('rise-refresh')?.value
+      if (refreshToken) {
+        try {
+          // Call the refresh route's logic inline
+          // ── Try Supabase refresh ──
+          if (isSupabaseConfigured() && refreshToken.length > 20) {
+            const supabase = await getSupabaseAnon()
+            if (supabase) {
+              const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
+              if (!error && data.session && data.user) {
+                // Refresh succeeded — set new cookies and return the user
+                const { setAuthCookies } = await import('@/lib/cookie-auth')
+                const isAdmin = await checkAdminRole(data.user.id, data.user.email)
+                let avatar: string | null = null
+                try {
+                  const admin = await getSupabaseAdmin()
+                  if (admin) {
+                    const sb = admin as any
+                    const { data: profile } = await sb
+                      .from('profiles')
+                      .select('avatar')
+                      .eq('id', data.user.id)
+                      .single()
+                    const av = profile as { avatar?: string } | null
+                    avatar = av?.avatar || null
+                  }
+                } catch { /* ignore */ }
+
+                const userInfo = {
+                  id: data.user.id,
+                  email: data.user.email || '',
+                  name: (data.user as any).user_metadata?.name || data.user.email?.split('@')[0] || 'مستخدم',
+                  isAdmin,
+                  avatar,
+                }
+                const sessionData = {
+                  access_token: data.session.access_token,
+                  refresh_token: data.session.refresh_token,
+                  expires_at: data.session.expires_at!,
+                }
+                const res = NextResponse.json({
+                  user: userInfo,
+                  expires: new Date(((data.user as any).exp || 0) * 1000).toISOString() || null,
+                })
+                return setAuthCookies(res, sessionData, userInfo)
+              }
+            }
+          }
+
+          // ── Local/mock refresh fallback ──
+          const mockMatch = refreshToken.match(/^local\.refresh\.(.+?)\.\d+\.risecos\.local/)
+          if (mockMatch) {
+            userId = mockMatch[1]
+          } else if (refreshToken) {
+            // Legacy: raw user ID as refresh token
+            userId = refreshToken
+          }
+        } catch { /* refresh failed — return null below */ }
+      }
+    }
+
     if (!userId) {
       return NextResponse.json({ user: null, expires: null })
     }
