@@ -244,7 +244,44 @@ export default function RiseOSApp() {
       try {
         const stored = localStorage.getItem('rise-auth')
         const userInfo = localStorage.getItem('rise-user-info')
-        if (!stored || !userInfo) return // No session — show login
+
+        // FIX: If localStorage is empty, DON'T just show login.
+        // The httpOnly cookie (rise-access, 7-day maxAge) might still be valid
+        // even though localStorage was cleared by the browser (tab discard,
+        // "clear data on exit", mobile memory pressure, etc.).
+        // Try to restore the session from the cookie via /api/auth/session.
+        if (!stored || !userInfo) {
+          // Skip if offline — can't validate cookie
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+
+          // Try to restore session from httpOnly cookie
+          apiGet('/api/auth/session').then(r => r.json()).then(data => {
+            if (data.user) {
+              // Cookie is valid! Restore the session to localStorage + Zustand.
+              // We don't have the refresh_token (it was in localStorage which
+              // was cleared), but the httpOnly rise-refresh cookie still has it.
+              // The /api/auth/session route already refreshed the access cookie
+              // if needed, so we can just use the user info.
+              const session = {
+                access_token: 'restored-from-cookie', // placeholder — API calls use cookie
+                refresh_token: '', // not available (httpOnly)
+                expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
+              }
+              localStorage.setItem('rise-auth', JSON.stringify(session))
+              localStorage.setItem('rise-user-info', JSON.stringify(data.user))
+              setAuth({
+                isAuthenticated: true,
+                userId: data.user.id,
+                userEmail: data.user.email || '',
+                userName: data.user.name || '',
+                isAdmin: data.user.isAdmin || false,
+                accessToken: session.access_token,
+              })
+            }
+            // If data.user is null, the cookie is also invalid → show login
+          }).catch(() => { /* network error — show login */ })
+          return
+        }
 
         const session = JSON.parse(stored)
         if (!session.access_token) {
