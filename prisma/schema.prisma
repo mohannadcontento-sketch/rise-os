@@ -63,6 +63,7 @@ model UserSettings {
   updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== USER ACHIEVEMENTS ====================
@@ -76,6 +77,7 @@ model UserAchievement {
   earnedAt  DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== DAILY SCORE ====================
@@ -93,6 +95,7 @@ model DailyScore {
   createdAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== PROJECTS ====================
@@ -110,6 +113,7 @@ model Project {
 
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks Task[]
+  @@index([userId])
 }
 
 // ==================== TASKS ====================
@@ -137,6 +141,7 @@ model Task {
   user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   subtasks SubTask[]
+  @@index([userId])
 }
 
 // ==================== SUBTASKS ====================
@@ -167,6 +172,7 @@ model Goal {
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   milestones Milestone[]
+  @@index([userId])
 }
 
 // ==================== MILESTONES ====================
@@ -198,6 +204,7 @@ model Habit {
 
   user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   logs HabitLog[]
+  @@index([userId])
 }
 
 // ==================== HABIT LOGS ====================
@@ -225,6 +232,7 @@ model MorningLog {
   createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== JOURNAL ====================
@@ -245,6 +253,7 @@ model Journal {
   updatedAt   DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== FOCUS SESSION ====================
@@ -262,6 +271,7 @@ model FocusSession {
   createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== HEALTH LOG ====================
@@ -283,6 +293,7 @@ model HealthLog {
   createdAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== FINANCE RECORD ====================
@@ -298,6 +309,7 @@ model FinanceRecord {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== BOOKS ====================
@@ -322,6 +334,7 @@ model Book {
   updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== KNOWLEDGE ITEM ====================
@@ -339,6 +352,7 @@ model KnowledgeItem {
   updatedAt  DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== PLANNER ITEM ====================
@@ -371,6 +385,7 @@ model UserAIUsage {
   updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== USER STORAGE ====================
@@ -388,6 +403,7 @@ model UserStorage {
   updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== APP CONFIG ====================
@@ -407,6 +423,7 @@ model UserApiKey {
   lastUsedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 // ==================== NOTIFICATION ====================
