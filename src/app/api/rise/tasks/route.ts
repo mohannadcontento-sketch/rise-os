@@ -8,10 +8,16 @@ export const dynamic = 'force-dynamic'
 
 // P2#2: Paginated tasks list (backward compatible — no params = all)
 // P1#5: Zod validation on POST/PUT
+// FIX: Accept both 'in_progress' (underscore, used by frontend) and 'in-progress' (hyphen).
+// Normalize to 'in_progress' so the DB stores a consistent format.
+const TaskStatusSchema = z
+  .enum(['todo', 'in_progress', 'in-progress', 'done'])
+  .transform((v) => (v === 'in-progress' ? 'in_progress' : v))
+
 const TaskCreateSchema = z.object({
   title: z.string().min(1, 'العنوان مطلوب').max(200),
   description: z.string().max(2000).optional().nullable(),
-  status: z.enum(['todo', 'in-progress', 'done']).optional(),
+  status: TaskStatusSchema.optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   label: z.string().max(50).optional().nullable(),
   projectId: z.string().optional().nullable(),
@@ -25,11 +31,13 @@ const TaskCreateSchema = z.object({
   order: z.number().int().optional(),
 }).strict()
 
+// FIX: Removed .strict() — the frontend may send extra fields (dependsOn,
+// recurringPattern, etc.) during updates. .strict() rejected them with 400.
 const TaskUpdateSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional().nullable(),
-  status: z.enum(['todo', 'in-progress', 'done']).optional(),
+  status: TaskStatusSchema.optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   completedAt: z.string().optional().nullable(),
   label: z.string().max(50).optional().nullable(),
@@ -39,7 +47,10 @@ const TaskUpdateSchema = z.object({
   estimatedMin: z.number().int().min(0).max(600).optional().nullable(),
   xpReward: z.number().int().min(0).max(500).optional(),
   order: z.number().int().optional(),
-}).strict()
+  dependsOn: z.string().optional().nullable(),
+  isRecurring: z.boolean().optional(),
+  recurringPattern: z.string().optional().nullable(),
+})
 
 export async function GET(req: NextRequest) {
   try {

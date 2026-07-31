@@ -473,7 +473,7 @@ function RoutineItemRow({
         />
       </motion.div>
       <motion.div
-        animate={checked ? { scale: 1, backgroundColor: 'var(--color-emerald-accent)', color: 'white' } : { scale: 1 }}
+        animate={checked ? { scale: 1, backgroundColor: '#10b981', color: 'white' } : { scale: 1 }}
         transition={{ duration: 0.3 }}
         className={cn(
           'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300',

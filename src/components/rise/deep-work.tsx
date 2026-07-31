@@ -919,15 +919,15 @@ export default function DeepWork() {
           <motion.div
             animate={isRunning && !isPaused ? {
               boxShadow: [
-                '0 0 20px oklch(0.72 0.19 162 / 0.15)',
-                '0 0 40px oklch(0.72 0.19 162 / 0.25)',
-                '0 0 20px oklch(0.72 0.19 162 / 0.15)',
+                '0 0 20px rgba(16, 185, 129, 0.15)',
+                '0 0 40px rgba(16, 185, 129, 0.25)',
+                '0 0 20px rgba(16, 185, 129, 0.15)',
               ],
             } : isPaused ? {
               boxShadow: [
-                '0 0 15px oklch(0.85 0.14 85 / 0.1)',
-                '0 0 25px oklch(0.85 0.14 85 / 0.18)',
-                '0 0 15px oklch(0.85 0.14 85 / 0.1)',
+                '0 0 15px rgba(234, 179, 8, 0.1)',
+                '0 0 25px rgba(234, 179, 8, 0.18)',
+                '0 0 15px rgba(234, 179, 8, 0.1)',
               ],
             } : {}}
             transition={{

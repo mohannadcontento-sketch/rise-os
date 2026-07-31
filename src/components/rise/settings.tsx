@@ -929,7 +929,7 @@ export default function Settings() {
           {/* Red glow effect */}
           <motion.div
             className="absolute inset-0 rounded-2xl pointer-events-none"
-            animate={{ boxShadow: ['inset 0 0 20px oklch(0.6 0.25 25 / 0.05)', 'inset 0 0 40px oklch(0.6 0.25 25 / 0.08)', 'inset 0 0 20px oklch(0.6 0.25 25 / 0.05)'] }}
+            animate={{ boxShadow: ['inset 0 0 20px rgba(220, 38, 38, 0.05)', 'inset 0 0 40px rgba(220, 38, 38, 0.08)', 'inset 0 0 20px rgba(220, 38, 38, 0.05)'] }}
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
           />
           <div className="bg-destructive/5 group-hover:bg-destructive/10 transition-colors p-5">

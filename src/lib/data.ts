@@ -187,21 +187,33 @@ export const data = {
     async list(userId: string) {
       const client = await sb()
 
-      // P2#4: Fetch tasks + subtasks + projects efficiently.
-      // Use 3 parallel queries instead of nested join (more reliable across
-      // Supabase RLS configs, and still O(1) round-trips via Promise.all).
-      const [tasksRes, subtasksRes, projectsRes] = await Promise.all([
+      // FIX: Fetch tasks + projects first (parallel), then fetch subtasks
+      // using .in('task_id', taskIds) instead of the nested relation filter
+      // .eq('task.user_id', userId) which the mock client doesn't support.
+      // This works identically in both Supabase and mock (Prisma) mode.
+      const [tasksRes, projectsRes] = await Promise.all([
         client.from('tasks').select('*').eq('user_id', userId).order('order', { ascending: true }),
-        client.from('subtasks').select('*, task:tasks(id, user_id)').eq('task.user_id', userId),
         client.from('projects').select('id, name, color').eq('user_id', userId),
       ])
 
       if (tasksRes.error) throw tasksRes.error
       const taskList = tasksRes.data ?? []
+      const taskIds = taskList.map((t: any) => t.id)
+
+      // Fetch subtasks for the user's tasks (only if there are tasks)
+      let subtasksData: any[] = []
+      if (taskIds.length > 0) {
+        const subtasksRes = await client
+          .from('subtasks')
+          .select('*')
+          .in('task_id', taskIds)
+          .order('order', { ascending: true })
+        subtasksData = subtasksRes.data ?? []
+      }
 
       // Build subtask map (group by task_id)
       const subtaskMap = new Map<string, any[]>()
-      for (const st of (subtasksRes.data ?? [])) {
+      for (const st of subtasksData) {
         const tid = st.task_id
         if (!subtaskMap.has(tid)) subtaskMap.set(tid, [])
         subtaskMap.get(tid)!.push(st)
