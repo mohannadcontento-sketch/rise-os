@@ -1068,7 +1068,14 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
 
+  // FIX: Deduplication guard — prevents multiple concurrent fetchDashboard calls.
+  // If rise:data-changed fires rapidly (e.g. bulk task operations), useDataRefresh
+  // increments refreshKey multiple times, each triggering a fetch. This guard
+  // ensures only ONE fetch runs at a time; subsequent calls are skipped.
+  const fetchingRef = useRef(false)
   const fetchDashboard = useCallback(async () => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
     try {
       setLoading(true)
       setError(null)
@@ -1084,6 +1091,7 @@ export default function Dashboard() {
       setError(err.message || 'حدث خطأ غير متوقع')
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }, [])
 

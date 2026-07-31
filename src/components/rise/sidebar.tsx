@@ -194,13 +194,16 @@ export function Sidebar() {
     }
   }, [setUser, auth?.userId, auth?.userEmail, auth?.isAdmin])
 
+  // FIX: Fetch on mount + on rise:user-updated only.
+  // Removed the 30s setInterval polling — it was one of the main causes
+  // of the /api/rise/dashboard 429 rate-limit errors. The sidebar doesn't
+  // need real-time XP updates; it only needs to refresh when the user
+  // earns XP (dispatched via rise:user-updated) or on mount.
   useEffect(() => {
     fetchUser()
-    const interval = setInterval(fetchUser, 30000)
-    return () => clearInterval(interval)
   }, [fetchUser])
 
-  // Re-fetch when user updates name in settings
+  // Re-fetch when user updates name in settings or earns XP
   useEffect(() => {
     const handler = () => { fetchUser() }
     window.addEventListener('rise:user-updated', handler)

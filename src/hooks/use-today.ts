@@ -34,20 +34,26 @@ export function useToday(): string {
       }
     }
 
-    // Check every 30 seconds (catches midnight rollover while tab is open)
-    const interval = setInterval(check, 30_000)
+    // Check every 5 minutes (catches midnight rollover while tab is open).
+    // FIX: Reduced from 30s to 5min — checking every 30s was unnecessary
+    // load and contributed to the dashboard 429 rate-limit cascade.
+    // Midnight only happens once a day; 5min polling is more than enough.
+    const interval = setInterval(check, 5 * 60_000)
 
-    // Also check when the tab becomes visible again (catches overnight sleep)
+    // Also check when the tab becomes visible again (catches overnight sleep).
+    // FIX: Removed window.addEventListener('focus', check) — the focus event
+    // fires on EVERY click that returns focus to the window, which caused
+    // check() to run on every user interaction. visibilitychange already
+    // covers the "tab refocus" case and only fires when visibility actually
+    // changes (hidden → visible), not on every focus.
     const onVisible = () => {
       if (document.visibilityState === 'visible') check()
     }
     document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', check)
 
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('focus', check)
     }
   }, [])
 

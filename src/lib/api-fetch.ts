@@ -236,12 +236,14 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 
   // Make the request — credentials: 'include' sends httpOnly cookies (P1#3)
-  // For GET requests, add cache-busting to prevent browser HTTP cache
+  // FIX: Removed the _t=<timestamp> cache-busting param. It was causing every
+  // GET request to have a unique URL, which:
+  // 1. Defeats the browser's HTTP cache entirely (even for static data)
+  // 2. Creates unique rate-limit keys in some configurations
+  // 3. Makes request deduplication impossible (React Query, SWR, etc.)
+  // We already use cache: 'no-store' below which prevents the browser HTTP
+  // cache. The _t param was redundant and harmful.
   let fetchUrl = url
-  if (!options.method || options.method === 'GET') {
-    const separator = url.includes('?') ? '&' : '?'
-    fetchUrl = `${url}${separator}_t=${Date.now()}`
-  }
 
   let response: Response
   try {
