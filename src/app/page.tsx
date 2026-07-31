@@ -55,31 +55,31 @@ import LoginPage from '@/components/rise/login-page'
 // PWA components — lazy loaded
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
 
-const Onboarding = lazy(() => import('@/components/rise/onboarding'))
+import Onboarding from '@/components/rise/onboarding'
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
 
 // Lazy load all modules
-const Dashboard = lazy(() => import('@/components/rise/dashboard'))
-const MorningRoutine = lazy(() => import('@/components/rise/morning-routine'))
-const DailyPlanner = lazy(() => import('@/components/rise/daily-planner'))
-const Tasks = lazy(() => import('@/components/rise/tasks'))
-const Projects = lazy(() => import('@/components/rise/projects'))
-const Goals = lazy(() => import('@/components/rise/goals'))
-const Habits = lazy(() => import('@/components/rise/habits'))
-const Journal = lazy(() => import('@/components/rise/journal'))
-const DeepWork = lazy(() => import('@/components/rise/deep-work'))
-const Reading = lazy(() => import('@/components/rise/reading'))
-const Learning = lazy(() => import('@/components/rise/learning'))
-const Health = lazy(() => import('@/components/rise/health'))
-const Finance = lazy(() => import('@/components/rise/finance'))
-const Calendar = lazy(() => import('@/components/rise/calendar'))
-const SecondBrain = lazy(() => import('@/components/rise/second-brain'))
-const WeeklyReview = lazy(() => import('@/components/rise/weekly-review'))
-const MonthlyReview = lazy(() => import('@/components/rise/monthly-review'))
-const Analytics = lazy(() => import('@/components/rise/analytics'))
-const AICoach = lazy(() => import('@/components/rise/ai-coach'))
-const AdminPanel = lazy(() => import('@/components/rise/admin-panel'))
-const Settings = lazy(() => import('@/components/rise/settings'))
+const Dashboard = lazy(() => import('@/components/rise/dashboard').then(m => ({ default: m.default })))
+const MorningRoutine = lazy(() => import('@/components/rise/morning-routine').then(m => ({ default: m.default })))
+const DailyPlanner = lazy(() => import('@/components/rise/daily-planner').then(m => ({ default: m.default })))
+const Tasks = lazy(() => import('@/components/rise/tasks').then(m => ({ default: m.default })))
+const Projects = lazy(() => import('@/components/rise/projects').then(m => ({ default: m.default })))
+const Goals = lazy(() => import('@/components/rise/goals').then(m => ({ default: m.default })))
+const Habits = lazy(() => import('@/components/rise/habits').then(m => ({ default: m.default })))
+const Journal = lazy(() => import('@/components/rise/journal').then(m => ({ default: m.default })))
+const DeepWork = lazy(() => import('@/components/rise/deep-work').then(m => ({ default: m.default })))
+const Reading = lazy(() => import('@/components/rise/reading').then(m => ({ default: m.default })))
+const Learning = lazy(() => import('@/components/rise/learning').then(m => ({ default: m.default })))
+const Health = lazy(() => import('@/components/rise/health').then(m => ({ default: m.default })))
+const Finance = lazy(() => import('@/components/rise/finance').then(m => ({ default: m.default })))
+const Calendar = lazy(() => import('@/components/rise/calendar').then(m => ({ default: m.default })))
+const SecondBrain = lazy(() => import('@/components/rise/second-brain').then(m => ({ default: m.default })))
+const WeeklyReview = lazy(() => import('@/components/rise/weekly-review').then(m => ({ default: m.default })))
+const MonthlyReview = lazy(() => import('@/components/rise/monthly-review').then(m => ({ default: m.default })))
+const Analytics = lazy(() => import('@/components/rise/analytics').then(m => ({ default: m.default })))
+const AICoach = lazy(() => import('@/components/rise/ai-coach').then(m => ({ default: m.default })))
+const AdminPanel = lazy(() => import('@/components/rise/admin-panel').then(m => ({ default: m.default })))
+const Settings = lazy(() => import('@/components/rise/settings').then(m => ({ default: m.default })))
 
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
   'dashboard': Dashboard,
@@ -254,32 +254,32 @@ export default function RiseOSApp() {
           // Skip if offline — can't validate cookie
           if (typeof navigator !== 'undefined' && navigator.onLine === false) return
 
-          // Try to restore session from httpOnly cookie
-          apiGet('/api/auth/session').then(r => r.json()).then(data => {
-            if (data.user) {
-              // Cookie is valid! Restore the session to localStorage + Zustand.
-              // We don't have the refresh_token (it was in localStorage which
-              // was cleared), but the httpOnly rise-refresh cookie still has it.
-              // The /api/auth/session route already refreshed the access cookie
-              // if needed, so we can just use the user info.
-              const session = {
-                access_token: 'restored-from-cookie', // placeholder — API calls use cookie
-                refresh_token: '', // not available (httpOnly)
-                expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
+          // FIX: Use direct fetch instead of apiGet. apiGet reads localStorage
+          // for auth headers and caching (both empty here), which can cause
+          // subtle issues. A direct fetch with credentials:'include' sends
+          // the httpOnly cookie and is the simplest, most reliable approach.
+          fetch('/api/auth/session', { credentials: 'include' })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data && data.user) {
+                const session = {
+                  access_token: 'restored-from-cookie',
+                  refresh_token: '',
+                  expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
+                }
+                localStorage.setItem('rise-auth', JSON.stringify(session))
+                localStorage.setItem('rise-user-info', JSON.stringify(data.user))
+                setAuth({
+                  isAuthenticated: true,
+                  userId: data.user.id,
+                  userEmail: data.user.email || '',
+                  userName: data.user.name || '',
+                  isAdmin: data.user.isAdmin || false,
+                  accessToken: session.access_token,
+                })
               }
-              localStorage.setItem('rise-auth', JSON.stringify(session))
-              localStorage.setItem('rise-user-info', JSON.stringify(data.user))
-              setAuth({
-                isAuthenticated: true,
-                userId: data.user.id,
-                userEmail: data.user.email || '',
-                userName: data.user.name || '',
-                isAdmin: data.user.isAdmin || false,
-                accessToken: session.access_token,
-              })
-            }
-            // If data.user is null, the cookie is also invalid → show login
-          }).catch(() => { /* network error — show login */ })
+            })
+            .catch(() => { /* network error — show login */ })
           return
         }
 
@@ -901,8 +901,13 @@ export default function RiseOSApp() {
       {/* PWA: install prompt */}
       <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
 
-      {/* Onboarding for first-time users */}
-      <Suspense fallback={null}><Onboarding /></Suspense>
+      {/* Onboarding for first-time users — wrapped in ErrorBoundary so
+          a crash in Onboarding never takes down the main app */}
+      <Suspense fallback={null}>
+        <ModuleErrorBoundary moduleName="Onboarding">
+          <Onboarding />
+        </ModuleErrorBoundary>
+      </Suspense>
 
     </div>
   )
