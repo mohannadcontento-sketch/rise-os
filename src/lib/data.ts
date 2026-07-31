@@ -343,8 +343,16 @@ export const data = {
       return toCamel({ ...data, milestones: [] })
     },
 
-    async addMilestone(goalId: string, title: string) {
+    async addMilestone(goalId: string, userId: string, title: string) {
       const client = await sb()
+      // FIX: Verify the goal belongs to the user before adding a milestone
+      const { data: goal } = await client
+        .from('goals')
+        .select('id')
+        .eq('id', goalId)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!goal) throw new Error('Goal not found or not owned by user')
       const { data, error } = await client
         .from('milestones')
         .insert(toSnake({ goalId, title }))
@@ -367,8 +375,22 @@ export const data = {
       return toCamel(data)
     },
 
-    async toggleMilestone(milestoneId: string, completed: boolean) {
+    async toggleMilestone(milestoneId: string, userId: string, completed: boolean) {
       const client = await sb()
+      // FIX: Verify the milestone's parent goal belongs to the user
+      const { data: milestone } = await client
+        .from('milestones')
+        .select('goal_id')
+        .eq('id', milestoneId)
+        .maybeSingle()
+      if (!milestone) throw new Error('Milestone not found')
+      const { data: goal } = await client
+        .from('goals')
+        .select('id')
+        .eq('id', milestone.goal_id)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!goal) throw new Error('Goal not owned by user')
       const { data, error } = await client
         .from('milestones')
         .update({ completed })
@@ -460,9 +482,17 @@ export const data = {
       return toCamel(data)
     },
 
-    async toggleLog(habitId: string, date: string, completed: boolean, count: number) {
+    async toggleLog(habitId: string, userId: string, date: string, completed: boolean, count: number) {
       // P2#5 FIX: Atomic upsert (race-condition safe)
+      // FIX: Verify the habit belongs to the user before toggling log
       const client = await sb()
+      const { data: habit } = await client
+        .from('habits')
+        .select('id')
+        .eq('id', habitId)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!habit) throw new Error('Habit not found or not owned by user')
       const { data, error } = await client
         .from('habit_logs')
         .upsert(

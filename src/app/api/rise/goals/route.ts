@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Add milestone to existing goal: { goalId, milestoneTitle }
     if (body.goalId && body.milestoneTitle) {
-      const milestone = await data.goals.addMilestone(body.goalId, body.milestoneTitle)
+      const milestone = await data.goals.addMilestone(body.goalId, userId, body.milestoneTitle)
       return NextResponse.json(milestone)
     }
 
@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest) {
 
     // Milestone toggle
     if (body.milestoneId) {
-      const updated = await data.goals.toggleMilestone(body.milestoneId, body.completed)
+      const updated = await data.goals.toggleMilestone(body.milestoneId, userId, body.completed)
       // FIX: Recalculate and update goal progress after milestone toggle
       try {
         // Find the goal that owns this milestone

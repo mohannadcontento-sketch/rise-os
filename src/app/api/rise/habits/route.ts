@@ -50,6 +50,7 @@ export async function PUT(req: NextRequest) {
     if (body.habitId && body.date !== undefined) {
       const log = await data.habits.toggleLog(
         body.habitId,
+        userId,
         body.date,
         body.completed,
         body.count !== undefined ? body.count : 1,

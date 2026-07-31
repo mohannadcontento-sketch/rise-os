@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getDefaultUser } from "@/lib/default-user";
+import { requireAuth } from "@/lib/auth";
+import { data, setCurrentAuthToken } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,9 +37,13 @@ const QUICK_PROMPTS = [
 ];
 
 /** GET /api/rise/ai-coach — returns quick prompts + usage stats. */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const user = await getDefaultUser();
+    const userId = await requireAuth(req);
+    setCurrentAuthToken(req);
+    if (!userId) return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
+    const user = await db.user.findUnique({ where: { id: userId } });
+    if (!user) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     // Count focus sessions this month as a proxy for activity (no separate AI usage table yet)
@@ -67,6 +72,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { message, history } = parsed.data;
+
+    // FIX: Require authentication — this endpoint was previously unauthenticated,
+    // allowing anyone to invoke the paid AI API.
+    const userId = await requireAuth(req);
+    setCurrentAuthToken(req);
+    if (!userId) return NextResponse.json({ error: "مطلوب تسجيل الدخول" }, { status: 401 });
 
     // Dynamically import to avoid loading SDK on every cold start unnecessarily
     const ZAI = (await import("z-ai-web-dev-sdk")).default;

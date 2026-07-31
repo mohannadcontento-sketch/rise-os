@@ -141,9 +141,10 @@ class MockQueryBuilder {
   }
   private buildOrderBy(): any {
     if (this.orders.length === 0) return undefined
-    const ob: Record<string, 'asc' | 'desc'> = {}
-    for (const o of this.orders) ob[toCamelKey(o.col)] = o.ascending ? 'asc' : 'desc'
-    return ob
+    // FIX: Prisma expects an ARRAY of orderBy objects for multi-column sort,
+    // not a single object. Returning a single object causes:
+    // "Expected PlannerItemOrderByWithRelationInput[], provided Object"
+    return this.orders.map((o) => ({ [toCamelKey(o.col)]: o.ascending ? 'asc' as const : 'desc' as const }))
   }
 
   private async execute(): Promise<{ data: any; error: any }> {

@@ -1,3 +1,4 @@
+import { isAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin, ADMIN_EMAIL } from '@/lib/supabase'
