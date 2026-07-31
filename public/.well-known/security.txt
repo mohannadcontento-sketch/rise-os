@@ -1,0 +1,11 @@
+# Security Policy for RiseOS
+# Last Updated: 2026-07-31
+# Preferred Languages: ar, en
+
+Contact: https://github.com/mohannadcontento-sketch/rise-os/security/advisories
+Encryption: https://github.com/mohannadcontento-sketch/rise-os/raw/main/SECURITY-KEY.asc
+Acknowledgments: https://github.com/mohannadcontento-sketch/rise-os/blob/main/SECURITY.md#hall-of-fame
+Preferred-Languages: ar, en
+Canonical: https://rise-os-gamma.vercel.app/.well-known/security.txt
+Policy: https://github.com/mohannadcontento-sketch/rise-os/blob/main/SECURITY.md
+Hiring: https://github.com/mohannadcontento-sketch
