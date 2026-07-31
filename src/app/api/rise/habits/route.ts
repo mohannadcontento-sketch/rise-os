@@ -59,7 +59,7 @@ export async function PUT(req: NextRequest) {
 
     // Normal habit update
     const { id, ...updateBody } = body
-    const habit = await data.habits.update(id, updateBody)
+    const habit = await data.habits.update(id, userId, updateBody)
     return NextResponse.json(habit)
   } catch (error) {
     console.error('Habits PUT error:', error)

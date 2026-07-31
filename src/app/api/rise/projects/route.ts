@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const { id, ...body } = await req.json()
-    const project = await data.projects.update(id, body)
+    const project = await data.projects.update(id, userId, body)
     return NextResponse.json(project)
   } catch (error) {
     console.error('Projects PUT error:', error)

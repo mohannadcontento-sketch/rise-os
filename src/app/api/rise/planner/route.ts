@@ -83,7 +83,7 @@ export async function PUT(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { id, ...body } = await req.json()
-    const item = await data.plannerItems.update(id, body)
+    const item = await data.plannerItems.update(id, userId, body)
     return NextResponse.json(item)
   } catch (error) {
     console.error('Planner PUT error:', error)

@@ -48,7 +48,7 @@ export async function PUT(req: NextRequest) {
     const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    const record = await data.knowledgeItems.update(id, body)
+    const record = await data.knowledgeItems.update(id, userId, body)
     return NextResponse.json(record)
   } catch (error) {
     console.error('Knowledge PUT error:', error)

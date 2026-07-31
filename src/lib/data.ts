@@ -157,12 +157,13 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('projects')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -258,9 +259,8 @@ export const data = {
       return toCamel({ ...task, subtasks: [] })
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
-      // FIX: set completedAt when status changes to 'done', clear when not
       const updateBody: Record<string, any> = { ...body }
       if (body.status === 'done') {
         updateBody.completedAt = new Date().toISOString()
@@ -271,6 +271,7 @@ export const data = {
         .from('tasks')
         .update(toSnake(updateBody))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -353,20 +354,13 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
-      // FIX: Add user_id filter for RLS compliance
-      const { data: existing } = await client
-        .from('goals')
-        .select('user_id')
-        .eq('id', id)
-        .maybeSingle()
-      if (!existing) throw new Error('Goal not found')
       const { data, error } = await client
         .from('goals')
         .update(toSnake(body))
         .eq('id', id)
-        .eq('user_id', existing.user_id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -453,12 +447,13 @@ export const data = {
       return toCamel({ ...data, logs: [] })
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('habits')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -563,12 +558,13 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('focus_sessions')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -675,12 +671,13 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('books')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -724,12 +721,13 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('knowledge_items')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error
@@ -775,12 +773,13 @@ export const data = {
       return toCamel(data)
     },
 
-    async update(id: string, body: Record<string, any>) {
+    async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
       const { data, error } = await client
         .from('planner_items')
         .update(toSnake(body))
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
       if (error) throw error

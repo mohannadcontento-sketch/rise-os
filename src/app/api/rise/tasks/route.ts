@@ -139,7 +139,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const { id, ...updateData } = parsed.data
-    const task = await data.tasks.update(id, updateData)
+    const task = await data.tasks.update(id, userId, updateData)
     return NextResponse.json(task)
   } catch (error) {
     console.error('Tasks PUT error:', error)

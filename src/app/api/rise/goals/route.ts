@@ -65,14 +65,14 @@ export async function PUT(req: NextRequest) {
           const milestones = goal.milestones || []
           const completedCount = milestones.filter((m: any) => m.completed).length
           const progress = milestones.length > 0 ? Math.round((completedCount / milestones.length) * 100) : 0
-          await data.goals.update(goal.id, { progress, status: progress === 100 ? 'done' : 'active' })
+          await data.goals.update(goal.id, userId, { progress, status: progress === 100 ? 'done' : 'active' })
         }
       } catch { /* non-critical */ }
       return NextResponse.json(updated)
     }
 
     const { id, ...updateBody } = body
-    const goal = await data.goals.update(id, updateBody)
+    const goal = await data.goals.update(id, userId, updateBody)
     return NextResponse.json(goal)
   } catch (error) {
     console.error('Goals PUT error:', error)

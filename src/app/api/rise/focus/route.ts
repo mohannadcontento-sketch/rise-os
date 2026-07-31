@@ -85,7 +85,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const { id, ...updateData } = parsed.data
-    const session = await data.focusSessions.update(id, updateData)
+    const session = await data.focusSessions.update(id, userId, updateData)
     return NextResponse.json(session)
   } catch (error) {
     console.error('Focus PUT error:', error)
