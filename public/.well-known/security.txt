@@ -2,6 +2,7 @@
 # Last Updated: 2026-07-31
 # Preferred Languages: ar, en
 
+Contact: mailto:mohannadcontento@gmail.com
 Contact: https://github.com/mohannadcontento-sketch/rise-os/security/advisories
 Encryption: https://github.com/mohannadcontento-sketch/rise-os/raw/main/SECURITY-KEY.asc
 Acknowledgments: https://github.com/mohannadcontento-sketch/rise-os/blob/main/SECURITY.md#hall-of-fame
