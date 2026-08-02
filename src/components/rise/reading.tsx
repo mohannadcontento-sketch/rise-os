@@ -173,7 +173,7 @@ export default function Reading() {
   }, [])
 
   useEffect(() => {
-    // Dynamic update: useDataRefresh handles re-fetch
+    fetchBooks()
   }, [fetchBooks, refreshKey])
 
   const handleAddBook = async () => {
@@ -192,13 +192,13 @@ export default function Reading() {
         return
       }
       toastCreated('الكتاب')
-      // Dynamic update: useDataRefresh handles re-fetch
+      fetchBooks()
       setNewTitle('')
       setNewAuthor('')
       setNewType('book')
       setNewTotalPages('')
       setAddDialogOpen(false)
-      // Dynamic update: useDataRefresh handles re-fetch
+      fetchBooks()
     } catch {
       toastError('إضافة الكتاب')
     }
@@ -848,4 +848,4 @@ export default function Reading() {
       )}
     </div>
   )
-}
+}// Force recompile: 1785702715

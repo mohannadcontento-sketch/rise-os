@@ -1021,4 +1021,4 @@ export default function Journal() {
       </motion.div>
     </motion.div>
   )
-}
+}// Force recompile: 1785702715

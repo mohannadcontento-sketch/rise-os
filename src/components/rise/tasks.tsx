@@ -389,7 +389,7 @@ export function Tasks() {
       toastCreated('المهمة')
       // Dynamic update: re-fetch from server after a short delay
       // to ensure the DB has committed the transaction
-      // Dynamic update: useDataRefresh handles re-fetch (500ms debounce)
+      fetchData() (500ms debounce)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {
