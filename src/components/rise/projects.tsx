@@ -457,17 +457,22 @@ export function Projects() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('إضافة المهمة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toast.success('تمت إضافة المهمة بنجاح')
+      // FIX: Optimistic update — add the new task to local state IMMEDIATELY
+      const result = await res.json().catch(() => null)
+      if (result && result.id) {
+        setTasks((prev) => [result, ...prev])
+      }
+      toastCreated('المهمة')
       setNewTaskTitle('')
       setNewTaskPriority('medium')
       setNewTaskDueDate('')
       setAddTaskOpen(false)
       fetchData()
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ')
+      toastError('الحفظ')
     } finally {
       setTaskSubmitting(false)
     }

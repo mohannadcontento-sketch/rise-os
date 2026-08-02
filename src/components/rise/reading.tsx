@@ -209,17 +209,22 @@ export default function Reading() {
   }
 
   const handleUpdateBook = async (id: string, data: Partial<Book>) => {
+    // FIX: Optimistic update — reflect the change in local state IMMEDIATELY
+    const prevBooks = books
+    setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)))
     try {
       const res = await apiPut('/api/rise/books', { id, ...data })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشل في تحديث الكتاب', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        setBooks(prevBooks) // Rollback on failure
+        toastError('تحديث الكتاب', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toast.success('تم التحديث بنجاح')
+      toastSaved('الكتاب')
       fetchBooks()
     } catch {
-      toast.error('فشل في تحديث الكتاب')
+      setBooks(prevBooks) // Rollback on failure
+      toastError('تحديث الكتاب')
     }
   }
 

@@ -189,13 +189,30 @@ export default function Health() {
         exerciseNotes,
       })
       if (res.ok) {
-        toast.success('تم حفظ بيانات الصحة بنجاح 💪')
+        const result = await res.json().catch(() => null)
+        // FIX: Optimistic update — reflect the saved log in local state IMMEDIATELY
+        if (result) {
+          const newLog = { ...result, date: today }
+          setData((prev) => {
+            if (!prev) return prev
+            const logs = prev.logs || []
+            const exists = logs.some((l) => l.date === today)
+            return {
+              ...prev,
+              todayLog: newLog,
+              logs: exists
+                ? logs.map((l) => l.date === today ? newLog : l)
+                : [...logs, newLog],
+            }
+          })
+        }
+        toastSaved('بيانات الصحة')
         fetchHealth()
       } else {
-        toast.error('فشل في حفظ البيانات')
+        toastError('حفظ البيانات')
       }
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ')
+      toastError('الحفظ')
     } finally {
       setSaving(false)
     }

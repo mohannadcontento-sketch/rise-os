@@ -513,17 +513,20 @@ export default function DeepWork() {
       }
 
       const sessionData = await res.json()
+      // FIX: Optimistic update — add the new session to local state IMMEDIATELY
+      if (sessionData && sessionData.id) {
+        setData((prev) => prev ? { ...prev, sessions: [sessionData, ...(prev.sessions || [])] } : prev)
+      }
       if (completed) {
         const xp = Math.round(elapsedMin * 2)
         notifyFocusComplete(elapsedMin, xp)
         apiPost('/api/rise/earn-xp', { amount: Math.floor(elapsedMin / 10), reason: `focus:${selectedDuration}min` }).catch(() => {})
-        // Open task linking dialog
         setLastSessionXp(xp)
         setLastSessionMin(elapsedMin)
         setLastSessionId(sessionData.id)
         fetchTasksForLinking()
       } else {
-        toast.success('تم حفظ الجلسة')
+        toastSaved('الجلسة')
       }
       fetchSessions()
     } catch {
@@ -567,7 +570,14 @@ export default function DeepWork() {
         return
       }
       const taskName = taskOptions.find((t) => t.id === selectedTaskId)?.title
-      toast.success('تم ربط الجلسة بالمهمة', { description: taskName })
+      // FIX: Optimistic update — reflect the linked task in the session list IMMEDIATELY
+      setData((prev) => prev ? {
+        ...prev,
+        sessions: (prev.sessions || []).map((s) =>
+          s.id === lastSessionId ? { ...s, taskId: selectedTaskId } : s
+        ),
+      } : prev)
+      toastSaved('ربط الجلسة')
       playSound('complete')
     } catch {
       toast.error('فشل في ربط الجلسة')

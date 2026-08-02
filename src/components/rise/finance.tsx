@@ -299,19 +299,22 @@ export default function Finance() {
   /* ─── Delete Record ─── */
   const handleDelete = async (id: string) => {
     playSound('delete')
+    // FIX: Optimistic update — remove the record from local state IMMEDIATELY
+    const prevData = data
+    setData((prev) => prev ? { ...prev, records: prev.records.filter((r) => r.id !== id) } : prev)
     setDeleting(id)
     try {
       const res = await apiDelete(`/api/rise/finance?id=${id}`)
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${res.status}`)
+        const errData = await res.json().catch(() => ({}))
+        setData(prevData) // Rollback on failure
+        throw new Error(errData.error || `HTTP ${res.status}`)
       }
-      toast.success('تم حذف السجل')
+      toastDeleted('السجل')
       fetchFinance()
     } catch (err) {
-      toast.error('فشل في حذف السجل', {
-        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
-      })
+      setData(prevData) // Rollback on failure
+      toastError('حذف السجل', err instanceof Error ? err.message : 'حاول مرة أخرى')
     } finally {
       setDeleting(null)
     }

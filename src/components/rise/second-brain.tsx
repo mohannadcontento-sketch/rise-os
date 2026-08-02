@@ -234,33 +234,41 @@ export default function SecondBrain() {
   }
 
   const handleUpdate = async (id: string, data: Partial<KnowledgeItem>) => {
+    // FIX: Optimistic update — reflect the change in local state IMMEDIATELY
+    const prevItems = items
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...data } : it)))
     try {
       const res = await apiPut('/api/rise/knowledge', { id, ...data })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشل في التحديث', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        setItems(prevItems) // Rollback on failure
+        toastError('التحديث', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toast.success('تم التحديث بنجاح')
+      toastSaved('العنصر')
       fetchItems()
     } catch {
-      toast.error('فشل في التحديث')
+      setItems(prevItems) // Rollback on failure
+      toastError('التحديث')
     }
   }
 
   const handleDelete = async (id: string) => {
+    // FIX: Optimistic update — remove the item from local state IMMEDIATELY
+    const prevItems = items
+    setItems((prev) => prev.filter((it) => it.id !== id))
     try {
       const res = await apiDelete(`/api/rise/knowledge?id=${id}`)
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
+        setItems(prevItems) // Rollback on failure
         throw new Error(data.error || `HTTP ${res.status}`)
       }
-      toast.success('تم الحذف بنجاح')
+      toastDeleted('العنصر')
       fetchItems()
     } catch (err) {
-      toast.error('فشل في الحذف', {
-        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
-      })
+      setItems(prevItems) // Rollback on failure
+      toastError('الحذف', err instanceof Error ? err.message : 'حاول مرة أخرى')
     }
   }
 
