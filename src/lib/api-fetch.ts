@@ -484,6 +484,10 @@ async function flushQueue(): Promise<void> {
         headers,
         body: item.body,
         signal: controller.signal,
+        // FIX: credentials:'include' is REQUIRED so the server receives the
+        // httpOnly auth cookie. Without it, the server returns 401 and the
+        // queued request is silently dropped — data is lost forever.
+        credentials: 'include',
       })
       clearTimeout(timeoutId)
 

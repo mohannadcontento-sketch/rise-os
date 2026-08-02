@@ -16,11 +16,18 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30 * 1000,
-            gcTime: 5 * 60 * 1000,
-            refetchOnWindowFocus: true,
-            retry: 1,
-            refetchOnMount: false,
+            staleTime: 5 * 60 * 1000, // 5 minutes — data is fresh for 5 min
+            // FIX: Increased gcTime from 5 min to 24 hours. The old 5-minute
+            // GC time was aggressively evicting cached queries, causing the UI
+            // to show empty states when the user navigated between modules.
+            gcTime: 24 * 60 * 60 * 1000, // 24 hours — keep cache for a day
+            retry: 2, // Retry failed requests twice before giving up
+            refetchOnMount: false, // Don't refetch when component mounts if cache exists
+            // FIX: throwOnError: false is CRITICAL. Without it, a failed fetch
+            // (e.g. 503, network error) throws an error that clears the UI.
+            // With throwOnError: false, React Query keeps showing the cached
+            // data and silently retries in the background.
+            throwOnError: false,
           },
           mutations: {
             retry: 0,

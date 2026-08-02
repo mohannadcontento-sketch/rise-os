@@ -36,6 +36,11 @@ export function setupOfflinePersistence(queryClient: QueryClient) {
   persistQueryClient({
     queryClient,
     persister,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    // FIX: Increased from 24 hours to 7 days. The 24-hour maxAge meant that
+    // if a user returned after a day, the cache was expired and the UI would
+    // be empty until a successful fetch completed. With 7 days, the cache
+    // persists long enough to cover normal usage gaps (weekend, vacation, etc.)
+    // and stale-while-revalidate still ensures fresh data when online.
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   })
 }

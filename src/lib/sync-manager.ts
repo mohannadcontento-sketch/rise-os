@@ -2,7 +2,7 @@
 // Handles bidirectional sync between IndexedDB (offline) and the server API.
 // Strategy: server-wins on conflict, periodic background sync when online.
 
-import { getOfflineDB, type StoreName, type SyncStatusRecord } from './offline-db';
+import { getOfflineDB, type StoreName } from './offline-db';
 import { apiFetch } from './api-fetch';
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -11,6 +11,25 @@ interface SyncOptions {
   /** Interval in ms for periodic background sync (default 60 000 = 1 min) */
   intervalMs?: number;
 }
+
+// FIX: Mapping between local store names and actual API route names.
+// The local store names (from IndexedDB) don't always match the API routes:
+// - 'journals' (local, plural) → '/api/rise/journal' (API, singular)
+// - 'settings' (local) → '/api/rise/storage' (API uses a different name)
+// Without this mapping, the sync manager was hitting /api/journals (404)
+// instead of /api/rise/journal (200).
+const API_ROUTES: Record<StoreName, string> = {
+  tasks: 'tasks',
+  habits: 'habits',
+  goals: 'goals',
+  projects: 'projects',
+  journals: 'journal', // API uses singular form
+  health: 'health',
+  finance: 'finance',
+  books: 'books',
+  knowledge: 'knowledge',
+  settings: 'storage', // 'settings' store maps to 'storage' API
+};
 
 // ─── SyncManager Class ──────────────────────────────────────────────────
 
@@ -116,7 +135,8 @@ class SyncManager {
           continue;
         }
 
-        const url = `/api/${record.storeName}`;
+        // FIX: Use the correct API route from the mapping
+        const route = API_ROUTES[record.storeName] || record.storeName;
         const method =
           record.action === 'create'
             ? 'POST'
@@ -124,9 +144,17 @@ class SyncManager {
               ? 'DELETE'
               : 'PUT';
 
-        const response = await apiFetch(url, {
+        // FIX: Build the correct URL — /api/rise/{route} (not /api/{store})
+        // For PUT/DELETE, append the record ID as a search param
+        // (Next.js App Router convention: ?id=xxx)
+        let requestUrl = `/api/rise/${route}`;
+        if (method !== 'POST' && data.id) {
+          requestUrl = `${requestUrl}?id=${data.id}`;
+        }
+
+        const response = await apiFetch(requestUrl, {
           method,
-          body: JSON.stringify(data),
+          body: method !== 'DELETE' ? JSON.stringify(data) : undefined,
         });
 
         if (response.ok) {
@@ -135,9 +163,13 @@ class SyncManager {
 
           // Server-wins: if the server returned data, update local store
           if (method !== 'DELETE') {
-            const serverData = await response.json();
-            if (serverData && typeof serverData === 'object') {
-              await getOfflineDB().update(record.storeName, serverData);
+            try {
+              const serverData = await response.json();
+              if (serverData && typeof serverData === 'object' && !Array.isArray(serverData)) {
+                await getOfflineDB().update(record.storeName, serverData);
+              }
+            } catch {
+              // Response might not have JSON body — that's OK
             }
           }
         } else {
@@ -182,17 +214,32 @@ class SyncManager {
 
     for (const store of stores) {
       try {
-        const response = await apiFetch(`/api/${store}`);
+        // FIX: Use the correct API route from the mapping
+        const route = API_ROUTES[store] || store;
+        const response = await apiFetch(`/api/rise/${route}`);
         if (!response.ok) continue;
 
-        const data = await response.json();
-        if (!Array.isArray(data)) continue;
+        const json = await response.json();
 
-        // Clear local store and repopulate from server
-        await getOfflineDB().clear(store);
+        // FIX: The API returns objects like { tasks: [] } or { habits: [] },
+        // not bare arrays. Extract the array from the response object.
+        let items: any[] = [];
+        if (Array.isArray(json)) {
+          items = json;
+        } else if (json && typeof json === 'object') {
+          // Find the first array-valued key in the response object
+          const arrayKey = Object.keys(json).find((k) => Array.isArray(json[k]));
+          if (arrayKey) {
+            items = json[arrayKey];
+          }
+        }
 
-        for (const item of data) {
-          await getOfflineDB().add(store, item);
+        if (items.length > 0) {
+          // Clear local store and repopulate from server
+          await getOfflineDB().clear(store);
+          for (const item of items) {
+            await getOfflineDB().add(store, item);
+          }
         }
       } catch {
         // If one store fails, continue with the rest
