@@ -49,6 +49,7 @@ import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { cn } from '@/lib/utils'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
+import { useDataRefresh } from '@/hooks/use-data-refresh'
 // useDataRefresh removed — causes toggle reverts (multiple data-changed events)
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
@@ -215,11 +216,14 @@ export function HabitsView() {
 
   const todayStr = getTodayStr()
 
-  // FIX: Removed useDataRefresh — it caused toggle reverts because multiple
-  // API calls (PUT habits + POST earn-xp + POST notifications) each fire
-  // rise:data-changed, triggering fetchHabits() which overwrites the
-  // optimistic update. Now habits only fetch on mount.
+  // FIX: Re-added useDataRefresh with a skip-during-toggle guard.
+  // When the user toggles a habit, we set skipRefreshRef=true to prevent
+  // re-fetching (which would overwrite the optimistic update). After 1s,
+  // the guard is cleared and normal refresh resumes.
+  const skipRefreshRef = useRef(false)
+  const { refreshKey } = useDataRefresh()
   const fetchHabits = useCallback(async () => {
+    if (skipRefreshRef.current) return
     try {
       const res = await apiFetch('/api/rise/habits')
       if (res.ok) {
@@ -234,10 +238,10 @@ export function HabitsView() {
     }
   }, [])
 
-  /* ---- Fetch on mount only ---- */
+  /* ---- Fetch on mount + when data changes (debounced) ---- */
   useEffect(() => {
     fetchHabits()
-  }, [fetchHabits])
+  }, [fetchHabits, refreshKey])
 
   /* ---- Re-fetch on day rollover so habits show fresh "today" state ---- */
   useEffect(() => {
@@ -251,6 +255,12 @@ export function HabitsView() {
     async (habitId: string) => {
       const existingLog = logs.find((l) => l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)
       const newCompleted = existingLog ? !existingLog.completed : true
+
+      // FIX: Skip refresh for 1.5s to prevent re-fetch from overwriting
+      // the optimistic update (PUT habit + POST earn-xp + POST notification
+      // each fire rise:data-changed which would trigger fetchHabits)
+      skipRefreshRef.current = true
+      setTimeout(() => { skipRefreshRef.current = false }, 1500)
 
       // Flash animation
       setFlashCard(habitId)

@@ -10,10 +10,10 @@ const DATA_CHANGED_EVENT = 'rise:data-changed'
  * that increments each time, so components can add it as a useEffect dependency
  * to automatically re-fetch their data.
  *
- * FIX: Added 500ms debouncing — if multiple data-changed events fire in rapid
- * succession (e.g. bulk task operations, multiple API calls in a single user
- * action), only ONE refreshKey increment happens after the burst settles.
- * This prevents cascading re-fetches that caused the dashboard 429 errors.
+ * Uses a short 100ms debounce to batch rapid events (e.g. toggle habit →
+ * earn-xp → notification all fire data-changed) into a single refresh.
+ * 100ms is fast enough to feel instant to the user while preventing
+ * cascading re-fetches.
  */
 export function useDataRefresh() {
   const [refreshKey, setRefreshKey] = useState(0)
@@ -21,13 +21,10 @@ export function useDataRefresh() {
 
   useEffect(() => {
     const handler = () => {
-      // Debounce: wait 500ms after the last event before incrementing.
-      // This batches rapid bursts (e.g. toggle habit → earn-xp → notification
-      // all fire data-changed) into a single refresh.
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         setRefreshKey((k) => k + 1)
-      }, 500)
+      }, 100)
     }
     window.addEventListener(DATA_CHANGED_EVENT, handler)
     return () => {

@@ -1068,13 +1068,19 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
 
-  // FIX: Deduplication guard — prevents multiple concurrent fetchDashboard calls.
-  // If rise:data-changed fires rapidly (e.g. bulk task operations), useDataRefresh
-  // increments refreshKey multiple times, each triggering a fetch. This guard
-  // ensures only ONE fetch runs at a time; subsequent calls are skipped.
+  // FIX: Deduplication guard with pending-refresh flag.
+  // If a fetch is in progress when a new refresh is requested, the new
+  // request is NOT dropped — it's queued via pendingRefreshRef and executed
+  // after the current fetch completes. This ensures the dashboard always
+  // shows the latest data after any save operation.
   const fetchingRef = useRef(false)
+  const pendingRefreshRef = useRef(false)
   const fetchDashboard = useCallback(async () => {
-    if (fetchingRef.current) return
+    // If already fetching, queue a refresh for when the current fetch completes
+    if (fetchingRef.current) {
+      pendingRefreshRef.current = true
+      return
+    }
     fetchingRef.current = true
     try {
       setLoading(true)
@@ -1092,6 +1098,11 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
       fetchingRef.current = false
+      // If a refresh was requested while we were fetching, fetch again now
+      if (pendingRefreshRef.current) {
+        pendingRefreshRef.current = false
+        fetchDashboard()
+      }
     }
   }, [])
 
