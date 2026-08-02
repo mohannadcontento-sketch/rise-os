@@ -221,7 +221,7 @@ export function HabitsView() {
   const fetchHabits = useCallback(async () => {
 
     try {
-      const res = await apiFetch('/api/rise/habits')
+      const res = await apiFetch(`/api/rise/habits?_t=${Date.now()}`)
       if (res.ok) {
         const data: HabitsResponse = await res.json()
         setHabits(data.habits)

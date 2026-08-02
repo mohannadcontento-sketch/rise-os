@@ -24,7 +24,7 @@ export function useDataRefresh() {
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         setRefreshKey((k) => k + 1)
-      }, 500)
+      }, 200)
     }
     window.addEventListener(DATA_CHANGED_EVENT, handler)
     return () => {

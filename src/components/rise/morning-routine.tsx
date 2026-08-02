@@ -635,7 +635,7 @@ export default function MorningRoutine() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await apiFetch('/api/rise/morning')
+        const res = await apiFetch(`/api/rise/morning?_t=${Date.now()}`)
         if (res.ok) {
           const data = await res.json()
           setLogs(data.logs || [])
@@ -649,7 +649,7 @@ export default function MorningRoutine() {
 
         // Fetch today's scheduled tasks (tasks with dueDate = today and dueTime set)
         try {
-          const tasksRes = await apiFetch('/api/rise/tasks')
+          const tasksRes = await apiFetch(`/api/rise/tasks?_t=${Date.now()}`)
           if (tasksRes.ok) {
             const tasksData = await tasksRes.json()
             const todayStr = new Date().toISOString().split('T')[0]

@@ -77,11 +77,15 @@ export async function GET(req: NextRequest) {
       if (status) filtered = allTasks.filter((t: any) => t.status === status)
 
       const pageData = filtered.slice(params.offset, params.offset + params.limit)
-      return NextResponse.json(paginatedResponse(pageData, filtered.length, params))
+      const paginatedResp = NextResponse.json(paginatedResponse(pageData, filtered.length, params))
+      paginatedResp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      return paginatedResp
     }
 
     // Backward compatible: return all tasks (no pagination)
-    return NextResponse.json({ tasks: allTasks, projects })
+    const response = NextResponse.json({ tasks: allTasks, projects })
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    return response
   } catch (error) {
     console.error('Tasks GET error:', error)
     return NextResponse.json({ tasks: [], projects: [] })

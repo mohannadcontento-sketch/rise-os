@@ -171,7 +171,7 @@ export default function Settings() {
   const [userStats, setUserStats] = useState<{ level: number; xp: number; xpToNext: number; streak: number } | null>(null)
 
   useEffect(() => {
-    apiFetch('/api/rise/dashboard')
+    apiFetch(`/api/rise/dashboard?_t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
         if (data.user) setUserStats(data.user)

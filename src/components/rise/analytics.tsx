@@ -196,10 +196,10 @@ export default function Analytics() {
     async function load() {
       try {
         const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
-          apiFetch('/api/rise/dashboard'),
-          apiFetch('/api/rise/habits'),
-          apiFetch('/api/rise/focus'),
-          apiFetch('/api/rise/health'),
+          apiFetch(`/api/rise/dashboard?_t=${Date.now()}`),
+          apiFetch(`/api/rise/habits?_t=${Date.now()}`),
+          apiFetch(`/api/rise/focus?_t=${Date.now()}`),
+          apiFetch(`/api/rise/health?_t=${Date.now()}`),
         ])
 
         let dash: any = null, habit: any = null, foc: any = null, hlt: any = null

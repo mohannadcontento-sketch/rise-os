@@ -170,7 +170,7 @@ export function Sidebar() {
   // Fetch user data for XP display
   const fetchUser = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/rise/dashboard')
+      const res = await apiFetch(`/api/rise/dashboard?_t=${Date.now()}`)
       if (res.ok) {
         const data = await res.json()
         if (data.user) {

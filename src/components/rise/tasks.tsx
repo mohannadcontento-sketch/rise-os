@@ -225,7 +225,7 @@ export function Tasks() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/rise/tasks')
+      const res = await apiFetch(`/api/rise/tasks?_t=${Date.now()}`)
       if (!res.ok) {
         // FIX: Don't overwrite existing tasks with empty data on error.
         // Just set loading to false and keep showing whatever we already have.

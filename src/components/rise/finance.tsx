@@ -237,7 +237,7 @@ export default function Finance() {
   /* ─── Fetch ─── */
   const fetchFinance = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/rise/finance')
+      const res = await apiFetch(`/api/rise/finance?_t=${Date.now()}`)
       if (res.ok) {
         const json = await res.json()
         setData(json)

@@ -331,7 +331,7 @@ export function Projects() {
     try {
       const [projRes, taskRes] = await Promise.all([
         apiFetch('/api/rise/projects'),
-        apiFetch('/api/rise/tasks'),
+        apiFetch(`/api/rise/tasks?_t=${Date.now()}`),
       ])
       if (!projRes.ok) throw new Error('Failed')
       if (!taskRes.ok) throw new Error('Failed')

@@ -209,7 +209,7 @@ export default function Journal() {
 
   const fetchJournal = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/rise/journal')
+      const res = await apiFetch(`/api/rise/journal?_t=${Date.now()}`)
       if (res.ok) {
         const json = await res.json()
         setData(json)

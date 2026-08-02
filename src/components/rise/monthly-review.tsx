@@ -207,10 +207,10 @@ export default function MonthlyReview() {
     setAutoFilling(true)
     try {
       const [tasksRes, focusRes, habitsRes, journalRes] = await Promise.all([
-        apiFetch('/api/rise/tasks'),
-        apiFetch('/api/rise/focus'),
-        apiFetch('/api/rise/habits'),
-        apiFetch('/api/rise/journal'),
+        apiFetch(`/api/rise/tasks?_t=${Date.now()}`),
+        apiFetch(`/api/rise/focus?_t=${Date.now()}`),
+        apiFetch(`/api/rise/habits?_t=${Date.now()}`),
+        apiFetch(`/api/rise/journal?_t=${Date.now()}`),
       ])
       const [tasksData, focusData, habitsData, journalData] = await Promise.all([
         tasksRes.json(),

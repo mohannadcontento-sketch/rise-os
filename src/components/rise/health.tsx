@@ -147,7 +147,7 @@ export default function Health() {
 
   const fetchHealth = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/rise/health')
+      const res = await apiFetch(`/api/rise/health?_t=${Date.now()}`)
       if (res.ok) {
         const json = await res.json()
         setData(json)
