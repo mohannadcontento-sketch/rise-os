@@ -286,25 +286,23 @@ export function Tasks() {
   const toggleTask = async (task: Task) => {
     const isDone = task.status === 'done'
     const newStatus = isDone ? 'todo' : 'done'
-    const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
-        toast.error('فشل تحديث المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('تحديث المهمة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
+      // Dynamic update: re-fetch from server (useDataRefresh handles this via rise:data-changed)
+      fetchData()
       if (!isDone) {
         playSound('task-complete')
         notifyTaskComplete(task.title, task.xpReward)
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
         checkUnblockedTasks(task.id)
-        toastSaved('المهمة')
       }
     } catch {
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+      toastError('تحديث المهمة')
     }
   }
 
@@ -394,15 +392,7 @@ export function Tasks() {
         toast.error('فشل الاتصال بالخادم', { description: 'يرجى إعادة تسجيل الدخول' })
         return
       }
-      // FIX: Optimistic update — add the new task to local state IMMEDIATELY.
-      // Do NOT call fetchData() here — it would overwrite the optimistic update
-      // with a server fetch that might arrive before the DB commits the new task.
-      // The rise:data-changed event (from apiPost) will trigger useDataRefresh
-      // which calls fetchData() with a 100ms debounce — by then the DB has
-      // committed the task and the fetch will include it.
-      if (result.id) {
-        setTasks((prev) => [result, ...prev])
-      }
+      // Dynamic update: re-fetch from server to get the real data
       setFormTitle('')
       setFormDesc('')
       setFormPriority('medium')

@@ -134,11 +134,11 @@ export function GoalsView() {
   const [formType, setFormType] = useState<Goal['type']>('monthly')
   const [formDeadline, setFormDeadline] = useState('')
 
-  const { refreshKey } = useDataRefresh()
+  const { refreshKey, triggerRefresh } = useDataRefresh()
 
   /* ---- Fetch ---- */
   useEffect(() => {
-    async function fetchGoals() {
+    async function loadGoals() {
       try {
         const res = await apiFetch('/api/rise/goals')
         if (res.ok) {
@@ -156,7 +156,7 @@ export function GoalsView() {
         setLoading(false)
       }
     }
-    fetchGoals()
+    loadGoals()
   }, [refreshKey])
 
   /* ---- Filtered goals ---- */
@@ -298,7 +298,7 @@ export function GoalsView() {
         })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setGoals((prev) => prev.filter((g) => g.id !== tempId))
+        // Will be handled by triggerRefresh (useDataRefresh)
         toast.error('فشل في إضافة الهدف', { description: errData.error || errData.details || 'حاول مرة أخرى' })
         return
       }
@@ -315,14 +315,14 @@ export function GoalsView() {
 
       const data = await res.json()
       if (data && data.id && data.title) {
-        setGoals((prev) => prev.map((g) => g.id === tempId ? data : g))
+        triggerRefresh()
       }
       setAddOpen(false)
       resetForm()
       playSound('save')
     } catch {
-      setGoals((prev) => prev.filter((g) => g.id !== tempId))
-      toast.error('فشل في إضافة الهدف')
+      
+      toastError('إضافة الهدف')
     } finally {
       setSaving(false)
     }

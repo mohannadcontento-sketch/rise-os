@@ -460,11 +460,6 @@ export function Projects() {
         toastError('إضافة المهمة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      // FIX: Optimistic update — add the new task to local state IMMEDIATELY
-      const result = await res.json().catch(() => null)
-      if (result && result.id) {
-        setTasks((prev) => [result, ...prev])
-      }
       toastCreated('المهمة')
       setNewTaskTitle('')
       setNewTaskPriority('medium')

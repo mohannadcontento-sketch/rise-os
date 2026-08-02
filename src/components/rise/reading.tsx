@@ -191,12 +191,8 @@ export default function Reading() {
         toastError('إضافة الكتاب', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      // FIX: Optimistic update — add the new book to local state IMMEDIATELY
-      const result = await res.json().catch(() => null)
-      if (result && result.id) {
-        setBooks((prev) => [result, ...prev])
-      }
       toastCreated('الكتاب')
+      fetchBooks()
       setNewTitle('')
       setNewAuthor('')
       setNewType('book')
@@ -209,21 +205,17 @@ export default function Reading() {
   }
 
   const handleUpdateBook = async (id: string, data: Partial<Book>) => {
-    // FIX: Optimistic update — reflect the change in local state IMMEDIATELY
-    const prevBooks = books
-    setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...data } : b)))
+    // Dynamic: will be handled by fetchBooks() after API success
     try {
       const res = await apiPut('/api/rise/books', { id, ...data })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setBooks(prevBooks) // Rollback on failure
         toastError('تحديث الكتاب', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
       toastSaved('الكتاب')
       // (fetchData removed — useDataRefresh handles background sync)
     } catch {
-      setBooks(prevBooks) // Rollback on failure
       toastError('تحديث الكتاب')
     }
   }

@@ -263,11 +263,6 @@ export default function Finance() {
     try {
       const res = await apiPost('/api/rise/finance', form)
       if (res.ok) {
-        const result = await res.json().catch(() => null)
-        // FIX: Optimistic update — add the new record to local state IMMEDIATELY
-        if (result && result.id) {
-          setData((prev) => prev ? { ...prev, records: [result, ...(prev.records || [])] } : prev)
-        }
         toastCreated('المعاملة')
         playSound('save')
         // Show budget impact
@@ -299,21 +294,16 @@ export default function Finance() {
   /* ─── Delete Record ─── */
   const handleDelete = async (id: string) => {
     playSound('delete')
-    // FIX: Optimistic update — remove the record from local state IMMEDIATELY
-    const prevData = data
-    setData((prev) => prev ? { ...prev, records: prev.records.filter((r) => r.id !== id) } : prev)
     setDeleting(id)
     try {
       const res = await apiDelete(`/api/rise/finance?id=${id}`)
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setData(prevData) // Rollback on failure
         throw new Error(errData.error || `HTTP ${res.status}`)
       }
       toastDeleted('السجل')
       // (fetchData removed — useDataRefresh handles background sync)
     } catch (err) {
-      setData(prevData) // Rollback on failure
       toastError('حذف السجل', err instanceof Error ? err.message : 'حاول مرة أخرى')
     } finally {
       setDeleting(null)

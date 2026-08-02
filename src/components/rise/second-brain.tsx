@@ -185,12 +185,8 @@ export default function SecondBrain() {
         toastError('الحفظ', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      // FIX: Optimistic update — add the new item to local state IMMEDIATELY
-      const result = await res.json().catch(() => null)
-      if (result && result.id) {
-        setItems((prev) => [result, ...prev])
-      }
       setQuickCapture('')
+      fetchItems()
       toastCreated('الفكرة')
       // (fetchData removed — useDataRefresh handles background sync)
     } catch {
@@ -216,12 +212,8 @@ export default function SecondBrain() {
         toastError('الإضافة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      // FIX: Optimistic update — add the new item to local state IMMEDIATELY
-      const result = await res.json().catch(() => null)
-      if (result && result.id) {
-        setItems((prev) => [result, ...prev])
-      }
       toastCreated('العنصر')
+      fetchItems()
       setNewTitle('')
       setNewContent('')
       setNewTags('')
@@ -234,40 +226,34 @@ export default function SecondBrain() {
   }
 
   const handleUpdate = async (id: string, data: Partial<KnowledgeItem>) => {
-    // FIX: Optimistic update — reflect the change in local state IMMEDIATELY
-    const prevItems = items
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...data } : it)))
+    // Dynamic: will be handled by fetchItems() after API success
     try {
       const res = await apiPut('/api/rise/knowledge', { id, ...data })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setItems(prevItems) // Rollback on failure
         toastError('التحديث', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
       toastSaved('العنصر')
       // (fetchData removed — useDataRefresh handles background sync)
     } catch {
-      setItems(prevItems) // Rollback on failure
       toastError('التحديث')
     }
   }
 
   const handleDelete = async (id: string) => {
-    // FIX: Optimistic update — remove the item from local state IMMEDIATELY
-    const prevItems = items
-    setItems((prev) => prev.filter((it) => it.id !== id))
+    // Dynamic: will be handled by fetchItems() after API success
     try {
       const res = await apiDelete(`/api/rise/knowledge?id=${id}`)
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setItems(prevItems) // Rollback on failure
+        // Will be handled by fetchItems()
         throw new Error(data.error || `HTTP ${res.status}`)
       }
       toastDeleted('العنصر')
       // (fetchData removed — useDataRefresh handles background sync)
     } catch (err) {
-      setItems(prevItems) // Rollback on failure
+      // Will be handled by fetchItems()
       toastError('الحذف', err instanceof Error ? err.message : 'حاول مرة أخرى')
     }
   }

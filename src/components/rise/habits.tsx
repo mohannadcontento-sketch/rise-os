@@ -217,14 +217,9 @@ export function HabitsView() {
 
   const todayStr = getTodayStr()
 
-  // FIX: Re-added useDataRefresh with a skip-during-toggle guard.
-  // When the user toggles a habit, we set skipRefreshRef=true to prevent
-  // re-fetching (which would overwrite the optimistic update). After 1s,
-  // the guard is cleared and normal refresh resumes.
-  const skipRefreshRef = useRef(false)
   const { refreshKey } = useDataRefresh()
   const fetchHabits = useCallback(async () => {
-    if (skipRefreshRef.current) return
+
     try {
       const res = await apiFetch('/api/rise/habits')
       if (res.ok) {
@@ -257,31 +252,9 @@ export function HabitsView() {
       const existingLog = logs.find((l) => l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)
       const newCompleted = existingLog ? !existingLog.completed : true
 
-      // FIX: Skip refresh for 1.5s to prevent re-fetch from overwriting
-      // the optimistic update (PUT habit + POST earn-xp + POST notification
-      // each fire rise:data-changed which would trigger fetchHabits)
-      skipRefreshRef.current = true
-      setTimeout(() => { skipRefreshRef.current = false }, 1500)
-
       // Flash animation
       setFlashCard(habitId)
       setTimeout(() => setFlashCard(null), 400)
-
-      // Optimistic update
-      if (existingLog) {
-        setLogs((prev) =>
-          prev.map((l) =>
-            l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
-              ? { ...l, completed: newCompleted, count: newCompleted ? 1 : 0 }
-              : l
-          )
-        )
-      } else {
-        setLogs((prev) => [
-          ...prev,
-          { habitId, date: todayStr, completed: newCompleted, count: newCompleted ? 1 : 0 },
-        ])
-      }
 
       try {
         const res = await apiPut('/api/rise/habits', {
@@ -291,21 +264,10 @@ export function HabitsView() {
         })
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}))
-          // Revert
-          if (existingLog) {
-            setLogs((prev) =>
-              prev.map((l) =>
-                l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
-                  ? { ...l, completed: existingLog.completed, count: existingLog.count }
-                  : l
-              )
-            )
-          } else {
-            setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)))
-          }
-          toast.error('فشل تحديث العادة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+          toastError('تحديث العادة', errData.error || errData.details || 'حاول مرة أخرى')
           return
         }
+        fetchHabits()
         if (newCompleted) {
           playSound('habit-check')
           const habit = habits.find((h) => h.id === habitId)
@@ -342,16 +304,6 @@ export function HabitsView() {
   async function handleAddHabit() {
     if (!formName.trim()) return
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-    const optimistic: Habit = {
-      id: tempId,
-      name: formName,
-      icon: formIcon,
-      color: formColor,
-      frequency: formFrequency,
-      targetCount: parseInt(formTarget) || 1,
-      xpReward: 10,
-    }
-    setHabits((prev) => [...prev, optimistic])
     setSaving(true)
     try {
       const res = await apiPost('/api/rise/habits', {
@@ -363,8 +315,7 @@ export function HabitsView() {
         })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setHabits((prev) => prev.filter((h) => h.id !== tempId))
-        toast.error('فشل في إضافة العادة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('إضافة العادة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
 
@@ -378,16 +329,12 @@ export function HabitsView() {
         return
       }
 
-      const data = await res.json()
-      if (data && data.id && data.name) {
-        setHabits((prev) => prev.map((h) => h.id === tempId ? data : h))
-      }
       setAddOpen(false)
       resetForm()
       playSound('save')
+      fetchHabits()
     } catch {
-      setHabits((prev) => prev.filter((h) => h.id !== tempId))
-      toast.error('فشل في إضافة العادة')
+      toastError('إضافة العادة')
     } finally {
       setSaving(false)
     }
@@ -395,8 +342,6 @@ export function HabitsView() {
 
   /* ---- Delete habit ---- */
   async function deleteHabit(id: string) {
-    const prev = [...habits]
-    setHabits((p) => p.filter((h) => h.id !== id))
     playSound('delete')
     try {
       const res = await apiDelete(`/api/rise/habits?id=${id}`)
@@ -406,7 +351,7 @@ export function HabitsView() {
       }
       toast.success('تم حذف العادة بنجاح')
     } catch (err) {
-      setHabits(prev)
+      // Will be handled by fetchHabits()
       toast.error('فشل حذف العادة', {
         description: err instanceof Error ? err.message : 'حاول مرة أخرى',
       })
