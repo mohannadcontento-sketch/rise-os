@@ -387,9 +387,7 @@ export function Tasks() {
       setFormDependsOn([])
       setAddOpen(false)
       toastCreated('المهمة')
-      // Dynamic update: re-fetch from server after a short delay
-      // to ensure the DB has committed the transaction
-      fetchData() (500ms debounce)
+      fetchData()
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {
