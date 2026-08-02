@@ -198,11 +198,6 @@ const priorityDotColors: Record<string, string> = {
 
 export function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([])
-  // FIX: When we do an optimistic update (create/update/delete), we set this
-  // flag to skip the NEXT fetchData() call triggered by useDataRefresh.
-  // This prevents the server fetch from overwriting the optimistic update
-  // before the DB has committed the change.
-  const lastOptimisticUpdateRef = useRef(0)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
@@ -229,16 +224,6 @@ export function Tasks() {
   const [calendarMonth, setCalendarMonth] = useState(new Date())
 
   const fetchData = useCallback(async () => {
-    // FIX: Skip this fetch if we just did an optimistic update.
-    // The server might not have committed the change yet (100ms delay),
-    // which would cause the new item to disappear from the UI.
-    // FIX: Skip fetch if we did an optimistic update in the last 2 seconds.
-    // This prevents the server fetch from overwriting the optimistic update
-    // before the DB has committed the change. Uses a timestamp instead of
-    // a boolean flag so multiple rapid refreshes are all skipped.
-    if (Date.now() - lastOptimisticUpdateRef.current < 2000) {
-      return
-    }
     try {
       const res = await apiFetch('/api/rise/tasks')
       if (!res.ok) {
@@ -302,7 +287,6 @@ export function Tasks() {
     const isDone = task.status === 'done'
     const newStatus = isDone ? 'todo' : 'done'
     const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
-    lastOptimisticUpdateRef.current = Date.now()
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
       const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
@@ -326,7 +310,6 @@ export function Tasks() {
 
   const moveTask = async (task: Task, newStatus: string) => {
     const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
-    lastOptimisticUpdateRef.current = Date.now()
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
       const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
@@ -349,7 +332,6 @@ export function Tasks() {
 
   const deleteTask = async (taskId: string) => {
     const prev = [...tasks]
-    lastOptimisticUpdateRef.current = Date.now()
     setTasks((p) => p.filter((t) => t.id !== taskId))
     playSound('delete')
     try {
@@ -419,7 +401,6 @@ export function Tasks() {
       // which calls fetchData() with a 100ms debounce — by then the DB has
       // committed the task and the fetch will include it.
       if (result.id) {
-        lastOptimisticUpdateRef.current = Date.now() // Skip the next fetchData (from useDataRefresh)
         setTasks((prev) => [result, ...prev])
       }
       setFormTitle('')
