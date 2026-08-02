@@ -394,6 +394,11 @@ export function Tasks() {
         toast.error('فشل الاتصال بالخادم', { description: 'يرجى إعادة تسجيل الدخول' })
         return
       }
+      // FIX: Optimistic update — add the new task to local state IMMEDIATELY
+      // so it appears in the UI without waiting for fetchData() to complete.
+      if (result.id) {
+        setTasks((prev) => [result, ...prev])
+      }
       setFormTitle('')
       setFormDesc('')
       setFormPriority('medium')
@@ -402,7 +407,7 @@ export function Tasks() {
       setFormDueTime('')
       setFormDependsOn([])
       setAddOpen(false)
-      toast.success('تمت إضافة المهمة بنجاح')
+      toastCreated('المهمة')
       fetchData()
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')

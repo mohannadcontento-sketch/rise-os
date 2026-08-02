@@ -400,15 +400,24 @@ export function Projects() {
         : await apiPost('/api/rise/projects', { name: formName.trim(), description: formDesc.trim() || null, color: formColor })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشلت العملية', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('العملية', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toast.success(editingProject ? 'تم تحديث المشروع بنجاح' : 'تم إنشاء المشروع بنجاح')
+      // FIX: Optimistic update — add/update the project in local state IMMEDIATELY
+      const result = await res.json().catch(() => null)
+      if (result && result.id) {
+        if (editingProject) {
+          setProjects((prev) => prev.map((p) => p.id === result.id ? result : p))
+        } else {
+          setProjects((prev) => [result, ...prev])
+        }
+      }
+      if (editingProject) { toastSaved('المشروع') } else { toastCreated('المشروع') }
       playSound('save')
       setDialogOpen(false)
       fetchData()
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ')
+      toastError('الحفظ')
     } finally {
       setSubmitting(false)
     }

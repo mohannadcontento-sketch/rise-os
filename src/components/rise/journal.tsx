@@ -248,15 +248,29 @@ export default function Journal() {
           date: today,
         })
       if (res.ok) {
-        toast.success('تم حفظ اليوميات بنجاح ✨')
+        const result = await res.json().catch(() => null)
+        // FIX: Optimistic update — add the new/updated journal to local state IMMEDIATELY
+        if (result && result.id) {
+          setData((prev) => {
+            if (!prev) return prev
+            const exists = prev.recentJournals?.some((j: any) => j.id === result.id)
+            return {
+              ...prev,
+              recentJournals: exists
+                ? prev.recentJournals?.map((j: any) => j.id === result.id ? result : j)
+                : [result, ...(prev.recentJournals || [])],
+            }
+          })
+        }
+        toastSaved('اليوميات')
         playSound('save')
         setIsEditing(false)
         fetchJournal()
       } else {
-        toast.error('فشل في حفظ اليوميات')
+        toastError('حفظ اليوميات')
       }
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ')
+      toastError('الحفظ')
     } finally {
       setSaving(false)
     }

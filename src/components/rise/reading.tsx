@@ -188,10 +188,15 @@ export default function Reading() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشل في إضافة الكتاب', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('إضافة الكتاب', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toast.success('تمت إضافة الكتاب بنجاح')
+      // FIX: Optimistic update — add the new book to local state IMMEDIATELY
+      const result = await res.json().catch(() => null)
+      if (result && result.id) {
+        setBooks((prev) => [result, ...prev])
+      }
+      toastCreated('الكتاب')
       setNewTitle('')
       setNewAuthor('')
       setNewType('book')
@@ -199,7 +204,7 @@ export default function Reading() {
       setAddDialogOpen(false)
       fetchBooks()
     } catch {
-      toast.error('فشل في إضافة الكتاب')
+      toastError('إضافة الكتاب')
     }
   }
 

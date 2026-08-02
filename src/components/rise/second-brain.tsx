@@ -182,14 +182,19 @@ export default function SecondBrain() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشل في الحفظ', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('الحفظ', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
+      // FIX: Optimistic update — add the new item to local state IMMEDIATELY
+      const result = await res.json().catch(() => null)
+      if (result && result.id) {
+        setItems((prev) => [result, ...prev])
+      }
       setQuickCapture('')
-      toast.success('تم التقاط الفكرة بسرعة!')
+      toastCreated('الفكرة')
       fetchItems()
     } catch {
-      toast.error('فشل في الحفظ')
+      toastError('الحفظ')
     } finally {
       setIsCapturing(false)
     }
@@ -208,10 +213,15 @@ export default function SecondBrain() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        toast.error('فشل في الإضافة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('الإضافة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toast.success('تمت الإضافة بنجاح')
+      // FIX: Optimistic update — add the new item to local state IMMEDIATELY
+      const result = await res.json().catch(() => null)
+      if (result && result.id) {
+        setItems((prev) => [result, ...prev])
+      }
+      toastCreated('العنصر')
       setNewTitle('')
       setNewContent('')
       setNewTags('')
@@ -219,7 +229,7 @@ export default function SecondBrain() {
       setAddDialogOpen(false)
       fetchItems()
     } catch {
-      toast.error('فشل في الإضافة')
+      toastError('الإضافة')
     }
   }
 

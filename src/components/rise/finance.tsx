@@ -263,7 +263,12 @@ export default function Finance() {
     try {
       const res = await apiPost('/api/rise/finance', form)
       if (res.ok) {
-        toast.success('تم إضافة السجل بنجاح ✨')
+        const result = await res.json().catch(() => null)
+        // FIX: Optimistic update — add the new record to local state IMMEDIATELY
+        if (result && result.id) {
+          setData((prev) => prev ? { ...prev, records: [result, ...(prev.records || [])] } : prev)
+        }
+        toastCreated('المعاملة')
         playSound('save')
         // Show budget impact
         if (form.type === 'مصروف' && form.category && form.amount > 0) {
@@ -282,10 +287,10 @@ export default function Finance() {
         setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
         fetchFinance()
       } else {
-        toast.error('فشل في إضافة السجل')
+        toastError('إضافة السجل')
       }
     } catch {
-      toast.error('حدث خطأ أثناء الحفظ')
+      toastError('الحفظ')
     } finally {
       setSaving(false)
     }
