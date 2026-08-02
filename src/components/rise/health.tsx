@@ -207,7 +207,7 @@ export default function Health() {
           })
         }
         toastSaved('بيانات الصحة')
-        fetchHealth()
+        // (fetchData removed — useDataRefresh handles background sync)
       } else {
         toastError('حفظ البيانات')
       }

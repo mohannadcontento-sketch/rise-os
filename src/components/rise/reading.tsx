@@ -221,7 +221,7 @@ export default function Reading() {
         return
       }
       toastSaved('الكتاب')
-      fetchBooks()
+      // (fetchData removed — useDataRefresh handles background sync)
     } catch {
       setBooks(prevBooks) // Rollback on failure
       toastError('تحديث الكتاب')

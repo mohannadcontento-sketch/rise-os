@@ -311,7 +311,7 @@ export default function Finance() {
         throw new Error(errData.error || `HTTP ${res.status}`)
       }
       toastDeleted('السجل')
-      fetchFinance()
+      // (fetchData removed — useDataRefresh handles background sync)
     } catch (err) {
       setData(prevData) // Rollback on failure
       toastError('حذف السجل', err instanceof Error ? err.message : 'حاول مرة أخرى')

@@ -43,23 +43,24 @@ function getCacheKey(url: string): string {
 
 function getCached<T = any>(url: string): T | null {
   if (typeof window === 'undefined') return null
+  // FIX: Cache is DISABLED (CACHE_TTL_MS = 0). Never return cached data.
+  // This prevents stale data from masking newly created/updated/deleted items.
+  // The cache was causing the "task disappears after creation" bug because
+  // fetchData() returned the OLD cached response (without the new task)
+  // instead of hitting the server.
+  if (CACHE_TTL_MS <= 0) return null
   try {
     const uid = getCurrentUserId()
     if (!uid) return null // No user = no cache
     const raw = localStorage.getItem(getCacheKey(url))
     if (!raw) return null
     const entry: CacheEntry = JSON.parse(raw)
-    // Verify cache belongs to current user
     if (entry.uid && entry.uid !== uid) {
       localStorage.removeItem(getCacheKey(url))
       return null
     }
     const age = Date.now() - entry.ts
-    // Return cached data even if stale (we use stale-while-revalidate).
-    // Reduced from 24h to 2h — a 24h window served yesterday's "today" data
-    // after midnight, causing the "must logout/login to start a new day" bug.
-    // 2h is enough for offline recovery without crossing midnight in most cases.
-    if (age < 2 * 60 * 60 * 1000) { // Max 2h old
+    if (age < CACHE_TTL_MS) {
       return entry.data as T
     }
     localStorage.removeItem(getCacheKey(url))
@@ -71,6 +72,7 @@ function getCached<T = any>(url: string): T | null {
 
 function setCache(url: string, data: any): void {
   if (typeof window === 'undefined') return
+  if (CACHE_TTL_MS <= 0) return // Cache disabled
   const uid = getCurrentUserId()
   if (!uid) return // Don't cache without a user
   try {
@@ -125,7 +127,11 @@ function getAuthHeaders(): Record<string, string> {
     const stored = localStorage.getItem('rise-auth')
     if (!stored) return {}
     const session = JSON.parse(stored)
-    if (session.access_token) {
+    // FIX: Don't send Authorization header if the token is a placeholder
+    // from cookie-based session restore. The real auth is in the httpOnly
+    // cookie (sent via credentials:'include'). Sending a fake token in the
+    // header causes the API to reject the request with 401.
+    if (session.access_token && session.access_token !== 'restored-from-cookie') {
       return { 'Authorization': `Bearer ${session.access_token}` }
     }
   } catch { /* ignore parse errors */ }

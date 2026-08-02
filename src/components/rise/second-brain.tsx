@@ -192,7 +192,7 @@ export default function SecondBrain() {
       }
       setQuickCapture('')
       toastCreated('الفكرة')
-      fetchItems()
+      // (fetchData removed — useDataRefresh handles background sync)
     } catch {
       toastError('الحفظ')
     } finally {
@@ -246,7 +246,7 @@ export default function SecondBrain() {
         return
       }
       toastSaved('العنصر')
-      fetchItems()
+      // (fetchData removed — useDataRefresh handles background sync)
     } catch {
       setItems(prevItems) // Rollback on failure
       toastError('التحديث')
@@ -265,7 +265,7 @@ export default function SecondBrain() {
         throw new Error(data.error || `HTTP ${res.status}`)
       }
       toastDeleted('العنصر')
-      fetchItems()
+      // (fetchData removed — useDataRefresh handles background sync)
     } catch (err) {
       setItems(prevItems) // Rollback on failure
       toastError('الحذف', err instanceof Error ? err.message : 'حاول مرة أخرى')

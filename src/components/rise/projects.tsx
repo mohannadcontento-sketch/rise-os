@@ -470,7 +470,6 @@ export function Projects() {
       setNewTaskPriority('medium')
       setNewTaskDueDate('')
       setAddTaskOpen(false)
-      fetchData()
     } catch {
       toastError('الحفظ')
     } finally {
