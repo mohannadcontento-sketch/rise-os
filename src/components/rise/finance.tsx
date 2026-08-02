@@ -250,7 +250,7 @@ export default function Finance() {
   }, [])
 
   useEffect(() => {
-    // Dynamic update: useDataRefresh handles re-fetch
+    fetchFinance()
   }, [fetchFinance, refreshKey])
 
   /* ─── Save Record ─── */
@@ -280,7 +280,7 @@ export default function Finance() {
         }
         setDialogOpen(false)
         setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
-        // Dynamic update: useDataRefresh handles re-fetch
+        fetchFinance()
       } else {
         toastError('إضافة السجل')
       }

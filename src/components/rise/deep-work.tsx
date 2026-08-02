@@ -403,7 +403,7 @@ export default function DeepWork() {
   }, [])
 
   useEffect(() => {
-    // Dynamic update: useDataRefresh handles re-fetch
+    fetchSessions()
   }, [fetchSessions])
 
   /* ─── Restore timer state on mount ─── */
@@ -508,7 +508,7 @@ export default function DeepWork() {
         } else {
           toast.success('تم حفظ الجلسة (سيتم المزامنة لاحقاً)')
         }
-        // Dynamic update: useDataRefresh handles re-fetch
+        fetchSessions()
         return
       }
 
@@ -524,7 +524,7 @@ export default function DeepWork() {
       } else {
         toastSaved('الجلسة')
       }
-      // Dynamic update: useDataRefresh handles re-fetch
+      fetchSessions()
     } catch {
       toast.error('فشل في حفظ الجلسة')
     } finally {
@@ -567,7 +567,7 @@ export default function DeepWork() {
       }
       const taskName = taskOptions.find((t) => t.id === selectedTaskId)?.title
       toastSaved('ربط الجلسة')
-      // Dynamic update: useDataRefresh handles re-fetch
+      fetchSessions()
       playSound('complete')
     } catch {
       toast.error('فشل في ربط الجلسة')

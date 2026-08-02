@@ -176,7 +176,7 @@ export default function Health() {
   }, [])
 
   useEffect(() => {
-    // Dynamic update: useDataRefresh handles re-fetch
+    fetchHealth()
   }, [fetchHealth, refreshKey])
 
   /* ─── Save ─── */
