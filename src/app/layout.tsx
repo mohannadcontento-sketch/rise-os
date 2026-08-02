@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { PWAInit } from "@/components/pwa-init";
 import { QueryProvider } from "@/components/query-provider";
 import { PerformanceMonitor } from "@/components/performance-monitor";
@@ -78,6 +79,7 @@ export default function RootLayout({
             <PerformanceMonitor />
             {children}
             <Toaster />
+            <SonnerToaster position="top-center" richColors closeButton={false} />
           </QueryProvider>
         </ThemeProvider>
       </body>

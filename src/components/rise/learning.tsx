@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { toastSaved, toastError } from '@/lib/toast-helpers'
 import {
   RadarChart,
   Radar,
@@ -312,7 +313,7 @@ export default function Learning() {
           ...prev,
           goals: prev.goals.map((g) => (g.id === tempId ? { ...g, id: created.id } : g)),
         }))
-        toast.success('تمت إضافة الهدف')
+        toastSaved('الهدف')
       } else {
         // Rollback on failure
         setData((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== tempId) }))
@@ -342,7 +343,7 @@ export default function Learning() {
 
   const deleteGoal = (id: string) => {
     setData((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== id) }))
-    toast.success('تم حذف الهدف')
+    toastSaved('الهدف')
     if (!id.startsWith('temp-')) {
       apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
     }
@@ -378,7 +379,7 @@ export default function Learning() {
           ...prev,
           courses: prev.courses.map((c) => (c.id === tempId ? { ...c, id: created.id } : c)),
         }))
-        toast.success('تمت إضافة الدورة')
+        toastSaved('الدورة')
       } else {
         setData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== tempId) }))
         toast.error('فشل في حفظ الدورة')
@@ -441,7 +442,7 @@ export default function Learning() {
 
   const deleteCourse = (id: string) => {
     setData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== id) }))
-    toast.success('تم حذف الدورة')
+    toastSaved('الدورة')
     if (!id.startsWith('temp-')) {
       apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
     }
@@ -472,7 +473,7 @@ export default function Learning() {
           ...prev,
           skills: prev.skills.map((s) => (s.id === tempId ? { ...s, id: created.id } : s)),
         }))
-        toast.success('تمت إضافة المهارة')
+        toastSaved('المهارة')
       } else {
         setData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s.id !== tempId) }))
         toast.error('فشل في حفظ المهارة')
@@ -515,12 +516,12 @@ export default function Learning() {
     }
     setEditingSkill(null)
     setEditSkillName('')
-    toast.success('تم تحديث المهارة')
+    toastSaved('المهارة')
   }
 
   const deleteSkill = (id: string) => {
     setData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s.id !== id) }))
-    toast.success('تم حذف المهارة')
+    toastSaved('المهارة')
     if (!id.startsWith('temp-')) {
       apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
     }
@@ -550,7 +551,7 @@ export default function Learning() {
           ...prev,
           logs: prev.logs.map((l) => (l.id === tempId ? { ...l, id: created.id } : l)),
         }))
-        toast.success('تمت إضافة السجل')
+        toastSaved('السجل')
       } else {
         setData((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== tempId) }))
         toast.error('فشل في حفظ السجل')
@@ -570,12 +571,12 @@ export default function Learning() {
       apiPut('/api/rise/knowledge', { id, content: editLogContent }).catch(() => {})
     }
     setEditingLog(null)
-    toast.success('تم تحديث السجل')
+    toastSaved('السجل')
   }
 
   const deleteLog = (id: string) => {
     setData((prev) => ({ ...prev, logs: prev.logs.filter((l) => l.id !== id) }))
-    toast.success('تم حذف السجل')
+    toastSaved('السجل')
     if (!id.startsWith('temp-')) {
       apiDelete(`/api/rise/knowledge?id=${id}`).catch(() => { /* silent */ })
     }

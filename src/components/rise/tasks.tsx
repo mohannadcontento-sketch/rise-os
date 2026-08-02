@@ -82,6 +82,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
+import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { playSound } from '@/lib/sounds'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
 import { ar } from 'date-fns/locale'
@@ -299,8 +300,8 @@ export function Tasks() {
         playSound('task-complete')
         notifyTaskComplete(task.title, task.xpReward)
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
-        // Check if completing this task unblocks dependent tasks
         checkUnblockedTasks(task.id)
+        toastSaved('المهمة')
       }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))

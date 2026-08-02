@@ -43,6 +43,7 @@ import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
+import { toastSaved } from '@/lib/toast-helpers'
 import { notifyMorningComplete } from '@/lib/notifications'
 
 /* ────────────── Types ────────────── */
