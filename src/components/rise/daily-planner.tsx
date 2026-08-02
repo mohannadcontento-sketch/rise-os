@@ -741,23 +741,26 @@ export default function DailyPlanner() {
   const [activeView, setActiveView] = useState<'sections' | 'timeline'>('sections')
   const [currentTime, setCurrentTime] = useState(new Date())
 
-  // FIX: reactive today — updates at midnight so the planner doesn't get
-  // stuck on yesterday's date (which caused the "logout/login to start new day" bug).
+  // FIX: reactive today — updates at EXACTLY midnight (00:00:00) so the
+  // planner immediately switches to the new day without waiting for a poll.
   const [todayStr, setTodayStr] = useState(() => getTodayStr())
   useEffect(() => {
     const update = () => setTodayStr(getTodayStr())
-    // Re-check on focus/visibility (covers overnight sleep)
+
+    // Listen for the global day-changed event (fired by useToday hook
+    // at exactly midnight)
+    window.addEventListener('rise:day-changed', update)
+
+    // Also check on visibility change (covers overnight sleep)
     const onVis = () => { if (document.visibilityState === 'visible') update() }
     document.addEventListener('visibilitychange', onVis)
-    window.addEventListener('focus', update)
-    // Re-check on global day-changed event (from useToday hook)
-    window.addEventListener('rise:day-changed', update)
-    // Poll every 30s as a safety net
-    const interval = setInterval(update, 30_000)
+
+    // Safety net: 5-minute interval
+    const interval = setInterval(update, 5 * 60_000)
+
     return () => {
-      document.removeEventListener('visibilitychange', onVis)
-      window.removeEventListener('focus', update)
       window.removeEventListener('rise:day-changed', update)
+      document.removeEventListener('visibilitychange', onVis)
       clearInterval(interval)
     }
   }, [])
