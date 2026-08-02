@@ -235,7 +235,7 @@ export default function Journal() {
   }, [])
 
   useEffect(() => {
-    fetchJournal()
+    // Dynamic update: useDataRefresh handles re-fetch
   }, [fetchJournal, refreshKey])
 
   /* ─── Save ─── */
@@ -265,7 +265,7 @@ export default function Journal() {
         toastSaved('اليوميات')
         playSound('save')
         setIsEditing(false)
-        fetchJournal()
+        // Dynamic update: useDataRefresh handles re-fetch
       } else {
         toastError('حفظ اليوميات')
       }

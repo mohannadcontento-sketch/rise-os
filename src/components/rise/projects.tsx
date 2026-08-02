@@ -347,7 +347,7 @@ export function Projects() {
   }, [])
 
   useEffect(() => {
-    fetchData()
+    // Dynamic update: useDataRefresh handles re-fetch (500ms debounce)
   }, [fetchData, refreshKey])
 
   /* ── Computed ── */
@@ -415,7 +415,7 @@ export function Projects() {
       if (editingProject) { toastSaved('المشروع') } else { toastCreated('المشروع') }
       playSound('save')
       setDialogOpen(false)
-      fetchData()
+      // Dynamic update: useDataRefresh handles re-fetch (500ms debounce)
     } catch {
       toastError('الحفظ')
     } finally {

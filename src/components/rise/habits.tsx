@@ -236,12 +236,12 @@ export function HabitsView() {
 
   /* ---- Fetch on mount + when data changes (debounced) ---- */
   useEffect(() => {
-    fetchHabits()
+    // Dynamic update: useDataRefresh handles re-fetch
   }, [fetchHabits, refreshKey])
 
   /* ---- Re-fetch on day rollover so habits show fresh "today" state ---- */
   useEffect(() => {
-    const handler = () => fetchHabits()
+    const handler = () => // Dynamic update: useDataRefresh handles re-fetch
     window.addEventListener('rise:day-changed', handler)
     return () => window.removeEventListener('rise:day-changed', handler)
   }, [fetchHabits])
@@ -267,7 +267,7 @@ export function HabitsView() {
           toastError('تحديث العادة', errData.error || errData.details || 'حاول مرة أخرى')
           return
         }
-        fetchHabits()
+        // Dynamic update: useDataRefresh handles re-fetch
         if (newCompleted) {
           playSound('habit-check')
           const habit = habits.find((h) => h.id === habitId)
@@ -332,7 +332,7 @@ export function HabitsView() {
       setAddOpen(false)
       resetForm()
       playSound('save')
-      fetchHabits()
+      // Dynamic update: useDataRefresh handles re-fetch
     } catch {
       toastError('إضافة العادة')
     } finally {

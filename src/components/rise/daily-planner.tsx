@@ -792,7 +792,7 @@ export default function DailyPlanner() {
   const { refreshKey } = useDataRefresh()
 
   useEffect(() => {
-    fetchItems()
+    // Dynamic update: useDataRefresh handles re-fetch
   }, [fetchItems, refreshKey])
 
   // Quick Notes (keep in localStorage)

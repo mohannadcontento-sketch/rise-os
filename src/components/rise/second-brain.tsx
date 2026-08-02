@@ -163,7 +163,7 @@ export default function SecondBrain() {
   }, [])
 
   useEffect(() => {
-    fetchItems()
+    // Dynamic update: useDataRefresh handles re-fetch
   }, [fetchItems, refreshKey])
 
   // Quick Capture handler
@@ -186,7 +186,7 @@ export default function SecondBrain() {
         return
       }
       setQuickCapture('')
-      fetchItems()
+      // Dynamic update: useDataRefresh handles re-fetch
       toastCreated('الفكرة')
       // (fetchData removed — useDataRefresh handles background sync)
     } catch {
@@ -213,13 +213,13 @@ export default function SecondBrain() {
         return
       }
       toastCreated('العنصر')
-      fetchItems()
+      // Dynamic update: useDataRefresh handles re-fetch
       setNewTitle('')
       setNewContent('')
       setNewTags('')
       setNewSource('')
       setAddDialogOpen(false)
-      fetchItems()
+      // Dynamic update: useDataRefresh handles re-fetch
     } catch {
       toastError('الإضافة')
     }

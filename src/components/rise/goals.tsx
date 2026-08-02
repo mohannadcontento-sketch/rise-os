@@ -315,7 +315,7 @@ export function GoalsView() {
 
       const data = await res.json()
       if (data && data.id && data.title) {
-        triggerRefresh()
+        // Dynamic update: useDataRefresh handles re-fetch
       }
       setAddOpen(false)
       resetForm()

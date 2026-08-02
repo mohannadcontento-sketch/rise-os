@@ -307,30 +307,25 @@ export function Tasks() {
   }
 
   const moveTask = async (task: Task, newStatus: string) => {
-    const optimistic = { ...task, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null }
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
-      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: optimistic.completedAt })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
-        toast.error('فشل تحديث المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
+        toastError('تحديث المهمة', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
+      fetchData()
       if (newStatus === 'done') {
         playSound('task-complete')
         apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
-        // Check if completing this task unblocks dependent tasks
         checkUnblockedTasks(task.id)
       }
     } catch {
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+      toastError('تحديث المهمة')
     }
   }
 
   const deleteTask = async (taskId: string) => {
-    const prev = [...tasks]
-    setTasks((p) => p.filter((t) => t.id !== taskId))
     playSound('delete')
     try {
       const res = await apiDelete(`/api/rise/tasks?id=${taskId}`)
@@ -340,31 +335,21 @@ export function Tasks() {
       }
       toast.success('تم حذف المهمة بنجاح')
     } catch (err) {
-      setTasks(prev)
-      toast.error('فشل حذف المهمة', {
-        description: err instanceof Error ? err.message : 'حاول مرة أخرى',
-      })
+      toastError('حذف المهمة', err instanceof Error ? err.message : 'حاول مرة أخرى')
     }
   }
 
   const toggleSubtask = async (task: Task, subtaskId: string, completed: boolean) => {
-    const optimistic = {
-      ...task,
-      subtasks: task.subtasks.map((s) => (s.id === subtaskId ? { ...s, completed: !completed } : s)),
-    }
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
+    const updatedSubtasks = task.subtasks.map((s) => (s.id === subtaskId ? { ...s, completed: !completed } : s))
     try {
       const res = await apiPut('/api/rise/tasks', {
         id: task.id,
-        subtasks: optimistic.subtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
+        subtasks: updatedSubtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
       })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
-        toast.error('فشل تحديث المهمة الفرعية', { description: errData.error || errData.details || 'حاول مرة أخرى' })
-      }
+      if (!res.ok) return
+      fetchData()
     } catch {
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)))
+      // silent
     }
   }
 
@@ -402,6 +387,9 @@ export function Tasks() {
       setFormDependsOn([])
       setAddOpen(false)
       toastCreated('المهمة')
+      // Dynamic update: re-fetch from server after a short delay
+      // to ensure the DB has committed the transaction
+      // Dynamic update: useDataRefresh handles re-fetch (500ms debounce)
     } catch {
       toast.error('حدث خطأ أثناء الحفظ')
     } finally {
@@ -481,17 +469,6 @@ export function Tasks() {
     // Reorder within status group
     const reordered = arrayMove(statusTasks, oldIndex, newIndex)
     const updates = reordered.map((t, i) => ({ id: t.id, order: i }))
-
-    // Optimistic update
-    setTasks((prev) => {
-      const newTasks = prev.map((t) => {
-        if (t.status !== activeTask.status) return t
-        const idx = updates.findIndex((u) => u.id === t.id)
-        if (idx === -1) return t
-        return { ...t, order: updates[idx].order }
-      })
-      return newTasks.sort((a, b) => a.order - b.order)
-    })
 
     try {
       const results = await Promise.all(updates.map((u) =>
