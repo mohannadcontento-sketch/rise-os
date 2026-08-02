@@ -18,9 +18,9 @@ export async function GET(req: NextRequest) {
       data.tasks.list(userId),
     ])
 
-    // Filter tasks due today with a dueTime (not completed, not cancelled)
+    // FIX: Show ALL tasks due today (including completed ones — they show as checked)
     const linkedTasks = allTasks.filter(
-      (t: any) => t.dueDate === date && t.dueTime && t.status !== 'done' && t.status !== 'cancelled'
+      (t: any) => t.dueDate === date && t.dueTime && t.status !== 'cancelled'
     ).map((t: any) => {
       // Determine section from dueTime hour
       const hour = parseInt(t.dueTime.split(':')[0], 10)

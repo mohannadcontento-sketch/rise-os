@@ -148,6 +148,19 @@ export default function Settings() {
     if (typeof window === 'undefined') return ''
     return localStorage.getItem('rise-user-avatar') || ''
   })
+
+  // FIX: Load avatar from server (survives cookie/cache clearing)
+  useEffect(() => {
+    apiFetch('/api/auth/session')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.user?.avatar) {
+          setSelectedAvatar(data.user.avatar)
+          localStorage.setItem('rise-user-avatar', data.user.avatar)
+        }
+      })
+      .catch(() => {})
+  }, [])
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [isEditingName, setIsEditingName] = useState(false)

@@ -36,9 +36,33 @@ export async function POST(req: NextRequest) {
             newXpToNext = calculateXpForLevel(newLevel)
             leveled = true
           }
+
+          // FIX: Update streak — if user earned XP today, they're active.
+          // Streak increments if last activity was yesterday, resets if >1 day gap.
+          const now = new Date()
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+          const yesterday = new Date(now)
+          yesterday.setDate(yesterday.getDate() - 1)
+          const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`
+          
+          const lastActive = (user as any).lastActiveDate || ''
+          let newStreak = user.streak || 0
+          if (lastActive !== todayStr) {
+            if (lastActive === yesterdayStr) {
+              newStreak = (user.streak || 0) + 1
+            } else {
+              newStreak = 1 // Reset streak
+            }
+          }
+          const newLongestStreak = Math.max(newStreak, user.longestStreak || 0)
+
           await (db as any).user.update({
             where: { id: userId },
-            data: { xp: newXp, level: newLevel, xpToNextLevel: newXpToNext },
+            data: { 
+              xp: newXp, level: newLevel, xpToNextLevel: newXpToNext,
+              streak: newStreak, longestStreak: newLongestStreak,
+              lastActiveDate: todayStr,
+            } as any,
           })
           return NextResponse.json({ xp: newXp, amount, reason: reason || 'unknown', leveled, newLevel })
         }

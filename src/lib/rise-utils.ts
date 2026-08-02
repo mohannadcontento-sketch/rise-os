@@ -2,7 +2,14 @@ import { format, startOfDay, startOfWeek, startOfMonth, subDays, eachDayOfInterv
 import { ar } from 'date-fns/locale'
 
 export function getToday(): string {
-  return format(startOfDay(new Date()), 'yyyy-MM-dd')
+  // FIX: Use LOCAL date (not UTC) so "today" changes at midnight local time.
+  // In Egypt (UTC+2), UTC midnight is 2am local time — tasks created at 00:30
+  // were being counted as "yesterday" because UTC was still the previous day.
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export function getWeekDays(): string[] {

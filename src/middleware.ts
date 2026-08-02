@@ -127,6 +127,14 @@ function setSecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
 
+  // FIX: Prevent browser from caching API responses.
+  // Without this, GET requests return stale cached data after POST/PUT/DELETE.
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.headers.set('Pragma', 'no-cache')
+    res.headers.set('Expires', '0')
+  }
+
   return res
 }
 

@@ -22,6 +22,7 @@ model User {
   totalFocusMin  Int      @default(0)
   totalTasksDone Int      @default(0)
   isDefault      Boolean  @default(false)
+  lastActiveDate  String?  // yyyy-MM-dd for streak calculation
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -59,6 +60,7 @@ model UserSettings {
   dailyReadingGoal Int     @default(30)
   weeklyExerciseGoal Int   @default(5)
   notifications    Boolean @default(true)
+  budgets          String? // JSON string: [{category, limit}]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
