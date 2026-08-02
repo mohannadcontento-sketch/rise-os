@@ -127,14 +127,16 @@ function setSecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
 
-  // FIX: Prevent browser from caching API responses.
-  // Without this, GET requests return stale cached data after POST/PUT/DELETE.
-  if (req.nextUrl.pathname.startsWith('/api/')) {
+  return res
+}
+
+// FIX: Add no-cache headers for API responses
+function addNoCacheHeaders(res: NextResponse, pathname: string): NextResponse {
+  if (pathname.startsWith('/api/')) {
     res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
     res.headers.set('Pragma', 'no-cache')
     res.headers.set('Expires', '0')
   }
-
   return res
 }
 
@@ -195,6 +197,7 @@ export async function middleware(req: NextRequest) {
 
   const res = NextResponse.next()
   setSecurityHeaders(res)
+  addNoCacheHeaders(res, pathname)
   return res
 }
 
