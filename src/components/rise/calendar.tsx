@@ -119,10 +119,10 @@ export default function CalendarView() {
   const fetchAllData = useCallback(async () => {
     try {
       const [tasksRes, habitsRes, journalRes, focusRes] = await Promise.all([
-        apiFetch(`/api/rise/tasks?_t=${Date.now()}`),
-        apiFetch(`/api/rise/habits?_t=${Date.now()}`),
-        apiFetch(`/api/rise/journal?_t=${Date.now()}`),
-        apiFetch(`/api/rise/focus?_t=${Date.now()}`),
+        apiFetch(`/api/rise/tasks`),
+        apiFetch(`/api/rise/habits`),
+        apiFetch(`/api/rise/journal`),
+        apiFetch(`/api/rise/focus`),
       ])
 
       let tasksData: any = null, habitsData: any = null, journalData: any = null, focusData: any = null

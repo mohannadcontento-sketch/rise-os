@@ -184,8 +184,8 @@ export default function WeeklyReview() {
     setIsAutoFilling(true)
     try {
       const [tasksRes, focusRes] = await Promise.all([
-        apiFetch(`/api/rise/tasks?_t=${Date.now()}`),
-        apiFetch(`/api/rise/focus?_t=${Date.now()}`),
+        apiFetch(`/api/rise/tasks`),
+        apiFetch(`/api/rise/focus`),
       ])
       const tasksData = await tasksRes.json()
       const focusData = await focusRes.json()

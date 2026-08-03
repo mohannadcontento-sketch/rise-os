@@ -706,7 +706,7 @@ function GoalDeltaBadge({ goalId }: { goalId: string }) {
     async function fetchDelta() {
       try {
         // Fetch goals from API to get current progress
-        const goalsRes = await apiFetch(`/api/rise/goals?_t=${Date.now()}`)
+        const goalsRes = await apiFetch(`/api/rise/goals`)
         const goalsData = await goalsRes.json()
         const goal = (goalsData.goals || []).find((g: { id: string }) => g.id === goalId)
         if (!goal) return
@@ -1086,7 +1086,7 @@ export default function Dashboard() {
     try {
       setLoading(true)
       setError(null)
-      const res = await apiFetch(`/api/rise/dashboard?_t=${Date.now()}`)
+      const res = await apiFetch(`/api/rise/dashboard`)
       if (res.ok) {
         const json = await res.json()
         setFromCache(isFromCache(res))

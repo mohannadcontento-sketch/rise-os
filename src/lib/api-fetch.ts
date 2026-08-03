@@ -338,8 +338,11 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     }
   }
 
-  // If 401 and this is an API request, try to refresh and retry
-  if (response.status === 401 && url.startsWith('/api/') && authHeaders['Authorization']) {
+  // If 401 and this is an API request, try to refresh and retry.
+  // FIX: Also try refresh when there's no Authorization header (cookie-based auth).
+  // Previously, 401 errors from cookie-only auth never triggered refresh,
+  // causing the user to be logged out after JWT expiry.
+  if (response.status === 401 && url.startsWith('/api/')) {
     const refreshed = await tryRefreshToken()
     if (refreshed) {
       // Get the new auth headers after refresh

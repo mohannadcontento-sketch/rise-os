@@ -140,7 +140,7 @@ export function GoalsView() {
   useEffect(() => {
     async function loadGoals() {
       try {
-        const res = await apiFetch(`/api/rise/goals?_t=${Date.now()}`)
+        const res = await apiFetch(`/api/rise/goals`)
         if (res.ok) {
           const data: GoalsResponse = await res.json()
           // Ensure goals is always an array, and each goal has a milestones array

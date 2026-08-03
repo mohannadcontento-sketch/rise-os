@@ -60,8 +60,13 @@ export async function POST(request: NextRequest) {
             const res = NextResponse.json({ session: sessionData, user: userInfo })
             return setAuthCookies(res, sessionData, userInfo)
           }
-        } catch { /* fall through */ }
+        } catch (e) {
+          console.error('[auth/refresh] Supabase refresh failed:', e)
+        }
       }
+      // If Supabase is configured but refresh failed, return 401
+      // (don't fall through to Prisma — it's not available on Vercel)
+      return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
     }
 
     // ── Local Fallback (mock mode) ──
@@ -99,7 +104,8 @@ export async function POST(request: NextRequest) {
     const { setAuthCookies } = await import('@/lib/cookie-auth')
     const res = NextResponse.json({ session: newSession, user: userInfo })
     return setAuthCookies(res, newSession, userInfo)
-  } catch {
-    return NextResponse.json({ error: 'حدث خطأ' }, { status: 500 })
+  } catch (error) {
+    console.error('[auth/refresh] error:', error)
+    return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
   }
 }

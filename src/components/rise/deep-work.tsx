@@ -390,7 +390,7 @@ export default function DeepWork() {
   /* ─── Fetch ─── */
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await apiFetch(`/api/rise/focus?_t=${Date.now()}`)
+      const res = await apiFetch(`/api/rise/focus`)
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -535,7 +535,7 @@ export default function DeepWork() {
   /* ─── Task Linking ─── */
   const fetchTasksForLinking = async () => {
     try {
-      const res = await apiFetch(`/api/rise/tasks?_t=${Date.now()}`)
+      const res = await apiFetch(`/api/rise/tasks`)
       if (res.ok) {
         const data = await res.json()
         const eligible = (data.tasks || []).filter(
