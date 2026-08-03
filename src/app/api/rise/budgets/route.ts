@@ -13,32 +13,21 @@ export async function GET(req: NextRequest) {
     let budgets: { category: string; limit: number }[] = []
 
     if (isSupabaseConfigured()) {
-      // Production: use Supabase
+      // Production: read from knowledge_items (type='budget-config')
       const admin = await getSupabaseAdmin()
       if (admin) {
         const { data, error } = await admin
-          .from('user_settings')
-          .select('budgets')
-          .eq('user_id', userId)
-          .maybeSingle()
-        if (!error && data?.budgets) {
-          try { budgets = JSON.parse(data.budgets) } catch {}
-        }
-      }
-      // Fallback: if no budgets in user_settings, check knowledge_items
-      if (budgets.length === 0 && admin) {
-        const { data: kData } = await admin
           .from('knowledge_items')
           .select('content')
           .eq('user_id', userId)
           .eq('type', 'budget-config')
           .maybeSingle()
-        if (kData?.content) {
-          try { budgets = JSON.parse(kData.content) } catch {}
+        if (!error && data?.content) {
+          try { budgets = JSON.parse(data.content) } catch {}
         }
       }
     } else {
-      // Local dev: use Prisma
+      // Local dev: read from Prisma user_settings
       const settings = await db.userSettings.findUnique({ where: { userId } })
       if (settings && (settings as any).budgets) {
         try { budgets = JSON.parse((settings as any).budgets) } catch {}
@@ -69,54 +58,37 @@ export async function PUT(req: NextRequest) {
     const budgetsJson = JSON.stringify(budgets)
 
     if (isSupabaseConfigured()) {
-      // Production: use Supabase
+      // Production: save to knowledge_items (type='budget-config')
       const admin = await getSupabaseAdmin()
       if (admin) {
-        // Try to update existing user_settings row
+        // Check if budget-config already exists
         const { data: existing } = await admin
-          .from('user_settings')
-          .select('user_id')
+          .from('knowledge_items')
+          .select('id')
           .eq('user_id', userId)
+          .eq('type', 'budget-config')
           .maybeSingle()
 
-        if (existing) {
-          // Update existing row
-          const { error } = await admin
-            .from('user_settings')
-            .update({ budgets: budgetsJson })
-            .eq('user_id', userId)
-          if (error) {
-            // If 'budgets' column doesn't exist, store in profiles table instead
-            if (error.message.includes('column') || error.message.includes('Could not find')) {
-              // Fallback: store as a knowledge_item with type 'budget-config'
-              await admin.from('knowledge_items').upsert({
-                user_id: userId,
-                type: 'budget-config',
-                title: 'ميزانية المستخدم',
-                content: budgetsJson,
-              }, { onConflict: 'user_id,type' })
-            } else {
-              throw error
-            }
-          }
+        if (existing?.id) {
+          // Update existing
+          await admin
+            .from('knowledge_items')
+            .update({ content: budgetsJson })
+            .eq('id', existing.id)
         } else {
-          // Insert new row
-          const { error } = await admin
-            .from('user_settings')
-            .insert({ user_id: userId, budgets: budgetsJson })
-          if (error) {
-            // Fallback: store as a knowledge_item
-            await admin.from('knowledge_items').upsert({
+          // Insert new
+          await admin
+            .from('knowledge_items')
+            .insert({
               user_id: userId,
               type: 'budget-config',
               title: 'ميزانية المستخدم',
               content: budgetsJson,
-            }, { onConflict: 'user_id,type' })
-          }
+            })
         }
       }
     } else {
-      // Local dev: use Prisma
+      // Local dev: save to Prisma user_settings
       await db.userSettings.upsert({
         where: { userId },
         update: { budgets: budgetsJson } as any,
