@@ -156,9 +156,10 @@ interface BudgetCategory {
 
 const DEFAULT_BUDGET_CATEGORIES: BudgetCategory[] = [
   { name: 'سكن', limit: 2000, icon: Home },
-  { name: 'غذاء', limit: 1500, icon: Utensils },
-  { name: 'تنقل', limit: 800, icon: Car },
-  { name: 'اشتراكات', limit: 300, icon: CreditCard },
+  { name: 'طعام', limit: 1500, icon: Utensils },
+  { name: 'مواصلات', limit: 800, icon: Car },
+  { name: 'فواتير', limit: 500, icon: Zap },
+  { name: 'تسوق', limit: 400, icon: ShoppingBag },
   { name: 'صحة', limit: 500, icon: Heart },
   { name: 'ترفيه', limit: 400, icon: Gift },
   { name: 'تعليم', limit: 600, icon: GraduationCap },

@@ -22,7 +22,7 @@ export function calculateLevel(xp: number): {
 }
 
 function xpForLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.2, level - 1))
+  return Math.floor(100 * Math.pow(1.15, level - 1))  // FIX: Match rise-utils.ts formula
 }
 
 /* ────────────── Badges ────────────── */

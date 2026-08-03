@@ -174,18 +174,19 @@ export function Sidebar() {
       if (res.ok) {
         const data = await res.json()
         if (data.user) {
-          const { calculateLevel } = await import('@/lib/gamification')
-          const levelInfo = calculateLevel(data.user.xp)
+          // FIX: Use level from DB (authoritative), not recalculated from XP
+          const xp = data.user.xp || 0
+          const xpToNext = data.user.xpToNextLevel || 100
           setUser({
             id: auth?.userId || '',
             email: auth?.userEmail || '',
             isAdmin: auth?.isAdmin || false,
             name: data.user.name,
-            level: levelInfo.level,
-            currentXp: levelInfo.currentXp,
-            xpToNext: levelInfo.xpToNext,
-            progress: levelInfo.progress,
-            streak: data.user.streak,
+            level: data.user.level || 1,
+            currentXp: xp,
+            xpToNext: xpToNext,
+            progress: xpToNext > 0 ? Math.min(100, Math.round((xp / xpToNext) * 100)) : 0,
+            streak: data.user.streak || 0,
           })
         }
       }

@@ -1175,7 +1175,13 @@ export default function Dashboard() {
   const projects = Array.isArray(data.projects) ? data.projects : []
   const greeting = getGreeting()
 
-  const levelInfo = calculateLevel(user.xp)
+  // FIX: Use level from DB (authoritative), don't recalculate
+  const levelInfo = {
+    level: user.level || 1,
+    currentXp: user.xp || 0,
+    xpToNext: user.xpToNext || 100,
+    progress: (user.xpToNext && user.xpToNext > 0) ? Math.min(100, Math.round(((user.xp || 0) / user.xpToNext) * 100)) : 0,
+  }
   const badgeStats: BadgeStats = {
     totalTasks: user.totalTasksDone,
     streak: user.streak,
