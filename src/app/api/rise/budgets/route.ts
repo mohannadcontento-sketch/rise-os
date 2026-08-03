@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -9,14 +10,41 @@ export async function GET(req: NextRequest) {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ budgets: [] })
 
-    // FIX: Store budgets in user_settings.budgets (JSON string)
-    const settings = await db.userSettings.findUnique({ where: { userId } })
     let budgets: { category: string; limit: number }[] = []
-    if (settings && (settings as any).budgets) {
-      try {
-        budgets = JSON.parse((settings as any).budgets)
-      } catch { /* ignore parse errors */ }
+
+    if (isSupabaseConfigured()) {
+      // Production: use Supabase
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        const { data, error } = await admin
+          .from('user_settings')
+          .select('budgets')
+          .eq('user_id', userId)
+          .maybeSingle()
+        if (!error && data?.budgets) {
+          try { budgets = JSON.parse(data.budgets) } catch {}
+        }
+      }
+      // Fallback: if no budgets in user_settings, check knowledge_items
+      if (budgets.length === 0 && admin) {
+        const { data: kData } = await admin
+          .from('knowledge_items')
+          .select('content')
+          .eq('user_id', userId)
+          .eq('type', 'budget-config')
+          .maybeSingle()
+        if (kData?.content) {
+          try { budgets = JSON.parse(kData.content) } catch {}
+        }
+      }
+    } else {
+      // Local dev: use Prisma
+      const settings = await db.userSettings.findUnique({ where: { userId } })
+      if (settings && (settings as any).budgets) {
+        try { budgets = JSON.parse((settings as any).budgets) } catch {}
+      }
     }
+
     const resp = NextResponse.json({ budgets })
     resp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
     return resp
@@ -38,12 +66,63 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'budgets array required' }, { status: 400 })
     }
 
-    // FIX: Upsert budgets into user_settings table
-    await db.userSettings.upsert({
-      where: { userId },
-      update: { budgets: JSON.stringify(budgets) } as any,
-      create: { userId, budgets: JSON.stringify(budgets) } as any,
-    })
+    const budgetsJson = JSON.stringify(budgets)
+
+    if (isSupabaseConfigured()) {
+      // Production: use Supabase
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        // Try to update existing user_settings row
+        const { data: existing } = await admin
+          .from('user_settings')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (existing) {
+          // Update existing row
+          const { error } = await admin
+            .from('user_settings')
+            .update({ budgets: budgetsJson })
+            .eq('user_id', userId)
+          if (error) {
+            // If 'budgets' column doesn't exist, store in profiles table instead
+            if (error.message.includes('column') || error.message.includes('Could not find')) {
+              // Fallback: store as a knowledge_item with type 'budget-config'
+              await admin.from('knowledge_items').upsert({
+                user_id: userId,
+                type: 'budget-config',
+                title: 'ميزانية المستخدم',
+                content: budgetsJson,
+              }, { onConflict: 'user_id,type' })
+            } else {
+              throw error
+            }
+          }
+        } else {
+          // Insert new row
+          const { error } = await admin
+            .from('user_settings')
+            .insert({ user_id: userId, budgets: budgetsJson })
+          if (error) {
+            // Fallback: store as a knowledge_item
+            await admin.from('knowledge_items').upsert({
+              user_id: userId,
+              type: 'budget-config',
+              title: 'ميزانية المستخدم',
+              content: budgetsJson,
+            }, { onConflict: 'user_id,type' })
+          }
+        }
+      }
+    } else {
+      // Local dev: use Prisma
+      await db.userSettings.upsert({
+        where: { userId },
+        update: { budgets: budgetsJson } as any,
+        create: { userId, budgets: budgetsJson } as any,
+      })
+    }
 
     const resp = NextResponse.json({ budgets })
     resp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
