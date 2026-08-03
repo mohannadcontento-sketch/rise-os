@@ -1150,7 +1150,7 @@ export default function Dashboard() {
     )
   }
 
-  const user = data.user || { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0 }
+  const user = data.user || { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0, xpToNextLevel: 100 }
   const today = data.today || { tasksCompleted: 0, tasksTotal: 0, habitsCompleted: 0, habitsTotal: 0, focusMin: 0, morningScore: 0 }
 
   // Use localStorage settings name as fallback if server name is generic
@@ -1179,8 +1179,8 @@ export default function Dashboard() {
   const levelInfo = {
     level: user.level || 1,
     currentXp: user.xp || 0,
-    xpToNext: user.xpToNext || 100,
-    progress: (user.xpToNext && user.xpToNext > 0) ? Math.min(100, Math.round(((user.xp || 0) / user.xpToNext) * 100)) : 0,
+    xpToNext: user.xpToNextLevel || 100,
+    progress: (user.xpToNextLevel && user.xpToNextLevel > 0) ? Math.min(100, Math.round(((user.xp || 0) / user.xpToNextLevel) * 100)) : 0,
   }
   const badgeStats: BadgeStats = {
     totalTasks: user.totalTasksDone,
