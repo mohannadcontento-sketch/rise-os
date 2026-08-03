@@ -120,17 +120,18 @@ function toArabicNum(n: number | null | undefined | string | object): string {
 export function Sidebar() {
   const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser, auth } = useRiseStore()
   const [notesExpanded, setNotesExpanded] = useState(false)
-  const [quickNotes, setQuickNotes] = useState('')
+  const [quickNotes, setQuickNotes] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    try { return localStorage.getItem('rise-quick-notes') || '' } catch { return '' }
+  })
   const notesRef = useRef<HTMLTextAreaElement>(null)
-  const [notesLoaded, setNotesLoaded] = useState(false)
-  const [selectedAvatar, setSelectedAvatar] = useState<string>('')
+  const [selectedAvatar, setSelectedAvatar] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    try { return localStorage.getItem('rise-user-avatar') || '' } catch { return '' }
+  })
 
-  // Load selected avatar
+  // Listen for avatar changes
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('rise-user-avatar')
-      if (stored) setSelectedAvatar(stored)
-    } catch { /* ignore */ }
     const handler = () => {
       try {
         const stored = localStorage.getItem('rise-user-avatar')
@@ -149,28 +150,18 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [setSidebarOpen])
 
-  // Load quick notes from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('rise-quick-notes')
-      if (stored) setQuickNotes(stored)
-    } catch { /* ignore */ }
-    setNotesLoaded(true)
-  }, [])
-
   // Auto-save quick notes
   useEffect(() => {
-    if (!notesLoaded) return
     const timer = setTimeout(() => {
       localStorage.setItem('rise-quick-notes', quickNotes)
     }, 500)
     return () => clearTimeout(timer)
-  }, [quickNotes, notesLoaded])
+  }, [quickNotes])
 
   // Fetch user data for XP display
   const fetchUser = useCallback(async () => {
     try {
-      const res = await apiFetch(`/api/rise/dashboard?_t=${Date.now()}`)
+      const res = await apiFetch('/api/rise/dashboard')
       if (res.ok) {
         const data = await res.json()
         if (data.user) {
@@ -193,7 +184,7 @@ export function Sidebar() {
     } catch {
       // silently ignore
     }
-  }, [setUser, auth?.userId, auth?.userEmail, auth?.isAdmin])
+  }, [auth, setUser])
 
   // FIX: Fetch on mount + on rise:user-updated only.
   // Removed the 30s setInterval polling — it was one of the main causes
