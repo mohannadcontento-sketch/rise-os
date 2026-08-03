@@ -191,6 +191,8 @@ export default function Finance() {
   const budgetEditRef = useRef<HTMLInputElement>(null)
   const [budgetImpact, setBudgetImpact] = useState<{ category: string; remaining: number; over: boolean } | null>(null)
 
+  const { refreshKey } = useDataRefresh()
+
   // Load budgets from API
   const fetchBudgets = useCallback(async () => {
     try {
@@ -217,7 +219,7 @@ export default function Finance() {
 
   useEffect(() => {
     fetchBudgets()
-  }, [fetchBudgets])
+  }, [fetchBudgets, refreshKey])
 
   // Save budgets to API
   const saveBudgets = useCallback(async (categories: BudgetCategory[]) => {
@@ -226,15 +228,14 @@ export default function Finance() {
         budgets: categories.map(cat => ({ category: cat.name, limit: cat.limit })),
       })
       if (!res.ok) {
-        console.warn('Failed to save budgets to server')
+        toastError('حفظ الميزانية')
+      } else {
+        toastSaved('الميزانية')
       }
     } catch {
-      console.warn('Failed to save budgets to server')
+      toastError('حفظ الميزانية')
     }
   }, [])
-
-  const { refreshKey } = useDataRefresh()
-
   /* ─── Fetch ─── */
   const fetchFinance = useCallback(async () => {
     try {
