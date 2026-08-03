@@ -65,6 +65,7 @@ interface DashboardData {
     name: string
     level: number
     xp: number
+    xpToNextLevel?: number
     streak: number
     longestStreak: number
     totalFocusMin: number
