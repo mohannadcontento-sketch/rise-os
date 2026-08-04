@@ -6,6 +6,7 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { PWAInit } from "@/components/pwa-init";
 import { QueryProvider } from "@/components/query-provider";
 import { PerformanceMonitor } from "@/components/performance-monitor";
+import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: "RiseOS — امتلك صباحك. امتلك حياتك.",
@@ -75,11 +76,13 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <QueryProvider>
-            <PWAInit />
-            <PerformanceMonitor />
-            {children}
-            <Toaster />
-            <SonnerToaster position="top-center" richColors closeButton={false} />
+            <AuthProvider>
+              <PWAInit />
+              <PerformanceMonitor />
+              {children}
+              <Toaster />
+              <SonnerToaster position="top-center" richColors closeButton={false} />
+            </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

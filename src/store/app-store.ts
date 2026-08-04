@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { clearAllCache } from '@/lib/api-fetch'
 
+// Re-entry guard: prevents logout() from being called recursively.
+// This can happen if the rise:session-expired event is dispatched
+// during logout()'s set() call. The module-level flag breaks the cycle.
+let _isLoggingOut = false
+
 export type ModuleId =
   | 'dashboard'
   | 'morning'
@@ -58,7 +63,7 @@ interface RiseStore {
   logout: () => void
 }
 
-export const useRiseStore = create<RiseStore>((set) => ({
+export const useRiseStore = create<RiseStore>((set, get) => ({
   activeModule: 'dashboard',
   sidebarOpen: false,
   user: null,
@@ -69,12 +74,29 @@ export const useRiseStore = create<RiseStore>((set) => ({
   setUser: (user) => set({ user }),
   setAuth: (auth) => set({ auth }),
   logout: () => {
-    if (typeof window !== 'undefined') {
-      clearAllCache() // Clear per-user cache to prevent cross-user data leaks
-      localStorage.removeItem('rise-auth')
-      localStorage.removeItem('rise-user-info')
-      window.dispatchEvent(new CustomEvent('rise:session-expired'))
+    // Re-entry guard: prevent recursive logout calls.
+    if (_isLoggingOut) return
+    // State guard: skip if already logged out.
+    if (!get().auth) return
+
+    _isLoggingOut = true
+    try {
+      if (typeof window !== 'undefined') {
+        clearAllCache()
+        localStorage.removeItem('rise-auth')
+        localStorage.removeItem('rise-user-info')
+        try {
+          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+        } catch { /* ignore */ }
+        import('@/lib/supabase-client').then(({ supabaseClient }) => {
+          if (supabaseClient) {
+            supabaseClient.auth.signOut().catch(() => {})
+          }
+        }).catch(() => {})
+      }
+      set({ auth: null, user: null, activeModule: 'dashboard' })
+    } finally {
+      _isLoggingOut = false
     }
-    set({ auth: null, user: null, activeModule: 'dashboard' })
   },
 }))

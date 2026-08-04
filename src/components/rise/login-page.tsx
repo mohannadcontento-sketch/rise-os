@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { apiPost } from '@/lib/api-fetch'
+import { supabaseClient, isSupabaseClientConfigured } from '@/lib/supabase-client'
 
 interface LoginPageProps {
   onLogin: (data: { user: { id: string; email: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => void
@@ -29,6 +30,94 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setLoading(true)
 
     try {
+      // MODE 1: Supabase client (production)
+      // autoRefreshToken refreshes the JWT ~60s before expiry, preventing 401.
+      if (isSupabaseClientConfigured && supabaseClient) {
+        if (mode === 'login') {
+          const { data, error: sbError } = await supabaseClient.auth.signInWithPassword({
+            email, password,
+          })
+          if (sbError) {
+            if (sbError.message.includes('Email not confirmed')) {
+              setError('البريد الإلكتروني لم يتم تأكيده بعد. تحقق من صندوق البريد.')
+            } else {
+              setError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
+            }
+            setLoading(false)
+            return
+          }
+          if (data.session && data.user) {
+            try {
+              await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+                credentials: 'include',
+              })
+            } catch { /* non-fatal */ }
+            const userInfo = {
+              id: data.user.id,
+              email: data.user.email || email,
+              name: (data.user as any).user_metadata?.name || email.split('@')[0],
+              isAdmin: email === process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+            }
+            const sessionData = {
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+              expires_at: data.session.expires_at || 0,
+            }
+            localStorage.setItem('rise-auth', JSON.stringify(sessionData))
+            localStorage.setItem('rise-user-info', JSON.stringify(userInfo))
+            onLogin({ user: userInfo, session: sessionData })
+          }
+        } else {
+          const { data, error: sbError } = await supabaseClient.auth.signUp({
+            email, password,
+            options: { data: { name: name || email.split('@')[0] } },
+          })
+          if (sbError) {
+            if (sbError.message.includes('already registered') || sbError.message.includes('already been registered')) {
+              setError('هذا البريد مسجل بالفعل. استخدم تسجيل الدخول.')
+            } else {
+              setError(`خطأ في التسجيل: ${sbError.message}`)
+            }
+            setLoading(false)
+            return
+          }
+          if (!data.session && data.user?.confirmed_at === null) {
+            setError('تم إرسال رابط تأكيد إلى بريدك الإلكتروني')
+            setLoading(false)
+            return
+          }
+          if (data.session && data.user) {
+            try {
+              await fetch('/api/auth/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, name }),
+                credentials: 'include',
+              })
+            } catch { /* non-fatal */ }
+            const userInfo = {
+              id: data.user.id,
+              email: data.user.email || email,
+              name: name || (data.user as any).user_metadata?.name || email.split('@')[0],
+              isAdmin: email === process.env.NEXT_PUBLIC_ADMIN_EMAIL,
+            }
+            const sessionData = {
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+              expires_at: data.session.expires_at || 0,
+            }
+            localStorage.setItem('rise-auth', JSON.stringify(sessionData))
+            localStorage.setItem('rise-user-info', JSON.stringify(userInfo))
+            onLogin({ user: userInfo, session: sessionData })
+          }
+        }
+        return
+      }
+
+      // MODE 2: Mock/dev (no Supabase env vars)
       const url = mode === 'login' ? '/api/auth/login' : '/api/auth/signup'
       const body = mode === 'login'
         ? { email, password }
@@ -38,6 +127,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        credentials: 'include',
       })
 
       const data = await res.json()

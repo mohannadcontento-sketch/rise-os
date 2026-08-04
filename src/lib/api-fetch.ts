@@ -140,8 +140,8 @@ function getAuthHeaders(): Record<string, string> {
 
 /**
  * Attempt to refresh the Supabase session token.
- * Returns true if refresh succeeded, false otherwise.
- * Uses a lock to prevent concurrent refreshes.
+ * On failure, dispatches 'rise:session-expired' (throttled) so the
+ * AuthProvider can clear the auth state and show the login page.
  */
 async function tryRefreshToken(): Promise<boolean> {
   if (!isOnline()) return false
@@ -149,8 +149,6 @@ async function tryRefreshToken(): Promise<boolean> {
 
   _refreshPromise = (async () => {
     try {
-      // FIX: Don't send refresh_token in body — let the server read it from
-      // the httpOnly cookie. This prevents race conditions with single-use tokens.
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -165,35 +163,23 @@ async function tryRefreshToken(): Promise<boolean> {
       clearTimeout(timeoutId)
 
       if (!res.ok) {
-        // FIX: Do NOT call clearAuth() on refresh failure.
-        // The httpOnly cookie (rise-access) is still valid for 7 days and
-        // the mock token format never expires from the API's perspective.
-        // Calling clearAuth() here was prematurely logging users out and
-        // causing tasks to "disappear" (the UI lost auth state even though
-        // the backend would still accept the cookie).
+        dispatchSessionExpired()
         return false
       }
 
       const data = await res.json()
       if (data.session && data.user) {
-        // FIX: Store the new session in localStorage so future requests
-        // use the fresh JWT (not the expired one)
         localStorage.setItem('rise-auth', JSON.stringify(data.session))
         localStorage.setItem('rise-user-info', JSON.stringify(data.user))
-
-        // Dispatch event so Zustand store can update
         window.dispatchEvent(new CustomEvent('rise:auth-refreshed', {
           detail: { user: data.user, session: data.session },
         }))
-
         return true
       }
 
-      // Refresh failed — return false (don't clear auth, let the 401 response
-      // be returned to the calling component which can show an error)
+      dispatchSessionExpired()
       return false
     } catch {
-      // Network error or timeout — don't clear auth, keep stored session
       return false
     } finally {
       _refreshPromise = null
@@ -203,13 +189,13 @@ async function tryRefreshToken(): Promise<boolean> {
   return _refreshPromise
 }
 
-function clearAuth() {
+// Throttle session-expired dispatch (max once per 30s)
+let _lastExpiredDispatch = 0
+function dispatchSessionExpired() {
   if (typeof window === 'undefined') return
-  // Clear all cached data for this user to prevent cross-user data leaks
-  invalidateCache()
-  localStorage.removeItem('rise-auth')
-  localStorage.removeItem('rise-user-info')
-  // Dispatch logout event so the app can react
+  const now = Date.now()
+  if (now - _lastExpiredDispatch < 30000) return
+  _lastExpiredDispatch = now
   window.dispatchEvent(new CustomEvent('rise:session-expired'))
 }
 
@@ -365,6 +351,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           ...options,
           headers: retryHeaders,
           signal: retryController.signal,
+          credentials: 'include',
+          cache: 'no-store',
         })
 
         // Cache successful retry

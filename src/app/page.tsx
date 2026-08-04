@@ -238,178 +238,35 @@ export default function RiseOSApp() {
     () => false
   )
 
-  // Auth check — OFFLINE-FIRST: trust stored session instantly, validate in background
+  // Auth check — simplified. The AuthProvider (in layout.tsx) handles:
+  //   • Supabase onAuthStateChange (SIGNED_IN, TOKEN_REFRESHED, SIGNED_OUT)
+  //   • autoRefreshToken (refreshes JWT ~60s before expiry)
+  //   • syncing refreshed token to the httpOnly cookie
+  //   • restoring session from cookie/localStorage on mount
+  //   • listening for 'rise:session-expired' events (from api-fetch 401 handler)
+  //
+  // Here we only need to handle the INITIAL state — if the user has a
+  // stored session in localStorage, set it immediately (offline-first,
+  // zero delay) so the UI doesn't flash the login page.
   useEffect(() => {
-    const checkAuth = () => {
-      try {
-        const stored = localStorage.getItem('rise-auth')
-        const userInfo = localStorage.getItem('rise-user-info')
-
-        // FIX: If localStorage is empty, DON'T just show login.
-        // The httpOnly cookie (rise-access, 7-day maxAge) might still be valid
-        // even though localStorage was cleared by the browser (tab discard,
-        // "clear data on exit", mobile memory pressure, etc.).
-        // Try to restore the session from the cookie via /api/auth/session.
-        if (!stored || !userInfo) {
-          // Skip if offline — can't validate cookie
-          if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-
-          // FIX: Use direct fetch instead of apiGet. apiGet reads localStorage
-          // for auth headers and caching (both empty here), which can cause
-          // subtle issues. A direct fetch with credentials:'include' sends
-          // the httpOnly cookie and is the simplest, most reliable approach.
-          fetch('/api/auth/session', { credentials: 'include' })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-              if (data && data.user) {
-                const session = {
-                  access_token: 'restored-from-cookie',
-                  refresh_token: '',
-                  expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
-                }
-                localStorage.setItem('rise-auth', JSON.stringify(session))
-                localStorage.setItem('rise-user-info', JSON.stringify(data.user))
-                setAuth({
-                  isAuthenticated: true,
-                  userId: data.user.id,
-                  userEmail: data.user.email || '',
-                  userName: data.user.name || '',
-                  isAdmin: data.user.isAdmin || false,
-                  accessToken: session.access_token,
-                })
-              }
-            })
-            .catch(() => { /* network error — show login */ })
-          return
-        }
-
+    try {
+      const stored = localStorage.getItem('rise-auth')
+      const userInfo = localStorage.getItem('rise-user-info')
+      if (stored && userInfo) {
         const session = JSON.parse(stored)
-        if (!session.access_token) {
-          localStorage.removeItem('rise-auth')
-          localStorage.removeItem('rise-user-info')
-          return
+        const info = JSON.parse(userInfo)
+        if (session.access_token && !useRiseStore.getState().auth) {
+          setAuth({
+            isAuthenticated: true,
+            userId: info.id || '',
+            userEmail: info.email || '',
+            userName: info.name || '',
+            isAdmin: info.isAdmin || false,
+            accessToken: session.access_token,
+          })
         }
-
-        // ✅ INSTANT: Set auth from localStorage immediately (zero delay)
-        const storedInfo = JSON.parse(userInfo)
-        // FIX: Mock tokens start with "local." — they should NOT be treated as
-        // Supabase sessions. Treating them as Supabase sessions caused checkAuth
-        // to call /api/auth/refresh on every mount (because mock refresh_token
-        // length > 20), which could fail and log the user out.
-        const isMockSession = !!(session.access_token && session.access_token.startsWith('local.'))
-        const isSupabaseSession = !isMockSession && session.refresh_token && session.refresh_token.length > 20
-        setAuth({
-          isAuthenticated: true,
-          // FIX: For mock sessions, use storedInfo.id (the real user ID from DB).
-          // Previously, mock sessions fell into the `else` branch and used
-          // session.access_token as the userId, which is the full token string
-          // (e.g. "local.cms3xxx.123.risecos.local...") — not a valid user ID.
-          userId: isMockSession ? (storedInfo?.id || '') : (isSupabaseSession ? (storedInfo?.id || session.access_token) : session.access_token),
-          userEmail: storedInfo?.email || '',
-          userName: storedInfo?.name || '',
-          isAdmin: storedInfo?.isAdmin || false,
-          accessToken: session.access_token,
-        })
-
-        // 🔍 BACKGROUND: Validate session with server (non-blocking)
-        // Skip if offline
-        if (navigator.onLine === false) return
-
-        // For Supabase sessions, check if token needs refresh first
-        if (isSupabaseSession && session.expires_at) {
-          const expiresAtMs = session.expires_at * 1000
-          const fiveMin = 5 * 60 * 1000
-          if (expiresAtMs - Date.now() < fiveMin) {
-            // FIX: Don't send refresh_token in body — let the server read it
-            // from the httpOnly cookie. Sending it in the body can cause
-            // race conditions when multiple refresh calls happen simultaneously.
-            fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({}),
-              credentials: 'include',
-            }).then(r => r.json()).then(data => {
-              if (data.session) {
-                localStorage.setItem('rise-auth', JSON.stringify(data.session))
-                localStorage.setItem('rise-user-info', JSON.stringify(data.user))
-                setAuth({
-                  isAuthenticated: true,
-                  userId: data.user.id,
-                  userEmail: data.user.email || '',
-                  userName: data.user.name || '',
-                  isAdmin: data.user.isAdmin,
-                  accessToken: data.session.access_token,
-                })
-              }
-              // If refresh failed but we're already showing the UI, keep it —
-              // the token might still be valid for a few more minutes
-            }).catch(() => { /* offline — already showing UI */ })
-            return
-          }
-        }
-
-        // Validate session in background
-        apiGet('/api/auth/session').then(r => r.json()).then(data => {
-          if (data.user) {
-            // Session valid — update with fresh server data
-            const current = useRiseStore.getState().auth
-            if (current) {
-              setAuth({
-                ...current,
-                userName: data.user.name || current.userName,
-                userEmail: data.user.email || current.userEmail,
-                userId: data.user.id,
-                isAdmin: data.user.isAdmin,
-              })
-            }
-          } else if (isSupabaseSession && !isMockSession) {
-            // FIX: Only attempt Supabase refresh for REAL Supabase sessions.
-            // Mock sessions (token starts with "local.") are validated by the
-            // cookie-based session route above — if it returned {user: null},
-            // the mock token is genuinely invalid and we should NOT try to
-            // refresh it (the refresh route's Supabase branch would fail anyway
-            // because isSupabaseConfigured() is false in mock mode).
-            // Supabase session invalid — try refresh
-            fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({}),
-              credentials: 'include',
-            }).then(r => r.json()).then(refreshData => {
-              if (refreshData.session) {
-                localStorage.setItem('rise-auth', JSON.stringify(refreshData.session))
-                localStorage.setItem('rise-user-info', JSON.stringify(refreshData.user))
-                setAuth({
-                  isAuthenticated: true,
-                  userId: refreshData.user.id,
-                  userEmail: refreshData.user.email || '',
-                  userName: refreshData.user.name || '',
-                  isAdmin: refreshData.user.isAdmin,
-                  accessToken: refreshData.session.access_token,
-                })
-              }
-              // FIX: Do NOT call setAuth(null) when refresh fails.
-              // The user might have a transient network issue or the Supabase
-              // service might be temporarily unavailable. Logging them out
-              // forces them to re-enter credentials, which is terrible UX.
-              // Instead, keep the existing auth state and let them keep using
-              // the app. If the token is truly invalid, API calls will return
-              // 401 and apiFetch will handle it gracefully.
-            }).catch(() => {
-              // Network error — keep showing UI with stored session
-            })
-          }
-          // For local sessions, always trust stored data
-        }).catch(() => {
-          // Network error — already showing UI with stored session
-        })
-      } catch {
-        // FIX: Don't remove localStorage on parse errors.
-        // The session might be valid but just have an unexpected format.
-        // Removing it would log the user out unnecessarily.
       }
-    }
-    checkAuth()
+    } catch { /* ignore */ }
   }, [setAuth])
 
   const handleLogin = useCallback((data: { user: { id: string; email: string; name: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
@@ -480,6 +337,8 @@ export default function RiseOSApp() {
   }, [setAuth])
 
   // Listen for token refresh events from api-fetch
+  // NOTE: 'rise:session-expired' is handled by AuthProvider (in layout.tsx)
+  // which calls logout() — no need for a duplicate listener here.
   useEffect(() => {
     const handleRefresh = (e: CustomEvent) => {
       const { user, session } = e.detail || {}
@@ -494,14 +353,9 @@ export default function RiseOSApp() {
         })
       }
     }
-    const handleExpired = () => {
-      setAuth(null)
-    }
     window.addEventListener('rise:auth-refreshed', handleRefresh as EventListener)
-    window.addEventListener('rise:session-expired', handleExpired)
     return () => {
       window.removeEventListener('rise:auth-refreshed', handleRefresh as EventListener)
-      window.removeEventListener('rise:session-expired', handleExpired)
     }
   }, [setAuth])
 
