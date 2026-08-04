@@ -6,15 +6,19 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    let refresh_token: string | undefined
-    try {
-      const body = await request.json()
-      refresh_token = body?.refresh_token
-    } catch { /* no body */ }
+    // FIX: Always read refresh_token from the httpOnly cookie.
+    // Don't read from request body — this prevents race conditions where
+    // multiple refresh calls use the same token (Supabase tokens are single-use).
+    let refresh_token: string | undefined = request.cookies.get('rise-refresh')?.value
 
-    // FIX: Also check httpOnly cookie for refresh token
+    // Also try body as fallback (for legacy clients)
     if (!refresh_token) {
-      refresh_token = request.cookies.get('rise-refresh')?.value
+      try {
+        const body = await request.json()
+        if (body?.refresh_token && typeof body.refresh_token === 'string' && body.refresh_token.length > 0) {
+          refresh_token = body.refresh_token
+        }
+      } catch { /* no body */ }
     }
 
     if (!refresh_token) {

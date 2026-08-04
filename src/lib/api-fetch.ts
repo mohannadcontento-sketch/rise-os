@@ -149,16 +149,15 @@ async function tryRefreshToken(): Promise<boolean> {
 
   _refreshPromise = (async () => {
     try {
-      const stored = localStorage.getItem('rise-auth')
-      const refreshToken = stored ? JSON.parse(stored).refresh_token : undefined
-
+      // FIX: Don't send refresh_token in body — let the server read it from
+      // the httpOnly cookie. This prevents race conditions with single-use tokens.
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
+        body: JSON.stringify({}),
         signal: controller.signal,
         credentials: 'include',
       })
@@ -177,6 +176,8 @@ async function tryRefreshToken(): Promise<boolean> {
 
       const data = await res.json()
       if (data.session && data.user) {
+        // FIX: Store the new session in localStorage so future requests
+        // use the fresh JWT (not the expired one)
         localStorage.setItem('rise-auth', JSON.stringify(data.session))
         localStorage.setItem('rise-user-info', JSON.stringify(data.user))
 
@@ -188,8 +189,8 @@ async function tryRefreshToken(): Promise<boolean> {
         return true
       }
 
-      // FIX: Don't clearAuth() here either — just return false.
-      // The cookie may still be valid even if the refresh response is malformed.
+      // Refresh failed — return false (don't clear auth, let the 401 response
+      // be returned to the calling component which can show an error)
       return false
     } catch {
       // Network error or timeout — don't clear auth, keep stored session

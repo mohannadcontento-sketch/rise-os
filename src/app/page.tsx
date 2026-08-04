@@ -320,14 +320,13 @@ export default function RiseOSApp() {
           const expiresAtMs = session.expires_at * 1000
           const fiveMin = 5 * 60 * 1000
           if (expiresAtMs - Date.now() < fiveMin) {
+            // FIX: Don't send refresh_token in body — let the server read it
+            // from the httpOnly cookie. Sending it in the body can cause
+            // race conditions when multiple refresh calls happen simultaneously.
             fetch('/api/auth/refresh', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refresh_token: session.refresh_token }),
-              // FIX: credentials:'include' is REQUIRED so the browser accepts
-              // the Set-Cookie headers in the refresh response. Without it,
-              // the new httpOnly cookies are never stored → the old expired
-              // cookie persists → next session check fails → user appears logged out.
+              body: JSON.stringify({}),
               credentials: 'include',
             }).then(r => r.json()).then(data => {
               if (data.session) {
@@ -374,8 +373,7 @@ export default function RiseOSApp() {
             fetch('/api/auth/refresh', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refresh_token: session.refresh_token }),
-              // FIX: credentials:'include' so new cookies are stored by browser
+              body: JSON.stringify({}),
               credentials: 'include',
             }).then(r => r.json()).then(refreshData => {
               if (refreshData.session) {
