@@ -35,6 +35,7 @@ type Mode = "letters" | "sentences";
 type SentenceCategory = "الكل" | "التحية" | "اللباقة" | "البيت" | "المشاعر" | "اللعب" | "التعلّم";
 type GameMode = "listen" | "match" | "sentence";
 type PronunciationPhase = "ready" | "listening" | "retry" | "success" | "unavailable";
+type CelebrationTheme = "quiz" | "speech" | GameMode;
 type SpeechRecognitionResultLike = { transcript: string };
 type SpeechRecognitionEventLike = { results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>> };
 type SpeechRecognitionLike = {
@@ -232,6 +233,7 @@ export default function Home() {
   const [gameFeedback, setGameFeedback] = useState("");
   const [celebrationKey, setCelebrationKey] = useState(0);
   const [celebrationAmount, setCelebrationAmount] = useState(0);
+  const [celebrationTheme, setCelebrationTheme] = useState<CelebrationTheme>("quiz");
   const [wrongPulse, setWrongPulse] = useState(0);
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState<boolean | null>(null);
   const [isChildSpeaking, setIsChildSpeaking] = useState(false);
@@ -403,24 +405,25 @@ export default function Home() {
     }
   };
 
-  const launchCelebration = (amount = 0) => {
+  const launchCelebration = (amount = 0, theme: CelebrationTheme = "quiz") => {
     setCelebrationAmount(amount);
+    setCelebrationTheme(theme);
     setCelebrationKey(Date.now());
     playSuccessChime();
     if (navigator.vibrate) navigator.vibrate([18, 24, 42]);
   };
 
-  const giveReward = (amount: number, message: string) => {
+  const giveReward = (amount: number, message: string, theme: CelebrationTheme) => {
     setGameStars((current) => current + amount);
     setGameWins((current) => current + 1);
     setGameFeedback(message);
-    launchCelebration(amount);
+    launchCelebration(amount, theme);
   };
 
   const chooseQuizAnswer = (option: string) => {
     const wasCorrect = quizAnswer === activeLetter.word;
     setQuizAnswer(option);
-    if (option === activeLetter.word && !wasCorrect) launchCelebration();
+    if (option === activeLetter.word && !wasCorrect) launchCelebration(0, "quiz");
     if (option !== activeLetter.word) setWrongPulse(Date.now());
   };
 
@@ -465,7 +468,7 @@ export default function Home() {
       const expected = normalizeSpokenEnglish(activeLetter.word);
       setPronunciationHeard(transcript);
       if (heard.includes(expected)) {
-        giveReward(1, `أحسنت! سمعنا كلمة ${activeLetter.word} بوضوح.`);
+        giveReward(1, `أحسنت! سمعنا كلمة ${activeLetter.word} بوضوح.`, "speech");
         setPronunciationPhase("success");
         setPronunciationFeedback(`صح! أحسنت، قلت كلمة ${activeLetter.word} بشكل صحيح.`);
       } else {
@@ -497,7 +500,7 @@ export default function Home() {
     setListenSelected(index);
     if (index === listenTargetIndex) {
       setListenSolved(true);
-      giveReward(2, "أحسنت! اصطدت الصوت الصحيح. حصلت على نجمتين.");
+      giveReward(2, "أحسنت! اصطدت الصوت الصحيح. حصلت على نجمتين.", "listen");
     } else {
       setWrongPulse(Date.now());
       setGameFeedback("قريب جدًا. اسمع الصوت مرة أخرى ثم جرّب.");
@@ -517,7 +520,7 @@ export default function Home() {
     setMatchSelected(index);
     if (index === matchTargetIndex) {
       setMatchSolved(true);
-      giveReward(2, "ممتاز! وصلت الكلمة إلى بيت حرفها. نجمتان جديدتان لك.");
+      giveReward(2, "ممتاز! وصلت الكلمة إلى بيت حرفها. نجمتان جديدتان لك.", "match");
     } else {
       setWrongPulse(Date.now());
       setGameFeedback("هذه الكلمة لا تبدأ بهذا الحرف. انظر للكلمة مرة أخرى.");
@@ -539,7 +542,7 @@ export default function Home() {
     if (next.length === activeSentencePuzzle.words.length) {
       if (next.join(" ") === activeSentencePuzzle.words.join(" ")) {
         setSentenceSolved(true);
-        giveReward(3, "ترتيب رائع! كوّنت الجملة الصحيحة وحصلت على 3 نجوم.");
+        giveReward(3, "ترتيب رائع! كوّنت الجملة الصحيحة وحصلت على 3 نجوم.", "sentence");
       } else {
         setWrongPulse(Date.now());
         setGameFeedback("ترتيب لطيف، لكن لنبدّل أماكن الكلمات ونجرّب مجددًا.");
@@ -563,7 +566,7 @@ export default function Home() {
   return (
     <div className="quest-app" dir="rtl">
       <div className="paper-speckle" aria-hidden="true" />
-      {celebrationKey > 0 && <div className="celebration-burst" key={celebrationKey} aria-hidden="true"><span className="celebration-halo" /><span className="reward-pop"><small>{celebrationAmount > 0 ? "نجوم جديدة" : "إجابة صحيحة"}</small>{celebrationAmount > 0 ? `+${celebrationAmount} ★` : "أحسنت!"}</span><span className="celebration-cheer">برافو!</span>{Array.from({ length: 3 }).map((_, index) => <b className="star-flight" key={`flight-${index}`}>★</b>)}{Array.from({ length: 24 }).map((_, index) => <i key={index} />)}</div>}
+      {celebrationKey > 0 && <div className={cn("celebration-burst", `theme-${celebrationTheme}`)} key={celebrationKey} aria-hidden="true"><span className="celebration-halo" /><span className="reward-pop"><small>{celebrationAmount > 0 ? "نجوم جديدة" : "إجابة صحيحة"}</small>{celebrationAmount > 0 ? `+${celebrationAmount} ★` : "أحسنت!"}</span><span className="celebration-cheer">برافو!</span>{celebrationTheme === "listen" && <><span className="listen-wave wave-one" /><span className="listen-wave wave-two" /><span className="listen-comet-icon">✦</span></>}{celebrationTheme === "match" && <><span className="match-door left" /><span className="match-door right" /><span className="match-ticket-fly">{letters[matchTargetIndex].word}</span></>}{celebrationTheme === "sentence" && <span className="sentence-ribbon-fly">Great sentence!</span>}{Array.from({ length: 3 }).map((_, index) => <b className="star-flight" key={`flight-${index}`}>★</b>)}{Array.from({ length: 24 }).map((_, index) => <i key={index} />)}</div>}
       <header className="topbar container">
         <a className="brand" href="#top" aria-label="English Kids Quest">
           <span className="brand-mark"><img src={logoImage} alt="" /><span className="brand-soundlines" aria-hidden="true"><i /><i /><i /></span></span>
@@ -808,21 +811,24 @@ export default function Home() {
                     <button className="game-listen-button" onClick={() => playEmbeddedAudio(getEmbeddedAudioCue("sentence", activeSentencePuzzle.sentenceIndex))}><Volume2 size={20} /> اسمع الجملة</button>
                   </>}
                 </div>
-                <div className={cn("game-play-area", `game-${activeGame}`)}>
+                <div className={cn("game-play-area", `game-${activeGame}`, listenSolved && "solved-listen", matchSolved && "solved-match", sentenceSolved && "solved-sentence")}>
                   {activeGame === "listen" && <>
                     <div className="catch-cloud"><span>مستعد؟</span><b>أي حرف سمعت؟</b></div>
                     <div className="catch-options">{listenOptions.map((index, optionIndex) => <button key={letters[index].letter} className={cn("catch-bubble", `bubble-${optionIndex + 1}`, listenSelected === index && index === listenTargetIndex && "correct", listenSelected === index && index !== listenTargetIndex && "wrong")} onClick={() => chooseListenLetter(index)}>{letters[index].letter}<small>{letters[index].lower}</small></button>)}</div>
+                    {listenSolved && <div className="listen-success-streak" aria-hidden="true"><span>✦</span><i /><span>★</span><i /><span>✦</span></div>}
                     {listenSolved && <button className="next-game-button" onClick={nextListenRound}>مهمة صوتية جديدة <ArrowLeft size={16} /></button>}
                   </>}
                   {activeGame === "match" && <>
                     <div className="word-ticket"><span>الكلمة الضائعة</span><b>{letters[matchTargetIndex].word}</b><small>{letters[matchTargetIndex].wordAr}</small></div>
                     <div className="home-options">{matchOptions.map((index) => <button key={letters[index].letter} className={cn("letter-home", matchSelected === index && index === matchTargetIndex && "correct", matchSelected === index && index !== matchTargetIndex && "wrong")} onClick={() => chooseMatchLetter(index)}><span>بيت</span><b>{letters[index].letter}</b></button>)}</div>
+                    {matchSolved && <div className="match-success-note" aria-hidden="true"><span>{letters[matchTargetIndex].word}</span><b>وصلت إلى بيتها!</b><i>♥</i></div>}
                     {matchSolved && <button className="next-game-button" onClick={nextMatchRound}>كلمة جديدة <ArrowLeft size={16} /></button>}
                   </>}
                   {activeGame === "sentence" && <>
                     <div className="sentence-clue"><span>المعنى بالعربية</span><b>{activeSentencePuzzle.arabic}</b></div>
-                    <div className="sentence-build-zone">{placedSentenceWords.length ? placedSentenceWords.map((word, index) => <span key={`${word}-${index}`} className="built-word">{word}</span>) : <span className="build-placeholder">اضغط الكلمات بالترتيب هنا</span>}</div>
+                    <div className={cn("sentence-build-zone", sentenceSolved && "sentence-complete")}>{placedSentenceWords.length ? placedSentenceWords.map((word, index) => <span key={`${word}-${index}`} className="built-word">{word}</span>) : <span className="build-placeholder">اضغط الكلمات بالترتيب هنا</span>}</div>
                     <div className="word-bank">{sentenceWordBank.map((word) => <button key={word} className={cn(placedSentenceWords.includes(word) && "used")} onClick={() => chooseSentenceWord(word)}>{word}</button>)}</div>
+                    {sentenceSolved && <div className="sentence-success-strip" aria-hidden="true"><span>قرأتها صح!</span><i>✦</i><span>Great job!</span><i>★</i></div>}
                     {!sentenceSolved && placedSentenceWords.length > 0 && <button className="reset-words" onClick={resetSentenceRound}><RotateCcw size={14} /> أفرغ السطر</button>}
                     {sentenceSolved && <button className="next-game-button" onClick={nextSentenceRound}>جملة جديدة <ArrowLeft size={16} /></button>}
                   </>}
