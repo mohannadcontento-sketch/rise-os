@@ -403,14 +403,25 @@ export default function Home() {
     }
   };
 
-  const giveReward = (amount: number, message: string) => {
-    setGameStars((current) => current + amount);
-    setGameWins((current) => current + 1);
-    setGameFeedback(message);
+  const launchCelebration = (amount = 0) => {
     setCelebrationAmount(amount);
     setCelebrationKey(Date.now());
     playSuccessChime();
     if (navigator.vibrate) navigator.vibrate([18, 24, 42]);
+  };
+
+  const giveReward = (amount: number, message: string) => {
+    setGameStars((current) => current + amount);
+    setGameWins((current) => current + 1);
+    setGameFeedback(message);
+    launchCelebration(amount);
+  };
+
+  const chooseQuizAnswer = (option: string) => {
+    const wasCorrect = quizAnswer === activeLetter.word;
+    setQuizAnswer(option);
+    if (option === activeLetter.word && !wasCorrect) launchCelebration();
+    if (option !== activeLetter.word) setWrongPulse(Date.now());
   };
 
   const playPracticeModel = () => {
@@ -552,7 +563,7 @@ export default function Home() {
   return (
     <div className="quest-app" dir="rtl">
       <div className="paper-speckle" aria-hidden="true" />
-      {celebrationKey > 0 && <div className="celebration-burst" key={celebrationKey} aria-hidden="true"><span className="reward-pop">+{celebrationAmount} ★</span>{Array.from({ length: 18 }).map((_, index) => <i key={index} />)}</div>}
+      {celebrationKey > 0 && <div className="celebration-burst" key={celebrationKey} aria-hidden="true"><span className="celebration-halo" /><span className="reward-pop"><small>{celebrationAmount > 0 ? "نجوم جديدة" : "إجابة صحيحة"}</small>{celebrationAmount > 0 ? `+${celebrationAmount} ★` : "أحسنت!"}</span><span className="celebration-cheer">برافو!</span>{Array.from({ length: 3 }).map((_, index) => <b className="star-flight" key={`flight-${index}`}>★</b>)}{Array.from({ length: 24 }).map((_, index) => <i key={index} />)}</div>}
       <header className="topbar container">
         <a className="brand" href="#top" aria-label="English Kids Quest">
           <span className="brand-mark"><img src={logoImage} alt="" /><span className="brand-soundlines" aria-hidden="true"><i /><i /><i /></span></span>
@@ -579,7 +590,7 @@ export default function Home() {
             <Flame size={17} />
             <span><b>3</b><small>أيام</small></span>
           </div>
-          <div className={cn("mini-stat stars", celebrationKey > 0 && "rewarding")} title="النجوم المكتسبة">
+          <div key={`stars-${celebrationKey}`} className={cn("mini-stat stars", celebrationKey > 0 && "rewarding")} title="النجوم المكتسبة">
             <Star size={17} fill="currentColor" />
             <span><b key={celebrationKey}>{stars}</b><small>نجمة</small></span>
           </div>
@@ -724,7 +735,7 @@ export default function Home() {
                         const isSelected = quizAnswer === option;
                         const isCorrect = isSelected && option === activeLetter.word;
                         const isWrong = isSelected && option !== activeLetter.word;
-                        return <button key={option} className={cn("quiz-option", isCorrect && "correct", isWrong && "wrong")} onClick={() => setQuizAnswer(option)}>{option}<span>{isCorrect ? <Check size={14} /> : isWrong ? <X size={14} /> : <ArrowLeft size={13} />}</span></button>;
+                        return <button key={option} className={cn("quiz-option", isCorrect && "correct", isWrong && "wrong")} onClick={() => chooseQuizAnswer(option)}>{option}<span>{isCorrect ? <Check size={14} /> : isWrong ? <X size={14} /> : <ArrowLeft size={13} />}</span></button>;
                       })}
                     </div>
                     <div className="quiz-feedback" aria-live="polite">{quizAnswer === activeLetter.word ? "أحسنت! أذنك التقطت الصوت." : quizAnswer ? "قريب جدًا، اسمع مرة أخرى وجرّب." : ""}</div>
