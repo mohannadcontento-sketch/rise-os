@@ -34,6 +34,7 @@ import { getEmbeddedAudioCue, type AudioCue } from "@/lib/embeddedAudio";
 type Mode = "letters" | "sentences";
 type SentenceCategory = "الكل" | "التحية" | "اللباقة" | "البيت" | "المشاعر" | "اللعب" | "التعلّم";
 type GameMode = "listen" | "match" | "sentence";
+type PronunciationPhase = "ready" | "listening" | "retry" | "success" | "unavailable";
 type SpeechRecognitionResultLike = { transcript: string };
 type SpeechRecognitionEventLike = { results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>> };
 type SpeechRecognitionLike = {
@@ -236,6 +237,9 @@ export default function Home() {
   const [isChildSpeaking, setIsChildSpeaking] = useState(false);
   const [pronunciationFeedback, setPronunciationFeedback] = useState("");
   const [pronunciationHeard, setPronunciationHeard] = useState("");
+  const [pronunciationPhase, setPronunciationPhase] = useState<PronunciationPhase>("ready");
+  const [pronunciationAttempts, setPronunciationAttempts] = useState(0);
+  const [hasHeardModel, setHasHeardModel] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioFrameRef = useRef<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -371,6 +375,9 @@ export default function Home() {
     setQuizRound((current) => current + 1);
     setPronunciationFeedback("");
     setPronunciationHeard("");
+    setPronunciationPhase("ready");
+    setPronunciationAttempts(0);
+    setHasHeardModel(false);
   };
 
   const playSuccessChime = () => {
@@ -406,10 +413,24 @@ export default function Home() {
     if (navigator.vibrate) navigator.vibrate([18, 24, 42]);
   };
 
+  const playPracticeModel = () => {
+    setHasHeardModel(true);
+    if (pronunciationPhase === "retry") setPronunciationFeedback("اسمع الكلمة مرة أخرى، ثم جرّبها ببطء.");
+    playEmbeddedAudio(getEmbeddedAudioCue("word", activeLetterIndex));
+  };
+
+  const showPronunciationRetry = (message: string) => {
+    const nextAttempt = pronunciationAttempts + 1;
+    setPronunciationAttempts(nextAttempt);
+    setPronunciationPhase("retry");
+    setPronunciationFeedback(nextAttempt >= 2 ? `${message} لا بأس، جرّب بعد أن تسمع الكلمة مرة أخرى.` : `${message} اسمع النموذج ثم قل الكلمة ببطء.`);
+  };
+
   const startPronunciationCheck = () => {
     const browserWindow = window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
     const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
     if (!Recognition) {
+      setPronunciationPhase("unavailable");
       setPronunciationFeedback("هذا التدريب يعمل في Chrome أو Edge على جهاز يدعم الميكروفون.");
       return;
     }
@@ -423,6 +444,7 @@ export default function Home() {
     recognitionRef.current = recognition;
     recognition.onstart = () => {
       setIsChildSpeaking(true);
+      setPronunciationPhase("listening");
       setPronunciationFeedback("قل الكلمة الآن بهدوء… نحن نستمع.");
       setPronunciationHeard("");
     };
@@ -433,15 +455,22 @@ export default function Home() {
       setPronunciationHeard(transcript);
       if (heard.includes(expected)) {
         giveReward(1, `أحسنت! سمعنا كلمة ${activeLetter.word} بوضوح.`);
+        setPronunciationPhase("success");
         setPronunciationFeedback("رائع! التقط المتصفح الكلمة المطلوبة.");
       } else {
         setWrongPulse(Date.now());
-        setPronunciationFeedback(`سمعنا «${transcript || "…"}». جرّب أن تقول ${activeLetter.word} ببطء.`);
+        showPronunciationRetry(`سمعنا «${transcript || "…"}».`);
       }
     };
     recognition.onerror = (event) => {
-      const message = event.error === "not-allowed" ? "اسمح للميكروفون من إعدادات المتصفح ثم جرّب." : event.error === "no-speech" ? "لم نسمع كلمة. اقترب من الميكروفون ثم حاول مرة أخرى." : "تعذر التقاط الكلمة الآن. حاول مرة أخرى.";
-      setPronunciationFeedback(message);
+      if (event.error === "not-allowed") {
+        setPronunciationPhase("unavailable");
+        setPronunciationFeedback("اسمح للميكروفون من إعدادات المتصفح ثم جرّب.");
+      } else if (event.error === "no-speech") {
+        showPronunciationRetry("لم نسمع كلمة.");
+      } else {
+        showPronunciationRetry("تعذر التقاط الكلمة الآن.");
+      }
     };
     recognition.onend = () => setIsChildSpeaking(false);
     try {
@@ -668,11 +697,18 @@ export default function Home() {
                       <button className="word-sound" onClick={() => playEmbeddedAudio(getEmbeddedAudioCue("word", activeLetterIndex))}><Headphones size={17} /> اسمع الكلمة</button>
                     </div>
                     <div className="repeat-line"><span className="repeat-dots"><i /><i /><i /></span><span>جرّب أن تقولها: <b>{activeLetter.letter} — {activeLetter.word}</b></span></div>
-                    <div className="pronunciation-card">
-                      <div className="pronunciation-copy"><span className="mic-sticker"><Mic size={15} /></span><div><b>قلها معي</b><small>قل كلمة <em lang="en">{activeLetter.word}</em> ثم استمع للتشجيع</small></div></div>
-                      {speechRecognitionSupported ? <button className={cn("pronunciation-button", isChildSpeaking && "listening")} onClick={startPronunciationCheck} disabled={isChildSpeaking}><Mic size={16} /> {isChildSpeaking ? "نستمع…" : "ابدأ النطق"}</button> : <span className="speech-support-note">{speechRecognitionSupported === null ? "تجهيز الميكروفون…" : "متاح في Chrome وEdge"}</span>}
+                    <div className={cn("pronunciation-card", `phase-${pronunciationPhase}`)}>
+                      <div className="pronunciation-copy"><span className="mic-sticker"><Mic size={15} /></span><div><b>قلها معي</b><small>تدرّب على كلمة <em lang="en">{activeLetter.word}</em> خطوة بخطوة</small></div></div>
+                      <div className="pronunciation-steps" aria-label="مراحل تدريب النطق">
+                        <span className={cn(hasHeardModel && "done", isSpeaking && "current")}><i>1</i><Volume2 size={12} /> اسمع</span>
+                        <span className={cn(isChildSpeaking && "current", pronunciationHeard && "done")}><i>2</i><Mic size={12} /> قل</span>
+                        <span className={cn(pronunciationPhase === "retry" && "current", pronunciationPhase === "success" && "done")}><i>3</i><Sparkles size={12} /> راجع</span>
+                      </div>
+                      {speechRecognitionSupported ? <div className="pronunciation-actions"><button className="hear-model-button" onClick={playPracticeModel}><Volume2 size={15} /> اسمع النموذج</button><button className={cn("pronunciation-button", isChildSpeaking && "listening")} onClick={startPronunciationCheck} disabled={isChildSpeaking}><Mic size={16} /> {isChildSpeaking ? "نستمع…" : pronunciationPhase === "retry" ? "حاول مرة أخرى" : "قل الكلمة"}</button></div> : <span className="speech-support-note">{speechRecognitionSupported === null ? "تجهيز الميكروفون…" : "متاح في Chrome وEdge"}</span>}
+                      {pronunciationPhase === "retry" && <div className="pronunciation-hint"><span className="hint-letter" lang="en">{activeLetter.letter}</span><div><b>تلميح صغير</b><p>انظر للكلمة: <strong lang="en">{activeLetter.word}</strong></p><small>ابدأ بصوت <em>{activeLetter.hint}</em> ثم أكملها بهدوء.</small></div></div>}
                       {pronunciationHeard && <span className="heard-chip">سمعنا: <b lang="en">{pronunciationHeard}</b></span>}
-                      {pronunciationFeedback && <p className={cn("pronunciation-feedback", pronunciationFeedback.startsWith("رائع") && "success")}>{pronunciationFeedback}</p>}
+                      {pronunciationFeedback && <p className={cn("pronunciation-feedback", pronunciationPhase === "success" && "success")}>{pronunciationFeedback}</p>}
+                      {pronunciationAttempts > 0 && pronunciationPhase !== "success" && <span className="attempt-badge">محاولة {pronunciationAttempts} · البطل يتعلم بالمحاولة</span>}
                       <p className="mic-privacy">اطلب مساعدة ولي الأمر. اللعبة لا تحفظ تسجيلًا صوتيًا.</p>
                     </div>
                     <button className={cn("complete-button", completedLetters.has(activeLetter.letter) && "is-done")} onClick={() => toggleLetterComplete(activeLetter.letter)}>
