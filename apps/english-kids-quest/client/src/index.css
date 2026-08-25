@@ -261,6 +261,12 @@ a { color: inherit; text-decoration: none; }
 .pronunciation-steps span.current i { color: var(--white); background: var(--coral); }
 .pronunciation-steps span.done { color: var(--emerald-dark); border-color: #b7decf; background: #f1faf5; }
 .pronunciation-steps span.done i { color: var(--white); background: var(--emerald); }
+.direct-pronunciation-flow { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; direction: rtl; }
+.direct-pronunciation-flow span { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 4px; color: #8d8676; background: rgba(255,255,255,.72); border: 1px solid #eadfca; font-size: 9px; font-weight: 800; border-radius: 5px 8px 4px 6px; }
+.direct-pronunciation-flow i { width: 16px; height: 16px; display: grid; place-items: center; color: var(--white); background: var(--emerald); font-family: 'Nunito Sans', sans-serif; font-size: 9px; font-style: normal; border-radius: 50%; }
+.direct-pronunciation-flow span.current { color: var(--coral); background: #fff0e9; border-color: #f4bcae; }
+.direct-pronunciation-flow span.current i { background: var(--coral); }
+.direct-pronunciation-flow span.done { color: var(--emerald-dark); background: #f1faf5; border-color: #b7decf; }
 .pronunciation-actions { display: grid; grid-template-columns: 1fr 1.25fr; gap: 7px; margin-top: 9px; }
 .hear-model-button, .pronunciation-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; padding: 9px 8px; font-size: 10px; font-weight: 800; transition: transform .16s var(--ease-out), background .16s var(--ease-out); border-radius: 6px 10px 5px 8px; }
 .hear-model-button { color: var(--emerald-dark); background: #e4f3eb; }
@@ -282,6 +288,16 @@ a { color: inherit; text-decoration: none; }
 .pronunciation-hint p strong { direction: ltr; display: inline-block; color: var(--emerald-dark); font-family: 'Nunito Sans', sans-serif; }
 .pronunciation-hint small { color: #a76a58; font-size: 8px; }
 .pronunciation-hint em { color: var(--coral); font-style: normal; font-weight: 800; }
+.pronunciation-result { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px; font-size: 10px; font-weight: 800; border-radius: 6px 10px 5px 8px; }
+.pronunciation-result > svg { flex: 0 0 auto; }
+.pronunciation-result div { display: flex; flex-direction: column; gap: 1px; }
+.pronunciation-result b { font-size: 12px; }
+.pronunciation-result span { font-size: 9px; font-weight: 700; }
+.pronunciation-result em { direction: ltr; display: inline-block; font-family: 'Nunito Sans', sans-serif; font-style: normal; }
+.pronunciation-result.correct { color: var(--emerald-dark); background: #e6f6ed; border: 1px solid #aadac4; }
+.pronunciation-result.correct svg { color: var(--emerald); }
+.pronunciation-result.retry { color: #a24e40; background: #fff0ea; border: 1px solid #efb9ae; }
+.pronunciation-result.retry svg { color: var(--coral); }
 .attempt-badge { display: inline-flex; margin-top: 7px; color: #936b16; background: #fff0b0; padding: 4px 6px; font-size: 8px; font-weight: 800; border-radius: 4px 7px 4px 6px; }
 .mic-privacy { margin: 7px 0 0; color: #9e9684; font-size: 8px; line-height: 1.35; }
 .complete-button { margin-top: 13px; align-self: stretch; border: 1px dashed #9ecdbd; background: #f6fbf7; color: var(--emerald-dark); padding: 10px 12px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; font-weight: 700; border-radius: 5px 9px 6px 10px; transition: background .16s var(--ease-out), border .16s var(--ease-out), transform .16s var(--ease-out); }

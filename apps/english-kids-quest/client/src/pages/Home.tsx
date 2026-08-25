@@ -423,7 +423,7 @@ export default function Home() {
     const nextAttempt = pronunciationAttempts + 1;
     setPronunciationAttempts(nextAttempt);
     setPronunciationPhase("retry");
-    setPronunciationFeedback(nextAttempt >= 2 ? `${message} لا بأس، جرّب بعد أن تسمع الكلمة مرة أخرى.` : `${message} اسمع النموذج ثم قل الكلمة ببطء.`);
+    setPronunciationFeedback(nextAttempt >= 2 ? `${message} لا بأس. اسمع الكلمة مرة أخرى ثم قلها بهدوء.` : `${message} اضغط «اسمع الكلمة» ثم حاول مرة أخرى.`);
   };
 
   const startPronunciationCheck = () => {
@@ -456,10 +456,10 @@ export default function Home() {
       if (heard.includes(expected)) {
         giveReward(1, `أحسنت! سمعنا كلمة ${activeLetter.word} بوضوح.`);
         setPronunciationPhase("success");
-        setPronunciationFeedback("رائع! التقط المتصفح الكلمة المطلوبة.");
+        setPronunciationFeedback(`صح! أحسنت، قلت كلمة ${activeLetter.word} بشكل صحيح.`);
       } else {
         setWrongPulse(Date.now());
-        showPronunciationRetry(`سمعنا «${transcript || "…"}».`);
+        showPronunciationRetry("حاول مرة أخرى.");
       }
     };
     recognition.onerror = (event) => {
@@ -698,17 +698,14 @@ export default function Home() {
                     </div>
                     <div className="repeat-line"><span className="repeat-dots"><i /><i /><i /></span><span>جرّب أن تقولها: <b>{activeLetter.letter} — {activeLetter.word}</b></span></div>
                     <div className={cn("pronunciation-card", `phase-${pronunciationPhase}`)}>
-                      <div className="pronunciation-copy"><span className="mic-sticker"><Mic size={15} /></span><div><b>قلها معي</b><small>تدرّب على كلمة <em lang="en">{activeLetter.word}</em> خطوة بخطوة</small></div></div>
-                      <div className="pronunciation-steps" aria-label="مراحل تدريب النطق">
-                        <span className={cn(hasHeardModel && "done", isSpeaking && "current")}><i>1</i><Volume2 size={12} /> اسمع</span>
-                        <span className={cn(isChildSpeaking && "current", pronunciationHeard && "done")}><i>2</i><Mic size={12} /> قل</span>
-                        <span className={cn(pronunciationPhase === "retry" && "current", pronunciationPhase === "success" && "done")}><i>3</i><Sparkles size={12} /> راجع</span>
-                      </div>
-                      {speechRecognitionSupported ? <div className="pronunciation-actions"><button className="hear-model-button" onClick={playPracticeModel}><Volume2 size={15} /> اسمع النموذج</button><button className={cn("pronunciation-button", isChildSpeaking && "listening")} onClick={startPronunciationCheck} disabled={isChildSpeaking}><Mic size={16} /> {isChildSpeaking ? "نستمع…" : pronunciationPhase === "retry" ? "حاول مرة أخرى" : "قل الكلمة"}</button></div> : <span className="speech-support-note">{speechRecognitionSupported === null ? "تجهيز الميكروفون…" : "متاح في Chrome وEdge"}</span>}
-                      {pronunciationPhase === "retry" && <div className="pronunciation-hint"><span className="hint-letter" lang="en">{activeLetter.letter}</span><div><b>تلميح صغير</b><p>انظر للكلمة: <strong lang="en">{activeLetter.word}</strong></p><small>ابدأ بصوت <em>{activeLetter.hint}</em> ثم أكملها بهدوء.</small></div></div>}
-                      {pronunciationHeard && <span className="heard-chip">سمعنا: <b lang="en">{pronunciationHeard}</b></span>}
-                      {pronunciationFeedback && <p className={cn("pronunciation-feedback", pronunciationPhase === "success" && "success")}>{pronunciationFeedback}</p>}
-                      {pronunciationAttempts > 0 && pronunciationPhase !== "success" && <span className="attempt-badge">محاولة {pronunciationAttempts} · البطل يتعلم بالمحاولة</span>}
+                      <div className="pronunciation-copy"><span className="mic-sticker"><Mic size={15} /></span><div><b>قلها وخلّيني أصحح لك</b><small>اسمع كلمة <em lang="en">{activeLetter.word}</em>، ثم قلها في الميكروفون</small></div></div>
+                      <div className="direct-pronunciation-flow"><span className={cn(hasHeardModel && "done")}><i>1</i><Volume2 size={13} /> اسمع الكلمة</span><span className={cn(isChildSpeaking && "current")}><i>2</i><Mic size={13} /> قلها</span></div>
+                      {speechRecognitionSupported ? <div className="pronunciation-actions"><button className="hear-model-button" onClick={playPracticeModel}><Volume2 size={15} /> اسمع الكلمة</button><button className={cn("pronunciation-button", isChildSpeaking && "listening")} onClick={startPronunciationCheck} disabled={isChildSpeaking}><Mic size={16} /> {isChildSpeaking ? "نستمع…" : "قلها الآن"}</button></div> : <span className="speech-support-note">{speechRecognitionSupported === null ? "تجهيز الميكروفون…" : "متاح في Chrome وEdge"}</span>}
+                      {pronunciationPhase === "success" && <div className="pronunciation-result correct"><Check size={18} /><div><b>صح! أحسنت</b><span>نطقت <em lang="en">{activeLetter.word}</em> بشكل صحيح</span></div></div>}
+                      {pronunciationPhase === "retry" && <div className="pronunciation-result retry"><X size={18} /><div><b>حاول مرة أخرى</b><span>اسمع الكلمة ثم قلها ببطء</span></div></div>}
+                      {pronunciationPhase === "retry" && <div className="pronunciation-hint"><span className="hint-letter" lang="en">{activeLetter.letter}</span><div><b>تلميح</b><p>الكلمة هي: <strong lang="en">{activeLetter.word}</strong></p><small>ابدأ بصوت <em>{activeLetter.hint}</em>.</small></div></div>}
+                      {pronunciationFeedback && pronunciationPhase === "unavailable" && <p className="pronunciation-feedback">{pronunciationFeedback}</p>}
+                      {pronunciationAttempts > 0 && pronunciationPhase === "retry" && <span className="attempt-badge">محاولة {pronunciationAttempts} · أنت تتعلم بشكل ممتاز</span>}
                       <p className="mic-privacy">اطلب مساعدة ولي الأمر. اللعبة لا تحفظ تسجيلًا صوتيًا.</p>
                     </div>
                     <button className={cn("complete-button", completedLetters.has(activeLetter.letter) && "is-done")} onClick={() => toggleLetterComplete(activeLetter.letter)}>
