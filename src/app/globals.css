@@ -658,7 +658,7 @@ main {
 }
 
 /* Smooth orientation change */
-@screen and (orientation: landscape) {
+@media (orientation: landscape) {
   main { scroll-behavior: smooth; }
 }
 

@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // ⚠️ `output: "standalone"` breaks Vercel builds (Next 16 Turbopack):
+  // ENOENT .next/next-server.js.nft.json during onBuildComplete.
+  // Keep it ONLY for self-hosting (Docker/Node server) — never on Vercel.
+  output: process.env.VERCEL ? undefined : "standalone",
   typescript: {
     ignoreBuildErrors: false,
   },
