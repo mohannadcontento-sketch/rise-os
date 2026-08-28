@@ -63,7 +63,7 @@
 
 :root {
   --radius: 1rem;
-  /* RiseOS — Neo Palette · light "Morning" (VOLT × FORGE language, WCAG-AA verified 12/12 pairs) */
+  /* RiseOS — Neo Palette · light "Dawn Paper" (VOLT × FORGE language, WCAG-AA verified 12/12 pairs) */
   --background: #F4F2EA;
   --foreground: #0B1015;
   --card: #FFFFFF;
@@ -110,45 +110,57 @@
   --glass-blue: #007AFF;
   --violet: #A78BFA;
   --paper-soft: #EBE6D8;
+  /* Depth + glow system (v2) — light keeps soft warm shadows, no glow */
+  --surface-2: #FAF9F4;
+  --surface-3: #EFEEE6;
+  --glow: 0 0 0 rgba(0, 0, 0, 0);
+  --glow-violet: 0 0 0 rgba(0, 0, 0, 0);
+  --aurora-1: rgba(201, 154, 62, 0.07);
+  --aurora-2: rgba(27, 52, 43, 0.06);
+  --aurora-3: rgba(166, 204, 34, 0.05);
+  --tile-shadow: 0 1px 2px rgba(27, 42, 34, 0.05), 0 8px 24px -12px rgba(27, 42, 34, 0.16);
+  --tile-shadow-hover: 0 2px 4px rgba(27, 42, 34, 0.06), 0 16px 32px -12px rgba(27, 42, 34, 0.22);
 }
 
 .dark {
-  /* RiseOS — Neo Palette · dark "Night" (lime becomes primary — 16.6:1 on ink) */
-  --background: #0B1015;
-  --foreground: #F2F4EF;
-  --card: #141B21;
-  --card-foreground: #F2F4EF;
-  --popover: #141B21;
-  --popover-foreground: #F2F4EF;
+  /* RiseOS — Neo Palette · dark "Obsidian Aurora" — a DIFFERENT world, not a dimmed one:
+     deep blue-black surfaces, blue-violet borders, aurora glows, luminous lime accents.
+     (light is warm paper+forest; night is cold obsidian+violet) */
+  --background: #070B14;
+  --foreground: #F2F5F7;
+  --card: #0E1626;
+  --card-foreground: #F2F5F7;
+  --popover: #101A2C;
+  --popover-foreground: #F2F5F7;
   --primary: #D6FF3D;
   --primary-foreground: #0B1015;
-  --secondary: #1C242B;
-  --secondary-foreground: #F2F4EF;
-  --muted: #171F26;
-  --muted-foreground: #B5C2BA;
+  --secondary: #16213A;
+  --secondary-foreground: #E7EDF5;
+  --muted: #121B2E;
+  --muted-foreground: #9AAECB;
   --accent: #D6FF3D;
   --accent-foreground: #0B1015;
   --destructive: #FF7A8C;
-  --border: #232E36;
-  --input: #232E36;
+  --border: #1D2B47;
+  --input: #1D2B47;
   --ring: #D6FF3D;
   --chart-1: #D6FF3D;
   --chart-2: #7C9CF5;
   --chart-3: #FF7A8C;
   --chart-4: #C5F26E;
   --chart-5: #C99A3E;
-  --sidebar: #0E151B;
+  --sidebar: #0A101D;
   --sidebar-foreground: #EBE6D8;
   --sidebar-primary: #C5F26E;
   --sidebar-primary-foreground: #0B1015;
-  --sidebar-accent: #1A2A22;
+  --sidebar-accent: #14203366;
   --sidebar-accent-foreground: #EBE6D8;
-  --sidebar-border: #1C3329;
+  --sidebar-border: #182638;
   --sidebar-ring: #C5F26E;
-  --forest: #224034;
-  --forest-light: #2F5546;
-  --forest-dark: #1B342B;
-  --emerald-accent: #2F5546;
+  --forest: #1D3A31;
+  --forest-light: #2A5244;
+  --forest-dark: #142C24;
+  --emerald-accent: #2A5244;
   --gold: #D9A441;
   --gold-light: #E8C077;
   /* Neo extension tokens */
@@ -160,6 +172,16 @@
   --glass-blue: #4DA2FF;
   --violet: #A78BFA;
   --paper-soft: #EBE6D8;
+  /* Depth + glow system (v2) — night is luminous */
+  --surface-2: #111B2E;
+  --surface-3: #182438;
+  --glow: 0 0 24px -6px rgba(214, 255, 61, 0.35), 0 0 64px -12px rgba(214, 255, 61, 0.18);
+  --glow-violet: 0 0 24px -6px rgba(167, 139, 250, 0.40), 0 0 64px -12px rgba(124, 156, 245, 0.22);
+  --aurora-1: rgba(124, 108, 255, 0.16);
+  --aurora-2: rgba(34, 211, 238, 0.10);
+  --aurora-3: rgba(214, 255, 61, 0.06);
+  --tile-shadow: 0 1px 2px rgba(0, 0, 0, 0.40), 0 10px 32px -12px rgba(0, 0, 0, 0.55);
+  --tile-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.45), 0 18px 40px -12px rgba(0, 0, 0, 0.65), var(--glow);
 }
 
 @layer base {
@@ -170,9 +192,11 @@
     @apply bg-background text-foreground;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     background-image:
-      radial-gradient(at 15% 10%, color-mix(in oklch, var(--gold) 8%, transparent) 0px, transparent 40%),
-      radial-gradient(at 85% 90%, color-mix(in oklch, var(--forest) 6%, transparent) 0px, transparent 45%);
+      radial-gradient(ellipse 60% 50% at 85% 0%, var(--aurora-1) 0px, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 0% 100%, var(--aurora-2) 0px, transparent 55%),
+      radial-gradient(ellipse 40% 35% at 100% 85%, var(--aurora-3) 0px, transparent 50%);
     background-attachment: fixed;
+    transition: background-color 0.45s ease, background-image 0.45s ease;
   }
 }
 
@@ -724,15 +748,32 @@ main {
   --color-glass: var(--glass-blue);
   --color-violet-accent: var(--violet);
   --color-paper-soft: var(--paper-soft);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --shadow-tile: 0 1px 2px rgba(11, 16, 21, 0.05), 0 8px 24px -12px rgba(11, 16, 21, 0.18);
-  --shadow-lift: 0 2px 4px rgba(11, 16, 21, 0.06), 0 16px 32px -12px rgba(11, 16, 21, 0.24);
+  --shadow-tile: var(--tile-shadow);
+  --shadow-lift: var(--tile-shadow-hover);
+  --shadow-glow: var(--glow);
+  --shadow-glow-violet: var(--glow-violet);
   --animate-star-twinkle: star-twinkle 2.6s ease-in-out infinite;
   --animate-cloud-move: cloud-move 6s ease-in-out infinite;
   --animate-bar-grow: bar-grow 0.7s var(--ease-spring) both;
   --animate-float-dot: float-dot 2.4s ease-in-out infinite;
   --animate-sun-rays: sun-rays 12s linear infinite;
+  --animate-aurora-drift: aurora-drift 14s ease-in-out infinite alternate;
+  --animate-pulse-ring: pulse-ring 2.2s ease-out infinite;
+
+  @keyframes aurora-drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(-2%, 3%, 0) scale(1.06); }
+    100% { transform: translate3d(2%, -2%, 0) scale(1.02); }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.85); opacity: 0.7; }
+    70% { transform: scale(1.25); opacity: 0; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
 
   @keyframes star-twinkle {
     0%, 100% { transform: scale(1); opacity: 0.9; }
@@ -777,12 +818,20 @@ main {
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.015em;
   }
-  /* Neo card — white tile, warm hairline, soft layered shadow */
+  /* Neo card — theme-aware tile with depth system:
+     light = white tile + warm hairline + soft shadow;
+     dark = blue-black tile + blue-violet hairline + deep shadow, luminous on hover */
   .neo-card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 1.25rem;
-    box-shadow: var(--shadow-tile);
+    box-shadow: var(--tile-shadow);
+  }
+  .dark .neo-card {
+    border-color: color-mix(in srgb, var(--border) 75%, transparent);
+    box-shadow:
+      var(--tile-shadow),
+      inset 0 1px 0 rgba(148, 180, 255, 0.06);
   }
   .card-lift {
     transition: transform 0.2s var(--ease-out-soft), box-shadow 0.2s var(--ease-out-soft);
@@ -790,11 +839,14 @@ main {
   @media (hover: hover) {
     .card-lift:hover {
       transform: translateY(-2px);
-      box-shadow: var(--shadow-lift);
+      box-shadow: var(--tile-shadow-hover);
+    }
+    .dark .card-lift:hover {
+      border-color: color-mix(in srgb, var(--lime) 22%, var(--border));
     }
   }
-  /* Glass pill nav (component a) — forest-tinted glass keeps white text ≥4.5:1
-     over any page content; blue inner highlight keeps the iOS glass feel */
+  /* Glass pill nav (component a) — day: forest glass; night: obsidian-blue glass.
+     Both keep white text ≥4.5:1 over any page content. */
   .glass-nav {
     background: color-mix(in srgb, var(--forest) 90%, transparent);
     -webkit-backdrop-filter: blur(12px) saturate(180%) contrast(200%);
@@ -804,11 +856,57 @@ main {
       inset 2px 2px 5px -2px rgba(255, 255, 255, 0.35),
       0 8px 32px rgba(11, 16, 21, 0.28);
   }
+  .dark .glass-nav {
+    background: color-mix(in srgb, #101A2E 88%, transparent);
+    box-shadow:
+      inset 2px 2px 5px -2px rgba(148, 180, 255, 0.22),
+      0 8px 32px rgba(0, 0, 0, 0.55),
+      0 0 24px -8px rgba(124, 156, 245, 0.35);
+  }
   .glass-nav-item {
     transition: transform 0.15s var(--ease-spring), background-color 0.15s ease;
   }
   .glass-nav-item:active {
     transform: scale(0.96);
+  }
+  /* ─── Neo Duotone icon wells — the "distinctive icons" system ───
+     Each module icon sits in a rounded well tinted with its hue.
+     Day: pastel tint + deep forest glyph. Night: luminous tint + glow. */
+  .icon-well {
+    position: relative;
+    display: grid;
+    place-items: center;
+    border-radius: 0.75rem;
+    transition: transform 0.2s var(--ease-spring), box-shadow 0.2s ease, background-color 0.3s ease;
+  }
+  .icon-well::after {
+    /* glassy top highlight */
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%);
+    pointer-events: none;
+  }
+  .dark .icon-well::after {
+    background: linear-gradient(180deg, rgba(160, 190, 255, 0.10), rgba(255, 255, 255, 0) 55%);
+  }
+  .iw-lime   { background: color-mix(in srgb, var(--lime) 22%, var(--card)); color: #4d6b00; }
+  .iw-blue   { background: color-mix(in srgb, #007AFF 14%, var(--card)); color: #0B5ED7; }
+  .iw-violet { background: color-mix(in srgb, #A78BFA 20%, var(--card)); color: #6D28D9; }
+  .iw-rose   { background: color-mix(in srgb, var(--rose) 16%, var(--card)); color: #BE123C; }
+  .iw-amber  { background: color-mix(in srgb, #F59E0B 18%, var(--card)); color: #B45309; }
+  .iw-forest { background: color-mix(in srgb, var(--forest) 12%, var(--card)); color: var(--forest); }
+  .iw-cyan   { background: color-mix(in srgb, #06B6D4 15%, var(--card)); color: #0E7490; }
+  .dark .iw-lime   { background: color-mix(in srgb, var(--lime) 14%, var(--surface-2)); color: var(--lime); box-shadow: inset 0 0 0 1px rgba(214, 255, 61, 0.18), 0 0 18px -4px rgba(214, 255, 61, 0.30); }
+  .dark .iw-blue   { background: color-mix(in srgb, #4DA2FF 16%, var(--surface-2)); color: #7FB8FF; box-shadow: inset 0 0 0 1px rgba(77, 162, 255, 0.20), 0 0 18px -4px rgba(77, 162, 255, 0.35); }
+  .dark .iw-violet { background: color-mix(in srgb, #A78BFA 16%, var(--surface-2)); color: #C4B5FD; box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.22), 0 0 18px -4px rgba(167, 139, 250, 0.40); }
+  .dark .iw-rose   { background: color-mix(in srgb, var(--rose) 14%, var(--surface-2)); color: #FFA3B2; box-shadow: inset 0 0 0 1px rgba(255, 122, 140, 0.20), 0 0 18px -4px rgba(255, 122, 140, 0.35); }
+  .dark .iw-amber  { background: color-mix(in srgb, #F59E0B 15%, var(--surface-2)); color: #FCD34D; box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.20), 0 0 18px -4px rgba(245, 158, 11, 0.35); }
+  .dark .iw-forest { background: color-mix(in srgb, #34D399 12%, var(--surface-2)); color: #6EE7B7; box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.18), 0 0 18px -4px rgba(52, 211, 153, 0.30); }
+  .dark .iw-cyan   { background: color-mix(in srgb, #22D3EE 14%, var(--surface-2)); color: #67E8F9; box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.20), 0 0 18px -4px rgba(34, 211, 238, 0.35); }
+  @media (hover: hover) {
+    .icon-well-lift:hover { transform: translateY(-2px) scale(1.04); }
   }
   /* Status pills (component g) */
   .pill {

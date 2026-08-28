@@ -10,6 +10,12 @@ export const dynamic = 'force-dynamic'
 // Called by AuthProvider when Supabase client refreshes the JWT.
 // Syncs the fresh token to the httpOnly cookie so server-side
 // API routes always see a valid, non-expired JWT.
+//
+// FAILS SOFT: this is a background best-effort sync — the client
+// always sends the Authorization header anyway. Returning 400 here
+// used to surface "Failed to load resource: 400" in the user's
+// console on every refresh glitch. Any invalid/malformed payload
+// now returns 200 { ok:false, skipped:true } and is only logged.
 // ============================================================
 
 const SyncSchema = z.object({
@@ -24,12 +30,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true })
     }
     const body = await request.json().catch(() => null)
-    if (!body) {
-      return NextResponse.json({ error: 'invalid body' }, { status: 400 })
-    }
     const parsed = SyncSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json({ error: 'invalid token data' }, { status: 400 })
+      // Fail soft — never surface a console error for a background sync
+      console.warn('[auth/sync-token] skipped: invalid payload')
+      return NextResponse.json({ ok: true, skipped: true })
     }
     const { access_token, refresh_token, expires_at } = parsed.data
 
@@ -51,13 +56,14 @@ export async function POST(request: NextRequest) {
           avatar: null,
         }
       } catch {
-        return NextResponse.json({ error: 'cannot parse token' }, { status: 400 })
+        console.warn('[auth/sync-token] skipped: cannot parse token payload')
+        return NextResponse.json({ ok: true, skipped: true })
       }
     }
     const res = NextResponse.json({ ok: true })
     return setAuthCookies(res, { access_token, refresh_token, expires_at }, userInfo)
   } catch (error) {
     console.error('[auth/sync-token] error:', error)
-    return NextResponse.json({ error: 'sync failed' }, { status: 500 })
+    return NextResponse.json({ ok: true, skipped: true })
   }
 }

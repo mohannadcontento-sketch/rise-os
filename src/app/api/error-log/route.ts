@@ -15,23 +15,26 @@ const ErrorLogSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null)
-    if (!body) return NextResponse.json({ ok: false }, { status: 400 })
 
-    const parsed = ErrorLogSchema.safeParse(body)
-    if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 })
-
-    // Log to server console (Vercel captures this → viewable in dashboard)
-    console.error('[Client Error]', JSON.stringify({
-      message: parsed.data.message,
-      url: parsed.data.url,
-      timestamp: parsed.data.timestamp,
-      context: parsed.data.context,
-    }))
+    // Telemetry must NEVER surface as a console network error —
+    // accept anything, sanitize what we can use, always 200.
+    const parsed = ErrorLogSchema.safeParse(body ?? {})
+    if (parsed.success) {
+      // Log to server console (Vercel captures this → viewable in dashboard)
+      console.error('[Client Error]', JSON.stringify({
+        message: parsed.data.message,
+        url: parsed.data.url,
+        timestamp: parsed.data.timestamp,
+        context: parsed.data.context,
+      }))
+    } else {
+      console.error('[Client Error] (unparsed payload)', typeof body === 'string' ? body.slice(0, 500) : 'non-json')
+    }
 
     // In production with Sentry DSN, this would forward to Sentry
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('[error-log] failed:', error)
-    return NextResponse.json({ ok: false }, { status: 500 })
+    return NextResponse.json({ ok: true })
   }
 }

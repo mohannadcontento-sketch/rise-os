@@ -4,41 +4,16 @@ import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { playSound } from '@/lib/sounds'
 import { apiFetch } from '@/lib/api-fetch'
-import {
-  LayoutDashboard,
-  Sun,
-  CalendarDays,
-  CheckSquare,
-  FolderKanban,
-  Target,
-  Flame,
-  BookOpen,
-  Brain,
-  Clock,
-  GraduationCap,
-  Heart,
-  Wallet,
-  Calendar,
-  Network,
-  BarChart3,
-  Sparkles,
-  Settings,
-  X,
-  ChevronLeft,
-  ChevronDown,
-  Zap,
-  TrendingUp,
-  Pencil,
-  ShieldCheck,
-  Briefcase,
-} from 'lucide-react'
+import { X, ChevronLeft, ChevronDown, Pencil, Flame } from 'lucide-react'
+import { MODULE_ICONS, RiseGlyphIcon, RiseIcon, type RiseGlyph, type RiseHue } from './icons'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { AVATARS } from '@/lib/avatars'
 
 interface NavItem {
   id: ModuleId
   label: string
-  icon: React.ElementType
+  glyph: RiseGlyph
+  hue: RiseHue
 }
 
 interface NavGroup {
@@ -46,69 +21,73 @@ interface NavGroup {
   items: NavItem[]
 }
 
+function mi(id: string): { glyph: RiseGlyph; hue: RiseHue } {
+  return MODULE_ICONS[id] ?? { glyph: 'dashboard', hue: 'lime' }
+}
+
 const navGroups: NavGroup[] = [
   {
     title: '',
-    items: [{ id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard }],
+    items: [{ id: 'dashboard', label: 'لوحة التحكم', ...mi('dashboard') }],
   },
   {
     title: 'الصباح',
     items: [
-      { id: 'morning', label: 'الروتين الصباحي', icon: Sun },
-      { id: 'planner', label: 'المخطط اليومي', icon: CalendarDays },
+      { id: 'morning', label: 'الروتين الصباحي', ...mi('morning') },
+      { id: 'planner', label: 'المخطط اليومي', ...mi('planner') },
     ],
   },
   {
     title: 'التنفيذ',
     items: [
-      { id: 'tasks', label: 'المهام', icon: CheckSquare },
-      { id: 'projects', label: 'المشاريع', icon: FolderKanban },
-      { id: 'goals', label: 'الأهداف', icon: Target },
-      { id: 'deepwork', label: 'العمل العميق', icon: Brain },
-      { id: 'work', label: 'الشغل', icon: Briefcase },
-      { id: 'calendar', label: 'التقويم', icon: Calendar },
+      { id: 'tasks', label: 'المهام', ...mi('tasks') },
+      { id: 'projects', label: 'المشاريع', ...mi('projects') },
+      { id: 'goals', label: 'الأهداف', ...mi('goals') },
+      { id: 'deepwork', label: 'العمل العميق', ...mi('deepwork') },
+      { id: 'work', label: 'الشغل', ...mi('work') },
+      { id: 'calendar', label: 'التقويم', ...mi('calendar') },
     ],
   },
   {
     title: 'النمو',
     items: [
-      { id: 'habits', label: 'تتبع العادات', icon: Flame },
-      { id: 'journal', label: 'اليوميات', icon: BookOpen },
-      { id: 'health', label: 'الصحة', icon: Heart },
+      { id: 'habits', label: 'تتبع العادات', ...mi('habits') },
+      { id: 'journal', label: 'اليوميات', ...mi('journal') },
+      { id: 'health', label: 'الصحة', ...mi('health') },
     ],
   },
   {
     title: 'المعرفة',
     items: [
-      { id: 'reading', label: 'القراءة', icon: BookOpen },
-      { id: 'learning', label: 'التعلم', icon: GraduationCap },
-      { id: 'brain', label: 'الدماغ الثاني', icon: Network },
+      { id: 'reading', label: 'القراءة', ...mi('reading') },
+      { id: 'learning', label: 'التعلم', ...mi('learning') },
+      { id: 'brain', label: 'الدماغ الثاني', ...mi('brain') },
     ],
   },
   {
     title: 'المال',
     items: [
-      { id: 'finance', label: 'المالية', icon: Wallet },
+      { id: 'finance', label: 'المالية', ...mi('finance') },
     ],
   },
   {
     title: 'الرؤية',
     items: [
-      { id: 'weekly-review', label: 'مراجعة أسبوعية', icon: TrendingUp },
-      { id: 'monthly-review', label: 'مراجعة شهرية', icon: BarChart3 },
-      { id: 'analytics', label: 'التحليلات', icon: BarChart3 },
-      { id: 'ai-coach', label: 'المدرب الذكي', icon: Sparkles },
+      { id: 'weekly-review', label: 'مراجعة أسبوعية', ...mi('weekly-review') },
+      { id: 'monthly-review', label: 'مراجعة شهرية', ...mi('monthly-review') },
+      { id: 'analytics', label: 'التحليلات', ...mi('analytics') },
+      { id: 'ai-coach', label: 'المدرب الذكي', ...mi('ai-coach') },
     ],
   },
   {
     title: 'الإدارة',
     items: [
-      { id: 'admin-panel', label: 'لوحة الإدارة', icon: ShieldCheck },
+      { id: 'admin-panel', label: 'لوحة الإدارة', ...mi('admin-panel') },
     ],
   },
   {
     title: '',
-    items: [{ id: 'settings', label: 'الإعدادات', icon: Settings }],
+    items: [{ id: 'settings', label: 'الإعدادات', ...mi('settings') }],
   },
 ]
 
@@ -265,7 +244,6 @@ export function Sidebar() {
               )}
               <div className="space-y-0.5">
                 {group.items.map((item) => {
-                  const Icon = item.icon
                   const isActive = activeModule === item.id
                   return (
                     <button
@@ -278,16 +256,14 @@ export function Sidebar() {
                         isActive && 'bg-sidebar-primary/10 text-sidebar-primary font-semibold shadow-sm'
                       )}
                     >
-                      <div
-                        className={cn(
-                          'w-7 h-7 rounded-lg flex items-center justify-center',
-                          isActive
-                            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md'
-                            : 'bg-sidebar-accent/50 text-sidebar-foreground/50'
-                        )}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                      </div>
+                      {isActive ? (
+                        /* active = full hue well + glow — the module's color identity */
+                        <RiseIcon glyph={item.glyph} hue={item.hue} size="sm" className="!rounded-lg" />
+                      ) : (
+                        <div className="grid h-8 w-8 place-items-center rounded-lg bg-sidebar-accent/50 text-sidebar-foreground/50">
+                          <RiseGlyphIcon glyph={item.glyph} size={16} />
+                        </div>
+                      )}
                       <span className="flex-1 text-right">{item.label}</span>
                       {isActive && (
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-accent" />

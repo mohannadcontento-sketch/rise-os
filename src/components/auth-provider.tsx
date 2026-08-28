@@ -24,6 +24,26 @@ import { useEffect, useRef } from 'react'
 import { supabaseClient, isSupabaseClientConfigured } from '@/lib/supabase-client'
 import { useRiseStore } from '@/store/app-store'
 
+// Stale-session cleanup: when Supabase cannot restore/refresh a session
+// (expired or revoked refresh token → its internal /auth/v1/token call
+// returns 400), we must clear the cached session so the user gets a
+// clean login instead of a broken authed shell.
+function clearStaleSession() {
+  try {
+    localStorage.removeItem('rise-auth')
+    localStorage.removeItem('rise-user-info')
+    localStorage.removeItem('rise-user-avatar')
+  } catch { /* ignore */ }
+  try {
+    document.cookie.split(';').forEach(c => {
+      const name = c.split('=')[0].trim()
+      if (name.startsWith('rise-')) {
+        document.cookie = `${name}=; Path=/; Max-Age=0`
+      }
+    })
+  } catch { /* ignore */ }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setAuth, logout } = useRiseStore()
   const syncInProgress = useRef(false)
@@ -80,8 +100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isSupabaseClientConfigured && supabaseClient) {
       let mounted = true
 
-      supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
+      supabaseClient.auth.getSession().then(async ({ data: { session }, error }) => {
         if (!mounted) return
+        // Session restore failed (expired refresh token etc.) → clean slate
+        if (error) {
+          clearStaleSession()
+          logout()
+          return
+        }
         if (session?.user) {
           await syncSessionToCookie(session)
           const auth = await buildAuthFromSupabase(session.user, session)
@@ -118,7 +144,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setAuth(auth)
               }
             }
+          } else if (!session && event === 'INITIAL_SESSION') {
+            // INITIAL_SESSION with a null session = no recoverable session.
+            // If we still hold a cached session it is stale — clear quietly
+            // so the user gets a clean login (prevents refresh-400 loops).
+            const stored = (() => { try { return localStorage.getItem('rise-auth') } catch { return null } })()
+            if (stored) { clearStaleSession(); logout() }
           } else if (event === 'SIGNED_OUT') {
+            clearStaleSession()
             try {
               await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
             } catch { /* ignore */ }

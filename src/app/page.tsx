@@ -19,13 +19,11 @@ if (typeof window !== 'undefined' && typeof SVGElement !== 'undefined') {
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import {
-  Menu, Moon, Sun, Search, Sparkles, Plus,
-  Flame, Target, CheckSquare, BookOpen, Brain, Wallet, BarChart3,
-  LayoutDashboard, CalendarDays, FolderKanban, GraduationCap,
-  HeartPulse, Calendar as CalendarIcon, Network, PenLine,
-  Heart, LogOut, Settings as SettingsIcon, Zap, ShieldCheck,
-  Circle, CheckCircle2, Briefcase,
+  Menu, Search, Sparkles, Plus,
+  Flame, Target, BookOpen, Network,
+  LogOut, Zap, Circle, CheckCircle2,
 } from 'lucide-react'
+import { RiseIcon, RiseGlyphIcon, MODULE_ICONS, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -162,57 +160,18 @@ function LoadingFallback() {
   )
 }
 
-/* Module icon map for top bar indicator */
-const moduleIconMap: Record<ModuleId, React.ElementType> = {
-  'dashboard': LayoutDashboard,
-  'morning': Sun,
-  'planner': CalendarDays,
-  'tasks': CheckSquare,
-  'projects': FolderKanban,
-  'goals': Target,
-  'habits': Flame,
-  'journal': BookOpen,
-  'deepwork': Brain,
-  'work': Briefcase,
-  'reading': BookOpen,
-  'learning': GraduationCap,
-  'health': Heart,
-  'finance': Wallet,
-  'calendar': CalendarIcon,
-  'brain': Network,
-  'weekly-review': BarChart3,
-  'monthly-review': BarChart3,
-  'analytics': BarChart3,
-  'ai-coach': Sparkles,
-  'admin-panel': ShieldCheck,
-  'settings': SettingsIcon,
+/* Module identity via the Neo duotone icon system */
+const HUE_GRADIENT: Record<string, string> = {
+  lime: 'linear-gradient(135deg, #A8CC22, #D6FF3D)',
+  blue: 'linear-gradient(135deg, #007AFF, #4DA2FF)',
+  violet: 'linear-gradient(135deg, #8B5CF6, #C4B5FD)',
+  rose: 'linear-gradient(135deg, #FF5A76, #FFA3B2)',
+  amber: 'linear-gradient(135deg, #F59E0B, #FCD34D)',
+  forest: 'linear-gradient(135deg, #1B342B, #34D399)',
+  cyan: 'linear-gradient(135deg, #06B6D4, #67E8F9)',
 }
-
-/* Module accent color map */
-const moduleAccentMap: Record<ModuleId, string> = {
-  'dashboard': 'bg-emerald-accent',
-  'morning': 'bg-gold',
-  'planner': 'bg-emerald-accent',
-  'tasks': 'bg-emerald-accent',
-  'projects': 'bg-forest',
-  'goals': 'bg-gold',
-  'habits': 'bg-gold',
-  'journal': 'bg-forest',
-  'deepwork': 'bg-emerald-accent',
-  'work': 'bg-forest',
-  'reading': 'bg-gold',
-  'learning': 'bg-emerald-accent',
-  'health': 'bg-emerald-accent',
-  'finance': 'bg-gold',
-  'calendar': 'bg-forest',
-  'brain': 'bg-emerald-accent',
-  'weekly-review': 'bg-forest',
-  'monthly-review': 'bg-forest',
-  'analytics': 'bg-emerald-accent',
-  'ai-coach': 'bg-gold',
-  'admin-panel': 'bg-gold',
-  'settings': 'bg-foreground/30',
-}
+const moduleMeta = (id: ModuleId) =>
+  MODULE_ICONS[id as string] ?? { glyph: 'dashboard' as RiseGlyph, hue: 'lime' as RiseHue }
 
 interface SearchTask { id: string; title: string; status: string; xpReward: number }
 interface SearchHabit { id: string; name: string; icon: string; color: string }
@@ -416,7 +375,7 @@ export default function RiseOSApp() {
   }, [])
 
   const ActiveComponent = moduleComponents[activeModule]
-  const ModuleIcon = moduleIconMap[activeModule]
+  const activeMeta = moduleMeta(activeModule)
 
   // Show login if not authenticated (after all hooks)
   if (!auth) {
@@ -440,17 +399,14 @@ export default function RiseOSApp() {
             <Menu className="w-5 h-5" />
           </Button>
 
-          {/* Module indicator dot */}
-          <div className={cn(
-            'relative flex items-center justify-center w-7 h-7 rounded-lg shrink-0',
-            'bg-muted/50'
-          )}>
-            <ModuleIcon className="w-3.5 h-3.5 text-foreground/70" />
-            <span className={cn(
-              'absolute -bottom-0.5 -left-0.5 w-2 h-2 rounded-full',
-              moduleAccentMap[activeModule]
-            )} />
-          </div>
+          {/* Module identity — hue well with the Neo glyph */}
+          <RiseIcon
+            glyph={activeMeta.glyph}
+            hue={activeMeta.hue}
+            size="sm"
+            lift
+            key={activeModule}
+          />
 
           <div className="flex-1" />
 
@@ -509,12 +465,13 @@ export default function RiseOSApp() {
               key={activeModule}
               className="p-3 sm:p-4 md:p-6 pb-28 lg:pb-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
             >
-              {/* Module title with accent bar & date */}
+              {/* Module title with hue gradient bar & date */}
               <div className="mb-4 sm:mb-6 flex items-stretch gap-2 sm:gap-3 module-title-animate" key={`title-${activeModule}`}>
-                <div className={cn(
-                  'w-1 rounded-full shrink-0',
-                  moduleAccentMap[activeModule]
-                )} />
+                <div
+                  className="w-1.5 rounded-full shrink-0"
+                  style={{ background: HUE_GRADIENT[activeMeta.hue] }}
+                  aria-hidden="true"
+                />
                 <div className="flex flex-col justify-center">
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
                     {moduleNames[activeModule]}
@@ -692,12 +649,12 @@ export default function RiseOSApp() {
                   className="flex flex-col gap-2 mb-2 animate-[fadeSlideUp_0.15s_ease-out]"
                 >
                   {([
-                    { label: 'مهمة جديدة', icon: CheckSquare, module: 'tasks' as ModuleId, color: 'text-emerald-accent' },
-                    { label: 'عادة جديدة', icon: Flame, module: 'habits' as ModuleId, color: 'text-orange-500' },
-                    { label: 'يومية جديدة', icon: PenLine, module: 'journal' as ModuleId, color: 'text-forest' },
-                    { label: 'تسجيل صحي', icon: HeartPulse, module: 'health' as ModuleId, color: 'text-rose-500' },
+                    { label: 'مهمة جديدة', glyph: 'tasks', module: 'tasks' as ModuleId },
+                    { label: 'عادة جديدة', glyph: 'habits', module: 'habits' as ModuleId },
+                    { label: 'يومية جديدة', glyph: 'journal', module: 'journal' as ModuleId },
+                    { label: 'تسجيل صحي', glyph: 'health', module: 'health' as ModuleId },
                   ] as const).map((action) => {
-                    const ActionIcon = action.icon
+                    const meta = MODULE_ICONS[action.glyph]
                     return (
                       <button
                         key={action.label}
@@ -707,9 +664,7 @@ export default function RiseOSApp() {
                         }}
                         className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl glass border border-white/10 dark:border-white/5 shadow-lg hover:shadow-xl transition-shadow group"
                       >
-                        <div className="w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center">
-                          <ActionIcon className={cn('w-3.5 h-3.5', action.color)} />
-                        </div>
+                        <RiseIcon glyph={meta.glyph} hue={meta.hue} size="sm" className="!rounded-lg" />
                         <span className="text-sm font-medium text-foreground whitespace-nowrap">{action.label}</span>
                       </button>
                     )

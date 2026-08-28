@@ -10,18 +10,21 @@ export async function POST(req: NextRequest) {
     const userId = await requireAuth(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+    // Fail soft: the client cannot know the server's push config —
+    // a 400 here surfaced as a console network error. Report status
+    // via 200 payloads so the UI can react without error noise.
     if (!isSupabaseConfigured()) {
-      return NextResponse.json({ error: 'Push not configured' }, { status: 400 })
+      return NextResponse.json({ success: false, reason: 'not-configured' })
     }
 
-    const { subscription } = await req.json()
+    const { subscription } = await req.json().catch(() => ({}))
     if (!subscription) {
-      return NextResponse.json({ error: 'Subscription required' }, { status: 400 })
+      return NextResponse.json({ success: false, reason: 'subscription-required' })
     }
 
     const admin = await getSupabaseAdmin()
     if (!admin) {
-      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+      return NextResponse.json({ success: false, reason: 'server-misconfigured' })
     }
 
     // Store or update push subscription in user_settings
