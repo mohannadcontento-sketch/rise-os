@@ -85,3 +85,6 @@ supabase-schema.sql
 test-results/
 .tmp-*.mjs
 .env.audit-backup
+extracted/
+shots/
+scripts/
