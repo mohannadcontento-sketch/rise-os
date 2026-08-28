@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellRing, CheckCheck, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { RiseGlyphIcon } from './icons'
 import { apiGet, apiPut, apiDelete } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { cn } from '@/lib/utils'
@@ -25,14 +25,14 @@ interface Notification {
 // Type-based icon color mapping
 const typeColors: Record<string, string> = {
   success: 'bg-emerald-accent/15 text-emerald-accent',
-  achievement: 'bg-amber-500/15 text-amber-500',
-  info: 'bg-sky-500/15 text-sky-500',
-  warning: 'bg-orange-500/15 text-orange-500',
-  error: 'bg-red-500/15 text-red-500',
+  achievement: 'bg-violet-accent/15 text-violet-accent',
+  info: 'bg-glass/15 text-glass',
+  warning: 'bg-gold/15 text-gold',
+  error: 'bg-destructive/15 text-destructive',
   task: 'bg-emerald-accent/15 text-emerald-accent',
-  habit: 'bg-orange-500/15 text-orange-500',
-  focus: 'bg-violet-500/15 text-violet-500',
-  morning: 'bg-amber-500/15 text-amber-400',
+  habit: 'bg-gold/15 text-gold',
+  focus: 'bg-violet-accent/15 text-violet-accent',
+  morning: 'bg-gold/15 text-gold',
   level: 'bg-gold/15 text-gold',
 }
 
@@ -312,7 +312,7 @@ export function NotificationBell() {
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 shadow-md"
+            className="absolute -top-0.5 -start-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-white text-[10px] font-bold px-1 shadow-md"
           >
             {unreadCount > 99 ? '٩٩+' : unreadCount}
           </motion.span>
@@ -328,24 +328,24 @@ export function NotificationBell() {
             transition={{ duration: 0.15 }}
             className={cn(
               'absolute left-0 top-full mt-2 w-80 sm:w-96 z-50',
-              'glass rounded-xl border border-white/10 dark:border-white/5',
-              'shadow-xl shadow-black/10 dark:shadow-black/30',
+              'bg-popover text-popover-foreground rounded-2xl border border-border',
+              'shadow-lift',
               'overflow-hidden'
             )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 dark:border-white/5">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="flex items-center gap-2">
                 {unreadCount > 0 ? (
-                  <BellRing className="w-4 h-4 text-forest" />
+                  <BellRing className="w-4 h-4 text-gold" />
                 ) : (
-                  <Bell className="w-4 h-4 text-forest" />
+                  <Bell className="w-4 h-4 text-gold" />
                 )}
                 <h3 className="text-sm font-bold">الإشعارات</h3>
                 {unreadCount > 0 && (
-                  <Badge variant="destructive" className="text-[10px] h-5 px-1.5">
-                    {unreadCount} جديد
-                  </Badge>
+                  <span className="pill bg-rose-accent/15 text-rose-accent text-[10px]" dir="ltr">
+                    <span className="num">{unreadCount}</span> جديد
+                  </span>
                 )}
               </div>
               <div className="flex items-center gap-1">
@@ -353,10 +353,10 @@ export function NotificationBell() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-[11px] text-forest hover:text-forest hover:bg-forest/10"
+                    className="h-7 px-2 text-[11px] text-gold hover:text-gold hover:bg-gold/10"
                     onClick={markAllAsRead}
                   >
-                    <CheckCheck className="w-3 h-3 ml-1" />
+                    <CheckCheck className="w-3 h-3 me-1" />
                     تحديد الكل كمقروء
                   </Button>
                 )}
@@ -375,14 +375,14 @@ export function NotificationBell() {
             <ScrollArea className="max-h-96">
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                  <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
-                    <Bell className="w-5 h-5 text-muted-foreground/40" />
-                  </div>
+                  <span className="icon-well mb-3 h-14 w-14 bg-secondary text-muted-foreground/50">
+                    <RiseGlyphIcon glyph="bell" size={22} />
+                  </span>
                   <p className="text-sm text-muted-foreground">لا توجد إشعارات</p>
                   <p className="text-xs text-muted-foreground/60 mt-1">ستظهر هنا التنبيهات والأخبار</p>
                 </div>
               ) : (
-                <div className="divide-y divide-white/5 dark:divide-white/5">
+                <div className="divide-y divide-border">
                   <AnimatePresence mode="popLayout">
                     {notifications.map((notif) => (
                       <motion.div
@@ -394,8 +394,8 @@ export function NotificationBell() {
                         transition={{ duration: 0.2 }}
                         className={cn(
                           'group flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors',
-                          'hover:bg-white/5 dark:hover:bg-white/[0.03]',
-                          !notif.isRead && 'bg-emerald-accent/[0.03]'
+                          'hover:bg-secondary',
+                          !notif.isRead && 'bg-rose-accent/[0.04]'
                         )}
                         onClick={() => handleClickNotif(notif)}
                       >
@@ -414,7 +414,7 @@ export function NotificationBell() {
                               {notif.title}
                             </p>
                             {!notif.isRead && (
-                              <span className="w-2 h-2 rounded-full bg-emerald-accent shrink-0" />
+                              <span className="w-2 h-2 rounded-full bg-rose-accent shrink-0" />
                             )}
                           </div>
                           {notif.body && (
@@ -446,14 +446,14 @@ export function NotificationBell() {
 
             {/* Footer: Clear all */}
             {notifications.length > 0 && (
-              <div className="border-t border-white/10 dark:border-white/5 px-4 py-2">
+              <div className="border-t border-border px-4 py-2">
                 <Button
                   variant="ghost"
                   size="sm"
                   className="w-full h-8 text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/5"
                   onClick={clearAll}
                 >
-                  <Trash2 className="w-3 h-3 ml-1" />
+                  <Trash2 className="w-3 h-3 me-1" />
                   مسح جميع الإشعارات
                 </Button>
               </div>

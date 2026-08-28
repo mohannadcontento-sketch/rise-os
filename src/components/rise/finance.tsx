@@ -43,7 +43,6 @@ import {
   DollarSign,
   Eye,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -53,7 +52,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -63,6 +61,8 @@ import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { getToday } from '@/lib/rise-utils'
+import { RainbowCheckbox } from '@/components/rise/kit-v2'
+import { RiseIcon } from '@/components/rise/icons'
 
 /* ────────────── Types ────────────── */
 
@@ -82,20 +82,21 @@ interface FinanceData {
 
 /* ────────────── Constants ────────────── */
 
+// Finance identity = LIME (rule 5); expense = destructive, investment = glass, subscription = violet (rule 4 mapping)
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string; borderColor: string; dotColor: string; trendValue?: number }> = {
-  دخل: { label: 'الدخل', color: 'bg-emerald-accent/10 text-emerald-accent', icon: TrendingUp, amountColor: 'text-emerald-accent', borderColor: 'border-r-emerald-accent', dotColor: 'bg-emerald-accent', trendValue: 12 },
-  مصروف: { label: 'المصروفات', color: 'bg-orange-500/10 text-orange-500', icon: TrendingDown, amountColor: 'text-orange-500', borderColor: 'border-r-orange-500', dotColor: 'bg-orange-500', trendValue: -5 },
-  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest', borderColor: 'border-r-forest', dotColor: 'bg-forest', trendValue: 8 },
-  استثمار: { label: 'الاستثمار', color: 'bg-sky-500/10 text-sky-500', icon: Landmark, amountColor: 'text-sky-500', borderColor: 'border-r-sky-500', dotColor: 'bg-sky-500', trendValue: 15 },
-  اشتراك: { label: 'الاشتراكات', color: 'bg-purple-500/10 text-purple-500', icon: CreditCard, amountColor: 'text-purple-500', borderColor: 'border-r-purple-500', dotColor: 'bg-purple-500', trendValue: -3 },
+  دخل: { label: 'الدخل', color: 'bg-lime-deep/10 text-lime-deep dark:text-lime', icon: TrendingUp, amountColor: 'text-lime-deep dark:text-lime', borderColor: 'border-s-lime-deep', dotColor: 'bg-lime-deep', trendValue: 12 },
+  مصروف: { label: 'المصروفات', color: 'bg-destructive/10 text-destructive', icon: TrendingDown, amountColor: 'text-destructive', borderColor: 'border-s-destructive', dotColor: 'bg-destructive', trendValue: -5 },
+  ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest', borderColor: 'border-s-forest', dotColor: 'bg-forest', trendValue: 8 },
+  استثمار: { label: 'الاستثمار', color: 'bg-glass/10 text-glass', icon: Landmark, amountColor: 'text-glass', borderColor: 'border-s-glass', dotColor: 'bg-glass', trendValue: 15 },
+  اشتراك: { label: 'الاشتراكات', color: 'bg-violet-accent/10 text-violet-accent', icon: CreditCard, amountColor: 'text-violet-accent', borderColor: 'border-s-violet-accent', dotColor: 'bg-violet-accent', trendValue: -3 },
 }
 
 const TYPE_CARD_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; borderColor: string; activeBg: string }> = {
-  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-emerald-accent/5', borderColor: 'border-emerald-accent/30', activeBg: 'bg-emerald-accent/15 ring-emerald-accent/40' },
-  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-orange-500/5', borderColor: 'border-orange-500/30', activeBg: 'bg-orange-500/15 ring-orange-500/40' },
+  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-lime-deep/5', borderColor: 'border-lime-deep/30', activeBg: 'bg-lime-deep/15 ring-lime-deep/40' },
+  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-destructive/5', borderColor: 'border-destructive/30', activeBg: 'bg-destructive/15 ring-destructive/40' },
   ادخار: { label: 'الادخار', icon: PiggyBank, bg: 'bg-forest/5', borderColor: 'border-forest/30', activeBg: 'bg-forest/15 ring-forest/40' },
-  استثمار: { label: 'الاستثمار', icon: Landmark, bg: 'bg-sky-500/5', borderColor: 'border-sky-500/30', activeBg: 'bg-sky-500/15 ring-sky-500/40' },
-  اشتراك: { label: 'الاشتراكات', icon: CreditCard, bg: 'bg-purple-500/5', borderColor: 'border-purple-500/30', activeBg: 'bg-purple-500/15 ring-purple-500/40' },
+  استثمار: { label: 'الاستثمار', icon: Landmark, bg: 'bg-glass/5', borderColor: 'border-glass/30', activeBg: 'bg-glass/15 ring-glass/40' },
+  اشتراك: { label: 'الاشتراكات', icon: CreditCard, bg: 'bg-violet-accent/5', borderColor: 'border-violet-accent/30', activeBg: 'bg-violet-accent/15 ring-violet-accent/40' },
 }
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -360,8 +361,8 @@ export default function Finance() {
       const health = Math.max(0, Math.min(100, 100 - percentage))
       healthSum += health
 
-      let barColor = 'bg-emerald-accent'
-      if (percentage >= 100) barColor = 'bg-red-500'
+      let barColor = 'bg-lime-deep'
+      if (percentage >= 100) barColor = 'bg-destructive'
       else if (percentage >= 80) barColor = 'bg-gold'
 
       return { ...cat, spent, remaining, percentage, health, barColor }
@@ -386,9 +387,9 @@ export default function Finance() {
     const expenses = monthRecords.filter(r => r.type === 'مصروف').reduce((s, r) => s + r.amount, 0)
     const saved = monthRecords.filter(r => r.type === 'ادخار' || r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
     return [
-      { name: 'الدخل', قيمة: income, fill: 'oklch(0.55 0.14 163)' },
-      { name: 'المصروفات', قيمة: -expenses, fill: 'oklch(0.65 0.18 25)' },
-      { name: 'المدخرات', قيمة: saved, fill: 'oklch(0.35 0.10 160)' },
+      { name: 'الدخل', قيمة: income, fill: 'var(--color-lime-deep)' },
+      { name: 'المصروفات', قيمة: -expenses, fill: 'var(--color-destructive)' },
+      { name: 'المدخرات', قيمة: saved, fill: 'var(--color-forest)' },
     ]
   }, [data])
 
@@ -498,9 +499,7 @@ export default function Finance() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
-            <Wallet className="w-5 h-5 text-white" />
-          </div>
+          <RiseIcon glyph="finance" hue="lime" size="md" lift />
           <div>
             <h2 className="text-xl font-bold text-foreground">المالية</h2>
             <p className="text-xs text-muted-foreground">تتبع دخلك ومصروفاتك واستثماراتك</p>
@@ -510,16 +509,16 @@ export default function Finance() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-10 text-sm font-semibold">
-                <Plus className="w-4 h-4 ml-1" />
+              <Button className="bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg rounded-xl h-10 text-sm font-semibold">
+                <Plus className="w-4 h-4 me-1" />
                 إضافة سجل
               </Button>
             </motion.div>
           </DialogTrigger>
           <DialogContent className="max-w-md glass border-0">
             <DialogHeader>
-              <DialogTitle className="text-right flex items-center gap-2">
-                <Plus className="w-5 h-5 text-emerald-accent" />
+              <DialogTitle className="text-start flex items-center gap-2">
+                <Plus className="w-5 h-5 text-lime-deep dark:text-lime" />
                 سجل مالي جديد
               </DialogTitle>
             </DialogHeader>
@@ -548,7 +547,7 @@ export default function Finance() {
                         <Icon className={cn(
                           'w-4 h-4 transition-colors',
                           isActive ? cfg.activeBg.split(' ')[0].replace('bg-', 'text-').split('/')[0] : 'text-muted-foreground'
-                        )} style={isActive ? { color: `var(--color-${key === 'دخل' ? 'emerald-accent' : key === 'مصروف' ? 'orange-500' : key === 'ادخار' ? 'forest' : key === 'استثمار' ? 'sky-500' : 'purple-500'})` } : undefined} />
+                        )} style={isActive ? { color: `var(--color-${key === 'دخل' ? 'lime-deep' : key === 'مصروف' ? 'destructive' : key === 'ادخار' ? 'forest' : key === 'استثمار' ? 'glass-blue' : 'violet'})` } : undefined} />
                         <span className={cn(
                           'text-[10px] font-medium leading-tight text-center',
                           isActive ? 'text-foreground' : 'text-muted-foreground'
@@ -575,7 +574,7 @@ export default function Finance() {
                       className={cn(
                         'rounded-xl p-2.5 flex flex-col items-center gap-1 border transition-all duration-200',
                         form.category === cat
-                          ? 'border-emerald-accent/40 bg-emerald-accent/10 ring-1 ring-emerald-accent/30'
+                          ? 'border-lime-deep/40 bg-lime-deep/10 ring-1 ring-lime-deep/30'
                           : 'border-transparent bg-muted/30 hover:bg-muted/50'
                       )}
                     >
@@ -623,23 +622,22 @@ export default function Finance() {
               </div>
 
               {/* Recurring toggle */}
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                <RainbowCheckbox
                   checked={form.recurring}
-                  onChange={(e) => updateForm('recurring', e.target.checked)}
-                  className="w-4 h-4 rounded accent-emerald-accent"
+                  onChange={(v) => updateForm('recurring', v)}
+                  label="مكرر شهرياً"
+                  className="flex-1"
                 />
                 <Repeat className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-foreground">مكرر شهرياً</span>
-              </label>
+              </div>
 
               {/* Save */}
               <motion.div whileTap={{ scale: 0.98 }}>
                 <Button
                   onClick={handleSave}
                   disabled={saving}
-                  className="w-full bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 text-sm font-semibold"
+                  className="w-full bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg rounded-xl h-12 text-sm font-semibold"
                 >
                   {saving ? 'جاري الحفظ...' : 'حفظ السجل'}
                 </Button>
@@ -651,13 +649,14 @@ export default function Finance() {
 
       {/* ══════════ Budget Section ══════════ */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Target className="w-4 h-4 text-emerald-accent" />
-                الميزانية الشهرية
-              </CardTitle>
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span className="icon-well iw-lime w-8 h-8">
+                <Target className="w-4 h-4" />
+              </span>
+              الميزانية الشهرية
+            </h3>
               <div className="flex items-center gap-3">
                 {/* Budget Health Indicator */}
                 <div className="flex items-center gap-2">
@@ -671,7 +670,7 @@ export default function Finance() {
                         fill="none"
                         className={
                           budgetData.overallHealth >= 60 ? 'stroke-emerald-accent' :
-                          budgetData.overallHealth >= 30 ? 'stroke-gold' : 'stroke-red-500'
+                          budgetData.overallHealth >= 30 ? 'stroke-gold' : 'stroke-destructive'
                         }
                         strokeWidth="3"
                         strokeLinecap="round"
@@ -682,15 +681,15 @@ export default function Finance() {
                       />
                     </svg>
                     <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-foreground">
-                      {toArabicNum(budgetData.overallHealth)}
+                      <span className="num" dir="ltr">{toArabicNum(budgetData.overallHealth)}</span>
                     </span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-start">
                     <p className="text-[10px] text-muted-foreground">صحة الميزانية</p>
                     <p className={cn(
                       'text-xs font-bold',
                       budgetData.overallHealth >= 60 ? 'text-emerald-accent' :
-                      budgetData.overallHealth >= 30 ? 'text-gold' : 'text-red-500'
+                      budgetData.overallHealth >= 30 ? 'text-gold' : 'text-destructive'
                     )}>
                       {budgetData.overallHealth >= 60 ? 'ممتازة' : budgetData.overallHealth >= 30 ? 'متوسطة' : 'حرجة'}
                     </p>
@@ -698,8 +697,7 @@ export default function Finance() {
                 </div>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
+          <div>
             {/* Budget Impact Alert */}
             <AnimatePresence>
               {budgetImpact && (
@@ -710,7 +708,7 @@ export default function Finance() {
                   className={cn(
                     'mb-4 p-3 rounded-xl flex items-center gap-2 text-sm font-medium',
                     budgetImpact.over
-                      ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                      ? 'bg-destructive/10 text-destructive border border-destructive/20'
                       : 'bg-emerald-accent/10 text-emerald-accent border border-emerald-accent/20'
                   )}
                 >
@@ -733,13 +731,13 @@ export default function Finance() {
             <div className="text-center mb-5">
               <p className="text-[11px] text-muted-foreground mb-1">المتبقي من الميزانية هذا الشهر</p>
               <p className={cn(
-                'text-3xl font-black tracking-tight',
+                'text-3xl font-black tracking-tight num',
                 budgetData.totalRemaining > budgetData.totalBudget * 0.3
-                  ? 'text-emerald-accent'
+                  ? 'text-lime-deep dark:text-lime'
                   : budgetData.totalRemaining > 0
                     ? 'text-gold'
-                    : 'text-red-500'
-              )}>
+                    : 'text-destructive'
+              )} dir="ltr">
                 {toArabicNum(budgetData.totalRemaining)}
               </p>
               <p className="text-[10px] text-muted-foreground mt-1">
@@ -754,11 +752,11 @@ export default function Finance() {
                 return (
                   <div
                     key={item.name}
-                    className="rounded-xl bg-muted/20 p-3 space-y-2 group"
+                    className="rounded-2xl bg-muted/20 p-3 space-y-2 group"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center">
                           <Icon className="w-3.5 h-3.5 text-muted-foreground" />
                         </div>
                         <span className="text-sm font-medium text-foreground">{item.name}</span>
@@ -770,7 +768,7 @@ export default function Finance() {
                             type="number"
                             defaultValue={item.limit}
                             min={0}
-                            className="w-20 h-6 text-xs text-left rounded-md bg-muted border border-primary/20 px-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-accent/50"
+                            className="w-20 h-6 text-xs text-left rounded-md bg-card border border-border px-1.5 focus:outline-none focus:ring-1 focus:ring-lime-deep/50"
                             dir="ltr"
                             onBlur={(e) => {
                               const val = parseFloat(e.target.value) || 0
@@ -792,15 +790,15 @@ export default function Finance() {
                           <motion.button
                             whileTap={{ scale: 0.95 }}
                             onClick={() => setEditingBudget(item.name)}
-                            className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-1.5 py-0.5 rounded hover:bg-primary/5 transition-colors"
+                            className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-1.5 py-0.5 rounded hover:bg-secondary transition-colors"
                           >
-                            {toArabicNum(item.limit)}
+                            <span className="num" dir="ltr">{toArabicNum(item.limit)}</span>
                           </motion.button>
                         )}
                       </div>
                     </div>
                     {/* Progress bar */}
-                    <div className="relative h-2 rounded-full bg-primary/10 overflow-hidden">
+                    <div className="relative h-2 rounded-full bg-secondary overflow-hidden">
                       <motion.div
                         className={cn('h-full rounded-full', item.barColor)}
                         initial={{ width: 0 }}
@@ -809,9 +807,9 @@ export default function Finance() {
                       />
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>أنفقت {toArabicNum(Math.round(item.spent))}</span>
+                      <span>أنفقت <span className="num" dir="ltr">{toArabicNum(Math.round(item.spent))}</span></span>
                       <span className={cn(
-                        item.percentage >= 100 ? 'text-red-500 font-semibold' :
+                        item.percentage >= 100 ? 'text-destructive font-semibold' :
                         item.percentage >= 80 ? 'text-gold font-medium' : ''
                       )}>
                         {item.percentage >= 100 ? 'تجاوز!' : `${toArabicNum(Math.round(100 - item.percentage))}٪ متبقي`}
@@ -821,22 +819,22 @@ export default function Finance() {
                 )
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Summary Cards with colored left borders and trend arrows */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {/* Income */}
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 bottom-0 w-1 bg-emerald-accent rounded-r-2xl" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 start-0 bottom-0 w-1 bg-lime-deep rounded-s-2xl" />
+          <div className="p-4 flex flex-col items-center text-center gap-1 relative">
+            <div className="w-8 h-8 rounded-lg bg-lime-deep/10 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-lime-deep dark:text-lime" />
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-xl font-bold text-emerald-accent count-up">
-                {formatAmount(stats.income)}
+              <span className="text-xl font-bold text-lime-deep dark:text-lime count-up">
+                <span className="num" dir="ltr">{formatAmount(stats.income)}</span>
               </span>
               {stats.income > 0 && (
                 <motion.div
@@ -844,24 +842,24 @@ export default function Finance() {
                   animate={{ opacity: 1, y: 0 }}
                   className="flex items-center"
                 >
-                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                  <ArrowUpRight className="w-3.5 h-3.5 text-lime-deep dark:text-lime" />
                 </motion.div>
               )}
             </div>
             <span className="text-[11px] text-muted-foreground">الدخل</span>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Expenses */}
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 bottom-0 w-1 bg-orange-500 rounded-r-2xl" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
-              <TrendingDown className="w-4 h-4 text-orange-500" />
+        <div className="neo-card card-lift rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 start-0 bottom-0 w-1 bg-destructive rounded-s-2xl" />
+          <div className="p-4 flex flex-col items-center text-center gap-1 relative">
+            <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+              <TrendingDown className="w-4 h-4 text-destructive" />
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-xl font-bold text-orange-500 count-up">
-                {formatAmount(stats.expenses)}
+              <span className="text-xl font-bold text-destructive count-up">
+                <span className="num" dir="ltr">{formatAmount(stats.expenses)}</span>
               </span>
               {stats.expenses > 0 && (
                 <motion.div
@@ -869,24 +867,24 @@ export default function Finance() {
                   animate={{ opacity: 1, y: 0 }}
                   className="flex items-center"
                 >
-                  <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+                  <ArrowDownRight className="w-3.5 h-3.5 text-destructive" />
                 </motion.div>
               )}
             </div>
             <span className="text-[11px] text-muted-foreground">المصروفات</span>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Savings */}
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 bottom-0 w-1 bg-forest rounded-r-2xl" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
+        <div className="neo-card card-lift rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 start-0 bottom-0 w-1 bg-forest rounded-s-2xl" />
+          <div className="p-4 flex flex-col items-center text-center gap-1 relative">
             <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
               <PiggyBank className="w-4 h-4 text-forest" />
             </div>
             <div className="flex items-center gap-1">
               <span className="text-xl font-bold text-forest count-up">
-                {formatAmount(stats.savings)}
+                <span className="num" dir="ltr">{formatAmount(stats.savings)}</span>
               </span>
               {stats.savings > 0 && (
                 <motion.div
@@ -894,24 +892,24 @@ export default function Finance() {
                   animate={{ opacity: 1, y: 0 }}
                   className="flex items-center"
                 >
-                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                  <ArrowUpRight className="w-3.5 h-3.5 text-forest" />
                 </motion.div>
               )}
             </div>
             <span className="text-[11px] text-muted-foreground">الادخار</span>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Investment */}
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 bottom-0 w-1 bg-sky-500 rounded-r-2xl" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
-              <Landmark className="w-4 h-4 text-sky-500" />
+        <div className="neo-card card-lift rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 start-0 bottom-0 w-1 bg-glass rounded-s-2xl" />
+          <div className="p-4 flex flex-col items-center text-center gap-1 relative">
+            <div className="w-8 h-8 rounded-lg bg-glass/10 flex items-center justify-center">
+              <Landmark className="w-4 h-4 text-glass" />
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-xl font-bold text-sky-500 count-up">
-                {formatAmount(stats.investment)}
+              <span className="text-xl font-bold text-glass count-up">
+                <span className="num" dir="ltr">{formatAmount(stats.investment)}</span>
               </span>
               {stats.investment > 0 && (
                 <motion.div
@@ -919,38 +917,38 @@ export default function Finance() {
                   animate={{ opacity: 1, y: 0 }}
                   className="flex items-center"
                 >
-                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                  <ArrowUpRight className="w-3.5 h-3.5 text-glass" />
                 </motion.div>
               )}
             </div>
             <span className="text-[11px] text-muted-foreground">الاستثمار</span>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Savings Goal Tracker */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <PiggyBank className="w-4 h-4 text-forest" />
-                هدف الادخار
-              </CardTitle>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setSavingsGoal(prev => prev + 5000)}
-                className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <DollarSign className="w-3 h-3 inline ml-0.5" />
-                زيادة الهدف
-              </motion.button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="relative h-6 rounded-full bg-muted/50 overflow-hidden mb-2">
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span className="icon-well iw-forest w-8 h-8">
+                <PiggyBank className="w-4 h-4" />
+              </span>
+              هدف الادخار
+            </h3>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setSavingsGoal(prev => prev + 5000)}
+              className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-secondary transition-colors"
+            >
+              <DollarSign className="w-3 h-3 inline me-0.5" />
+              زيادة الهدف
+            </motion.button>
+          </div>
+          <div>
+            <div className="relative h-6 rounded-full bg-secondary overflow-hidden mb-2">
               <motion.div
-                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                className="h-full rounded-full bg-gradient-to-l from-lime-deep to-lime"
                 initial={{ width: 0 }}
                 animate={{ width: `${savingsProgress}%` }}
                 transition={{ duration: 1, ease: 'easeOut' }}
@@ -959,7 +957,7 @@ export default function Finance() {
                 <motion.div
                   initial={{ opacity: 0, scale: 0 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-sm"
+                  className="absolute end-2 top-1/2 -translate-y-1/2 text-sm"
                 >
                   🎉
                 </motion.div>
@@ -967,25 +965,25 @@ export default function Finance() {
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                <span className="font-bold text-forest">{formatAmount(totalSavings)}</span> من <span className="font-medium">{formatAmount(savingsGoal)}</span>
+                <span className="font-bold text-lime-deep dark:text-lime"><span className="num" dir="ltr">{formatAmount(totalSavings)}</span></span> من <span className="font-medium"><span className="num" dir="ltr">{formatAmount(savingsGoal)}</span></span>
               </span>
-              <span className="font-semibold text-forest">{Math.round(savingsProgress)}%</span>
+              <span className="font-semibold text-lime-deep dark:text-lime"><span className="num" dir="ltr">{Math.round(savingsProgress)}%</span></span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Charts Row */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Cash Flow Waterfall */}
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Eye className="w-4 h-4 text-emerald-accent" />
-              التدفق النقدي (هذا الشهر)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <h3 className="text-sm font-bold flex items-center gap-2 mb-3">
+            <span className="icon-well iw-lime w-8 h-8">
+              <Eye className="w-4 h-4" />
+            </span>
+            التدفق النقدي (هذا الشهر)
+          </h3>
+          <div>
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cashFlowData} barCategoryGap="10%">
@@ -1001,18 +999,18 @@ export default function Finance() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Expense Pie Chart with labels and legend */}
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold">توزيع المصروفات حسب الفئة</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <h3 className="text-sm font-bold mb-3">توزيع المصروفات حسب الفئة</h3>
+          <div>
             {expenseByCategory.length === 0 ? (
               <div className="text-center py-10">
-                <Receipt className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <span className="icon-well bg-secondary w-12 h-12 mx-auto mb-3">
+                  <Receipt className="w-5 h-5 text-muted-foreground" />
+                </span>
                 <p className="text-sm text-muted-foreground">لا توجد مصروفات بعد</p>
               </div>
             ) : (
@@ -1048,9 +1046,7 @@ export default function Finance() {
                   {/* Center label */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-xs text-muted-foreground">المجموع</span>
-                    <span className="text-sm font-bold text-foreground">
-                      {formatAmount(expenseByCategory.reduce((s, e) => s + e.قيمة, 0))}
-                    </span>
+                    <span className="text-sm font-bold text-foreground"><span className="num" dir="ltr">{formatAmount(expenseByCategory.reduce((s, e) => s + e.قيمة, 0))}</span></span>
                   </div>
                 </div>
                 {/* Legend with labels and percentages */}
@@ -1073,15 +1069,13 @@ export default function Finance() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Income vs Expenses Bar Chart */}
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold">الدخل مقابل المصروفات</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <h3 className="text-sm font-bold mb-3">الدخل مقابل المصروفات</h3>
+          <div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyChartData} barCategoryGap="15%">
@@ -1106,25 +1100,25 @@ export default function Finance() {
                       name,
                     ]}
                   />
-                  <Bar dataKey="دخل" fill="var(--color-emerald-accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
-                  <Bar dataKey="مصروفات" fill="var(--color-orange-500)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                  <Bar dataKey="دخل" fill="var(--color-lime-deep)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                  <Bar dataKey="مصروفات" fill="var(--color-destructive)" radius={[4, 4, 0, 0]} opacity={0.85} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Monthly Summary */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-gold" />
-              ملخص الشهر الحالي
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <h3 className="text-sm font-bold flex items-center gap-2 mb-4">
+            <span className="icon-well iw-amber w-8 h-8">
+              <Receipt className="w-4 h-4" />
+            </span>
+            ملخص الشهر الحالي
+          </h3>
+          <div>
             {(() => {
               const now = new Date()
               const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -1142,46 +1136,46 @@ export default function Finance() {
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">صافي الرصيد</p>
                     <div className="flex items-center justify-center gap-1">
-                      <span className={cn('text-lg font-bold', net >= 0 ? 'text-emerald-accent' : 'text-orange-500')}>
+                      <span className={cn('text-lg font-bold num', net >= 0 ? 'text-lime-deep dark:text-lime' : 'text-destructive')} dir="ltr">
                         {net >= 0 ? '+' : ''}{formatAmount(net)}
                       </span>
                       {net >= 0 ? (
-                        <ArrowUpRight className="w-3.5 h-3.5 text-emerald-accent" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-lime-deep dark:text-lime" />
                       ) : (
-                        <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />
+                        <ArrowDownRight className="w-3.5 h-3.5 text-destructive" />
                       )}
                     </div>
                   </div>
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">الاشتراكات</p>
-                    <span className="text-lg font-bold text-purple-500">{formatAmount(mSubscriptions)}</span>
+                    <span className="text-lg font-bold text-violet-accent"><span className="num" dir="ltr">{formatAmount(mSubscriptions)}</span></span>
                   </div>
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">نسبة الادخار</p>
-                    <span className="text-lg font-bold text-forest">{savingsRate}%</span>
+                    <span className="text-lg font-bold text-forest"><span className="num" dir="ltr">{savingsRate}%</span></span>
                   </div>
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">عدد العمليات</p>
-                    <span className="text-lg font-bold text-foreground">{monthRecords.length}</span>
+                    <span className="text-lg font-bold text-foreground"><span className="num" dir="ltr">{monthRecords.length}</span></span>
                   </div>
                 </div>
               )
             })()}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Transaction List with alternating rows, colored dots, smooth delete animation */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold">سجل المعاملات</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <h3 className="text-sm font-bold mb-4">سجل المعاملات</h3>
+          <div>
             <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {Object.keys(groupedRecords).length === 0 ? (
                 <div className="text-center py-10">
-                  <Wallet className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <span className="icon-well bg-secondary w-12 h-12 mx-auto mb-3">
+                    <Wallet className="w-5 h-5 text-muted-foreground" />
+                  </span>
                   <p className="text-sm text-muted-foreground">لا توجد معاملات بعد</p>
                   <p className="text-xs text-muted-foreground/60 mt-1">اضغط &quot;إضافة سجل&quot; للبدء</p>
                 </div>
@@ -1200,11 +1194,9 @@ export default function Finance() {
                           <Icon className="w-3.5 h-3.5" />
                         </div>
                         <span className="text-sm font-semibold text-foreground">{config.label}</span>
-                        <Badge variant="secondary" className="text-[10px] rounded-full bg-muted text-muted-foreground border-0">
-                          {records.length}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground mr-auto">
-                          {formatAmount(total)}
+                        <span className="pill pill-muted"><span className="num" dir="ltr">{records.length}</span></span>
+                        <span className="text-xs text-muted-foreground ms-auto">
+                          <span className="num" dir="ltr">{formatAmount(total)}</span>
                         </span>
                       </div>
 
@@ -1259,17 +1251,17 @@ export default function Finance() {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <div className="text-left">
+                                  <div className="text-start">
                                     <span className={cn(
-                                      'text-sm font-bold',
-                                      isPositive ? 'text-emerald-accent' : isSavings ? 'text-sky-500' : 'text-red-500'
-                                    )}>
+                                      'text-sm font-bold num',
+                                      isPositive ? 'text-lime-deep dark:text-lime' : isSavings ? 'text-glass' : 'text-destructive'
+                                    )} dir="ltr">
                                       {isPositive ? '+' : isSavings ? '+' : '-'}{formatAmount(record.amount)}
                                     </span>
                                     <div className="flex items-center gap-1 mt-0.5 justify-end">
-                                      {isPositive && <Badge className="text-[8px] px-1.5 py-0 h-3.5 bg-emerald-accent/10 text-emerald-accent border-0 rounded-full">دخل</Badge>}
-                                      {isSavings && <Badge className="text-[8px] px-1.5 py-0 h-3.5 bg-sky-500/10 text-sky-500 border-0 rounded-full">ادخار</Badge>}
-                                      {!isPositive && !isSavings && <Badge className="text-[8px] px-1.5 py-0 h-3.5 bg-red-500/10 text-red-500 border-0 rounded-full">مصروف</Badge>}
+                                      {isPositive && <span className="pill pill-lime">دخل</span>}
+                                      {isSavings && <span className="pill pill-success">ادخار</span>}
+                                      {!isPositive && !isSavings && <span className="pill bg-destructive/10 text-destructive">مصروف</span>}
                                     </div>
                                   </div>
                                   <motion.button
@@ -1302,8 +1294,8 @@ export default function Finance() {
                 })
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
     </motion.div>
   )

@@ -6,7 +6,6 @@ import {
   Flame,
   Plus,
   Zap,
-  Trophy,
   TrendingUp,
   CheckCircle2,
   Circle,
@@ -19,7 +18,6 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,6 +52,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 // useDataRefresh removed — causes toggle reverts (multiple data-changed events)
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
+import { RiseIcon } from '@/components/rise/icons'
 
 /* ────────────── Types ────────────── */
 
@@ -468,9 +467,7 @@ export function HabitsView() {
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg">
-              <Flame className="w-5 h-5 text-forest-dark" />
-            </div>
+            <RiseIcon glyph="habits" hue="lime" size="md" lift />
             <div>
               <h1 className="text-xl font-bold tracking-tight">تتبع العادات</h1>
               <p className="text-xs text-muted-foreground">
@@ -483,9 +480,9 @@ export function HabitsView() {
             <DialogTrigger asChild>
               <Button
                 size="sm"
-                className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+                className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-forest/20 dark:shadow-lime/20"
               >
-                <Plus className="w-4 h-4 ml-1.5" />
+                <Plus className="w-4 h-4 me-1.5" />
                 عادة جديدة
               </Button>
             </DialogTrigger>
@@ -582,12 +579,12 @@ export function HabitsView() {
                 <Button
                   onClick={handleAddHabit}
                   disabled={!formName.trim() || saving}
-                  className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+                  className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90"
                 >
                   {saving ? (
-                    <Loader2 className="w-4 h-4 animate-spin ml-1.5" />
+                    <Loader2 className="w-4 h-4 animate-spin me-1.5" />
                   ) : (
-                    <Plus className="w-4 h-4 ml-1.5" />
+                    <Plus className="w-4 h-4 me-1.5" />
                   )}
                   إضافة
                 </Button>
@@ -631,7 +628,7 @@ export function HabitsView() {
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-black text-gradient-forest">{stats.todayRate}</span>
+                  <span className="text-2xl font-black text-gradient-forest num" dir="ltr">{stats.todayRate}</span>
                   <span className="text-[9px] text-muted-foreground">٪</span>
                 </div>
               </div>
@@ -646,7 +643,8 @@ export function HabitsView() {
                     {stats.todayRate >= 80 ? 'A' : stats.todayRate >= 60 ? 'B' : stats.todayRate >= 40 ? 'C' : 'D'}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {logs.filter((l) => String(l.date).slice(0, 10) === todayStr && l.completed).length} من {habits.length} عادة مكتملة
+                    <span className="num" dir="ltr">{logs.filter((l) => String(l.date).slice(0, 10) === todayStr && l.completed).length}</span> من{' '}
+                    <span className="num" dir="ltr">{habits.length}</span> عادة مكتملة
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground/70 mt-2">
@@ -664,18 +662,20 @@ export function HabitsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.15 }}
           >
-            <div className="premium-card rounded-2xl p-4 relative overflow-hidden" style={{ border: '1px solid oklch(0.78 0.12 85 / 0.25)' }}>
-              <div className="absolute top-1/2 -translate-y-1/2 left-4 w-20 h-20 rounded-full bg-gold/[0.06] blur-2xl pointer-events-none" />
+            <div className="premium-card rounded-2xl p-4 relative overflow-hidden border border-gold/25">
+              <div className="absolute top-1/2 -translate-y-1/2 start-4 w-20 h-20 rounded-full bg-gold/[0.06] blur-2xl pointer-events-none" />
               <div className="relative flex items-center gap-3">
                 <motion.div
                   animate={{ scale: [1, 1.15, 1], rotate: [0, 8, -8, 0] }}
                   transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg shrink-0"
+                  className="shrink-0"
                 >
-                  <Trophy className="w-5 h-5 text-forest-dark" />
+                  <RiseIcon glyph="trophy" hue="amber" size="md" lift />
                 </motion.div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-gradient-gold">أفضل سلسلة: {stats.longestStreak} يوم</p>
+                  <p className="text-sm font-bold text-gradient-gold">
+                    أفضل سلسلة: <span className="num" dir="ltr">{stats.longestStreak}</span> يوم
+                  </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     {stats.longestStreak >= 30 ? '🏆 إنجاز خارق! أنت منضبط جداً' : stats.longestStreak >= 14 ? '🔥 سلسلة رائعة! واصل الحماس' : '💪 بداية جيدة! حافظ على الاستمرارية'}
                   </p>
@@ -700,7 +700,7 @@ export function HabitsView() {
                   <Target className="w-4.5 h-4.5 text-emerald-accent" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold">{stats.total}</p>
+                  <p className="text-xl font-bold num" dir="ltr">{stats.total}</p>
                   <p className="text-[10px] text-muted-foreground">إجمالي العادات</p>
                 </div>
               </CardContent>
@@ -719,7 +719,7 @@ export function HabitsView() {
                   <Zap className="w-4.5 h-4.5 text-gold" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold">{stats.todayRate}%</p>
+                  <p className="text-xl font-bold num" dir="ltr">{stats.todayRate}%</p>
                   <p className="text-[10px] text-muted-foreground">إنجاز اليوم</p>
                 </div>
               </CardContent>
@@ -738,7 +738,7 @@ export function HabitsView() {
                   <Flame className="w-4.5 h-4.5 text-forest" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold">{stats.currentStreak}</p>
+                  <p className="text-xl font-bold num" dir="ltr">{stats.currentStreak}</p>
                   <p className="text-[10px] text-muted-foreground">سلسلة حالية</p>
                 </div>
               </CardContent>
@@ -773,12 +773,11 @@ export function HabitsView() {
             <div className="flex items-center gap-2 mb-4">
               <CalendarDays className="w-4 h-4 text-emerald-accent" />
               <h2 className="text-sm font-semibold">عادات اليوم</h2>
-              <Badge
-                variant="secondary"
-                className="text-[10px] px-2 py-0 rounded-full bg-emerald-accent/10 text-emerald-accent border-0"
-              >
-                {logs.filter((l) => String(l.date).slice(0, 10) === todayStr && l.completed).length} / {habits.length}
-              </Badge>
+              <span className="pill pill-success">
+                <span className="num" dir="ltr">
+                  {logs.filter((l) => String(l.date).slice(0, 10) === todayStr && l.completed).length} / {habits.length}
+                </span>
+              </span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -843,7 +842,7 @@ export function HabitsView() {
                               e.stopPropagation()
                               deleteHabit(habit.id)
                             }}
-                            className="absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                            className="absolute top-2 end-2 w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
                             style={{ opacity: 0.4 }}
                             onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                             onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.4')}
@@ -852,7 +851,7 @@ export function HabitsView() {
                           </button>
 
                           {/* Reminder Bell */}
-                          <div className="absolute top-2 left-9">
+                          <div className="absolute top-2 end-9">
                             <ReminderBell habit={habit} onToggle={handleToggleReminder} />
                           </div>
 
@@ -943,7 +942,7 @@ export function HabitsView() {
                           <div className="flex items-center justify-center gap-1 mt-2">
                             <Sparkles className="w-3 h-3 text-gold" />
                             <span className="text-[10px] text-gold font-medium">
-                              +{habit.xpReward} خبرة
+                              <span className="num" dir="ltr">+{habit.xpReward}</span> خبرة
                             </span>
                           </div>
                         </CardContent>
@@ -965,7 +964,7 @@ export function HabitsView() {
               <span className="text-[10px] text-muted-foreground">آخر ٣٠ يوم</span>
             </div>
 
-            <div className="space-y-4 max-h-96 overflow-y-auto pl-1">
+            <div className="space-y-4 max-h-96 overflow-y-auto ps-1">
               {habits.map((habit, hIndex) => (
                 <motion.div
                   key={habit.id}
@@ -985,7 +984,7 @@ export function HabitsView() {
                             <span className="text-xs">🔥</span>
                           )}
                           <Flame className="w-3 h-3" style={{ color: habit.color }} />
-                          <span className="text-[10px] font-medium" style={{ color: habit.color }}>
+                          <span className="text-[10px] font-medium num" dir="ltr" style={{ color: habit.color }}>
                             {calcStreak(logs, habit.id).current}
                           </span>
                         </div>
@@ -995,11 +994,11 @@ export function HabitsView() {
                       <div className="overflow-x-auto">
                         <div className="flex gap-0.5 min-w-fit">
                           {/* Day labels */}
-                          <div className="flex flex-col gap-0.5 ml-1.5">
+                          <div className="flex flex-col gap-0.5 me-1.5">
                             {dayLabels.map((label, di) => (
                               <div
                                 key={label}
-                                className="w-7 text-[9px] text-muted-foreground/50 flex items-center justify-end pr-1"
+                                className="w-7 text-[9px] text-muted-foreground/50 flex items-center justify-end pe-1"
                                 style={{ height: '14px' }}
                               >
                                 {di % 2 === 0 ? label : ''}
@@ -1098,9 +1097,7 @@ export function HabitsView() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex flex-col items-center justify-center py-20 text-center"
           >
-            <div className="w-20 h-20 rounded-full bg-gold/10 flex items-center justify-center mb-6">
-              <Flame className="w-10 h-10 text-gold" />
-            </div>
+            <RiseIcon glyph="habits" hue="lime" size="lg" lift className="mb-6" />
             <h3 className="text-lg font-semibold mb-2">ابدأ ببناء عاداتك</h3>
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
               النجاح ليس حدثاً عابراً، بل هو نتيجة عادات يومية متكررة. أضف عادتك الأولى وابدأ
@@ -1108,9 +1105,9 @@ export function HabitsView() {
             </p>
             <Button
               onClick={() => setAddOpen(true)}
-              className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/20"
+              className="mt-6 rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-forest/20 dark:shadow-lime/20"
             >
-              <Plus className="w-4 h-4 ml-1.5" />
+              <Plus className="w-4 h-4 me-1.5" />
               أضف أول عادة
             </Button>
           </motion.div>

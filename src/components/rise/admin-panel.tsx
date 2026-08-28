@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 
 import {
   Shield,
-  ShieldCheck,
   Users,
   Database,
   Key,
@@ -32,10 +31,8 @@ import {
   Zap,
   CheckSquare,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -67,6 +64,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRiseStore } from '@/store/app-store'
+import { RiseIcon } from './icons'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
@@ -187,7 +185,7 @@ function StatsSkeleton() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="p-4 rounded-xl bg-muted/30 border border-border/50">
+        <div key={i} className="neo-card p-4">
           <Skeleton className="h-5 w-5 mb-2 rounded" />
           <Skeleton className="h-7 w-16 mb-1" />
           <Skeleton className="h-3 w-24" />
@@ -340,9 +338,9 @@ function UserManagementTab() {
   const SortIcon = ({ field }: { field: typeof sortField }) => {
     if (sortField !== field) return <ChevronDown className="w-3 h-3 opacity-30" />
     return sortDir === 'desc' ? (
-      <ChevronDown className="w-3 h-3 text-emerald-accent" />
+      <ChevronDown className="w-3 h-3 text-rose-accent" />
     ) : (
-      <ChevronUp className="w-3 h-3 text-emerald-accent" />
+      <ChevronUp className="w-3 h-3 text-rose-accent" />
     )
   }
 
@@ -350,30 +348,30 @@ function UserManagementTab() {
     <div className="space-y-4">
       {/* Search */}
       <div className="relative">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="بحث بالاسم أو البريد..."
-          className="pr-9 h-10 text-sm glass border-border/50"
+          className="ps-9 h-10 text-sm bg-card border-border text-foreground"
           dir="rtl"
         />
       </div>
 
       {/* Summary badges */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent gap-1.5">
+        <span className="pill bg-rose-accent/10 text-rose-accent gap-1.5">
           <Users className="w-3 h-3" />
-          {toArabicNum(users.length)} مستخدم
-        </Badge>
-        <Badge variant="secondary" className="bg-gold/10 text-gold gap-1.5">
+          <span className="num" dir="ltr">{toArabicNum(users.length)}</span> مستخدم
+        </span>
+        <span className="pill bg-gold/10 text-gold gap-1.5">
           <Brain className="w-3 h-3" />
-          {toArabicNum(users.reduce((a, u) => a + (u.aiUsed || 0), 0))} AI طلب
-        </Badge>
-        <Badge variant="secondary" className="bg-forest/10 text-forest gap-1.5">
+          <span className="num" dir="ltr">{toArabicNum(users.reduce((a, u) => a + (u.aiUsed || 0), 0))}</span> AI طلب
+        </span>
+        <span className="pill bg-forest/10 text-forest gap-1.5">
           <HardDrive className="w-3 h-3" />
-          {formatBytes(users.reduce((a, u) => a + (u.storageUsed || 0), 0))} تخزين
-        </Badge>
+          <span className="num" dir="ltr">{formatBytes(users.reduce((a, u) => a + (u.storageUsed || 0), 0))}</span> تخزين
+        </span>
       </div>
 
       {/* Users Table */}
@@ -381,30 +379,32 @@ function UserManagementTab() {
         <TableSkeleton />
       ) : filteredUsers.length === 0 ? (
         <div className="text-center py-16">
-          <Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/20" />
+          <span className="icon-well mx-auto mb-3 h-14 w-14 bg-secondary text-muted-foreground/50">
+            <Users className="w-6 h-6" />
+          </span>
           <p className="text-sm text-muted-foreground">
             {searchQuery ? 'لا توجد نتائج' : 'لا يوجد مستخدمين بعد'}
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border/50 overflow-hidden glass">
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
             <Table>
               <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                 <TableRow>
-                  <TableHead className="text-right pr-3">المستخدم</TableHead>
-                  <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort('name')}>
+                  <TableHead className="text-start ps-3">المستخدم</TableHead>
+                  <TableHead className="text-start cursor-pointer select-none" onClick={() => handleSort('name')}>
                     <span className="inline-flex items-center gap-1">الاسم <SortIcon field="name" /></span>
                   </TableHead>
-                  <TableHead className="text-right hidden md:table-cell">المستوى</TableHead>
-                  <TableHead className="text-right hidden lg:table-cell">الخبرة</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell cursor-pointer select-none" onClick={() => handleSort('aiUsed')}>
+                  <TableHead className="text-start hidden md:table-cell">المستوى</TableHead>
+                  <TableHead className="text-start hidden lg:table-cell">الخبرة</TableHead>
+                  <TableHead className="text-start hidden sm:table-cell cursor-pointer select-none" onClick={() => handleSort('aiUsed')}>
                     <span className="inline-flex items-center gap-1">AI <SortIcon field="aiUsed" /></span>
                   </TableHead>
-                  <TableHead className="text-right hidden lg:table-cell cursor-pointer select-none" onClick={() => handleSort('storageUsed')}>
+                  <TableHead className="text-start hidden lg:table-cell cursor-pointer select-none" onClick={() => handleSort('storageUsed')}>
                     <span className="inline-flex items-center gap-1">التخزين <SortIcon field="storageUsed" /></span>
                   </TableHead>
-                  <TableHead className="text-right hidden md:table-cell cursor-pointer select-none" onClick={() => handleSort('createdAt')}>
+                  <TableHead className="text-start hidden md:table-cell cursor-pointer select-none" onClick={() => handleSort('createdAt')}>
                     <span className="inline-flex items-center gap-1">الانضمام <SortIcon field="createdAt" /></span>
                   </TableHead>
                   <TableHead className="text-center w-[100px]">إجراءات</TableHead>
@@ -414,39 +414,39 @@ function UserManagementTab() {
                 {filteredUsers.map((user) => (
                   <TableRow
                     key={user.id}
-                    className="group hover:bg-emerald-accent/[0.03] cursor-pointer"
+                    className="group hover:bg-rose-accent/[0.04] cursor-pointer"
                     onClick={() => setSelectedUser(user)}
                   >
-                    <TableCell className="pr-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-white">
+                    <TableCell className="ps-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-accent to-forest flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-paper-soft">
                           {String(user?.name || user?.email || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-start">
                       <div>
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-medium truncate max-w-[140px]">{user.name || 'مستخدم'}</p>
                           {user.isAdmin && (
-                            <Badge className="bg-gold/20 text-gold text-[9px] px-1.5 py-0 shrink-0">
+                            <span className="pill bg-gold/15 text-gold text-[9px] shrink-0">
                               أدمن
-                            </Badge>
+                            </span>
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground truncate max-w-[160px]">{user.email || '—'}</p>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <Badge variant="outline" className="text-[11px] font-mono">
-                        {toArabicNum(user.level || 1)}
-                      </Badge>
+                      <span className="pill pill-muted text-[11px]" dir="ltr">
+                        <span className="num">{toArabicNum(user.level || 1)}</span>
+                      </span>
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs font-mono">
-                      {toArabicNum(user.xp || 0)} XP
+                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">
+                      <span className="num" dir="ltr">{toArabicNum(user.xp || 0)} XP</span>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <div className="text-xs">
+                      <div className="text-xs num" dir="ltr">
                         <span className="font-medium">{user.aiUsed || 0}</span>
                         <span className="text-muted-foreground"> / {user.aiLimit || 100}</span>
                       </div>
@@ -499,8 +499,8 @@ function UserManagementTab() {
         <DialogContent className="sm:max-w-lg" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
-                <span className="text-sm font-bold text-white">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-accent to-forest flex items-center justify-center">
+                <span className="text-sm font-bold text-paper-soft">
                   {String(selectedUser?.name || '?').charAt(0).toUpperCase()}
                 </span>
               </div>
@@ -513,20 +513,20 @@ function UserManagementTab() {
           {selectedUser && (
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-xl bg-muted/30 text-center">
-                  <p className="text-lg font-bold">{toArabicNum(selectedUser.level || 1)}</p>
+                <div className="neo-card p-3 text-center">
+                  <p className="text-lg font-bold num" dir="ltr">{toArabicNum(selectedUser.level || 1)}</p>
                   <p className="text-[10px] text-muted-foreground">المستوى</p>
                 </div>
-                <div className="p-3 rounded-xl bg-muted/30 text-center">
-                  <p className="text-lg font-bold">{toArabicNum(selectedUser.xp || 0)}</p>
+                <div className="neo-card p-3 text-center">
+                  <p className="text-lg font-bold num" dir="ltr">{toArabicNum(selectedUser.xp || 0)}</p>
                   <p className="text-[10px] text-muted-foreground">الخبرة</p>
                 </div>
-                <div className="p-3 rounded-xl bg-muted/30 text-center">
-                  <p className="text-lg font-bold">{toArabicNum(selectedUser.streak || 0)}</p>
+                <div className="neo-card p-3 text-center">
+                  <p className="text-lg font-bold num" dir="ltr">{toArabicNum(selectedUser.streak || 0)}</p>
                   <p className="text-[10px] text-muted-foreground">السلسلة</p>
                 </div>
-                <div className="p-3 rounded-xl bg-muted/30 text-center">
-                  <p className="text-lg font-bold">{selectedUser.aiUsed || 0} / {selectedUser.aiLimit || 100}</p>
+                <div className="neo-card p-3 text-center">
+                  <p className="text-lg font-bold num" dir="ltr">{selectedUser.aiUsed || 0} / {selectedUser.aiLimit || 100}</p>
                   <p className="text-[10px] text-muted-foreground">AI استخدام</p>
                 </div>
               </div>
@@ -542,24 +542,24 @@ function UserManagementTab() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">التخزين</span>
-                  <span>{formatBytes(selectedUser.storageUsed)} / {formatBytes(selectedUser.storageLimit)}</span>
+                  <span className="num" dir="ltr">{formatBytes(selectedUser.storageUsed)} / {formatBytes(selectedUser.storageLimit)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">الصلاحية</span>
-                  <Badge className={selectedUser.isAdmin ? 'bg-gold/20 text-gold' : 'bg-muted text-muted-foreground'}>
+                  <span className={cn('pill', selectedUser.isAdmin ? 'bg-gold/15 text-gold' : 'pill-muted')}>
                     {selectedUser.isAdmin ? 'أدمن' : 'مستخدم'}
-                  </Badge>
+                  </span>
                 </div>
               </div>
             </div>
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">إغلاق</Button>
+              <Button variant="outline" className="border-border bg-card hover:bg-secondary">إغلاق</Button>
             </DialogClose>
             <Button
               variant="outline"
-              className="gap-1.5"
+              className="gap-1.5 border-border bg-card hover:bg-secondary"
               onClick={() => {
                 if (selectedUser) {
                   setSelectedUser(null)
@@ -579,7 +579,7 @@ function UserManagementTab() {
         <DialogContent className="sm:max-w-sm" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Pencil className="w-4 h-4 text-emerald-accent" />
+              <Pencil className="w-4 h-4 text-rose-accent" />
               تعديل صلاحيات المستخدم
             </DialogTitle>
           </DialogHeader>
@@ -639,8 +639,11 @@ function UserManagementTab() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEditingUser(null)}>إلغاء</Button>
-            <Button className="bg-emerald-accent hover:bg-emerald-accent/90 gap-1.5" onClick={saveEdit}>
+            <Button variant="outline" className="border-border bg-card hover:bg-secondary" onClick={() => setEditingUser(null)}>إلغاء</Button>
+            <Button
+              className="gap-1.5 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90"
+              onClick={saveEdit}
+            >
               <Check className="w-3.5 h-3.5" />
               حفظ
             </Button>
@@ -661,7 +664,7 @@ function UserManagementTab() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteConfirmUser && (
-            <div className="p-3 rounded-xl bg-muted/30 space-y-1">
+            <div className="p-3 rounded-xl border border-border bg-card space-y-1">
               <p className="text-sm font-medium">{deleteConfirmUser.name}</p>
               <p className="text-xs text-muted-foreground">{deleteConfirmUser.email}</p>
             </div>
@@ -713,10 +716,12 @@ function SystemStatsTab() {
   if (!stats) {
     return (
       <div className="text-center py-16">
-        <BarChart3 className="w-12 h-12 mx-auto mb-3 text-muted-foreground/20" />
+        <span className="icon-well mx-auto mb-3 h-14 w-14 bg-secondary text-muted-foreground/50">
+          <BarChart3 className="w-6 h-6" />
+        </span>
         <p className="text-sm text-muted-foreground">فشل تحميل الإحصائيات</p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={loadStats}>
-          <RefreshCw className="w-3.5 h-3.5 ml-1.5" />
+        <Button variant="outline" size="sm" className="mt-3 border-border bg-card hover:bg-secondary" onClick={loadStats}>
+          <RefreshCw className="w-3.5 h-3.5 me-1.5" />
           إعادة المحاولة
         </Button>
       </div>
@@ -741,7 +746,7 @@ function SystemStatsTab() {
           label="المهام"
         />
         <StatCard
-          icon={<Flame className="w-5 h-5 text-orange-500" />}
+          icon={<Flame className="w-5 h-5 text-gold" />}
           value={toArabicNum(stats.totalHabits)}
           label="العادات"
         />
@@ -754,7 +759,7 @@ function SystemStatsTab() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          icon={<Target className="w-5 h-5 text-rose-500" />}
+          icon={<Target className="w-5 h-5 text-rose-accent" />}
           value={toArabicNum(stats.totalGoals)}
           label="الأهداف"
         />
@@ -777,14 +782,14 @@ function SystemStatsTab() {
       </div>
 
       {/* User Growth Chart (div-based bar chart) */}
-      <Card className="glass border-border/50 overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-accent" />
+      <div className="neo-card card-lift overflow-hidden">
+        <div className="p-5 pb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-rose-accent" />
             نمو المستخدمين
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
+        </div>
+        <div className="px-5 pb-5">
           {stats.userGrowth && stats.userGrowth.length > 0 ? (
             <div className="flex items-end gap-1 h-40 pt-2">
               {stats.userGrowth.map((point, i) => (
@@ -792,16 +797,16 @@ function SystemStatsTab() {
                   key={i}
                   className="flex-1 flex flex-col items-center gap-1 group"
                 >
-                  <span className="text-[9px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity font-mono">
+                  <span className="text-[9px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity num" dir="ltr">
                     {point.count}
                   </span>
                   <div
-                    className="w-full rounded-t-md bg-gradient-to-t from-emerald-accent to-emerald-accent/60 min-h-[4px] transition-all duration-500 group-hover:from-gold group-hover:to-gold/60"
+                    className="w-full rounded-t-md bg-gradient-to-t from-rose-accent to-rose-accent/60 min-h-[4px] transition-all duration-500 group-hover:from-gold group-hover:to-gold/60"
                     style={{
                       height: `${Math.max((point.count / maxGrowthCount) * 120, 4)}px`,
                     }}
                   />
-                  <span className="text-[8px] text-muted-foreground font-mono" dir="ltr">
+                  <span className="text-[8px] text-muted-foreground num" dir="ltr">
                     {point.date.slice(5)}
                   </span>
                 </div>
@@ -810,51 +815,53 @@ function SystemStatsTab() {
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">لا توجد بيانات نمو</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Table Row Counts */}
       {stats.tableCounts && Object.keys(stats.tableCounts).length > 0 && (
-        <Card className="glass border-border/50 overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
+        <div className="neo-card card-lift overflow-hidden">
+          <div className="p-5 pb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
               <Database className="w-4 h-4 text-forest" />
               عدد السجلات في الجداول
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {Object.entries(stats.tableCounts).map(([table, count]) => (
                 <div
                   key={table}
                   className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/30"
                 >
-                  <span className="text-xs text-muted-foreground truncate ml-2 font-mono" dir="ltr">{table}</span>
-                  <Badge variant="secondary" className="text-[11px] font-mono shrink-0">{toArabicNum(count)}</Badge>
+                  <span className="text-xs text-muted-foreground truncate me-2 font-mono" dir="ltr">{table}</span>
+                  <span className="pill pill-muted text-[11px] shrink-0" dir="ltr">
+                    <span className="num">{toArabicNum(count)}</span>
+                  </span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Recent Activity */}
       {stats.recentActivity && stats.recentActivity.length > 0 && (
-        <Card className="glass border-border/50 overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
+        <div className="neo-card card-lift overflow-hidden">
+          <div className="p-5 pb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
               <Activity className="w-4 h-4 text-gold" />
               النشاط الأخير
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
               {stats.recentActivity.map((activity, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
+                  className="flex items-center gap-3 p-2.5 rounded-xl bg-secondary/40 hover:bg-secondary transition-colors"
                 >
-                  <div className="w-2 h-2 rounded-full bg-emerald-accent shrink-0" />
+                  <div className="w-2 h-2 rounded-full bg-rose-accent shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-foreground truncate">{activity.action}</p>
                     <p className="text-[10px] text-muted-foreground">{activity.user}</p>
@@ -863,12 +870,12 @@ function SystemStatsTab() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       <div className="flex justify-center">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={loadStats}>
+        <Button variant="outline" size="sm" className="gap-1.5 border-border bg-card hover:bg-secondary" onClick={loadStats}>
           <RefreshCw className="w-3.5 h-3.5" />
           تحديث الإحصائيات
         </Button>
@@ -889,11 +896,11 @@ function StatCard({
   sub?: string
 }) {
   return (
-    <div className="p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-emerald-accent/30 transition-colors">
+    <div className="neo-card card-lift p-4 hover:border-rose-accent/30 transition-colors">
       <div className="mb-2">{icon}</div>
-      <p className="text-xl font-bold tracking-tight">{value}</p>
+      <p className="text-xl font-bold tracking-tight num" dir="ltr">{value}</p>
       <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
-      {sub && <p className="text-[10px] text-emerald-accent mt-0.5">{sub}</p>}
+      {sub && <p className="text-[10px] text-rose-accent mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -969,14 +976,14 @@ function DatabaseTab() {
     <div className="space-y-4">
       {/* Quick actions */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={loadTableCounts}>
+        <Button variant="outline" size="sm" className="gap-1.5 text-xs border-border bg-card hover:bg-secondary" onClick={loadTableCounts}>
           <Database className="w-3 h-3" />
           عدد سجلات الجداول
         </Button>
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs"
+          className="gap-1.5 text-xs border-border bg-card hover:bg-secondary"
           onClick={() => {
             setQuery('SELECT * FROM "User" ORDER BY "createdAt" DESC LIMIT 10;')
           }}
@@ -987,22 +994,22 @@ function DatabaseTab() {
       </div>
 
       {/* Query Editor */}
-      <Card className="glass border-border/50 overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+      <div className="neo-card card-lift overflow-hidden">
+        <div className="p-5 pb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
             <Database className="w-4 h-4 text-forest" />
             محرر الاستعلامات
-            <Badge variant="destructive" className="text-[9px] px-1.5 py-0">
+            <span className="pill bg-destructive/10 text-destructive text-[9px]">
               ⚡ استعلام مباشر
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+            </span>
+          </h3>
+        </div>
+        <div className="px-5 pb-5 space-y-3">
           <Textarea
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="اكتب استعلام SQL هنا..."
-            className="font-mono text-sm min-h-[120px] bg-background/50"
+            className="font-mono text-sm min-h-[120px] bg-surface-2 border-border text-foreground"
             dir="ltr"
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -1017,7 +1024,7 @@ function DatabaseTab() {
             </p>
             <Button
               size="sm"
-              className="gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90"
+              className="gap-1.5 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90"
               onClick={() => executeQuery(query)}
               disabled={loading || !query.trim()}
             >
@@ -1025,8 +1032,8 @@ function DatabaseTab() {
               تنفيذ
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Error */}
       {error && (
@@ -1038,29 +1045,33 @@ function DatabaseTab() {
 
       {/* Results Table */}
       {results && (
-        <Card className="glass border-border/50 overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Eye className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift overflow-hidden">
+          <div className="p-5 pb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Eye className="w-4 h-4 text-rose-accent" />
               النتائج
-              <Badge variant="secondary" className="text-[10px] font-mono">{toArabicNum(results.rows.length)} صف</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+              <span className="pill pill-muted text-[10px]" dir="ltr">
+                <span className="num">{toArabicNum(results.rows.length)}</span> صف
+              </span>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="overflow-x-auto max-h-96 overflow-y-auto custom-scrollbar rounded-lg border border-border/30">
               <Table>
                 <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                   <TableRow>
-                    <TableHead className="text-right pr-3 w-[40px] text-xs">#</TableHead>
+                    <TableHead className="text-start ps-3 w-[40px] text-xs">#</TableHead>
                     {results.columns.map((col) => (
-                      <TableHead key={col} className="text-right text-xs font-mono" dir="ltr">{col}</TableHead>
+                      <TableHead key={col} className="text-start text-xs font-mono" dir="ltr">{col}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {results.rows.map((row, i) => (
                     <TableRow key={i}>
-                      <TableCell className="pr-3 text-xs text-muted-foreground">{toArabicNum(i + 1)}</TableCell>
+                      <TableCell className="ps-3 text-xs text-muted-foreground" dir="ltr">
+                        <span className="num">{toArabicNum(i + 1)}</span>
+                      </TableCell>
                       {results.columns.map((col) => (
                         <TableCell key={col} className="text-xs font-mono max-w-[200px] truncate" dir="ltr">
                           {row[col] === null ? (
@@ -1077,31 +1088,31 @@ function DatabaseTab() {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Query History */}
       {queryHistory.length > 0 && (
-        <Card className="glass border-border/50 overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">سجل الاستعلامات</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift overflow-hidden">
+          <div className="p-5 pb-3">
+            <h3 className="text-sm font-semibold">سجل الاستعلامات</h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
               {queryHistory.map((q, i) => (
                 <button
                   key={i}
                   onClick={() => setQuery(q)}
-                  className="w-full text-right p-2 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors text-xs font-mono text-muted-foreground hover:text-foreground truncate"
+                  className="w-full text-start p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors text-xs font-mono text-muted-foreground hover:text-foreground truncate"
                   dir="ltr"
                 >
                   {q}
                 </button>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Confirm Dialog for Dangerous Queries */}
@@ -1203,20 +1214,20 @@ function ApiKeysTab() {
     <div className="space-y-4">
       {/* Summary */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge variant="secondary" className="bg-gold/10 text-gold gap-1.5">
+        <span className="pill bg-gold/10 text-gold gap-1.5">
           <Key className="w-3 h-3" />
-          {toArabicNum(keys.length)} مفتاح API
-        </Badge>
+          <span className="num" dir="ltr">{toArabicNum(keys.length)}</span> مفتاح API
+        </span>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="بحث بالمستخدم أو اسم المفتاح..."
-          className="pr-9 h-10 text-sm glass border-border/50"
+          className="ps-9 h-10 text-sm bg-card border-border text-foreground"
           dir="rtl"
         />
       </div>
@@ -1226,29 +1237,31 @@ function ApiKeysTab() {
         <TableSkeleton />
       ) : filteredKeys.length === 0 ? (
         <div className="text-center py-16">
-          <Key className="w-12 h-12 mx-auto mb-3 text-muted-foreground/20" />
+          <span className="icon-well mx-auto mb-3 h-14 w-14 bg-secondary text-muted-foreground/50">
+            <Key className="w-6 h-6" />
+          </span>
           <p className="text-sm text-muted-foreground">
             {searchQuery ? 'لا توجد نتائج' : 'لا توجد مفاتيح API'}
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border/50 overflow-hidden glass">
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
             <Table>
               <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
                 <TableRow>
-                  <TableHead className="text-right pr-3">المفتاح</TableHead>
-                  <TableHead className="text-right">المستخدم</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">البريد</TableHead>
-                  <TableHead className="text-right hidden md:table-cell">آخر استخدام</TableHead>
-                  <TableHead className="text-right hidden lg:table-cell">الاستخدام</TableHead>
+                  <TableHead className="text-start ps-3">المفتاح</TableHead>
+                  <TableHead className="text-start">المستخدم</TableHead>
+                  <TableHead className="text-start hidden sm:table-cell">البريد</TableHead>
+                  <TableHead className="text-start hidden md:table-cell">آخر استخدام</TableHead>
+                  <TableHead className="text-start hidden lg:table-cell">الاستخدام</TableHead>
                   <TableHead className="text-center w-[80px]">إجراءات</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredKeys.map((key) => (
                   <TableRow key={key.id} className="group">
-                    <TableCell className="pr-3">
+                    <TableCell className="ps-3">
                       <div>
                         <p className="text-sm font-medium">{key.name}</p>
                         <div className="flex items-center gap-1 mt-0.5">
@@ -1265,7 +1278,7 @@ function ApiKeysTab() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-start">
                       <p className="text-sm">{key.userName || '—'}</p>
                       <p className="text-[10px] text-muted-foreground">{formatDate(key.createdAt)}</p>
                     </TableCell>
@@ -1276,9 +1289,9 @@ function ApiKeysTab() {
                       {timeAgo(key.lastUsed)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <Badge variant="secondary" className="text-[11px] font-mono">
-                        {toArabicNum(key.usageCount)}
-                      </Badge>
+                      <span className="pill pill-muted text-[11px]" dir="ltr">
+                        <span className="num">{toArabicNum(key.usageCount)}</span>
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       <Button
@@ -1313,7 +1326,7 @@ function ApiKeysTab() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {revokeKey && (
-            <div className="p-3 rounded-xl bg-muted/30 space-y-1">
+            <div className="p-3 rounded-xl border border-border bg-card space-y-1">
               <p className="text-sm font-medium">{revokeKey.name}</p>
               <p className="text-xs text-muted-foreground">{revokeKey.userName} ({revokeKey.userEmail})</p>
             </div>
@@ -1325,7 +1338,7 @@ function ApiKeysTab() {
               onClick={handleRevoke}
               disabled={revoking}
             >
-              {revoking ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
+              {revoking ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
               إلغاء المفتاح
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1345,7 +1358,9 @@ export default function AdminPanel() {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <Shield className="w-12 h-12 mx-auto mb-3 text-muted-foreground/20" />
+          <span className="icon-well mx-auto mb-3 h-14 w-14 bg-secondary text-muted-foreground/50">
+            <Shield className="w-6 h-6" />
+          </span>
           <p className="text-sm text-muted-foreground">غير مصرح</p>
         </div>
       </div>
@@ -1355,14 +1370,12 @@ export default function AdminPanel() {
   return (
     <div className="space-y-4 animate-[fadeSlideIn_0.3s_ease-out]">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 rounded-xl glass border border-gold/20">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-light flex items-center justify-center shadow-lg shadow-gold/20">
-          <ShieldCheck className="w-5 h-5 text-forest-dark" />
-        </div>
+      <div className="flex items-center gap-3 neo-card card-lift p-4">
+        <RiseIcon glyph="shield" hue="rose" size="md" lift />
         <div className="flex-1">
           <h3 className="text-base font-bold flex items-center gap-2">
             لوحة الإدارة
-            <Badge className="bg-gold/20 text-gold text-[10px] px-2 py-0">Admin</Badge>
+            <span className="pill bg-rose-accent/15 text-rose-accent text-[10px]">Admin</span>
           </h3>
           <p className="text-xs text-muted-foreground">إدارة النظام والمستخدمين والبيانات</p>
         </div>

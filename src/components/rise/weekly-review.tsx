@@ -22,15 +22,15 @@ import {
   Heart,
   MessageCircle,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { RiseIcon } from './icons'
+import { RainbowCheckbox } from './kit-v2'
 import { apiFetch } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { getToday } from '@/lib/rise-utils'
@@ -79,8 +79,8 @@ function getMotivationalMessage(score: number): { icon: React.ElementType; text:
   if (score >= 8) return { icon: Rocket, text: 'أداء ممتاز! أنت على المسار الصحيح نحو أهدافك 🚀', color: 'text-emerald-accent', bg: 'bg-emerald-accent/10 border-emerald-accent/20' }
   if (score >= 7) return { icon: Star, text: 'أسبوع رائع! استمر في التحسن والتميّز ⭐', color: 'text-emerald-accent', bg: 'bg-emerald-accent/10 border-emerald-accent/20' }
   if (score >= 5) return { icon: TrendingUp, text: 'بداية جيدة، هناك مساحة للتحسين. استمر بالمحاولة! 💪', color: 'text-gold', bg: 'bg-gold/10 border-gold/20' }
-  if (score >= 3) return { icon: Heart, text: 'لا تقلق، كل بداية صعبة. الأهم أنك هنا وتحاول ❤️', color: 'text-orange-500', bg: 'bg-orange-500/10 border-orange-500/20' }
-  return { icon: Sparkles, text: 'الأسبوع القادم فرصة جديدة. ابدأ صغيراً وحقق تقدماً! ✨', color: 'text-rose-500', bg: 'bg-rose-500/10 border-rose-500/20' }
+  if (score >= 3) return { icon: Heart, text: 'لا تقلق، كل بداية صعبة. الأهم أنك هنا وتحاول ❤️', color: 'text-rose-accent', bg: 'bg-rose-accent/10 border-rose-accent/20' }
+  return { icon: Sparkles, text: 'الأسبوع القادم فرصة جديدة. ابدأ صغيراً وحقق تقدماً! ✨', color: 'text-rose-accent', bg: 'bg-rose-accent/10 border-rose-accent/20' }
 }
 
 /* ────────────── Component ────────────── */
@@ -263,7 +263,7 @@ export default function WeeklyReview() {
                 transition={{ duration: 1.5 + Math.random(), ease: 'easeOut' }}
                 className="absolute w-2 h-2 rounded-full"
                 style={{
-                  backgroundColor: ['oklch(0.55 0.14 163)', 'oklch(0.78 0.12 85)', 'oklch(0.65 0.20 30)', 'oklch(0.65 0.15 300)', 'oklch(0.60 0.18 15)'][i % 5],
+                  backgroundColor: ['#007AFF', '#C99A3E', '#D6FF3D', '#8B5CF6', '#FF5A76'][i % 5],
                 }}
               />
             ))}
@@ -278,26 +278,26 @@ export default function WeeklyReview() {
         transition={{ duration: 0.4 }}
         className="rounded-2xl overflow-hidden relative"
       >
-        <div className="absolute inset-0 bg-gradient-to-bl from-emerald-accent/10 via-forest/5 to-gold/10 dark:from-emerald-accent/15 dark:via-forest/10 dark:to-gold/10" />
+        <div className="absolute inset-0 bg-gradient-to-bl from-glass/10 via-glass/5 to-gold/10 dark:from-glass/15 dark:via-glass/10 dark:to-gold/10" />
         <div className="absolute inset-0 noise-bg opacity-15" />
         <div className="relative glass p-5 border-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="w-5 h-5 text-emerald-accent" />
+                <RiseIcon glyph="review" hue="blue" size="md" lift />
                 <h2 className="text-xl font-bold text-foreground">المراجعة الأسبوعية</h2>
               </div>
               <p className="text-sm text-muted-foreground">
                 {weekRange.start} — {weekRange.end}
               </p>
-              <p className="text-xs text-emerald-accent/70 mt-1">{motivational.text}</p>
+              <p className="text-xs text-glass/80 mt-1">{motivational.text}</p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
                 <RotateCcw className="w-3.5 h-3.5" />
                 إعادة
               </Button>
-              <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+              <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90">
                 <Save className="w-3.5 h-3.5" />
                 حفظ
               </Button>
@@ -308,8 +308,8 @@ export default function WeeklyReview() {
 
       {/* Score Card with Visual Slider */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="glass overflow-hidden">
-          <div className="bg-gradient-to-l from-emerald-accent/8 via-emerald-accent/3 to-transparent p-5">
+        <div className="neo-card card-lift overflow-hidden">
+          <div className="bg-gradient-to-l from-glass/8 via-glass/3 to-transparent p-5">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -319,7 +319,8 @@ export default function WeeklyReview() {
                       key={review.goals.score}
                       initial={{ scale: 1.2 }}
                       animate={{ scale: 1 }}
-                      className="text-4xl font-bold text-emerald-accent"
+                      className="text-4xl font-bold text-glass num"
+                      dir="ltr"
                     >
                       {review.goals.score}
                     </motion.span>
@@ -342,7 +343,7 @@ export default function WeeklyReview() {
                         className={cn(
                           'w-3.5 h-6 rounded-full transition-all duration-200',
                           s <= review.goals.score
-                            ? 'bg-emerald-accent shadow-sm shadow-emerald-accent/30'
+                            ? 'bg-glass shadow-sm shadow-glass/30'
                             : 'bg-muted/40 hover:bg-muted/60'
                         )}
                       />
@@ -367,19 +368,21 @@ export default function WeeklyReview() {
               </div>
             </div>
           </div>
-        </Card>
+        </div>
       </motion.div>
 
-      {/* Section 1: Review - with emerald accent border */}
+      {/* Section 1: Review */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
-              <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift border-s-4 border-s-glass">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-blue">
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
               المراجعة
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-5">
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
                 <Star className="w-3.5 h-3.5 text-gold" />
@@ -395,7 +398,7 @@ export default function WeeklyReview() {
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-orange-500" />
+                <TrendingUp className="w-3.5 h-3.5 text-gold" />
                 ما الذي يمكن تحسينه؟
               </Label>
               <Textarea
@@ -419,29 +422,31 @@ export default function WeeklyReview() {
                 className="text-sm resize-none"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Section 2: Numbers - with animated bars */}
+      {/* Section 2: Numbers */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="glass premium-card border-r-gold/50 border-r-3">
-          <CardHeader className="pb-4">
+        <div className="neo-card card-lift border-s-4 border-s-gold">
+          <div className="p-5 pb-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-gold">
-                <Target className="w-4 h-4 text-gold" />
+              <h3 className="text-base font-bold flex items-center gap-2.5">
+                <span className="icon-well h-7 w-7 iw-amber">
+                  <Target className="h-4 w-4" />
+                </span>
                 الأرقام
-              </CardTitle>
+              </h3>
               <motion.div whileHover={{ scale: 1.02 }}>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleAutoFill}
                   disabled={isAutoFilling}
-                  className="gap-1.5 text-xs border-emerald-accent/30 text-emerald-accent hover:bg-emerald-accent/10"
+                  className="gap-1.5 text-xs border-glass/30 text-glass hover:bg-glass/10"
                 >
                   {isAutoFilling ? (
-                    <div className="w-3.5 h-3.5 border-2 border-emerald-accent/30 border-t-emerald-accent rounded-full animate-spin" />
+                    <div className="w-3.5 h-3.5 border-2 border-glass/30 border-t-glass rounded-full animate-spin" />
                   ) : (
                     <Zap className="w-3.5 h-3.5" />
                   )}
@@ -449,14 +454,14 @@ export default function WeeklyReview() {
                 </Button>
               </motion.div>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="px-5 pb-5">
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'المهام المكتملة', value: review.numbers.tasksCompleted, max: 20, icon: CheckCircle2, color: 'text-emerald-accent', barColor: 'from-emerald-accent to-forest' },
-                { label: 'ساعات التركيز', value: review.numbers.focusHours, max: 10, icon: Clock, color: 'text-blue-500', barColor: 'from-blue-500 to-indigo-500' },
-                { label: 'الصفحات المقروءة', value: review.numbers.pagesRead, max: 200, icon: BookOpen, color: 'text-gold', barColor: 'from-gold to-amber-500' },
-                { label: 'نسبة إكمال العادات', value: review.numbers.habitsRate, max: 100, icon: Flame, color: 'text-orange-500', barColor: 'from-orange-500 to-rose-500', isPercent: true },
+                { label: 'ساعات التركيز', value: review.numbers.focusHours, max: 10, icon: Clock, color: 'text-glass', barColor: 'from-glass to-glass/60' },
+                { label: 'الصفحات المقروءة', value: review.numbers.pagesRead, max: 200, icon: BookOpen, color: 'text-gold', barColor: 'from-gold to-gold/60' },
+                { label: 'نسبة إكمال العادات', value: review.numbers.habitsRate, max: 100, icon: Flame, color: 'text-rose-accent', barColor: 'from-rose-accent to-rose-accent/60', isPercent: true },
               ].map((metric, i) => {
                 const percent = Math.min(100, Math.round((metric.value / metric.max) * 100))
                 return (
@@ -472,7 +477,7 @@ export default function WeeklyReview() {
                         <metric.icon className={cn('w-3.5 h-3.5', metric.color)} />
                         <span className="text-xs text-muted-foreground">{metric.label}</span>
                       </div>
-                      <span className={cn('text-sm font-bold', metric.color)}>
+                      <span className={cn('text-sm font-bold num', metric.color)} dir="ltr">
                         {metric.value}{metric.isPercent ? '%' : ''}
                       </span>
                     </div>
@@ -488,50 +493,46 @@ export default function WeeklyReview() {
                     {/* Keep input for editing */}
                     <Input
                       type="number"
+                      dir="ltr"
                       value={metric.value}
                       onChange={(e) => updateNumber(
                         metric.isPercent ? 'habitsRate' : metric.label === 'المهام المكتملة' ? 'tasksCompleted' : metric.label === 'ساعات التركيز' ? 'focusHours' : 'pagesRead',
                         parseInt(e.target.value) || 0
                       )}
-                      className="text-center text-sm font-semibold h-8 bg-transparent border-dashed"
+                      className="text-center text-sm font-semibold h-8 bg-transparent border-dashed border-border"
                     />
                   </motion.div>
                 )
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Section 3: Goals - with emerald accent border */}
+      {/* Section 3: Goals */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
-          <CardHeader className="pb-4">
+        <div className="neo-card card-lift border-s-4 border-s-glass">
+          <div className="p-5 pb-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-emerald-accent">
-                <Target className="w-4 h-4 text-emerald-accent" />
+              <h3 className="text-base font-bold flex items-center gap-2.5">
+                <span className="icon-well h-7 w-7 iw-blue">
+                  <Target className="h-4 w-4" />
+                </span>
                 الأهداف الأسبوعية
-              </CardTitle>
-              <Badge variant="secondary" className="text-[10px] bg-emerald-accent/10 text-emerald-accent">
-                {achievedCount}/{review.goals.items.length} مكتمل
-              </Badge>
+              </h3>
+              <span className="pill bg-glass/10 text-glass">
+                <span className="num" dir="ltr">{achievedCount}/{review.goals.items.length}</span> مكتمل
+              </span>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </div>
+          <div className="px-5 pb-5 space-y-3">
             {review.goals.items.map((goal, i) => (
               <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-muted/30">
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  onClick={() => toggleGoalAchieved(i)}
-                  className={cn(
-                    'w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
-                    goal.achieved
-                      ? 'bg-emerald-accent border-emerald-accent text-white'
-                      : 'border-muted-foreground/30 hover:border-emerald-accent'
-                  )}
-                >
-                  {goal.achieved && <CheckCircle2 className="w-4 h-4" />}
-                </motion.button>
+                <RainbowCheckbox
+                  checked={goal.achieved}
+                  onChange={() => toggleGoalAchieved(i)}
+                  className="shrink-0"
+                />
                 <Input
                   placeholder={`الهدف ${i + 1}`}
                   value={goal.text}
@@ -543,32 +544,34 @@ export default function WeeklyReview() {
             <div className="mt-2">
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
                 <span>التقدم</span>
-                <span>{overallProgress}%</span>
+                <span className="num" dir="ltr">{overallProgress}%</span>
               </div>
               <Progress value={overallProgress} className="h-2" />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Section 4: Next Week - with emerald accent border */}
+      {/* Section 4: Next Week */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass premium-card border-r-forest/50 border-r-3">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-forest">
-              <ArrowLeft className="w-4 h-4 text-forest" />
+        <div className="neo-card card-lift border-s-4 border-s-forest">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-forest">
+                <ArrowLeft className="h-4 w-4" />
+              </span>
               الأسبوع القادم
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-5">
             <div className="space-y-3">
               <p className="text-sm font-medium flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-emerald-accent" />
+                <Calendar className="w-3.5 h-3.5 text-glass" />
                 أولويات الأسبوع القادم
               </p>
               {review.nextWeek.priorities.map((p, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-accent/10 flex items-center justify-center text-xs font-bold text-emerald-accent shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-glass/10 flex items-center justify-center text-xs font-bold text-glass num shrink-0" dir="ltr">
                     {i + 1}
                   </div>
                   <Input
@@ -593,28 +596,30 @@ export default function WeeklyReview() {
                 className="text-sm resize-none"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Weekly Highlights - SVG Radar */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
-        <Card className="glass premium-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2.5 pr-3 border-r-3 border-r-purple-500">
-              <Sparkles className="w-4 h-4 text-purple-500" />
+        <div className="neo-card card-lift">
+          <div className="p-5 pb-3">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-violet">
+                <Sparkles className="h-4 w-4" />
+              </span>
               أبرز لحظات الأسبوع
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="flex flex-col sm:flex-row gap-6">
               {/* Simple SVG Radar */}
               <div className="shrink-0 flex items-center justify-center">
                 <svg viewBox="0 0 200 200" className="w-40 h-40 sm:w-48 sm:h-48">
                   <defs>
                     <linearGradient id="wradar-fill" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="oklch(0.78 0.12 85)" stopOpacity="0.1" />
+                      <stop offset="0%" stopColor="#007AFF" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#C99A3E" stopOpacity="0.1" />
                     </linearGradient>
                   </defs>
                   {/* Grid pentagons */}
@@ -623,7 +628,7 @@ export default function WeeklyReview() {
                       const angle = (j * 2 * Math.PI / 5) - Math.PI / 2
                       return `${100 + r * 0.8 * Math.cos(angle)},${100 + r * 0.8 * Math.sin(angle)}`
                     }).join(' ')
-                    return <polygon key={i} points={points} fill="none" stroke="oklch(0.7 0.01 160)" strokeWidth="0.5" opacity="0.3" />
+                    return <polygon key={i} points={points} fill="none" stroke="#94A3B8" strokeWidth="0.5" opacity="0.3" />
                   })}
                   {/* Data polygon */}
                   <motion.polygon
@@ -639,7 +644,7 @@ export default function WeeklyReview() {
                       return `${100 + r * Math.cos(angle)},${100 + r * Math.sin(angle)}`
                     }).join(' ')}
                     fill="url(#wradar-fill)"
-                    stroke="oklch(0.55 0.14 163)"
+                    stroke="#007AFF"
                     strokeWidth="2"
                     initial={{ opacity: 0, scale: 0.5, transformOrigin: '100px 100px' }}
                     animate={{ opacity: 1, scale: 1, transformOrigin: '100px 100px' }}
@@ -650,7 +655,7 @@ export default function WeeklyReview() {
                     const r = 95
                     const angle = (j * 2 * Math.PI / 5) - Math.PI / 2
                     return (
-                      <text key={label} x={100 + r * Math.cos(angle)} y={100 + r * Math.sin(angle)} textAnchor="middle" dominantBaseline="central" fill="oklch(0.45 0.01 160)" fontSize="9" fontWeight="500">{label}</text>
+                      <text key={label} x={100 + r * Math.cos(angle)} y={100 + r * Math.sin(angle)} textAnchor="middle" dominantBaseline="central" fill="#94A3B8" fontSize="9" fontWeight="500">{label}</text>
                     )
                   })}
                 </svg>
@@ -666,12 +671,12 @@ export default function WeeklyReview() {
                   value={review.review.lessons}
                   onChange={(e) => updateReview('lessons', e.target.value)}
                   rows={4}
-                  className="text-sm resize-none border-purple-200/30 dark:border-purple-800/20 focus-visible:ring-purple-500/30"
+                  className="text-sm resize-none border-glass/20 dark:border-glass/20 focus-visible:ring-glass/30"
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Motivational Message */}
@@ -680,8 +685,8 @@ export default function WeeklyReview() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <Card className={cn('glass border', motivational.bg)}>
-          <CardContent className="p-5">
+        <div className={cn('neo-card border', motivational.bg)}>
+          <div className="p-5">
             <div className="flex items-start gap-3">
               <motion.div
                 className="p-2.5 rounded-xl shrink-0"
@@ -700,20 +705,20 @@ export default function WeeklyReview() {
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Previous Reviews */}
       {allReviews.length > 1 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <Card className="glass">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2.5 pr-3 border-r-3 border-r-muted-foreground/30 text-muted-foreground">
+          <div className="neo-card card-lift">
+            <div className="p-5 pb-3">
+              <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-2.5 ps-3 border-s-[3px] border-s-border">
                 المراجعات السابقة
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="px-5 pb-5">
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {allReviews
                   .filter((r) => r.id !== review.id)
@@ -725,8 +730,8 @@ export default function WeeklyReview() {
                       onClick={() => setReview(r)}
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
-                          <span className="text-sm font-bold text-emerald-accent">{r.goals.score}</span>
+                        <div className="w-8 h-8 rounded-lg bg-glass/10 flex items-center justify-center">
+                          <span className="text-sm font-bold text-glass num" dir="ltr">{r.goals.score}</span>
                         </div>
                         <div>
                           <p className="text-xs font-medium">مراجعة الأسبوع</p>
@@ -737,8 +742,8 @@ export default function WeeklyReview() {
                     </div>
                   ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
       )}
     </div>

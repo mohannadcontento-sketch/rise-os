@@ -177,7 +177,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0B1015]" dir="rtl">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background" dir="rtl">
       {/* Ambient glow — violet aurora + forest floor */}
       <div className="absolute inset-0" aria-hidden="true">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-96 w-96 rounded-full bg-violet-accent/15 blur-3xl" />
@@ -187,19 +187,19 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
       {/* Login Card */}
       <div className="relative z-10 w-full max-w-sm sm:max-w-md mx-4 px-2">
-        <div className="rounded-3xl border border-white/10 bg-[#141B21]/95 shadow-2xl shadow-black/40 p-6 sm:p-8 backdrop-blur-xl">
+        <div className="rounded-3xl neo-card shadow-lift bg-card/95 p-6 sm:p-8 backdrop-blur-xl">
           {/* Logo */}
           <div className="flex flex-col items-center mb-6 sm:mb-8">
             <div className="press w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-lime flex items-center justify-center shadow-lg shadow-lime/25 mb-3 sm:mb-4">
-              <Zap className="w-7 h-7 sm:w-8 sm:h-8 text-[#0B1015]" />
+              <Zap className="w-7 h-7 sm:w-8 sm:h-8 text-ink" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#F2F4EF]">RiseOS</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">RiseOS</h1>
             <p className="eyebrow mt-1.5">Life Operating System</p>
-            <p className="text-xs sm:text-sm text-[#8B95A3] mt-1">امتلك صباحك. امتلك حياتك.</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">امتلك صباحك. امتلك حياتك.</p>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/5 mb-5 sm:mb-6" role="tablist">
+          <div className="flex gap-1 p-1 rounded-xl bg-muted border border-border mb-5 sm:mb-6" role="tablist">
             {[
               { id: 'login' as const, label: 'تسجيل الدخول' },
               { id: 'signup' as const, label: 'حساب جديد' },
@@ -213,7 +213,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   'flex-1 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all press',
                   mode === tab.id
                     ? 'bg-violet-accent/15 text-violet-accent shadow-sm'
-                    : 'text-[#8B95A3] hover:text-[#F2F4EF]'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {tab.label}
@@ -225,16 +225,16 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             {/* Name (signup only) */}
             {mode === 'signup' && (
               <div>
-                <Label htmlFor="name" className="text-sm font-medium mb-1.5 block text-[#B5C2BA]">الاسم</Label>
+                <Label htmlFor="name" className="text-sm font-medium mb-1.5 block text-foreground">الاسم</Label>
                 <div className="relative">
-                  <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8B95A3]" />
+                  <User className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="اسمك الكريم"
-                    className="pr-10 h-11 rounded-xl bg-[#0B1015]/70 border-[#374151] text-[#F2F4EF] placeholder:text-[#6B7785] focus-visible:border-violet-accent focus-visible:ring-violet-accent/30"
+                    className="ps-10 h-11 rounded-xl bg-muted/60 border-border text-foreground placeholder:text-muted-foreground/70 focus-visible:border-violet-accent focus-visible:ring-violet-accent/30"
                     dir="rtl"
                   />
                 </div>
@@ -243,16 +243,16 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
             {/* Email */}
             <div>
-              <Label htmlFor="email" className="text-sm font-medium mb-1.5 block text-[#B5C2BA]">البريد الإلكتروني</Label>
+              <Label htmlFor="email" className="text-sm font-medium mb-1.5 block text-foreground">البريد الإلكتروني</Label>
               <div className="relative">
-                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8B95A3]" />
+                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="example@email.com"
-                  className="pr-10 h-11 rounded-xl bg-[#0B1015]/70 border-[#374151] text-[#F2F4EF] placeholder:text-[#6B7785] focus-visible:border-violet-accent focus-visible:ring-violet-accent/30"
+                  className="ps-10 h-11 rounded-xl bg-muted/60 border-border text-foreground placeholder:text-muted-foreground/70 focus-visible:border-violet-accent focus-visible:ring-violet-accent/30"
                   dir="ltr"
                   required
                 />
@@ -261,16 +261,16 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
             {/* Password */}
             <div>
-              <Label htmlFor="password" className="text-sm font-medium mb-1.5 block text-[#B5C2BA]">كلمة المرور</Label>
+              <Label htmlFor="password" className="text-sm font-medium mb-1.5 block text-foreground">كلمة المرور</Label>
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8B95A3]" />
+                <Lock className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="pr-10 pl-10 h-11 rounded-xl bg-[#0B1015]/70 border-[#374151] text-[#F2F4EF] placeholder:text-[#6B7785] focus-visible:border-violet-accent focus-visible:ring-violet-accent/30"
+                  className="ps-10 pe-10 h-11 rounded-xl bg-muted/60 border-border text-foreground placeholder:text-muted-foreground/70 focus-visible:border-violet-accent focus-visible:ring-violet-accent/30"
                   dir="ltr"
                   required
                   minLength={8}
@@ -279,7 +279,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8B95A3] hover:text-[#F2F4EF] transition-colors"
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -288,7 +288,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
             {/* Error */}
             {error && (
-              <div className="text-sm text-[#FFB3BE] bg-[#FF5A76]/10 border border-[#FF5A76]/20 rounded-xl px-4 py-3 text-center" role="alert">
+              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 text-center" role="alert">
                 <p>{error}</p>
                 {(error.includes('تأكيد') || error.includes('لم يتم تأكيده')) && (
                   <button
@@ -322,13 +322,13 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               type="submit"
               disabled={loading || !email || !password || (mode === 'signup' && !name)}
               className={cn(
-                'w-full h-11 rounded-xl bg-violet-accent text-[#111827] font-bold transition-all press',
-                'hover:shadow-lg hover:shadow-violet-accent/25 hover:bg-[#B8A2FB]',
+                'w-full h-11 rounded-xl bg-violet-accent text-ink font-bold transition-all press',
+                'hover:shadow-lg hover:shadow-violet-accent/25 hover:bg-[#B8A2FB] dark:hover:bg-[#C4B5FD]',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
               {loading ? (
-                <span className="w-5 h-5 border-2 border-[#111827]/30 border-t-[#111827] rounded-full inline-block animate-spin" />
+                <span className="w-5 h-5 border-2 border-ink/30 border-t-ink rounded-full inline-block animate-spin" />
               ) : mode === 'login' ? (
                 <span className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
@@ -345,7 +345,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-[#6B7785] mt-5 sm:mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-5 sm:mt-6">
           RiseOS v1.0 — صُنع بـ ❤️
         </p>
       </div>

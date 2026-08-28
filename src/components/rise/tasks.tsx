@@ -21,12 +21,13 @@ import {
   CheckCircle2,
   Circle,
   Loader2,
-  Inbox,
   Sparkles,
   Lock,
   Link2,
   GripVertical,
 } from 'lucide-react'
+import { RainbowCheckbox } from '@/components/rise/kit-v2'
+import { RiseIcon, RiseGlyphIcon, MODULE_ICONS } from '@/components/rise/icons'
 import {
   DndContext,
   DragOverlay,
@@ -46,7 +47,6 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -79,7 +79,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
-import { priorityColors, priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
+import { priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
@@ -141,12 +141,12 @@ const itemVariants = {
 
 const cardHover = { scale: 1.01, transition: { type: 'spring' as const, stiffness: 400, damping: 25 } }
 
-/* Priority left border colors */
+/* Priority inline-start border colors (RTL: renders on the right) */
 const priorityBorderColors: Record<string, string> = {
-  urgent: 'border-r-red-500',
-  high: 'border-r-orange-500',
-  medium: 'border-r-gold',
-  low: 'border-r-blue-500',
+  urgent: 'border-s-destructive',
+  high: 'border-s-rose-accent',
+  medium: 'border-s-gold',
+  low: 'border-s-glass',
 }
 
 /* Animated Counter Component */
@@ -179,6 +179,7 @@ function AnimatedCounter({ target, className }: { target: number; className?: st
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       className={className}
+      dir="ltr"
     >
       {count}
     </motion.span>
@@ -188,10 +189,18 @@ function AnimatedCounter({ target, className }: { target: number; className?: st
 /* ────────────── Priority Dot ────────────── */
 
 const priorityDotColors: Record<string, string> = {
-  urgent: 'bg-red-500',
-  high: 'bg-orange-500',
+  urgent: 'bg-destructive',
+  high: 'bg-rose-accent',
   medium: 'bg-gold',
-  low: 'bg-blue-500',
+  low: 'bg-glass',
+}
+
+/* Priority tag tints — theme-adaptive (no raw red/orange/blue) */
+const priorityPillClasses: Record<string, string> = {
+  urgent: 'bg-destructive/15 text-destructive',
+  high: 'bg-rose-accent/15 text-rose-accent',
+  medium: 'bg-gold/15 text-gold',
+  low: 'bg-glass/15 text-glass',
 }
 
 /* ────────────── Component ────────────── */
@@ -448,7 +457,7 @@ export function Tasks() {
 
   /* ── Status column config ── */
   const statusColumns = [
-    { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-blue-500', bg: 'bg-blue-500/5' },
+    { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-glass', bg: 'bg-glass/5' },
     { key: 'in_progress', label: 'قيد التنفيذ', icon: Clock, color: 'text-gold', bg: 'bg-gold/5' },
     { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/5' },
   ]
@@ -513,9 +522,8 @@ export function Tasks() {
       >
         <motion.div
           className={cn(
-            'glass rounded-2xl p-4 border-r-4 transition-shadow duration-300',
-            'hover:shadow-lg hover:shadow-emerald-accent/8',
-            priorityBorderColors[task.priority] || 'border-r-border',
+            'neo-card card-lift rounded-2xl p-4 border-s-4 transition-shadow duration-300',
+            priorityBorderColors[task.priority] || 'border-s-border',
             isDone && 'opacity-60',
             blocked && !isDone && 'opacity-60'
           )}
@@ -541,13 +549,10 @@ export function Tasks() {
                     <Lock className="w-3 h-3 text-muted-foreground/50" />
                   </div>
                 ) : (
-                  <Checkbox
+                  <RainbowCheckbox
                     checked={isDone}
-                    onCheckedChange={() => toggleTask(task)}
+                    onChange={() => toggleTask(task)}
                     disabled={blocked && !isDone}
-                    className={cn(
-                      'w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
-                    )}
                   />
                 )}
               </motion.div>
@@ -559,7 +564,7 @@ export function Tasks() {
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : task.id)}
                   className={cn(
-                    'text-sm font-semibold text-right transition-colors',
+                    'text-sm font-semibold text-start transition-colors',
                     isDone ? 'line-through text-muted-foreground' : 'text-foreground'
                   )}
                 >
@@ -567,13 +572,10 @@ export function Tasks() {
                 </button>
 
                 {/* Priority badge */}
-                <Badge
-                  variant="secondary"
-                  className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
-                >
-                  <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+                <span className={cn('pill', priorityPillClasses[task.priority])}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full me-1', priorityDotColors[task.priority])} />
                   {priorityLabels[task.priority]}
-                </Badge>
+                </span>
 
                 {/* Project dot */}
                 {task.project && (
@@ -587,24 +589,24 @@ export function Tasks() {
                 {task.xpReward > 0 && (
                   <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
                     <Zap className="w-3 h-3" />
-                    {task.xpReward}
+                    <span className="num" dir="ltr">{task.xpReward}</span>
                   </span>
                 )}
 
                 {/* Blocked badge */}
                 {blocked && !isDone && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium rounded-full bg-muted text-muted-foreground">
-                    <Lock className="w-3 h-3 ml-1" />
+                  <span className="pill pill-muted">
+                    <Lock className="w-3 h-3 me-1" />
                     محظورة
-                  </Badge>
+                  </span>
                 )}
 
                 {/* Dependency chain badge */}
                 {depNames.length > 0 && !blocked && !isDone && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium rounded-full bg-gold/10 text-gold">
-                    <Link2 className="w-3 h-3 ml-1" />
-                    {depNames.length} تبعية
-                  </Badge>
+                  <span className="pill pill-info">
+                    <Link2 className="w-3 h-3 me-1" />
+                    <span className="num" dir="ltr">{depNames.length}</span> تبعية
+                  </span>
                 )}
               </div>
 
@@ -613,7 +615,7 @@ export function Tasks() {
                 {task.dueDate && (
                   <span className="flex items-center gap-1">
                     <CalendarClock className="w-3 h-3" />
-                    {formatDateShort(task.dueDate)}{task.dueTime && <span className="mr-1">· {task.dueTime}</span>}
+                    {formatDateShort(task.dueDate)}{task.dueTime && <span className="ms-1 num" dir="ltr">· {task.dueTime}</span>}
                   </span>
                 )}
                 {!task.dueDate && task.dueTime && (
@@ -625,7 +627,7 @@ export function Tasks() {
                 {task.subtasks.length > 0 && (
                   <span className="flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" />
-                    {completedSubs}/{task.subtasks.length}
+                    <span className="num" dir="ltr">{completedSubs}/{task.subtasks.length}</span>
                   </span>
                 )}
               </div>
@@ -654,10 +656,9 @@ export function Tasks() {
                       <div className="mt-3 space-y-1.5">
                         {task.subtasks.map((sub) => (
                           <label key={sub.id} className="flex items-center gap-2 cursor-pointer group/sub">
-                            <Checkbox
+                            <RainbowCheckbox
                               checked={sub.completed}
-                              onCheckedChange={() => toggleSubtask(task, sub.id, sub.completed)}
-                              className="w-4 h-4 rounded-md data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+                              onChange={() => toggleSubtask(task, sub.id, sub.completed)}
                             />
                             <span
                               className={cn(
@@ -702,9 +703,9 @@ export function Tasks() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => deleteTask(task.id)}
-                    className="text-red-500 focus:text-red-500"
+                    className="text-destructive focus:text-destructive"
                   >
-                    <Trash2 className="w-4 h-4 ml-2" />
+                    <Trash2 className="w-4 h-4 me-2" />
                     حذف
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -718,8 +719,8 @@ export function Tasks() {
 
   /* ────────────── Render: Board Card ────────────── */
   const boardColBorderColors: Record<string, string> = {
-    todo: 'border-t-blue-500',
-    in_progress: 'border-t-emerald-accent',
+    todo: 'border-t-glass',
+    in_progress: 'border-t-lime',
     done: 'border-t-gold',
   }
   const boardColGradientBorders: Record<string, string> = {
@@ -728,8 +729,8 @@ export function Tasks() {
     done: 'linear-gradient(135deg, oklch(0.78 0.12 85), oklch(0.88 0.06 85))',
   }
   const boardColHeaderBg: Record<string, string> = {
-    todo: 'bg-blue-500/8',
-    in_progress: 'bg-emerald-accent/8',
+    todo: 'bg-glass/8',
+    in_progress: 'bg-lime/8',
     done: 'bg-gold/8',
   }
   const renderBoardCard = (task: Task) => {
@@ -745,25 +746,21 @@ export function Tasks() {
       >
         <motion.div
           className={cn(
-            'glass rounded-2xl p-4 border-r-4 transition-all duration-300 cursor-pointer',
-            'hover:shadow-lg hover:shadow-emerald-accent/8',
-            priorityBorderColors[task.priority] || 'border-r-border',
+            'neo-card card-lift rounded-2xl p-4 border-s-4 transition-all duration-300 cursor-pointer',
+            priorityBorderColors[task.priority] || 'border-s-border',
             isDone && 'opacity-60',
-            task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-500/[0.03]' : '',
-            task.priority === 'medium' ? 'bg-gold/[0.03]' : '',
-            task.priority === 'low' ? 'bg-emerald-accent/[0.03]' : '',
+            task.priority === 'high' || task.priority === 'urgent' ? 'bg-destructive/[0.04]' : '',
+            task.priority === 'medium' ? 'bg-gold/[0.04]' : '',
+            task.priority === 'low' ? 'bg-lime/[0.04]' : '',
           )}
           whileHover={{ scale: 1.02, y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
           onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
         >
           <div className="flex items-start justify-between gap-2 mb-2">
-            <Badge
-              variant="secondary"
-              className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
-            >
-              <span className={cn('w-1.5 h-1.5 rounded-full ml-1', priorityDotColors[task.priority])} />
+            <span className={cn('pill', priorityPillClasses[task.priority])}>
+              <span className={cn('w-1.5 h-1.5 rounded-full me-1', priorityDotColors[task.priority])} />
               {priorityLabels[task.priority]}
-            </Badge>
+            </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <button className="p-1 rounded-lg hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
@@ -781,16 +778,16 @@ export function Tasks() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => deleteTask(task.id)}
-                  className="text-red-500 focus:text-red-500"
+                  className="text-destructive focus:text-destructive"
                 >
-                  <Trash2 className="w-4 h-4 ml-2" />
+                  <Trash2 className="w-4 h-4 me-2" />
                   حذف
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
-          <p className={cn('text-sm font-semibold text-right', isDone && 'line-through text-muted-foreground')}>
+          <p className={cn('text-sm font-semibold text-start', isDone && 'line-through text-muted-foreground')}>
             {task.title}
           </p>
 
@@ -808,7 +805,7 @@ export function Tasks() {
             {task.dueDate && (
               <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                 <CalendarClock className="w-3 h-3" />
-                {formatDateShort(task.dueDate)}{task.dueTime && <span className="mr-1">· {task.dueTime}</span>}
+                {formatDateShort(task.dueDate)}{task.dueTime && <span className="ms-1 num" dir="ltr">· {task.dueTime}</span>}
               </span>
             )}
             {!task.dueDate && task.dueTime && (
@@ -824,11 +821,11 @@ export function Tasks() {
             <div className="mt-3">
               <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                 <span>المهام الفرعية</span>
-                <span>{completedSubs}/{task.subtasks.length}</span>
+                <span className="num" dir="ltr">{completedSubs}/{task.subtasks.length}</span>
               </div>
-              <div className="h-1 rounded-full bg-muted overflow-hidden">
+              <div className="h-1 rounded-full bg-secondary overflow-hidden">
                 <motion.div
-                  className="h-full rounded-full bg-emerald-accent"
+                  className="h-full rounded-full bg-gradient-to-l from-lime-deep to-lime"
                   initial={false}
                   animate={{ width: `${task.subtasks.length > 0 ? (completedSubs / task.subtasks.length) * 100 : 0}%` }}
                   transition={{ duration: 0.3 }}
@@ -841,14 +838,13 @@ export function Tasks() {
           <div className="flex items-center justify-between mt-3">
             <span className="flex items-center gap-0.5 text-[11px] text-gold font-medium">
               <Zap className="w-3 h-3" />
-              {task.xpReward} خبرة
+              <span className="num" dir="ltr">{task.xpReward}</span> خبرة
             </span>
-            <Checkbox
+            <RainbowCheckbox
               checked={isDone}
-              onCheckedChange={() => {
+              onChange={() => {
                 toggleTask(task)
               }}
-              className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
             />
           </div>
         </motion.div>
@@ -887,12 +883,12 @@ export function Tasks() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         {/* Search */}
         <div className="relative flex-1 w-full sm:max-w-xs">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="ابحث في المهام..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
+            className="ps-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
           />
         </div>
 
@@ -962,15 +958,15 @@ export function Tasks() {
           {/* View tabs */}
           <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
             <TabsList className="h-10 rounded-xl p-1">
-              <TabsTrigger value="list" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+              <TabsTrigger value="list" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-forest data-[state=active]:text-paper-soft dark:data-[state=active]:bg-lime dark:data-[state=active]:text-ink">
                 <List className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">قائمة</span>
               </TabsTrigger>
-              <TabsTrigger value="board" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+              <TabsTrigger value="board" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-forest data-[state=active]:text-paper-soft dark:data-[state=active]:bg-lime dark:data-[state=active]:text-ink">
                 <LayoutGrid className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">لوحة</span>
               </TabsTrigger>
-              <TabsTrigger value="calendar" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-emerald-accent data-[state=active]:text-white">
+              <TabsTrigger value="calendar" className="rounded-lg px-3 text-xs gap-1.5 data-[state=active]:bg-forest data-[state=active]:text-paper-soft dark:data-[state=active]:bg-lime dark:data-[state=active]:text-ink">
                 <CalendarDays className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">تقويم</span>
               </TabsTrigger>
@@ -980,7 +976,7 @@ export function Tasks() {
           {/* Add task */}
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20">
+              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-xs font-semibold shadow-lg shadow-forest/20 dark:shadow-lime/20">
                 <Plus className="w-4 h-4" />
                 مهمة جديدة
               </Button>
@@ -999,7 +995,7 @@ export function Tasks() {
                     placeholder="ماذا تريد إنجازه؟"
                     value={formTitle}
                     onChange={(e) => setFormTitle(e.target.value)}
-                    className="rounded-xl h-10 focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                    className="rounded-xl h-10 bg-card focus-visible:ring-2 focus-visible:ring-ring"
                     onKeyDown={(e) => e.key === 'Enter' && createTask()}
                   />
                 </div>
@@ -1009,7 +1005,7 @@ export function Tasks() {
                     placeholder="أضف تفاصيل..."
                     value={formDesc}
                     onChange={(e) => setFormDesc(e.target.value)}
-                    className="rounded-xl min-h-[80px] text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                    className="rounded-xl min-h-[80px] text-sm bg-card focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1022,13 +1018,13 @@ export function Tasks() {
                       <SelectContent>
                         <SelectItem value="urgent">
                           <span className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-red-500" />
+                            <span className="w-2 h-2 rounded-full bg-destructive" />
                             عاجل
                           </span>
                         </SelectItem>
                         <SelectItem value="high">
                           <span className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                            <span className="w-2 h-2 rounded-full bg-rose-accent" />
                             مرتفع
                           </span>
                         </SelectItem>
@@ -1040,7 +1036,7 @@ export function Tasks() {
                         </SelectItem>
                         <SelectItem value="low">
                           <span className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+                            <span className="w-2 h-2 rounded-full bg-glass" />
                             منخفض
                           </span>
                         </SelectItem>
@@ -1074,7 +1070,7 @@ export function Tasks() {
                       type="date"
                       value={formDueDate}
                       onChange={(e) => setFormDueDate(e.target.value)}
-                      className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                      className="rounded-xl h-10 text-sm bg-card focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </div>
                   <div>
@@ -1086,7 +1082,7 @@ export function Tasks() {
                       type="time"
                       value={formDueTime}
                       onChange={(e) => setFormDueTime(e.target.value)}
-                      className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                      className="rounded-xl h-10 text-sm bg-card focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </div>
                 </div>
@@ -1132,9 +1128,9 @@ export function Tasks() {
                 <Button
                   onClick={createTask}
                   disabled={!formTitle.trim() || submitting}
-                  className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+                  className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-sm font-semibold shadow-lg shadow-forest/20 dark:shadow-lime/20"
                 >
-                  {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                  {submitting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
                   إنشاء المهمة
                 </Button>
               </DialogFooter>
@@ -1161,13 +1157,13 @@ export function Tasks() {
               className={cn(
                 'px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
                 isActive && status !== 'blocked'
-                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+                  ? 'bg-forest text-paper-soft shadow-md shadow-forest/25 dark:bg-lime dark:text-ink dark:shadow-lime/25'
                   : isActive && status === 'blocked'
-                    ? 'bg-orange-500 text-white shadow-md shadow-orange-500/25'
+                    ? 'bg-gold text-ink shadow-md shadow-gold/25'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
             >
-              {status === 'blocked' && <Lock className="w-3 h-3 ml-1 inline" />}
+              {status === 'blocked' && <Lock className="w-3 h-3 me-1 inline" />}
               {label}
             </motion.button>
           )
@@ -1184,12 +1180,12 @@ export function Tasks() {
               className={cn(
                 'px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200',
                 isActive
-                  ? 'bg-emerald-accent text-white shadow-md shadow-emerald-accent/25'
+                  ? 'bg-forest text-paper-soft shadow-md shadow-forest/25 dark:bg-lime dark:text-ink dark:shadow-lime/25'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               )}
             >
               {priority !== 'all' && (
-                <span className={cn('w-1.5 h-1.5 rounded-full inline-block ml-1', priorityDotColors[priority])} />
+                <span className={cn('w-1.5 h-1.5 rounded-full inline-block me-1', priorityDotColors[priority])} />
               )}
               {label}
             </motion.button>
@@ -1201,7 +1197,7 @@ export function Tasks() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'الكل', count: tasks.length, color: 'text-foreground' },
-          { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-blue-500' },
+          { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-glass' },
           { label: 'قيد التنفيذ', count: tasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
           { label: 'مكتمل', count: tasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
         ].map((s, i) => (
@@ -1210,10 +1206,10 @@ export function Tasks() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
-            className="glass rounded-2xl p-3.5 text-center"
+            className="neo-card card-lift rounded-2xl p-3.5 text-center"
           >
-            <p className={cn('text-xl font-bold tabular-nums', s.color)}>
-              <AnimatedCounter target={s.count} className={cn('text-xl font-bold tabular-nums', s.color)} />
+            <p className={cn('text-xl font-bold num', s.color)}>
+              <AnimatedCounter target={s.count} className={cn('text-xl font-bold num', s.color)} />
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
           </motion.div>
@@ -1228,9 +1224,7 @@ export function Tasks() {
           className="flex flex-col items-center justify-center py-12 text-center"
         >
           <div className="relative mb-5">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-accent/15 to-forest/10 flex items-center justify-center">
-              <Inbox className="w-9 h-9 text-emerald-accent/50" />
-            </div>
+            <RiseIcon glyph={MODULE_ICONS.tasks.glyph} hue={MODULE_ICONS.tasks.hue} size="lg" lift />
           </div>
           <h3 className="text-base font-bold text-foreground mb-1.5">
             {hasActiveFilter ? 'لا توجد مهام تطابق الفلتر' : 'لا توجد مهام بعد'}
@@ -1252,9 +1246,9 @@ export function Tasks() {
           {!hasActiveFilter && (
             <Button
               onClick={() => setAddOpen(true)}
-              className="mt-4 rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+              className="mt-4 rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-forest/20 dark:shadow-lime/20"
             >
-              <Plus className="w-4 h-4 ml-1.5" />
+              <Plus className="w-4 h-4 me-1.5" />
               أضف أول مهمة
             </Button>
           )}
@@ -1271,13 +1265,13 @@ export function Tasks() {
         >
           <DragOverlay>
             {activeDragTask ? (
-              <div className="glass rounded-2xl p-4 border-r-4 border-r-emerald-accent shadow-2xl shadow-emerald-accent/20 backdrop-blur-xl opacity-90 rotate-2 scale-105 max-w-md">
+              <div className="neo-card rounded-2xl p-4 border-s-4 border-s-emerald-accent shadow-2xl shadow-emerald-accent/20 backdrop-blur-xl opacity-90 rotate-2 scale-105 max-w-md">
                 <div className="flex items-center gap-3">
                   <GripVertical className="w-4 h-4 text-muted-foreground/50" />
                   <span className="text-sm font-semibold text-foreground truncate">{activeDragTask.title}</span>
-                  <Badge className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[activeDragTask.priority])}>
+                  <span className={cn('pill', priorityPillClasses[activeDragTask.priority])}>
                     {priorityLabels[activeDragTask.priority]}
-                  </Badge>
+                  </span>
                 </div>
               </div>
             ) : null}
@@ -1296,9 +1290,9 @@ export function Tasks() {
                   <div className="flex items-center gap-2 mb-2 px-1">
                     <col.icon className={cn('w-4 h-4', col.color)} />
                     <span className="text-sm font-semibold">{col.label}</span>
-                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
-                      {statusTasks.length}
-                    </Badge>
+                    <span className="pill pill-muted">
+                      <span className="num" dir="ltr">{statusTasks.length}</span>
+                    </span>
                   </div>
                   <AnimatePresence mode="popLayout">
                     {statusTasks.length === 0 ? (
@@ -1306,7 +1300,7 @@ export function Tasks() {
                         key="empty"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="glass rounded-2xl p-6 text-center text-sm text-muted-foreground"
+                        className="neo-card rounded-2xl p-6 text-center text-sm text-muted-foreground"
                       >
                         لا توجد مهام
                       </motion.div>
@@ -1341,20 +1335,20 @@ export function Tasks() {
                 <div className={cn('flex items-center gap-2 mb-3 px-3 pt-3 pb-2', col.color, boardColHeaderBg[col.key])}>
                   <col.icon className="w-4 h-4" />
                   <span className="text-sm font-semibold">{col.label}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5 min-w-[22px] px-1.5 rounded-full justify-center font-bold bg-background/50">
-                    {colTasks.length}
-                  </Badge>
+                  <span className="pill pill-muted justify-center">
+                    <span className="num" dir="ltr">{colTasks.length}</span>
+                  </span>
                 </div>
-                <div className="flex-1 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+                <div className="flex-1 space-y-2 max-h-[60vh] overflow-y-auto ps-1">
                   <AnimatePresence mode="popLayout">
                     {colTasks.length === 0 ? (
                       <motion.div
                         key="empty"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="glass rounded-2xl p-8 text-center"
+                        className="neo-card rounded-2xl p-8 text-center"
                       >
-                        <Inbox className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                        <RiseGlyphIcon glyph={MODULE_ICONS.tasks.glyph} size={30} className="mx-auto mb-2 text-muted-foreground/40" />
                         <p className="text-xs text-muted-foreground">لا توجد مهام</p>
                       </motion.div>
                     ) : (
@@ -1437,8 +1431,9 @@ export function Tasks() {
                       )}
                     >
                       <span
+                        dir="ltr"
                         className={cn(
-                          'text-[11px] font-medium block text-center',
+                          'text-[11px] font-medium block text-center num',
                           isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/40',
                           isToday && 'text-emerald-accent font-bold'
                         )}
@@ -1451,17 +1446,17 @@ export function Tasks() {
                             key={t.id}
                             className={cn(
                               'text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md truncate font-medium',
-                              t.priority === 'urgent' && 'bg-red-500/10 text-red-600 dark:text-red-400',
-                              t.priority === 'high' && 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-                              t.priority === 'medium' && 'bg-gold/10 text-yellow-700 dark:text-gold',
-                              t.priority === 'low' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                              t.priority === 'urgent' && 'bg-destructive/15 text-destructive',
+                              t.priority === 'high' && 'bg-rose-accent/15 text-rose-accent',
+                              t.priority === 'medium' && 'bg-gold/15 text-gold',
+                              t.priority === 'low' && 'bg-glass/15 text-glass'
                             )}
                           >
                             {t.title}
                           </div>
                         ))}
                         {dayTasks.length > 3 && (
-                          <p className="text-[9px] text-muted-foreground text-center">+{dayTasks.length - 3}</p>
+                          <p className="text-[9px] text-muted-foreground text-center num" dir="ltr">+{dayTasks.length - 3}</p>
                         )}
                       </div>
                     </motion.div>

@@ -15,10 +15,9 @@ import {
   Target,
   Sparkles,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api-fetch'
+import { RiseIcon } from '@/components/rise/icons'
 import {
   format,
   startOfMonth,
@@ -80,10 +79,10 @@ interface FocusSession {
 /* ────────────── Helpers ────────────── */
 
 const priorityColors: Record<string, string> = {
-  low: 'bg-emerald-500',
-  medium: 'bg-amber-500',
-  high: 'bg-orange-500',
-  urgent: 'bg-rose-500',
+  low: 'bg-lime-deep',
+  medium: 'bg-gold',
+  high: 'bg-destructive',
+  urgent: 'bg-rose-accent',
 }
 
 const priorityLabels: Record<string, string> = {
@@ -273,9 +272,12 @@ export default function CalendarView() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">التقويم</h2>
-          <p className="text-sm text-muted-foreground mt-1">عرض مهامك وأحداثك على التقويم</p>
+        <div className="flex items-center gap-3">
+          <RiseIcon glyph="calendar" hue="blue" size="md" lift />
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">التقويم</h2>
+            <p className="text-sm text-muted-foreground mt-1">عرض مهامك وأحداثك على التقويم</p>
+          </div>
         </div>
       </div>
 
@@ -286,21 +288,21 @@ export default function CalendarView() {
         className="flex items-center gap-4 sm:gap-6 flex-wrap text-sm"
       >
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+          <div className="w-2 h-2 rounded-full bg-lime-deep" />
           <span className="text-muted-foreground">
-            <span className="font-bold text-foreground">{monthStats.tasksCount}</span> مهام هذا الشهر
+            <span className="num font-bold text-foreground" dir="ltr">{monthStats.tasksCount}</span> مهام هذا الشهر
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-accent" />
+          <div className="w-2 h-2 rounded-full bg-violet-accent" />
           <span className="text-muted-foreground">
-            <span className="font-bold text-foreground">{monthStats.focusSessions}</span> جلسات تركيز
+            <span className="num font-bold text-foreground" dir="ltr">{monthStats.focusSessions}</span> جلسات تركيز
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500" />
+          <div className="w-2 h-2 rounded-full bg-glass" />
           <span className="text-muted-foreground">
-            <span className="font-bold text-foreground">{monthStats.journalDays}</span> يوم يوميات
+            <span className="num font-bold text-foreground" dir="ltr">{monthStats.journalDays}</span> يوم يوميات
           </span>
         </div>
       </motion.div>
@@ -308,9 +310,8 @@ export default function CalendarView() {
       <div className="flex gap-4 flex-col lg:flex-row">
         {/* Calendar Grid */}
         <div className="flex-1 min-w-0">
-          <Card className="glass">
-            <CardContent className="p-4 sm:p-5">
-              {/* Month Navigation */}
+          <div className="neo-card card-lift p-4 sm:p-5">
+            {/* Month Navigation */}
               <div className="flex items-center justify-between mb-6">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
@@ -327,7 +328,7 @@ export default function CalendarView() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={goToToday}
-                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20 transition-colors"
+                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-glass/10 text-glass hover:bg-glass/20 transition-colors"
                   >
                     اليوم
                   </motion.button>
@@ -376,16 +377,16 @@ export default function CalendarView() {
                         onClick={() => setSelectedDate(isSelected ? null : day)}
                         className={cn(
                           'relative aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all text-sm font-medium',
-                          !inMonth && 'text-muted-foreground/25',
-                          inMonth && !isTodayDate && !isSelected && 'text-foreground hover:glass hover:shadow-md',
-                          isTodayDate && !isSelected && 'ring-2 ring-emerald-accent/50 bg-emerald-accent/5 text-emerald-accent font-bold glow-emerald',
-                          isSelected && 'bg-gradient-to-br from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/30',
+                          !inMonth && 'bg-transparent text-muted-foreground/40',
+                          inMonth && !isTodayDate && !isSelected && 'text-foreground hover:bg-secondary',
+                          isTodayDate && !isSelected && 'ring-2 ring-glass bg-glass/5 text-glass font-bold',
+                          isSelected && 'bg-forest text-paper-soft shadow-lg shadow-forest/30 dark:bg-lime dark:text-ink dark:shadow-lime/20',
                         )}
                       >
                         <span
                           className={cn(
                             'text-xs sm:text-sm leading-none',
-                            isTodayDate && !isSelected && 'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-emerald-accent/15',
+                            isTodayDate && !isSelected && 'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-glass/15',
                           )}
                         >
                           {format(day, 'd')}
@@ -394,21 +395,21 @@ export default function CalendarView() {
                         {inMonth && indicators && (
                           <div className="flex gap-0.5 h-1.5 items-center">
                             {indicators.hasCompletedTasks && (
-                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-white/90' : 'bg-emerald-500')} />
+                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-paper-soft/90 dark:bg-ink/70' : 'bg-lime-deep')} />
                             )}
                             {indicators.hasGoals && (
-                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-white/90' : 'bg-amber-500')} />
+                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-paper-soft/90 dark:bg-ink/70' : 'bg-gold')} />
                             )}
                             {indicators.hasJournal && (
-                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-white/90' : 'bg-blue-500')} />
+                              <div className={cn('w-1.5 h-1.5 rounded-full', isSelected ? 'bg-paper-soft/90 dark:bg-ink/70' : 'bg-glass')} />
                             )}
                           </div>
                         )}
                         {/* Task count badge for days with many tasks */}
                         {inMonth && dayTasks.length > 2 && (
                           <span className={cn(
-                            'absolute -top-0.5 -left-0.5 text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center',
-                            isSelected ? 'bg-white/30 text-white' : 'bg-emerald-accent/15 text-emerald-accent'
+                            'num absolute -top-0.5 -start-0.5 text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center',
+                            isSelected ? 'bg-paper-soft/25 text-paper-soft dark:bg-ink/25 dark:text-ink' : 'bg-glass/15 text-glass'
                           )}>
                             {dayTasks.length}
                           </span>
@@ -422,20 +423,19 @@ export default function CalendarView() {
               {/* Legend */}
               <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t border-border/30">
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <div className="w-2 h-2 rounded-full bg-lime-deep" />
                   مهام مكتملة
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <div className="w-2 h-2 rounded-full bg-gold" />
                   أهداف مستحقة
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  <div className="w-2 h-2 rounded-full bg-glass" />
                   يوميات
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </div>
         </div>
 
         {/* Slide-in Panel (Desktop) / Below Calendar (Mobile) */}
@@ -449,19 +449,19 @@ export default function CalendarView() {
                 exit={{ opacity: 0, x: 40 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               >
-                <Card className="glass border-r-4 border-r-emerald-accent overflow-hidden shadow-xl shadow-emerald-accent/10">
+                <div className="neo-card card-lift border-s-4 border-s-glass overflow-hidden shadow-xl shadow-glass/10">
                   {/* Date Header */}
-                  <div className="bg-gradient-to-l from-emerald-accent/10 to-forest/5 px-4 pt-4 pb-3">
+                  <div className="bg-gradient-to-l from-glass/10 to-glass/5 px-4 pt-4 pb-3">
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <p className="text-2xl font-bold">{format(selectedDate, 'd', { locale: ar })}</p>
+                        <p className="num text-2xl font-bold" dir="ltr">{format(selectedDate, 'd', { locale: ar })}</p>
                         <p className="text-xs text-muted-foreground">
                           {format(selectedDate, 'EEEE d MMMM yyyy', { locale: ar })}
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5">
                         {isToday(selectedDate) && (
-                          <Badge className="bg-emerald-accent/15 text-emerald-accent border-0 text-[10px]">اليوم</Badge>
+                          <span className="pill bg-glass/15 text-glass text-[10px]">اليوم</span>
                         )}
                         <motion.button
                           whileTap={{ scale: 0.9 }}
@@ -474,12 +474,12 @@ export default function CalendarView() {
                     </div>
                   </div>
 
-                  <CardContent className="p-4 space-y-4">
+                  <div className="p-4 space-y-4">
                     {/* Tasks Section */}
                     <div>
                       <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                        <Target className="w-3 h-3 text-emerald-accent" />
-                        المهام ({selectedTasks.length})
+                        <Target className="w-3 h-3 text-glass" />
+                        المهام (<span className="num" dir="ltr">{selectedTasks.length}</span>)
                       </h4>
                       {selectedTasks.length === 0 ? (
                         <p className="text-xs text-muted-foreground text-center py-3 bg-muted/20 rounded-xl">لا توجد مهام</p>
@@ -488,7 +488,7 @@ export default function CalendarView() {
                           {selectedTasks.map((task) => (
                             <div key={task.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/30 transition-colors">
                               {task.status === 'done' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-accent mt-0.5 shrink-0" />
                               ) : (
                                 <Circle className="w-3.5 h-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
                               )}
@@ -503,9 +503,9 @@ export default function CalendarView() {
                                       {task.dueTime}
                                     </span>
                                   )}
-                                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
+                                  <span className="pill pill-muted text-[9px] px-1.5 py-0 h-4">
                                     {priorityLabels[task.priority] || task.priority}
-                                  </Badge>
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -518,8 +518,8 @@ export default function CalendarView() {
                     {selectedHabitStatus && selectedHabitStatus.total > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                          <Flame className="w-3 h-3 text-orange-500" />
-                          العادات ({selectedHabitStatus.completed}/{selectedHabitStatus.total})
+                          <Flame className="w-3 h-3 text-rose-accent" />
+                          العادات (<span className="num" dir="ltr">{selectedHabitStatus.completed}/{selectedHabitStatus.total}</span>)
                         </h4>
                         <div className="grid grid-cols-2 gap-1.5">
                           {selectedHabitStatus.items.slice(0, 6).map((h, idx) => (
@@ -527,7 +527,7 @@ export default function CalendarView() {
                               key={idx}
                               className={cn(
                                 'flex items-center gap-1.5 text-[11px] px-2 py-1.5 rounded-lg',
-                                h.completed ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted/20 text-muted-foreground'
+                                h.completed ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-muted/20 text-muted-foreground'
                               )}
                             >
                               {h.completed ? (
@@ -546,10 +546,10 @@ export default function CalendarView() {
                     {selectedJournal && (
                       <div>
                         <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                          <BookOpen className="w-3 h-3 text-blue-500" />
+                          <BookOpen className="w-3 h-3 text-glass" />
                           اليوميات
                         </h4>
-                        <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-3 space-y-2">
+                        <div className="bg-glass/5 border border-glass/10 rounded-xl p-3 space-y-2">
                           <div className="flex items-center gap-2">
                             {selectedJournal.mood && (
                               <span className="text-lg">{moodEmojis[selectedJournal.mood] || '😐'}</span>
@@ -566,8 +566,8 @@ export default function CalendarView() {
                         </div>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -575,21 +575,20 @@ export default function CalendarView() {
           {/* Today's Tasks (when no date selected) */}
           {!selectedDate && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <Card className="glass premium-card">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4 text-emerald-accent" />
-                    مهام اليوم
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+              <div className="neo-card card-lift p-4">
+                <h3 className="text-sm font-bold flex items-center gap-2.5 mb-3">
+                  <span className="icon-well h-6 w-6 iw-blue"><CalendarDays className="h-3.5 w-3.5" /></span>
+                  مهام اليوم
+                </h3>
+                <div>
                   {todayTasks.length === 0 ? (
                     <div className="text-center py-8">
                       <motion.div
                         animate={{ y: [0, -5, 0] }}
                         transition={{ duration: 2.5, repeat: Infinity }}
+                        className="flex justify-center mb-2"
                       >
-                        <CalendarDays className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+                        <span className="icon-well h-14 w-14 bg-secondary text-muted-foreground/50"><CalendarDays className="h-6 w-6" /></span>
                       </motion.div>
                       <p className="text-sm text-muted-foreground">لا توجد مهام لهذا اليوم</p>
                       <p className="text-xs text-muted-foreground/60 mt-1">استمتع بيومك الخالي من المهام! 🎉</p>
@@ -627,20 +626,18 @@ export default function CalendarView() {
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </motion.div>
           )}
 
           {/* Upcoming Tasks */}
-          <Card className="glass">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                المهام القادمة
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="neo-card card-lift p-4">
+            <h3 className="text-sm font-bold flex items-center gap-2.5 mb-3">
+              <span className="icon-well h-6 w-6 iw-amber"><Sparkles className="h-3.5 w-3.5" /></span>
+              المهام القادمة
+            </h3>
+            <div>
               {upcomingTasks.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">لا توجد مهام قادمة</p>
               ) : (
@@ -665,8 +662,8 @@ export default function CalendarView() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

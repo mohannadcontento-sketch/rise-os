@@ -16,7 +16,6 @@ import {
   CartesianGrid,
 } from 'recharts'
 import {
-  Heart,
   Moon,
   Droplets,
   Footprints,
@@ -29,15 +28,12 @@ import {
   Dumbbell,
   TrendingUp,
   Scale,
-  Calendar,
   Activity,
   CheckCircle2,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
@@ -46,6 +42,8 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { getToday, toLocalDateStr } from '@/lib/rise-utils'
+import { ActivityRing, HeartbeatChart, RainbowCheckbox } from '@/components/rise/kit-v2'
+import { RiseIcon } from '@/components/rise/icons'
 
 /* ────────────── Types ────────────── */
 
@@ -310,8 +308,7 @@ export default function Health() {
     return Math.round(score)
   }, [data?.todayLog])
 
-  const healthScoreColor = healthScore >= 70 ? 'text-emerald-accent' : healthScore >= 40 ? 'text-gold' : 'text-red-500'
-  const healthScoreBg = healthScore >= 70 ? 'from-emerald-accent' : healthScore >= 40 ? 'from-gold' : 'from-red-500'
+  const healthScoreColor = healthScore >= 70 ? 'text-emerald-accent' : healthScore >= 40 ? 'text-gold' : 'text-destructive'
 
   /* ─── Weekly Comparison ─── */
   const weeklyComparison = useMemo(() => {
@@ -397,9 +394,7 @@ export default function Health() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center shadow-lg">
-            <Heart className="w-5 h-5 text-white" />
-          </div>
+          <RiseIcon glyph="health" hue="rose" size="md" lift />
           <div>
             <h2 className="text-xl font-bold text-foreground">الصحة</h2>
             <p className="text-xs text-muted-foreground">تتبع صحتك وعافيتك اليومية</p>
@@ -409,17 +404,17 @@ export default function Health() {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-10 text-sm font-semibold"
+            className="bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 shadow-lg rounded-xl h-10 text-sm font-semibold"
           >
             {saving ? (
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
               >
-                <Save className="w-4 h-4 ml-1" />
+                <Save className="w-4 h-4 me-1" />
               </motion.div>
             ) : (
-              <Save className="w-4 h-4 ml-1" />
+              <Save className="w-4 h-4 me-1" />
             )}
             {saving ? 'جاري الحفظ...' : 'حفظ'}
           </Button>
@@ -428,17 +423,25 @@ export default function Health() {
 
       {/* Health Score Hero */}
       <motion.div variants={itemVariants}>
-        <div className="premium-card rounded-2xl overflow-hidden relative">
-          <div className={cn("noise-bg absolute inset-0 bg-gradient-to-l", healthScoreBg, "/8 via-transparent to-transparent pointer-events-none")} />
+        <div className="neo-card relative overflow-hidden">
+          <div className="noise-bg absolute inset-0 bg-gradient-to-l from-rose-accent/8 via-transparent to-transparent pointer-events-none" />
           <div className="relative z-10 p-6 flex flex-col items-center text-center gap-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">درجة الصحة اليوم</p>
+            <p className="eyebrow-ar uppercase tracking-wider">درجة الصحة اليوم</p>
             <motion.div
-              className={cn("text-7xl font-black tabular-nums", healthScoreColor)}
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: 'spring', stiffness: 200, damping: 20 }}
             >
-              <AnimatedCounter target={healthScore} />
+              <ActivityRing
+                percent={healthScore}
+                size={168}
+                hue="rose"
+                label={
+                  <span className={cn('num text-5xl font-black', healthScoreColor)}>
+                    <AnimatedCounter target={healthScore} />
+                  </span>
+                }
+              />
             </motion.div>
             <p className={cn("text-sm font-semibold", healthScoreColor)}>
               {healthScore >= 70 ? 'ممتاز 🎉' : healthScore >= 40 ? 'جيد 👍' : 'يحتاج تحسين 💪'}
@@ -457,14 +460,14 @@ export default function Health() {
       {/* Daily Checklist + Weekly Comparison */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Daily Checklist */}
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-accent" />
-              قائمة اليوم
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-3">
+            <span className="icon-well iw-rose w-8 h-8">
+              <CheckCircle2 className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">قائمة اليوم</h3>
+          </div>
+          <div className="space-y-4">
             {/* Water glasses as clickable icons */}
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground">الماء (هدف: ٨ أكواب)</p>
@@ -490,23 +493,15 @@ export default function Health() {
             {/* Exercise toggle */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Dumbbell className="w-4 h-4 text-emerald-accent" />
-                <span className="text-xs font-semibold text-muted-foreground">تمارين اليوم</span>
-              </div>
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={() => updateForm('exerciseType', form.exerciseType ? '' : 'مشي')}
-                className={cn(
-                  "w-12 h-6 rounded-full transition-colors relative",
-                  form.exerciseType ? "bg-emerald-accent" : "bg-muted"
-                )}
-              >
-                <motion.div
-                  className={cn("absolute top-0.5 w-5 h-5 rounded-full shadow-md", form.exerciseType ? "left-0.5 bg-white" : "right-0.5 bg-muted-foreground/50")}
-                  animate={{ x: 0 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                <span className="icon-well iw-rose w-7 h-7">
+                  <Dumbbell className="w-3.5 h-3.5" />
+                </span>
+                <RainbowCheckbox
+                  checked={!!form.exerciseType}
+                  onChange={(next) => updateForm('exerciseType', next ? 'مشي' : '')}
+                  label="تمارين اليوم"
                 />
-              </motion.button>
+              </div>
             </div>
             {/* Sleep quality stars */}
             <div className="space-y-2">
@@ -525,25 +520,25 @@ export default function Health() {
                     <Moon
                       className={cn(
                         "w-6 h-6 transition-colors",
-                        i < form.sleepQuality ? "text-indigo-400 fill-indigo-400" : "text-muted/30"
+                        i < form.sleepQuality ? "text-violet-accent fill-violet-accent" : "text-muted/30"
                       )}
                     />
                   </motion.button>
                 ))}
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Weekly Comparison Mini Bar */}
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-accent" />
-              مقارنة أسبوعية
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-3">
+            <span className="icon-well iw-rose w-8 h-8">
+              <TrendingUp className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">مقارنة أسبوعية</h3>
+          </div>
+          <div className="space-y-4">
             {/* Mood comparison */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
@@ -582,7 +577,7 @@ export default function Health() {
               <div className="flex gap-2 h-4">
                 <div className="flex-1 bg-muted rounded-full overflow-hidden flex justify-end">
                   <motion.div
-                    className="h-full bg-cyan-500/50 rounded-full"
+                    className="h-full bg-glass/50 rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, (weeklyComparison.lastWater / 8) * 100)}%` }}
                     transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -590,7 +585,7 @@ export default function Health() {
                 </div>
                 <div className="flex-1 bg-muted rounded-full overflow-hidden flex justify-end">
                   <motion.div
-                    className="h-full bg-cyan-500 rounded-full"
+                    className="h-full bg-glass rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, (weeklyComparison.thisWater / 8) * 100)}%` }}
                     transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -613,7 +608,7 @@ export default function Health() {
                   className={cn(
                     "flex items-center gap-2 p-2.5 rounded-xl text-xs",
                     insight.type === 'positive' && "bg-emerald-accent/8 text-emerald-accent border border-emerald-accent/15",
-                    insight.type === 'negative' && "bg-red-500/8 text-red-500 border border-red-500/15",
+                    insight.type === 'negative' && "bg-destructive/8 text-destructive border border-destructive/15",
                     insight.type === 'neutral' && "bg-muted/30 text-muted-foreground"
                   )}
                 >
@@ -622,19 +617,19 @@ export default function Health() {
                 </motion.div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Today's Overview - 2x3 Grid */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
         {/* Sleep */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 space-y-3">
+        <div className="neo-card card-lift">
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                <Moon className="w-4 h-4 text-indigo-400" />
-              </div>
+              <span className="icon-well iw-violet w-8 h-8">
+                <Moon className="w-4 h-4" />
+              </span>
               <span className="text-sm font-semibold text-foreground">النوم</span>
             </div>
             <div className="flex items-baseline gap-1">
@@ -642,7 +637,8 @@ export default function Health() {
                 type="number"
                 value={form.sleepHours ? Number(form.sleepHours.toFixed(1)) : ''}
                 onChange={(e) => updateForm('sleepHours', parseFloat(e.target.value) || 0)}
-                className="w-16 h-8 text-lg font-bold text-center rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0"
+                dir="ltr"
+                className="num w-16 h-8 text-lg font-bold text-center rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0"
                 placeholder="٠"
                 min={0}
                 max={24}
@@ -661,22 +657,22 @@ export default function Health() {
                 max={5}
                 value={form.sleepQuality}
                 onChange={(e) => updateForm('sleepQuality', parseInt(e.target.value))}
-                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-indigo-400"
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-violet-accent"
                 style={{
-                  background: `linear-gradient(to left, rgb(129 140 248) ${((form.sleepQuality - 1) / 4) * 100}%, var(--color-muted) ${((form.sleepQuality - 1) / 4) * 100}%)`,
+                  background: `linear-gradient(to left, #8B5CF6 ${((form.sleepQuality - 1) / 4) * 100}%, var(--color-muted) ${((form.sleepQuality - 1) / 4) * 100}%)`,
                 }}
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Water */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 space-y-3">
+        <div className="neo-card card-lift">
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                <Droplets className="w-4 h-4 text-cyan-500" />
-              </div>
+              <span className="icon-well iw-blue w-8 h-8">
+                <Droplets className="w-4 h-4" />
+              </span>
               <span className="text-sm font-semibold text-foreground">الماء</span>
             </div>
             <div className="flex items-center justify-center gap-4">
@@ -688,15 +684,15 @@ export default function Health() {
                 <Minus className="w-4 h-4 text-muted-foreground" />
               </motion.button>
               <div className="text-center">
-                <span className="text-2xl font-bold text-foreground">{form.waterGlasses}</span>
+                <span dir="ltr" className="num text-2xl font-bold text-foreground">{form.waterGlasses}</span>
                 <span className="text-xs text-muted-foreground block">كوب</span>
               </div>
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => updateForm('waterGlasses', form.waterGlasses + 1)}
-                className="w-9 h-9 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 flex items-center justify-center transition-colors"
+                className="w-9 h-9 rounded-xl bg-glass/10 hover:bg-glass/20 flex items-center justify-center transition-colors"
               >
-                <Plus className="w-4 h-4 text-cyan-500" />
+                <Plus className="w-4 h-4 text-glass" />
               </motion.button>
             </div>
             {/* Water visual */}
@@ -705,23 +701,23 @@ export default function Health() {
                 <motion.div
                   key={i}
                   animate={{
-                    backgroundColor: i < form.waterGlasses ? 'var(--color-cyan-500)' : 'var(--color-muted)',
+                    backgroundColor: i < form.waterGlasses ? 'var(--color-glass)' : 'var(--color-muted)',
                     scale: i < form.waterGlasses ? 1 : 0.8,
                   }}
                   className="w-2.5 h-2.5 rounded-full transition-colors"
                 />
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Steps */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 space-y-3">
+        <div className="neo-card card-lift">
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
-                <Footprints className="w-4 h-4 text-emerald-accent" />
-              </div>
+              <span className="icon-well iw-lime w-8 h-8">
+                <Footprints className="w-4 h-4" />
+              </span>
               <span className="text-sm font-semibold text-foreground">الخطوات</span>
             </div>
             <div className="flex items-baseline gap-1">
@@ -729,7 +725,8 @@ export default function Health() {
                 type="number"
                 value={form.steps || ''}
                 onChange={(e) => updateForm('steps', parseInt(e.target.value) || 0)}
-                className="w-24 h-8 text-lg font-bold rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0 text-center"
+                dir="ltr"
+                className="num w-24 h-8 text-lg font-bold rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0 text-center"
                 placeholder="٠"
                 min={0}
               />
@@ -744,16 +741,16 @@ export default function Health() {
             <span className="text-[10px] text-muted-foreground">
               الهدف: ١٠,٠٠٠ خطوة ({Math.round((form.steps / 10000) * 100)}%)
             </span>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Calories */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 space-y-3">
+        <div className="neo-card card-lift">
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <Flame className="w-4 h-4 text-orange-500" />
-              </div>
+              <span className="icon-well iw-amber w-8 h-8">
+                <Flame className="w-4 h-4" />
+              </span>
               <span className="text-sm font-semibold text-foreground">السعرات</span>
             </div>
             <div className="flex items-baseline gap-1">
@@ -761,7 +758,8 @@ export default function Health() {
                 type="number"
                 value={form.calories || ''}
                 onChange={(e) => updateForm('calories', parseInt(e.target.value) || 0)}
-                className="w-24 h-8 text-lg font-bold rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0 text-center"
+                dir="ltr"
+                className="num w-24 h-8 text-lg font-bold rounded-lg border-0 bg-muted/50 focus:bg-muted text-foreground p-0 text-center"
                 placeholder="٠"
                 min={0}
               />
@@ -769,7 +767,7 @@ export default function Health() {
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
               <motion.div
-                className="h-full rounded-full bg-gradient-to-l from-orange-400 to-orange-600"
+                className="h-full rounded-full bg-gradient-to-l from-gold to-gold/60"
                 animate={{ width: `${Math.min(100, (form.calories / 2500) * 100)}%` }}
                 transition={{ duration: 0.5 }}
               />
@@ -777,16 +775,16 @@ export default function Health() {
             <span className="text-[10px] text-muted-foreground">
               الهدف: ٢,٥٠٠ سعرة
             </span>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Mood */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 space-y-3">
+        <div className="neo-card card-lift">
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
-                <Smile className="w-4 h-4 text-gold" />
-              </div>
+              <span className="icon-well iw-amber w-8 h-8">
+                <Smile className="w-4 h-4" />
+              </span>
               <span className="text-sm font-semibold text-foreground">المزاج</span>
             </div>
             <div className="flex items-center justify-center gap-1.5 py-1">
@@ -810,19 +808,19 @@ export default function Health() {
             <p className="text-center text-[11px] text-muted-foreground">
               {MOOD_LABELS[form.mood - 1]}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Energy */}
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4 space-y-3">
+        <div className="neo-card card-lift">
+          <div className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
-                <Battery className="w-4 h-4 text-forest" />
-              </div>
+              <span className="icon-well iw-forest w-8 h-8">
+                <Battery className="w-4 h-4" />
+              </span>
               <span className="text-sm font-semibold text-foreground">الطاقة</span>
             </div>
-            <div className="flex items-center justify-center gap-1 text-3xl font-bold text-forest">
+            <div dir="ltr" className="flex items-center justify-center gap-1 num text-3xl font-bold text-forest">
               {form.energy}
             </div>
             <div className="space-y-1">
@@ -841,20 +839,20 @@ export default function Health() {
                 {ENERGY_LABELS[form.energy - 1]}
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Exercise Section */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Dumbbell className="w-4 h-4 text-emerald-accent" />
-              التمارين
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-3">
+            <span className="icon-well iw-amber w-8 h-8">
+              <Dumbbell className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">التمارين</h3>
+          </div>
+          <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {EXERCISE_TYPES.map((type) => (
                 <motion.button
@@ -897,26 +895,27 @@ export default function Health() {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Weight Tracking */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Scale className="w-4 h-4 text-forest" />
-              تتبع الوزن
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-3">
+            <span className="icon-well iw-forest w-8 h-8">
+              <Scale className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">تتبع الوزن</h3>
+          </div>
+          <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Input
                 type="number"
                 value={form.weight ?? ''}
                 onChange={(e) => updateForm('weight', parseFloat(e.target.value) || null)}
-                className="w-32 h-10 rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm text-center"
+                dir="ltr"
+                className="num w-32 h-10 rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm text-center"
                 placeholder="كجم"
                 min={0}
                 step={0.1}
@@ -955,66 +954,54 @@ export default function Health() {
                 </ResponsiveContainer>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Charts Section */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-accent" />
-              الرسوم البيانية (آخر ١٤ يوم)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-2">
+            <span className="icon-well iw-rose w-8 h-8">
+              <Activity className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">الرسوم البيانية (آخر ١٤ يوم)</h3>
+          </div>
+          <div>
             <Tabs defaultValue="sleep" className="w-full">
               <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50 rounded-xl">
                 <TabsTrigger
                   value="sleep"
-                  className="text-xs rounded-lg py-2 data-[state=active]:bg-emerald-accent data-[state=active]:text-white"
+                  className="text-xs rounded-lg py-2 data-[state=active]:bg-foreground data-[state=active]:text-background"
                 >
                   النوم
                 </TabsTrigger>
                 <TabsTrigger
                   value="water"
-                  className="text-xs rounded-lg py-2 data-[state=active]:bg-cyan-500 data-[state=active]:text-white"
+                  className="text-xs rounded-lg py-2 data-[state=active]:bg-foreground data-[state=active]:text-background"
                 >
                   الماء
                 </TabsTrigger>
                 <TabsTrigger
                   value="steps"
-                  className="text-xs rounded-lg py-2 data-[state=active]:bg-emerald-accent data-[state=active]:text-white"
+                  className="text-xs rounded-lg py-2 data-[state=active]:bg-foreground data-[state=active]:text-background"
                 >
                   الخطوات
                 </TabsTrigger>
                 <TabsTrigger
                   value="mood"
-                  className="text-xs rounded-lg py-2 data-[state=active]:bg-gold data-[state=active]:text-forest-dark"
+                  className="text-xs rounded-lg py-2 data-[state=active]:bg-foreground data-[state=active]:text-background"
                 >
                   المزاج
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="sleep" className="mt-4">
-                <div className="h-52">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={sleepChartData} barCategoryGap="20%">
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
-                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={25} />
-                      <Tooltip contentStyle={tooltipStyle} />
-                      <defs>
-                        <linearGradient id="sleepBarGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--color-emerald-accent)" stopOpacity={0.9} />
-                          <stop offset="100%" stopColor="var(--color-emerald-accent)" stopOpacity={0.3} />
-                        </linearGradient>
-                      </defs>
-                      <Bar dataKey="ساعات" fill="url(#sleepBarGrad)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <HeartbeatChart
+                  values={sleepChartData.map((d) => d['ساعات'])}
+                  labels={sleepChartData.map((d) => d.day)}
+                  unit="س"
+                />
               </TabsContent>
 
               <TabsContent value="water" className="mt-4">
@@ -1027,8 +1014,8 @@ export default function Health() {
                       <Tooltip contentStyle={tooltipStyle} />
                       <defs>
                         <linearGradient id="waterBarGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--color-cyan-500)" stopOpacity={0.9} />
-                          <stop offset="100%" stopColor="var(--color-cyan-500)" stopOpacity={0.3} />
+                          <stop offset="0%" stopColor="#007AFF" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="#007AFF" stopOpacity={0.3} />
                         </linearGradient>
                       </defs>
                       <Bar dataKey="أكواب" fill="url(#waterBarGrad)" radius={[4, 4, 0, 0]} />
@@ -1078,8 +1065,8 @@ export default function Health() {
                 </div>
               </TabsContent>
             </Tabs>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
     </motion.div>
   )

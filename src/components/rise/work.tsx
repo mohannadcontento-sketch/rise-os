@@ -19,18 +19,16 @@ import {
   ListChecks,
   History,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { notifyWorkComplete } from '@/lib/notifications'
+import { RiseIcon } from '@/components/rise/icons'
 import {
   Dialog,
   DialogContent,
@@ -96,7 +94,7 @@ function qualityLabel(score: number): { label: string; color: string } {
   if (score >= 85) return { label: 'ممتاز', color: 'text-emerald-accent' }
   if (score >= 65) return { label: 'جيد جداً', color: 'text-forest' }
   if (score >= 45) return { label: 'مقبول', color: 'text-gold' }
-  return { label: 'يحتاج تحسين', color: 'text-rose-400' }
+  return { label: 'يحتاج تحسين', color: 'text-rose-accent' }
 }
 
 /* ────────────── Component ────────────── */
@@ -419,20 +417,16 @@ export default function WorkSessions() {
     return (
       <div className="space-y-6 max-w-2xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-forest/10 flex items-center justify-center">
-            <Briefcase className="w-6 h-6 text-forest" />
-          </div>
+          <RiseIcon glyph="work" hue="forest" size="md" lift />
           <div>
             <h1 className="text-2xl font-bold">الشغل</h1>
             <p className="text-sm text-muted-foreground">افتح جلسة شغل طويلة، تابع وقتك واستراحاتك، وشوف جودة شغلك في الآخر</p>
           </div>
         </div>
 
-        <Card className="border-forest/15">
-          <CardHeader>
-            <CardTitle className="text-lg">ابدأ جلسة شغل جديدة</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="neo-card card-lift p-5">
+          <h3 className="text-lg font-bold mb-4">ابدأ جلسة شغل جديدة</h3>
+          <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm text-muted-foreground">عنوان الجلسة (اختياري)</label>
               <Input
@@ -445,11 +439,11 @@ export default function WorkSessions() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm text-muted-foreground">ساعات</label>
-                <Input type="number" min={0} max={23} value={hoursInput} onChange={(e) => setHoursInput(e.target.value)} />
+                <Input type="number" dir="ltr" min={0} max={23} value={hoursInput} onChange={(e) => setHoursInput(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-muted-foreground">دقائق</label>
-                <Input type="number" min={0} max={59} value={minutesInput} onChange={(e) => setMinutesInput(e.target.value)} />
+                <Input type="number" dir="ltr" min={0} max={59} value={minutesInput} onChange={(e) => setMinutesInput(e.target.value)} />
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -459,18 +453,19 @@ export default function WorkSessions() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="border-border bg-card hover:bg-secondary"
                   onClick={() => { setHoursInput(String(h)); setMinutesInput('0') }}
                 >
                   {h} {h === 1 ? 'ساعة' : 'ساعات'}
                 </Button>
               ))}
             </div>
-            <Button className="w-full gap-2" size="lg" onClick={handleStart} disabled={saving}>
+            <Button className="w-full gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink" size="lg" onClick={handleStart} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
               ابدأ الشغل
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         <WorkHistory history={history} loading={loadingHistory} />
       </div>
@@ -480,18 +475,18 @@ export default function WorkSessions() {
   /* ─── Running / break screen ─── */
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      <Card className={cn('border-2 transition-colors', phase === 'break' ? 'border-gold/40 bg-gold/5' : 'border-forest/30 bg-forest/5')}>
-        <CardContent className="pt-6 space-y-6">
+      <div className={cn('neo-card card-lift border-2 transition-colors', phase === 'break' ? 'border-gold/40 bg-gold/5' : 'border-forest/30 bg-forest/5')}>
+        <div className="p-6 space-y-6">
           <div className="text-center space-y-2">
-            <Badge variant="outline" className={cn('gap-1.5', phase === 'break' ? 'border-gold/40 text-gold' : 'border-forest/40 text-forest')}>
+            <span className={cn('pill', phase === 'break' ? 'bg-gold/15 text-gold' : 'bg-forest/15 text-forest dark:text-lime')}>
               {phase === 'break' ? <Coffee className="w-3.5 h-3.5" /> : <Briefcase className="w-3.5 h-3.5" />}
               {phase === 'break' ? 'في استراحة' : 'شغل جاري'}
-            </Badge>
+            </span>
             {sessionTitle && <p className="text-sm text-muted-foreground">{sessionTitle}</p>}
           </div>
 
           <div className="text-center">
-            <div className="text-5xl font-bold tabular-nums tracking-tight">
+            <div className="num text-5xl font-bold tracking-tight" dir="ltr">
               {formatClock(liveActiveMs)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -499,19 +494,21 @@ export default function WorkSessions() {
             </p>
           </div>
 
-          <Progress value={progressPct} className="h-2" />
+          <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-l from-forest/80 to-forest dark:from-lime/80 dark:to-lime" style={{ width: `${progressPct}%` }} />
+          </div>
 
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-xl bg-background/60 py-2.5">
+            <div className="rounded-xl bg-card/60 py-2.5">
               <div className="text-lg font-semibold">{formatHM(Math.floor(liveBreakMs / 60000))}</div>
               <div className="text-[11px] text-muted-foreground">استراحة</div>
             </div>
-            <div className="rounded-xl bg-background/60 py-2.5">
-              <div className="text-lg font-semibold">{breaksLog.length}</div>
+            <div className="rounded-xl bg-card/60 py-2.5">
+              <div className="num text-lg font-semibold" dir="ltr">{breaksLog.length}</div>
               <div className="text-[11px] text-muted-foreground">عدد الاستراحات</div>
             </div>
-            <div className="rounded-xl bg-background/60 py-2.5">
-              <div className="text-lg font-semibold">{totalCompletedTasks}</div>
+            <div className="rounded-xl bg-card/60 py-2.5">
+              <div className="num text-lg font-semibold" dir="ltr">{totalCompletedTasks}</div>
               <div className="text-[11px] text-muted-foreground">مهام أُنجزت</div>
             </div>
           </div>
@@ -519,7 +516,7 @@ export default function WorkSessions() {
           <div className="flex gap-2">
             <Button
               variant={phase === 'break' ? 'default' : 'outline'}
-              className="flex-1 gap-2"
+              className={cn('flex-1 gap-2', phase === 'break' ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink' : 'border-border bg-card hover:bg-secondary')}
               onClick={handleToggleBreak}
             >
               {phase === 'break' ? <Play className="w-4 h-4" /> : <Coffee className="w-4 h-4" />}
@@ -538,25 +535,26 @@ export default function WorkSessions() {
           <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => finalizeSession('cancelled')} disabled={saving}>
             إلغاء الجلسة بدون حفظ التقييم
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Task checklist */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ListChecks className="w-4 h-4 text-forest" />
-            مهام أنجزتها في الجلسة دي
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="neo-card card-lift p-5">
+        <h3 className="text-base font-bold flex items-center gap-2.5 mb-4">
+          <span className="icon-well h-7 w-7 iw-forest"><ListChecks className="h-4 w-4" /></span>
+          مهام أنجزتها في الجلسة دي
+        </h3>
+        <div>
           {loadingTasks ? (
             <div className="space-y-2">
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-9 w-full" />
             </div>
           ) : taskOptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">مفيش مهام مفتوحة دلوقتي — أضف مهام من وحدة المهام وهتظهر هنا</p>
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <span className="icon-well h-12 w-12 bg-secondary text-muted-foreground/50"><ListChecks className="h-5 w-5" /></span>
+              <p className="text-sm text-muted-foreground">مفيش مهام مفتوحة دلوقتي — أضف مهام من وحدة المهام وهتظهر هنا</p>
+            </div>
           ) : (
             <div className="space-y-1.5 max-h-56 overflow-y-auto">
               {taskOptions.map((task) => {
@@ -568,8 +566,8 @@ export default function WorkSessions() {
                     onClick={() => handleToggleTask(task)}
                     disabled={done || togglingTaskId === task.id}
                     className={cn(
-                      'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-right transition-colors',
-                      done ? 'bg-emerald-accent/10 text-emerald-accent' : 'hover:bg-muted/60'
+                      'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-start transition-colors',
+                      done ? 'bg-forest/10 text-forest dark:bg-lime/10 dark:text-lime' : 'hover:bg-muted/60'
                     )}
                   >
                     {togglingTaskId === task.id ? (
@@ -585,18 +583,16 @@ export default function WorkSessions() {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Notes */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <StickyNote className="w-4 h-4 text-gold" />
-            ملاحظات عن الشغل
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="neo-card card-lift p-5">
+        <h3 className="text-base font-bold flex items-center gap-2.5 mb-4">
+          <span className="icon-well h-7 w-7 iw-amber"><StickyNote className="h-4 w-4" /></span>
+          ملاحظات عن الشغل
+        </h3>
+        <div>
           <Textarea
             placeholder="إيه اللي اتعمل في الجلسة دي؟ عوائق؟ حاجات لازم تكمل بعدين؟"
             value={notes}
@@ -604,8 +600,8 @@ export default function WorkSessions() {
             rows={3}
             maxLength={2000}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <WorkHistory history={history} loading={loadingHistory} />
 
@@ -622,7 +618,7 @@ export default function WorkSessions() {
           {summary && (
             <div className="space-y-4">
               <div className="text-center py-2">
-                <div className={cn('text-4xl font-bold', qualityLabel(summary.qualityScore).color)}>
+                <div className={cn('num text-4xl font-bold', qualityLabel(summary.qualityScore).color)} dir="ltr">
                   {summary.qualityScore}٪
                 </div>
                 <div className={cn('text-sm font-medium', qualityLabel(summary.qualityScore).color)}>
@@ -639,15 +635,15 @@ export default function WorkSessions() {
                   <div className="text-[11px] text-muted-foreground">استراحات ({summary.breaksCount})</div>
                 </div>
                 <div className="rounded-lg bg-muted/50 py-2.5">
-                  <div className="font-semibold">{summary.tasksCompleted}</div>
+                  <div className="num font-semibold" dir="ltr">{summary.tasksCompleted}</div>
                   <div className="text-[11px] text-muted-foreground">مهام مُنجزة</div>
                 </div>
                 <div className="rounded-lg bg-muted/50 py-2.5 flex items-center justify-center gap-1">
                   <Zap className="w-3.5 h-3.5 text-gold" />
-                  <span className="font-semibold">+{summary.xp}</span>
+                  <span className="num font-semibold" dir="ltr">+{summary.xp}</span>
                 </div>
               </div>
-              <Button className="w-full" onClick={() => setSummaryOpen(false)}>تمام</Button>
+              <Button className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink" onClick={() => setSummaryOpen(false)}>تمام</Button>
             </div>
           )}
         </DialogContent>
@@ -663,12 +659,10 @@ function WorkHistory({ history, loading }: { history: WorkSession[]; loading: bo
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="pt-6 space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </CardContent>
-      </Card>
+      <div className="neo-card p-5 space-y-2">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
     )
   }
 
@@ -680,17 +674,15 @@ function WorkHistory({ history, loading }: { history: WorkSession[]; loading: bo
   const totalActiveMin = completed.reduce((sum, s) => sum + s.activeMin, 0)
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <History className="w-4 h-4 text-muted-foreground" />
-          سجل جلسات الشغل
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="neo-card card-lift p-5">
+      <h3 className="text-base font-bold flex items-center gap-2.5 mb-4">
+        <span className="icon-well h-7 w-7 bg-secondary text-muted-foreground"><History className="h-4 w-4" /></span>
+        سجل جلسات الشغل
+      </h3>
+      <div className="space-y-3">
         <div className="grid grid-cols-3 gap-3 text-center text-sm pb-2 border-b border-border/50">
           <div>
-            <div className="font-semibold flex items-center justify-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-forest" />{completed.length}</div>
+            <div className="font-semibold flex items-center justify-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-forest" /><span className="num" dir="ltr">{completed.length}</span></div>
             <div className="text-[11px] text-muted-foreground">جلسات</div>
           </div>
           <div>
@@ -698,7 +690,7 @@ function WorkHistory({ history, loading }: { history: WorkSession[]; loading: bo
             <div className="text-[11px] text-muted-foreground">إجمالي الشغل</div>
           </div>
           <div>
-            <div className="font-semibold flex items-center justify-center gap-1"><Gauge className="w-3.5 h-3.5 text-gold" />{avgQuality}٪</div>
+            <div className="font-semibold flex items-center justify-center gap-1"><Gauge className="w-3.5 h-3.5 text-gold" /><span className="num" dir="ltr">{avgQuality}٪</span></div>
             <div className="text-[11px] text-muted-foreground">متوسط الجودة</div>
           </div>
         </div>
@@ -712,7 +704,7 @@ function WorkHistory({ history, loading }: { history: WorkSession[]; loading: bo
                   key={s.id}
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 bg-muted/40 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-sm transition-shadow hover:shadow-lift"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">{s.title || 'جلسة شغل'}</div>
@@ -721,15 +713,15 @@ function WorkHistory({ history, loading }: { history: WorkSession[]; loading: bo
                       {formatHM(s.activeMin)} شغل · {s.breaksCount} استراحة · {s.tasksCompleted} مهمة
                     </div>
                   </div>
-                  <Badge variant="outline" className={cn('shrink-0', q.color)}>
-                    {s.qualityScore}٪
-                  </Badge>
+                  <span className={cn('pill shrink-0', q.color)}>
+                    <span className="num" dir="ltr">{s.qualityScore}٪</span>
+                  </span>
                 </motion.div>
               )
             })}
           </AnimatePresence>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

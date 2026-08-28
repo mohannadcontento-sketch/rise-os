@@ -27,13 +27,13 @@ import {
   Wand2,
   Loader2,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { cn } from '@/lib/utils'
+import { RiseIcon } from './icons'
 import { apiFetch } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import {
@@ -90,10 +90,10 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
 }
 
 const defaultCategories: CategoryReview[] = [
-  { id: 'health', name: 'الصحة', icon: Heart, color: 'text-rose-500', score: 5, notes: '' },
-  { id: 'finance', name: 'المالية', icon: Wallet, color: 'text-amber-500', score: 5, notes: '' },
-  { id: 'learning', name: 'التعلم', icon: GraduationCap, color: 'text-emerald-700 dark:text-emerald-400', score: 5, notes: '' },
-  { id: 'relationships', name: 'العلاقات', icon: Users, color: 'text-purple-500', score: 5, notes: '' },
+  { id: 'health', name: 'الصحة', icon: Heart, color: 'text-rose-accent', score: 5, notes: '' },
+  { id: 'finance', name: 'المالية', icon: Wallet, color: 'text-gold', score: 5, notes: '' },
+  { id: 'learning', name: 'التعلم', icon: GraduationCap, color: 'text-forest dark:text-[#6EE7B7]', score: 5, notes: '' },
+  { id: 'relationships', name: 'العلاقات', icon: Users, color: 'text-violet-accent', score: 5, notes: '' },
   { id: 'career', name: 'المهنة', icon: Briefcase, color: 'text-emerald-accent', score: 5, notes: '' },
 ]
 
@@ -123,11 +123,11 @@ const emptyReview = (): MonthlyReview => ({
 })
 
 const getMotivationalMessage = (score: number): { text: string; icon: React.ElementType; color: string } => {
-  if (score >= 9) return { text: 'أداء استثنائي! أنت في أفضل حالاتك 🌟', icon: Trophy, color: 'text-amber-500' }
+  if (score >= 9) return { text: 'أداء استثنائي! أنت في أفضل حالاتك 🌟', icon: Trophy, color: 'text-gold' }
   if (score >= 7) return { text: 'شهر رائع! استمر بهذا النهج المتميز 💪', icon: TrendingUp, color: 'text-emerald-accent' }
-  if (score >= 5) return { text: 'تقدم جيد! هناك مساحة للتحسن والنمو 🌱', icon: Sparkles, color: 'text-blue-500' }
-  if (score >= 3) return { text: 'لا بأس، كل بداية صعبة. الشهر القادم سيكون أفضل 🚀', icon: Target, color: 'text-orange-500' }
-  return { text: 'ابدأ من جديد! كل يوم فرصة لتغيير حياتك ✨', icon: Flame, color: 'text-rose-500' }
+  if (score >= 5) return { text: 'تقدم جيد! هناك مساحة للتحسن والنمو 🌱', icon: Sparkles, color: 'text-glass' }
+  if (score >= 3) return { text: 'لا بأس، كل بداية صعبة. الشهر القادم سيكون أفضل 🚀', icon: Target, color: 'text-rose-accent' }
+  return { text: 'ابدأ من جديد! كل يوم فرصة لتغيير حياتك ✨', icon: Flame, color: 'text-destructive' }
 }
 
 /* ────────────── Animated Counter ────────────── */
@@ -294,9 +294,9 @@ export default function MonthlyReview() {
         transition={{ duration: 0.5 }}
         className="rounded-2xl overflow-hidden relative"
       >
-        <div className="absolute inset-0 bg-gradient-to-bl from-forest/25 via-emerald-accent/10 to-gold/15 dark:from-forest/35 dark:via-emerald-accent/15 dark:to-gold/15" />
+        <div className="absolute inset-0 bg-gradient-to-bl from-[#06B6D4]/15 via-glass/10 to-gold/15 dark:from-[#22D3EE]/20 dark:via-glass/10 dark:to-gold/10" />
         <div className="absolute inset-0 noise-bg opacity-20" />
-        <div className="relative glass p-6 border-0 text-center sm:text-right">
+        <div className="relative glass p-6 border-0 text-center sm:text-start">
           <motion.h2
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -305,7 +305,10 @@ export default function MonthlyReview() {
           >
             {monthName}
           </motion.h2>
-          <p className="text-sm text-muted-foreground">المراجعة الشهرية — {motivation.text}</p>
+          <div className="flex items-center justify-center sm:justify-start gap-2">
+            <RiseIcon glyph="review" hue="cyan" size="md" lift />
+            <p className="text-sm text-muted-foreground">المراجعة الشهرية — {motivation.text}</p>
+          </div>
           <div className="flex justify-center sm:justify-end gap-2 mt-4">
             <Button variant="outline" size="sm" onClick={reset} className="gap-1.5 text-xs">
               <RotateCcw className="w-3.5 h-3.5" />
@@ -316,7 +319,7 @@ export default function MonthlyReview() {
               size="sm"
               onClick={handleAutoFill}
               disabled={autoFilling}
-              className="gap-1.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+              className="gap-1.5 text-xs border-[#06B6D4]/30 text-[#0E7490] dark:text-[#67E8F9] hover:bg-[#06B6D4]/10"
             >
               {autoFilling ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -326,7 +329,7 @@ export default function MonthlyReview() {
               ملء تلقائي
             </Button>
             <motion.div whileTap={{ scale: 0.95 }}>
-              <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-emerald-accent hover:bg-emerald-accent/90 text-white min-w-[100px] relative overflow-hidden">
+              <Button size="sm" onClick={save} className="gap-1.5 text-xs bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 min-w-[100px] relative overflow-hidden">
                 <AnimatePresence mode="wait">
                   {showSaveSuccess ? (
                     <motion.span key="success" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="flex items-center gap-1.5">
@@ -353,27 +356,27 @@ export default function MonthlyReview() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3 flex-wrap"
         >
-          <div className="flex items-center gap-1.5 bg-emerald-accent/10 text-emerald-accent px-3 py-1.5 rounded-full text-xs font-medium">
+          <span className="pill bg-emerald-accent/10 text-emerald-accent">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            {autoFillData.completedTasks} مهمة مكتملة
-          </div>
-          <div className="flex items-center gap-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium">
+            <span className="num" dir="ltr">{autoFillData.completedTasks}</span> مهمة مكتملة
+          </span>
+          <span className="pill bg-glass/10 text-glass">
             <Timer className="w-3.5 h-3.5" />
-            {Math.round(autoFillData.focusMinutes / 60)} ساعة تركيز
-          </div>
-          <div className="flex items-center gap-1.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs font-medium">
+            <span className="num" dir="ltr">{Math.round(autoFillData.focusMinutes / 60)}</span> ساعة تركيز
+          </span>
+          <span className="pill bg-rose-accent/10 text-rose-accent">
             <Flame className="w-3.5 h-3.5" />
-            {autoFillData.habitRate}% عادات
-          </div>
-          <div className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-full text-xs font-medium">
+            <span className="num" dir="ltr">{autoFillData.habitRate}%</span> عادات
+          </span>
+          <span className="pill bg-violet-accent/10 text-violet-accent">
             <BookOpen className="w-3.5 h-3.5" />
-            {autoFillData.journalCount} يوميات
-          </div>
+            <span className="num" dir="ltr">{autoFillData.journalCount}</span> يوميات
+          </span>
           {autoFillData.avgMood > 0 && (
-            <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium">
+            <span className="pill bg-gold/10 text-gold">
               <Star className="w-3.5 h-3.5" />
-              متوسط المزاج: {autoFillData.avgMood}
-            </div>
+              متوسط المزاج: <span className="num" dir="ltr">{autoFillData.avgMood}</span>
+            </span>
           )}
         </motion.div>
       )}
@@ -386,25 +389,25 @@ export default function MonthlyReview() {
         className="grid grid-cols-2 sm:grid-cols-4 gap-3"
       >
         {[
-          { label: 'المهام المكتملة', value: autoFillData?.completedTasks || 0, icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/10' },
-          { label: 'ساعات التركيز', value: autoFillData ? Math.round(autoFillData.focusMinutes / 60) : 0, icon: Timer, color: 'text-blue-500 dark:text-blue-400', bg: 'bg-blue-500/10' },
-          { label: 'نسبة العادات', value: autoFillData?.habitRate || 0, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10', suffix: '٪' },
-          { label: 'اليوميات', value: autoFillData?.journalCount || 0, icon: BookOpen, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+          { label: 'المهام المكتملة', value: autoFillData?.completedTasks || 0, icon: CheckCircle2, well: 'iw-blue' },
+          { label: 'ساعات التركيز', value: autoFillData ? Math.round(autoFillData.focusMinutes / 60) : 0, icon: Timer, well: 'iw-violet' },
+          { label: 'نسبة العادات', value: autoFillData?.habitRate || 0, icon: Flame, well: 'iw-lime', suffix: '٪' },
+          { label: 'اليوميات', value: autoFillData?.journalCount || 0, icon: BookOpen, well: 'iw-cyan' },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.08 + i * 0.06 }}
-            className="glass premium-card p-4"
+            className="neo-card card-lift p-4"
           >
             <div className="flex items-center gap-3">
-              <div className={cn('p-2 rounded-xl', stat.bg)}>
-                <stat.icon className={cn('w-4 h-4', stat.color)} />
-              </div>
+              <span className={cn('icon-well h-9 w-9', stat.well)}>
+                <stat.icon className="h-4 w-4" />
+              </span>
               <div>
-                <p className="text-2xl font-bold tabular-nums">
-                  <AnimatedCounter value={stat.value} />
+                <p className="text-2xl font-bold font-mono">
+                  <span className="num" dir="ltr"><AnimatedCounter value={stat.value} /></span>
                   {stat.suffix}
                 </p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
@@ -418,13 +421,13 @@ export default function MonthlyReview() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-l from-emerald-accent/5 via-transparent to-amber-500/5 border border-border/30"
+        className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-l from-[#06B6D4]/5 via-transparent to-gold/5 border border-border/30"
       >
         <div className={cn('p-2.5 rounded-xl bg-background shadow-sm', motivation.color)}>
           <motivation.icon className="w-5 h-5" />
         </div>
         <div>
-          <p className="text-sm font-semibold">المتوسط الحالي: {avgScore}/10</p>
+          <p className="text-sm font-semibold">المتوسط الحالي: <span className="num" dir="ltr">{avgScore}/10</span></p>
           <p className="text-xs text-muted-foreground mt-0.5">{motivation.text}</p>
         </div>
       </motion.div>
@@ -433,11 +436,11 @@ export default function MonthlyReview() {
       <div className="grid sm:grid-cols-2 gap-4">
         {/* Score Card */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="glass premium-card overflow-hidden h-full border-r-emerald-accent/50 border-r-3">
-            <div className="bg-gradient-to-l from-emerald-accent/5 to-transparent p-5 h-full flex flex-col justify-center">
+          <div className="neo-card card-lift overflow-hidden h-full border-s-4 border-s-[#06B6D4]">
+            <div className="bg-gradient-to-l from-[#06B6D4]/5 to-transparent p-5 h-full flex flex-col justify-center">
               <p className="text-sm text-muted-foreground mb-1">درجة الشهر</p>
               <div className="flex items-center gap-3 mb-4">
-                <span className="text-5xl font-bold text-emerald-accent">{safeScore}</span>
+                <span className="text-5xl font-bold text-[#0E7490] dark:text-[#67E8F9] num" dir="ltr">{safeScore}</span>
                 <span className="text-xl text-muted-foreground">/ 10</span>
               </div>
               <div className="flex items-center gap-1">
@@ -447,54 +450,56 @@ export default function MonthlyReview() {
                     onClick={() => setReview((prev) => ({ ...prev, score: s }))}
                     className={cn(
                       'flex-1 h-2 rounded-full transition-all',
-                      s <= safeScore ? 'bg-emerald-accent' : 'bg-muted/50'
+                      s <= safeScore ? 'bg-[#06B6D4] dark:bg-[#22D3EE]' : 'bg-muted/50'
                     )}
                   />
                 ))}
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-500" />
-                <span className="text-xs text-muted-foreground">متوسط الفئات: {avgScore}/10</span>
+                <Trophy className="w-4 h-4 text-gold" />
+                <span className="text-xs text-muted-foreground">متوسط الفئات: <span className="num" dir="ltr">{avgScore}/10</span></span>
               </div>
             </div>
-          </Card>
+          </div>
         </motion.div>
 
         {/* Radar Chart */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="glass premium-card h-full border-r-amber-500/50 border-r-3">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Target className="w-4 h-4 text-emerald-accent" />
+          <div className="neo-card card-lift h-full border-s-4 border-s-gold">
+            <div className="p-5 pb-2">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span className="icon-well h-7 w-7 iw-cyan">
+                  <Target className="h-4 w-4" />
+                </span>
                 خريطة الفئات
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4">
+              </h3>
+            </div>
+            <div className="px-5 pb-4">
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-                    <PolarGrid stroke="oklch(0.7 0.01 160 / 0.2)" />
+                    <PolarGrid stroke="rgba(148,163,184,0.25)" />
                     <PolarAngleAxis
                       dataKey="category"
-                      tick={{ fontSize: 11, fill: 'oklch(0.45 0.01 160)' }}
+                      tick={{ fontSize: 11, fill: '#94A3B8' }}
                     />
                     <PolarRadiusAxis
                       angle={90}
                       domain={[0, 10]}
-                      tick={{ fontSize: 9, fill: 'oklch(0.55 0.01 160)' }}
+                      tick={{ fontSize: 9, fill: '#94A3B8' }}
                       tickCount={6}
                     />
                     <Radar
                       name="الدرجة"
                       dataKey="score"
-                      stroke="oklch(0.55 0.14 163)"
-                      fill="oklch(0.55 0.14 163)"
+                      stroke="#06B6D4"
+                      fill="#06B6D4"
                       fillOpacity={0.25}
                       strokeWidth={2.5}
                       dot={false}
                       label={{
                         position: 'top',
-                        fill: 'oklch(0.45 0.01 160)',
+                        fill: '#94A3B8',
                         fontSize: 10,
                         formatter: (value: number) => `${typeof value === 'number' ? value : ''}`,
                       }}
@@ -502,83 +507,87 @@ export default function MonthlyReview() {
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
       </div>
 
-      {/* Monthly Highlights — with gold best moment card */}
+      {/* Monthly Highlights */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-        <Card className="glass premium-card">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-500" />
+        <div className="neo-card card-lift">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-violet">
+                <Sparkles className="h-4 w-4" />
+              </span>
               أبرز لحظات الشهر
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="grid sm:grid-cols-3 gap-4">
-              {/* Best Achievement — with gold gradient border */}
-              <div className="space-y-2 p-4 rounded-xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/30 dark:border-amber-600/30 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-20 h-20 bg-gradient-to-br from-amber-400/20 to-transparent rounded-full -translate-x-1/2 -translate-y-1/2" />
+              {/* Best Achievement — gold */}
+              <div className="space-y-2 p-4 rounded-xl bg-gradient-to-br from-gold/10 via-gold/5 to-transparent border-2 border-gold/30 relative overflow-hidden">
+                <div className="absolute top-0 start-0 w-20 h-20 bg-gradient-to-br from-gold/20 to-transparent rounded-full -translate-x-1/2 -translate-y-1/2" />
                 <div className="relative flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-amber-500/15">
-                    <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                  </div>
-                  <Label className="text-xs font-semibold text-amber-600 dark:text-amber-400">أفضل إنجاز</Label>
+                  <span className="icon-well h-7 w-7 iw-amber">
+                    <Trophy className="h-3.5 w-3.5" />
+                  </span>
+                  <Label className="text-xs font-semibold text-gold">أفضل إنجاز</Label>
                 </div>
                 <Input
                   placeholder="ما هو أفضل إنجاز؟"
                   value={review.bestAchievement || ''}
                   onChange={(e) => setReview((prev) => ({ ...prev, bestAchievement: e.target.value }))}
-                  className="text-sm h-9 border-amber-500/20 focus-visible:ring-amber-500/30"
+                  className="text-sm h-9 border-gold/20 focus-visible:ring-gold/30"
                 />
               </div>
               {/* Biggest Challenge */}
-              <div className="space-y-2 p-4 rounded-xl bg-rose-500/5 border border-rose-500/10">
+              <div className="space-y-2 p-4 rounded-xl bg-rose-accent/5 border border-rose-accent/10">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-rose-500/15">
-                    <Target className="w-3.5 h-3.5 text-rose-500" />
-                  </div>
-                  <Label className="text-xs font-semibold text-rose-600 dark:text-rose-400">أكبر تحدّي</Label>
+                  <span className="icon-well h-7 w-7 iw-rose">
+                    <Target className="h-3.5 w-3.5" />
+                  </span>
+                  <Label className="text-xs font-semibold text-rose-accent">أكبر تحدّي</Label>
                 </div>
                 <Input
                   placeholder="ما هو أكبر تحدٍّ؟"
                   value={review.biggestChallenge || ''}
                   onChange={(e) => setReview((prev) => ({ ...prev, biggestChallenge: e.target.value }))}
-                  className="text-sm h-9 border-rose-500/20 focus-visible:ring-rose-500/30"
+                  className="text-sm h-9 border-rose-accent/20 focus-visible:ring-rose-accent/30"
                 />
               </div>
               {/* Key Lesson */}
-              <div className="space-y-2 p-4 rounded-xl bg-emerald-accent/5 border border-emerald-accent/10">
+              <div className="space-y-2 p-4 rounded-xl bg-[#06B6D4]/5 border border-[#06B6D4]/10">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-emerald-accent/15">
-                    <GraduationCap className="w-3.5 h-3.5 text-emerald-accent" />
-                  </div>
-                  <Label className="text-xs font-semibold text-emerald-accent">أهم درس</Label>
+                  <span className="icon-well h-7 w-7 iw-cyan">
+                    <GraduationCap className="h-3.5 w-3.5" />
+                  </span>
+                  <Label className="text-xs font-semibold text-[#0E7490] dark:text-[#67E8F9]">أهم درس</Label>
                 </div>
                 <Input
                   placeholder="ماذا تعلّمت؟"
                   value={review.keyLesson || ''}
                   onChange={(e) => setReview((prev) => ({ ...prev, keyLesson: e.target.value }))}
-                  className="text-sm h-9 border-emerald-accent/20 focus-visible:ring-emerald-accent/30"
+                  className="text-sm h-9 border-[#06B6D4]/20 focus-visible:ring-[#06B6D4]/30"
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Wins */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="glass border-r-4 border-r-amber-500">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-amber-500" />
+        <div className="neo-card card-lift border-s-4 border-s-gold">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-amber">
+                <Trophy className="h-4 w-4" />
+              </span>
               إنجازات وبطولات الشهر
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <Textarea
               placeholder="اكتب أهم إنجازاتك هذا الشهر..."
               value={review.wins}
@@ -586,24 +595,26 @@ export default function MonthlyReview() {
               rows={4}
               className="text-sm resize-none"
             />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Categories */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="glass border-r-4 border-r-emerald-accent">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Star className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift border-s-4 border-s-[#06B6D4]">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-cyan">
+                <Star className="h-4 w-4" />
+              </span>
               مراجعة الفئات
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-6">
             {review.categories.map((cat) => {
               const Icon = cat.icon
               return (
-                <div key={cat.id} className="space-y-3 p-4 rounded-xl bg-muted/20 border-r-3 border-r-border/30">
+                <div key={cat.id} className="space-y-3 p-4 rounded-xl bg-muted/20 border-s-[3px] border-s-border/30">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className={cn('p-2 rounded-lg bg-background', cat.color)}>
@@ -612,7 +623,7 @@ export default function MonthlyReview() {
                       <span className="font-semibold text-sm">{cat.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={cn('text-2xl font-bold', cat.color)}>{cat.score}</span>
+                      <span className={cn('text-2xl font-bold num', cat.color)} dir="ltr">{cat.score}</span>
                       <span className="text-sm text-muted-foreground">/ 10</span>
                     </div>
                   </div>
@@ -633,20 +644,22 @@ export default function MonthlyReview() {
                 </div>
               )
             })}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Goal Progress — with emerald accent */}
+      {/* Goal Progress */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift border-s-4 border-s-[#06B6D4]">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-cyan">
+                <Award className="h-4 w-4" />
+              </span>
               تقدم الأهداف الشهرية
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <Textarea
               placeholder="كيف تقدمت في أهدافك الشهرية؟ ما الذي أنجزته؟"
               value={review.goalProgress}
@@ -654,23 +667,25 @@ export default function MonthlyReview() {
               rows={4}
               className="text-sm resize-none"
             />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Next Month Planning */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <Card className="glass premium-card border-r-emerald-accent/50 border-r-3">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift border-s-4 border-s-[#06B6D4]">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-cyan">
+                <ArrowLeft className="h-4 w-4" />
+              </span>
               تخطيط الشهر القادم
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-5">
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-emerald-accent" />
+                <Target className="w-3.5 h-3.5 text-[#0E7490] dark:text-[#67E8F9]" />
                 الأولويات القصوى
               </Label>
               <Textarea
@@ -683,7 +698,7 @@ export default function MonthlyReview() {
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                <Calendar className="w-3.5 h-3.5 text-gold" />
                 أهداف الشهر القادم
               </Label>
               <Textarea
@@ -694,18 +709,18 @@ export default function MonthlyReview() {
                 className="text-sm resize-none"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Previous Reviews */}
       {allReviews.length > 1 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <Card className="glass">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-muted-foreground">المراجعات السابقة</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="neo-card card-lift">
+            <div className="p-5 pb-3">
+              <h3 className="text-sm font-bold text-muted-foreground">المراجعات السابقة</h3>
+            </div>
+            <div className="px-5 pb-5">
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {allReviews
                   .filter((r) => r.id !== review.id)
@@ -717,8 +732,8 @@ export default function MonthlyReview() {
                       onClick={() => setReview({ ...r, categories: hydrateCategories(r.categories || []) })}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
-                          <span className="text-lg font-bold text-emerald-accent">{typeof r.score === 'number' ? r.score : 5}</span>
+                        <div className="w-10 h-10 rounded-xl bg-[#06B6D4]/10 flex items-center justify-center">
+                          <span className="text-lg font-bold text-[#0E7490] dark:text-[#67E8F9] num" dir="ltr">{typeof r.score === 'number' ? r.score : 5}</span>
                         </div>
                         <div>
                           <p className="text-xs font-medium">مراجعة الشهر</p>
@@ -731,8 +746,8 @@ export default function MonthlyReview() {
                     </div>
                   ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
       )}
     </div>

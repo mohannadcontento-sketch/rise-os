@@ -19,17 +19,13 @@ import {
   StickyNote,
   TrendingUp,
   Flame,
-  X,
   Calendar,
-  BookMarked,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { RiseIcon } from '@/components/rise/icons'
 import {
   Dialog,
   DialogContent,
@@ -89,17 +85,24 @@ const typeIcons: Record<string, React.ElementType> = {
 }
 
 const typeColors: Record<string, string> = {
-  book: 'bg-emerald-accent/10 text-emerald-accent',
-  article: 'bg-gold/10 text-gold',
-  course: 'bg-blue-500/10 text-blue-500',
-  video: 'bg-purple-500/10 text-purple-500',
+  book: 'bg-gold/10 text-gold',
+  article: 'bg-forest/10 text-forest',
+  course: 'bg-glass/10 text-glass',
+  video: 'bg-violet-accent/10 text-violet-accent',
+}
+
+const typeWellColors: Record<string, string> = {
+  book: 'iw-amber',
+  article: 'iw-forest',
+  course: 'iw-blue',
+  video: 'iw-violet',
 }
 
 const typeBorderColors: Record<string, string> = {
-  book: 'border-r-emerald-accent',
-  article: 'border-r-gold',
-  course: 'border-r-blue-500',
-  video: 'border-r-purple-500',
+  book: 'border-s-gold',
+  article: 'border-s-forest',
+  course: 'border-s-glass',
+  video: 'border-s-violet-accent',
 }
 
 function arabicNum(n: number): string {
@@ -327,16 +330,16 @@ export default function Reading() {
     <div dir="rtl" className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <BookMarked className="w-6 h-6 text-emerald-accent" />
-            القراءة
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">تتبع كتبك ومقالاتك ودوراتك التعليمية</p>
+        <div className="flex items-center gap-2">
+          <RiseIcon glyph="reading" hue="amber" size="md" lift />
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">القراءة</h2>
+            <p className="text-sm text-muted-foreground mt-1">تتبع كتبك ومقالاتك ودوراتك التعليمية</p>
+          </div>
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+            <Button className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink">
               <Plus className="w-4 h-4" />
               إضافة
             </Button>
@@ -383,9 +386,11 @@ export default function Reading() {
                   placeholder="العدد الإجمالي للصفحات"
                   value={newTotalPages}
                   onChange={(e) => setNewTotalPages(e.target.value)}
+                  dir="ltr"
+                  className="num"
                 />
               </div>
-              <Button onClick={handleAddBook} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newTitle.trim()}>
+              <Button onClick={handleAddBook} className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink" disabled={!newTitle.trim()}>
                 إضافة للقراءة
               </Button>
             </div>
@@ -396,10 +401,10 @@ export default function Reading() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'إجمالي الكتب', value: totalBooks, icon: Library, color: 'text-emerald-accent' },
-          { label: 'قيد القراءة', value: readingBooks.length, icon: BookOpen, color: 'text-forest' },
-          { label: 'صفحات مقروءة', value: totalPagesRead, icon: FileText, color: 'text-gold' },
-          { label: 'مكتملة', value: completedBooks.length, icon: BookmarkCheck, color: 'text-emerald-accent' },
+          { label: 'إجمالي الكتب', value: totalBooks, icon: Library, well: 'iw-amber' },
+          { label: 'قيد القراءة', value: readingBooks.length, icon: BookOpen, well: 'iw-forest' },
+          { label: 'صفحات مقروءة', value: totalPagesRead, icon: FileText, well: 'iw-amber' },
+          { label: 'مكتملة', value: completedBooks.length, icon: BookmarkCheck, well: 'iw-lime' },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -407,19 +412,17 @@ export default function Reading() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08 }}
           >
-            <Card className="glass">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={cn('p-2 rounded-xl bg-background/80', stat.color)}>
-                    <stat.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  </div>
+            <div className="neo-card card-lift p-4">
+              <div className="flex items-center gap-3">
+                <span className={cn('icon-well w-9 h-9', stat.well)}>
+                  <stat.icon className="w-4 h-4" />
+                </span>
+                <div>
+                  <p className="num text-2xl font-bold text-foreground" dir="ltr">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -431,13 +434,11 @@ export default function Reading() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card className="glass border-emerald-accent/20 overflow-hidden">
-            <div className="bg-gradient-to-l from-emerald-accent/5 via-emerald-accent/3 to-transparent p-5">
+          <div className="neo-card card-lift overflow-hidden">
+            <div className="bg-gradient-to-l from-gold/8 via-gold/3 to-transparent p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-accent/15 flex items-center justify-center">
-                    <BookOpen className="w-5 h-5 text-emerald-accent" />
-                  </div>
+                  <RiseIcon glyph="reading" hue="amber" size="md" />
                   <div>
                     <h3 className="font-bold text-base">أقرأ الآن</h3>
                     <p className="text-xs text-muted-foreground">{arabicNum(readingBooks.length)} كتاب قيد القراءة</p>
@@ -454,21 +455,21 @@ export default function Reading() {
                 const estDate = getEstimatedCompletion(featured)
 
                 return (
-                  <div className="bg-background/60 rounded-2xl p-5 border border-emerald-accent/10">
+                  <div className="bg-background/60 rounded-2xl p-5 border border-gold/10">
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-bold text-lg truncate">{featured.title}</h4>
-                          <Badge variant="secondary" className={cn('text-[10px] shrink-0', typeColors[featured.type])}>
+                          <span className={cn('pill text-[10px] shrink-0', typeColors[featured.type])}>
                             {typeLabels[featured.type]}
-                          </Badge>
+                          </span>
                         </div>
                         {featured.author && <p className="text-sm text-muted-foreground">{featured.author}</p>}
                       </div>
                       <motion.div whileTap={{ scale: 0.95 }}>
                         <Button
                           onClick={() => handleLogReading(featured.id)}
-                          className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white shrink-0"
+                          className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink shrink-0"
                           size="sm"
                         >
                           <Plus className="w-4 h-4" />
@@ -481,13 +482,13 @@ export default function Reading() {
                     <div className="space-y-2 mb-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          صفحة <span className="font-semibold text-foreground">{arabicNum(featured.currentPage)}</span> من <span className="font-semibold text-foreground">{arabicNum(featured.totalPages || 0)}</span>
+                          صفحة <span className="num font-semibold text-foreground" dir="ltr">{arabicNum(featured.currentPage)}</span> من <span className="num font-semibold text-foreground" dir="ltr">{arabicNum(featured.totalPages || 0)}</span>
                         </span>
-                        <span className="font-bold text-emerald-accent text-lg">{Math.round(featured.progress)}٪</span>
+                        <span className="font-bold text-gold text-lg"><span className="num" dir="ltr">{Math.round(featured.progress)}</span>٪</span>
                       </div>
-                      <div className="h-3.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-3.5 rounded-full bg-secondary overflow-hidden">
                         <motion.div
-                          className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                          className="h-full rounded-full bg-gradient-to-l from-gold/80 to-gold"
                           initial={{ width: 0 }}
                           animate={{ width: `${featured.progress}%` }}
                           transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -527,7 +528,7 @@ export default function Reading() {
                     const pagesRemaining = (book.totalPages || 0) - book.currentPage
                     const estDate = getEstimatedCompletion(book)
                     return (
-                      <div key={book.id} className="bg-background/60 rounded-xl p-3 space-y-2 border-r-4 border-r-emerald-accent/40">
+                      <div key={book.id} className="bg-background/60 rounded-xl p-3 space-y-2 border-s-4 border-s-gold/40">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm truncate">{book.title}</p>
@@ -536,7 +537,7 @@ export default function Reading() {
                           <motion.button
                             whileTap={{ scale: 0.9 }}
                             onClick={() => handleLogReading(book.id)}
-                            className="shrink-0 p-1.5 rounded-lg bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20 transition-colors"
+                            className="shrink-0 p-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold/20 transition-colors"
                             title="تسجيل صفحة"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -544,10 +545,15 @@ export default function Reading() {
                         </div>
                         <div className="space-y-1">
                           <div className="flex justify-between text-[11px] text-muted-foreground">
-                            <span>{arabicNum(book.currentPage)} / {book.totalPages || '∞'}</span>
-                            <span className="font-semibold text-foreground">{Math.round(book.progress)}%</span>
+                            <span className="num" dir="ltr">{arabicNum(book.currentPage)} / {book.totalPages || '∞'}</span>
+                            <span className="num font-semibold text-foreground" dir="ltr">{Math.round(book.progress)}%</span>
                           </div>
-                          <Progress value={book.progress} className="h-2" />
+                          <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-l from-gold/80 to-gold"
+                              style={{ width: `${book.progress}%` }}
+                            />
+                          </div>
                         </div>
                         {estDate && (
                           <p className="text-[10px] text-muted-foreground/60">تقدير الإنهاء: {estDate}</p>
@@ -558,7 +564,7 @@ export default function Reading() {
                 </div>
               )}
             </div>
-          </Card>
+          </div>
         </motion.div>
       )}
 
@@ -572,12 +578,12 @@ export default function Reading() {
           </TabsList>
         </Tabs>
         <div className="relative">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="بحث عن كتاب..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-9 w-full sm:w-64"
+            className="ps-9 w-full sm:w-64"
           />
         </div>
       </div>
@@ -586,13 +592,11 @@ export default function Reading() {
       {loading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="glass">
-              <CardContent className="p-5 space-y-3">
-                <Skeleton className="h-5 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-2 w-full" />
-              </CardContent>
-            </Card>
+            <div key={i} className="neo-card p-5 space-y-3">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-2 w-full" />
+            </div>
           ))}
         </div>
       ) : filteredBooks.length === 0 ? (
@@ -601,9 +605,9 @@ export default function Reading() {
           animate={{ opacity: 1 }}
           className="flex flex-col items-center justify-center py-20 text-center"
         >
-          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-            <BookOpen className="w-8 h-8 text-muted-foreground/50" />
-          </div>
+          <span className="icon-well w-16 h-16 bg-secondary text-muted-foreground/50 mb-4">
+            <BookOpen className="w-8 h-8" />
+          </span>
           <p className="text-lg font-semibold text-muted-foreground">لا توجد كتب</p>
           <p className="text-sm text-muted-foreground/70 mt-1">أضف كتابك الأول لبدء التتبع</p>
         </motion.div>
@@ -627,19 +631,18 @@ export default function Reading() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <Card className={cn(
-                    'glass overflow-hidden transition-shadow hover:shadow-lg',
-                    isExpanded && 'ring-1 ring-emerald-accent/30',
-                    typeBorderColors[book.type] || 'border-r-emerald-accent',
-                    'border-r-4'
+                  <div className={cn(
+                    'bg-card border border-border rounded-2xl overflow-hidden transition-shadow hover:shadow-lift border-s-4',
+                    isExpanded && 'outline-2 -outline-offset-2 outline-gold/40',
+                    typeBorderColors[book.type] || 'border-s-gold'
                   )}>
-                    <CardContent className="p-5">
+                    <div className="p-5">
                       {/* Header */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <div className={cn('p-2.5 rounded-xl shrink-0', typeColors[book.type])}>
+                          <span className={cn('icon-well w-9 h-9 shrink-0', typeWellColors[book.type])}>
                             <TypeIcon className="w-4 h-4" />
-                          </div>
+                          </span>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-sm leading-snug truncate">{book.title}</h3>
                             {book.author && (
@@ -647,19 +650,24 @@ export default function Reading() {
                             )}
                           </div>
                         </div>
-                        <Badge variant="secondary" className={cn('text-[10px] shrink-0', typeColors[book.type])}>
+                        <span className={cn('pill text-[10px] shrink-0', typeColors[book.type])}>
                           {typeLabels[book.type]}
-                        </Badge>
+                        </span>
                       </div>
 
                       {/* Progress */}
                       {book.totalPages && (
                         <div className="space-y-1.5 mb-3">
                           <div className="flex justify-between text-[11px] text-muted-foreground">
-                            <span>صفحة {book.currentPage} من {book.totalPages}</span>
-                            <span className="font-semibold text-foreground">{Math.round(book.progress)}%</span>
+                            <span>صفحة <span className="num" dir="ltr">{book.currentPage}</span> من <span className="num" dir="ltr">{book.totalPages}</span></span>
+                            <span className="num font-semibold text-foreground" dir="ltr">{Math.round(book.progress)}%</span>
                           </div>
-                          <Progress value={book.progress} className="h-2" />
+                          <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-l from-gold/80 to-gold"
+                              style={{ width: `${book.progress}%` }}
+                            />
+                          </div>
                         </div>
                       )}
 
@@ -708,7 +716,7 @@ export default function Reading() {
                               {book.status === 'reading' && book.totalPages && (
                                 <div className="space-y-2">
                                   <label className="text-xs font-semibold flex items-center gap-1.5">
-                                    <TrendingUp className="w-3 h-3 text-emerald-accent" />
+                                    <TrendingUp className="w-3 h-3 text-gold" />
                                     تحديث الصفحة الحالية
                                   </label>
                                   <div className="flex gap-2">
@@ -718,12 +726,13 @@ export default function Reading() {
                                       max={book.totalPages}
                                       value={editPage[book.id] ?? book.currentPage}
                                       onChange={(e) => setEditPage((prev) => ({ ...prev, [book.id]: e.target.value }))}
-                                      className="h-8 text-sm"
+                                      className="h-8 text-sm num"
+                                      dir="ltr"
                                     />
                                     <Button
                                       size="sm"
                                       onClick={() => handleUpdateProgress(book.id)}
-                                      className="h-8 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs px-3"
+                                      className="h-8 bg-forest text-paper-soft dark:bg-lime dark:text-ink text-xs px-3"
                                     >
                                       تحديث
                                     </Button>
@@ -762,7 +771,7 @@ export default function Reading() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleSaveQuote(book.id)}
-                                    className="h-8 text-xs px-3"
+                                    className="h-8 text-xs px-3 border-border bg-card hover:bg-secondary"
                                   >
                                     حفظ
                                   </Button>
@@ -772,7 +781,7 @@ export default function Reading() {
                               {/* Highlights */}
                               <div className="space-y-2">
                                 <label className="text-xs font-semibold flex items-center gap-1.5">
-                                  <Highlighter className="w-3 h-3 text-emerald-accent" />
+                                  <Highlighter className="w-3 h-3 text-gold" />
                                   المقتطفات ({highlights.length})
                                 </label>
                                 <div className="flex gap-2">
@@ -787,7 +796,7 @@ export default function Reading() {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleSaveHighlight(book.id)}
-                                    className="h-8 text-xs px-3"
+                                    className="h-8 text-xs px-3 border-border bg-card hover:bg-secondary"
                                   >
                                     أضف
                                   </Button>
@@ -795,7 +804,7 @@ export default function Reading() {
                                 {highlights.length > 0 && (
                                   <div className="space-y-1.5 max-h-32 overflow-y-auto">
                                     {highlights.map((h, hi) => (
-                                      <div key={hi} className="text-xs p-2 rounded-lg bg-emerald-accent/5 border border-emerald-accent/10 text-muted-foreground leading-relaxed">
+                                      <div key={hi} className="text-xs p-2 rounded-lg bg-gold/5 border border-gold/10 text-muted-foreground leading-relaxed">
                                         {h}
                                       </div>
                                     ))}
@@ -820,7 +829,7 @@ export default function Reading() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleSaveNotes(book.id)}
-                                  className="text-xs px-3"
+                                  className="text-xs px-3 border-border bg-card hover:bg-secondary"
                                 >
                                   حفظ الملاحظات
                                 </Button>
@@ -839,8 +848,8 @@ export default function Reading() {
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </motion.div>
               )
             })}

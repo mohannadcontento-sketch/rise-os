@@ -23,17 +23,12 @@ import {
   ChevronDown,
   ChevronUp,
   GripVertical,
-  Trash2,
   ListTodo,
   Highlighter,
   StickyNote,
   Timer,
-  Loader2,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -44,6 +39,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { RainbowCheckbox } from './kit-v2'
+import { RiseIcon } from './icons'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
@@ -80,6 +77,7 @@ interface PlannerSection {
   bgGradient: string
   iconBg: string
   accentColor: string
+  chip: string
   hours: number[]
 }
 
@@ -101,10 +99,11 @@ const SECTIONS: PlannerSection[] = [
     subtitle: 'بداية يومك بإيجابية وتركيز',
     timeRange: '٦:٠٠ – ١٢:٠٠',
     icon: Sun,
-    color: 'text-amber-600 dark:text-amber-400',
-    bgGradient: 'from-amber-50/80 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10',
-    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
-    accentColor: 'border-amber-200/60 dark:border-amber-800/40',
+    color: 'text-gold',
+    bgGradient: 'from-gold/12 to-gold/4',
+    iconBg: 'iw-amber',
+    accentColor: 'border-gold/30',
+    chip: 'bg-gold/15 text-gold',
     hours: [6, 7, 8, 9, 10, 11],
   },
   {
@@ -113,10 +112,11 @@ const SECTIONS: PlannerSection[] = [
     subtitle: 'استمر في الإنتاجية والإنجاز',
     timeRange: '١٢:٠٠ – ١٧:٠٠',
     icon: CloudSun,
-    color: 'text-emerald-accent',
-    bgGradient: 'from-emerald-50/80 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
-    accentColor: 'border-emerald-accent/20 dark:border-emerald-accent/15',
+    color: 'text-gold',
+    bgGradient: 'from-gold/20 to-gold/8',
+    iconBg: 'iw-amber',
+    accentColor: 'border-gold/40',
+    chip: 'bg-gold/25 text-gold',
     hours: [12, 13, 14, 15, 16],
   },
   {
@@ -125,10 +125,11 @@ const SECTIONS: PlannerSection[] = [
     subtitle: 'اختم يومك بهدوء واستعداد',
     timeRange: '١٧:٠٠ – ٢٢:٠٠',
     icon: Moon,
-    color: 'text-forest',
-    bgGradient: 'from-sky-50/80 to-indigo-50/30 dark:from-sky-950/20 dark:to-indigo-950/10',
-    iconBg: 'bg-sky-100 dark:bg-sky-900/30',
-    accentColor: 'border-forest/15 dark:border-forest/10',
+    color: 'text-violet-accent',
+    bgGradient: 'from-violet-accent/12 to-violet-accent/4',
+    iconBg: 'iw-violet',
+    accentColor: 'border-violet-accent/30',
+    chip: 'bg-violet-accent/15 text-violet-accent',
     hours: [17, 18, 19, 20, 21, 22],
   },
 ]
@@ -248,8 +249,8 @@ function EmptyState({ section }: { section: PlannerSection }) {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-8 text-center"
     >
-      <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center mb-3', section.iconBg)}>
-        <Icon className={cn('w-7 h-7', section.color, 'opacity-40')} />
+      <div className={cn('icon-well w-14 h-14 mb-3', section.iconBg)}>
+        <Icon className="w-7 h-7 opacity-60" />
       </div>
       <p className="text-sm font-medium text-muted-foreground mb-1">لا توجد مهام بعد</p>
       <p className="text-xs text-muted-foreground/60">أضف مهامك أو اختر من الاقتراحات أدناه</p>
@@ -304,26 +305,26 @@ function PlannerItemRow({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
       className={cn(
-        'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
-        'hover:bg-background/80 hover:shadow-md hover:scale-[1.005] backdrop-blur-sm',
+        'group flex items-center gap-3 px-3 py-2.5 rounded-2xl border transition-all duration-300',
+        'hover:shadow-lift bg-card border-border',
         item.completed && 'opacity-50',
-        isLinked && 'bg-muted/30 border border-dashed border-border/40'
+        isLinked && 'bg-muted/30 border-dashed border-border/40'
       )}
     >
       {/* Time indicator */}
       {timeStr && (
         <div className="flex items-center gap-1 shrink-0 w-12">
           <Clock className="w-3 h-3 text-muted-foreground/40" />
-          <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">{timeStr}</span>
+          <span className="num text-[10px] text-muted-foreground/50 font-mono" dir="ltr">{timeStr}</span>
         </div>
       )}
 
       {/* Linked task badge */}
       {isLinked && (
-        <Badge className="text-[9px] px-1.5 py-0 h-4 rounded-full bg-emerald-accent/10 text-emerald-accent border-emerald-accent/20 shrink-0">
-          <ListTodo className="w-2.5 h-2.5 ml-0.5" />
+        <span className="pill pill-info shrink-0">
+          <ListTodo className="w-2.5 h-2.5 me-0.5" />
           مهمة
-        </Badge>
+        </span>
       )}
 
       {/* Drag handle (visual only) */}
@@ -335,16 +336,7 @@ function PlannerItemRow({
 
       {/* Checkbox */}
       <motion.div whileTap={{ scale: 0.9 }}>
-        <Checkbox
-          checked={item.completed}
-          onCheckedChange={() => onToggle(item.id)}
-          className={cn(
-            'w-[18px] h-[18px] rounded-md border-2',
-            item.completed
-              ? 'border-emerald-accent bg-emerald-accent text-white data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent'
-              : 'border-muted-foreground/25'
-          )}
-        />
+        <RainbowCheckbox checked={item.completed} onChange={() => onToggle(item.id)} />
       </motion.div>
 
       {/* Text + project badge */}
@@ -439,26 +431,26 @@ function SectionCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.05 + index * 0.08 }}
     >
-      <Card
+      <div
         className={cn(
-          'overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-md transition-shadow duration-300 gap-0',
-          isCurrentSection && 'ring-1 ring-emerald-accent/30'
+          'neo-card card-lift overflow-hidden',
+          isCurrentSection && 'outline outline-2 -outline-offset-2 outline-glass/40'
         )}
       >
         {/* Section Header */}
         <div className={cn('px-5 pt-5 pb-3 bg-gradient-to-b', section.bgGradient)}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', section.iconBg)}>
-                <Icon className={cn('w-5 h-5', section.color)} />
-              </div>
+              <span className={cn('icon-well w-10 h-10', section.iconBg)}>
+                <Icon className="w-5 h-5" />
+              </span>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className={cn('text-lg font-bold', section.color)}>{section.title}</h3>
                   {isCurrentSection && (
-                    <Badge className="text-[10px] px-1.5 py-0 bg-emerald-accent/15 text-emerald-accent border-emerald-accent/20">
+                    <span className={cn('pill', section.chip)}>
                       الآن
-                    </Badge>
+                    </span>
                   )}
                   {allDone && (
                     <motion.div
@@ -492,7 +484,7 @@ function SectionCard({
           {totalCount > 0 && (
             <div className="mt-3 h-1 rounded-full bg-muted/40 overflow-hidden">
               <motion.div
-                className={cn('h-full rounded-full', allDone ? 'bg-emerald-accent' : section.color.replace('text-', 'bg-'))}
+                className={cn('h-full rounded-full', allDone ? 'bg-gold' : section.color.replace('text-', 'bg-'))}
                 animate={{ width: `${sectionProgress}%` }}
                 transition={{ duration: 0.4, ease: 'easeOut' }}
               />
@@ -508,7 +500,7 @@ function SectionCard({
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
             >
-              <CardContent className="p-3 space-y-0.5">
+              <div className="p-3 space-y-0.5">
                 {/* Items list */}
                 <div className="min-h-[2rem]">
                   {loading ? (
@@ -547,13 +539,13 @@ function SectionCard({
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder={`أضف مهمة${totalCount > 0 ? ' أخرى' : ''}...`}
-                      className="h-9 text-sm pr-9 rounded-xl border-dashed bg-transparent
-                        focus:border-emerald-accent/50 focus:ring-emerald-accent/20
+                      className="h-9 text-sm ps-9 rounded-xl border-dashed bg-card border-border
+                        focus:border-glass/50 focus:ring-glass/20
                         placeholder:text-muted-foreground/40"
                     />
                     <Plus className={cn(
-                      'absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors',
-                      inputValue ? 'text-emerald-accent' : 'text-muted-foreground/30'
+                      'absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors',
+                      inputValue ? 'text-glass' : 'text-muted-foreground/30'
                     )} />
                   </div>
                   {inputValue.trim() && (
@@ -564,7 +556,7 @@ function SectionCard({
                       <Button
                         onClick={handleAdd}
                         size="sm"
-                        className="h-9 px-3 rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white"
+                        className="h-9 px-3 rounded-xl bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:bg-forest/90 dark:hover:bg-lime/90"
                       >
                         إضافة
                       </Button>
@@ -622,11 +614,11 @@ function SectionCard({
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </CardContent>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </Card>
+      </div>
     </motion.div>
   )
 }
@@ -669,21 +661,21 @@ function TimelineView({
               key={hour}
               className={cn(
                 'flex items-stretch gap-4 py-1.5 border-b border-border/20 last:border-0 relative',
-                isNow && 'bg-emerald-accent/5 -mx-3 px-3 rounded-lg'
+                isNow && 'bg-glass/5 -mx-3 px-3 rounded-lg'
               )}
             >
               {isNow && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="absolute right-0 top-0 bottom-0 w-0.5 bg-emerald-accent"
+                  className="absolute start-0 top-0 bottom-0 w-0.5 bg-glass"
                 />
               )}
-              <div className="w-14 shrink-0 text-left flex items-center gap-1">
+              <div className="w-14 shrink-0 text-end flex items-center gap-1">
                 <Clock className="w-3 h-3 text-muted-foreground/30" />
                 <span className={cn(
                   'text-[11px] font-mono tabular-nums',
-                  isNow ? 'text-emerald-accent font-bold' : 'text-muted-foreground/50'
+                  isNow ? 'text-glass font-bold' : 'text-muted-foreground/50'
                 )}>
                   {formatHour(hour)}
                 </span>
@@ -695,8 +687,8 @@ function TimelineView({
                     animate={{ opacity: 1, x: 0 }}
                     className="flex items-center gap-2"
                   >
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-accent" />
-                    <span className="text-xs text-emerald-accent font-medium">الوقت الحالي</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-glass" />
+                    <span className="text-xs text-glass font-medium">الوقت الحالي</span>
                   </motion.div>
                 )}
                 {hourItems.map((item) => (
@@ -709,19 +701,15 @@ function TimelineView({
                       item.isLinkedTask && 'bg-muted/40 border border-dashed border-border/30'
                     )}
                   >
-                    <Checkbox
-                      checked={item.completed}
-                      onCheckedChange={() => onToggleItem(item.id)}
-                      className="w-3.5 h-3.5 rounded border-muted-foreground/30 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
-                    />
+                    <RainbowCheckbox checked={item.completed} onChange={() => onToggleItem(item.id)} />
                     {item.isLinkedTask && (
-                      <Badge className="text-[8px] px-1 py-0 h-3 rounded-full bg-emerald-accent/10 text-emerald-accent border-0 shrink-0">
+                      <span className="pill pill-info shrink-0">
                         مهمة
-                      </Badge>
+                      </span>
                     )}
                     <span className="truncate">{item.title}</span>
                     {item.projectName && (
-                      <span className="text-[10px] text-muted-foreground/60 mr-auto shrink-0">{item.projectName}</span>
+                      <span className="text-[10px] text-muted-foreground/60 ms-auto shrink-0">{item.projectName}</span>
                     )}
                   </motion.div>
                 ))}
@@ -1027,21 +1015,21 @@ export default function DailyPlanner() {
         transition={{ duration: 0.4 }}
         className="rounded-2xl overflow-hidden relative"
       >
-        <div className="absolute inset-0 bg-gradient-to-bl from-forest/20 via-emerald-accent/10 to-gold/10 dark:from-forest/30 dark:via-emerald-accent/15 dark:to-gold/10" />
+        <div className="absolute inset-0 bg-gradient-to-bl from-glass/15 via-glass/5 to-gold/10 dark:from-glass/25 dark:via-glass/10 dark:to-gold/10" />
         <div className="absolute inset-0 noise-bg opacity-20" />
         <div className="relative glass p-5 border-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Live Clock */}
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-accent to-forest flex flex-col items-center justify-center shadow-lg glow-emerald">
-                <Timer className="w-4 h-4 text-white/80 mb-0.5" />
-                <span className="text-white text-base font-bold font-mono tabular-nums leading-none">
+              <span className="icon-well iw-cyan w-16 h-16 shadow-lg shadow-glass/20">
+                <Timer className="w-4 h-4 mb-0.5 opacity-80" />
+                <span className="num text-base font-bold font-mono leading-none" dir="ltr">
                   {arabicClock}
                 </span>
-              </div>
+              </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4 text-emerald-accent" />
+                  <RiseIcon glyph="planner" hue="cyan" size="sm" lift />
                   <h3 className="text-xl font-bold text-foreground">{getArabicDate()}</h3>
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">
@@ -1085,13 +1073,13 @@ export default function DailyPlanner() {
                   <motion.div
                     className={cn(
                       'h-full rounded-full transition-colors',
-                      overallProgress === 100 ? 'bg-emerald-accent' : 'bg-gradient-to-l from-emerald-accent to-forest'
+                      overallProgress === 100 ? 'bg-glass' : 'bg-gradient-to-l from-glass to-glass/50'
                     )}
                     animate={{ width: `${overallProgress}%` }}
                     transition={{ duration: 0.5, ease: 'easeOut' }}
                   />
                 </div>
-                <span className="text-xs font-semibold text-muted-foreground tabular-nums min-w-[3rem] text-left">
+                <span className="text-xs font-semibold text-muted-foreground tabular-nums min-w-[3rem] text-end">
                   {arabicNum(overallProgress)}٪
                 </span>
               </div>
@@ -1115,7 +1103,7 @@ export default function DailyPlanner() {
               <div key={section.id} className="relative">
                 {/* Gradient divider line between sections (desktop) */}
                 {index > 0 && (
-                  <div className="hidden lg:block absolute top-6 bottom-6 right-0 w-px bg-gradient-to-b from-transparent via-emerald-accent/20 to-transparent" />
+                  <div className="hidden lg:block absolute top-6 bottom-6 start-0 w-px bg-gradient-to-b from-transparent via-glass/25 to-transparent" />
                 )}
                 <SectionCard
                   section={section}
@@ -1143,20 +1131,20 @@ export default function DailyPlanner() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="overflow-hidden rounded-2xl border-0 shadow-sm gap-0">
+            <div className="neo-card card-lift overflow-hidden">
               <div className="px-5 pt-4 pb-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-forest" />
-                  </div>
+                  <span className="icon-well iw-forest w-8 h-8">
+                    <Clock className="w-4 h-4" />
+                  </span>
                   <h3 className="text-sm font-bold text-foreground">الجدول الزمني</h3>
                   <span className="text-[11px] text-muted-foreground">٦:٠٠ ص – ١٠:٠٠ م</span>
                 </div>
               </div>
-              <CardContent className="p-4 pt-2">
+              <div className="p-4 pt-2">
                 <TimelineView items={[...items, ...linkedTasks]} onToggleItem={toggleItem} />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1174,28 +1162,28 @@ export default function DailyPlanner() {
             value: arabicNum(totalItems),
             icon: ListTodo,
             color: 'text-foreground',
-            bg: 'bg-muted/50',
+            bg: 'icon-well iw-blue',
           },
           {
             label: 'مكتملة',
             value: arabicNum(completedItems),
             icon: CheckCircle2,
             color: 'text-emerald-accent',
-            bg: 'bg-emerald-accent/10',
+            bg: 'icon-well iw-lime',
           },
           {
             label: 'متبقية',
             value: arabicNum(totalItems - completedItems),
             icon: Circle,
             color: 'text-gold',
-            bg: 'bg-gold/10',
+            bg: 'icon-well iw-amber',
           },
           {
             label: 'التقدم',
             value: arabicNum(overallProgress) + '٪',
             icon: Star,
-            color: 'text-forest',
-            bg: 'bg-forest/10',
+            color: 'text-glass',
+            bg: 'icon-well iw-cyan',
           },
         ].map((stat, i) => (
           <motion.div
@@ -1203,14 +1191,14 @@ export default function DailyPlanner() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.35 + i * 0.05 }}
-            className="glass rounded-xl p-3 flex items-center gap-3"
+            className="neo-card card-lift rounded-xl p-3 flex items-center gap-3"
           >
-            <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', stat.bg)}>
-              <stat.icon className={cn('w-4 h-4', stat.color)} />
-            </div>
+            <span className={cn('w-8 h-8', stat.bg)}>
+              <stat.icon className="w-4 h-4" />
+            </span>
             <div>
               <p className="text-[11px] text-muted-foreground">{stat.label}</p>
-              <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
+              <p className={cn('num text-lg font-bold', stat.color)}>{stat.value}</p>
             </div>
           </motion.div>
         ))}
@@ -1223,19 +1211,19 @@ export default function DailyPlanner() {
         transition={{ duration: 0.4, delay: 0.35 }}
       >
         <div className="relative rounded-2xl overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-amber-500/5 dark:from-amber-500/8 dark:to-amber-500/3" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gold/8 via-transparent to-gold/4" />
           <div className="absolute inset-0 noise-bg opacity-15" />
-          <div className="relative glass border border-amber-200/30 dark:border-amber-700/20 p-4">
+          <div className="relative glass border border-gold/25 p-4">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 flex items-center justify-center shadow-sm">
-                <StickyNote className="w-4 h-4 text-white" />
-              </div>
+              <span className="icon-well iw-amber w-8 h-8">
+                <StickyNote className="w-4 h-4" />
+              </span>
               <div>
                 <h3 className="text-sm font-bold text-foreground">ملاحظات سريعة</h3>
                 <p className="text-[10px] text-muted-foreground">أفكار وملاحظات تذكيرية لليوم</p>
               </div>
-              <div className="mr-auto">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400/50" />
+              <div className="ms-auto">
+                <Sparkles className="w-3.5 h-3.5 text-gold/60" />
               </div>
             </div>
             <Textarea
@@ -1243,7 +1231,7 @@ export default function DailyPlanner() {
               value={quickNoteText}
               onChange={(e) => setQuickNoteText(e.target.value)}
               rows={3}
-              className="text-sm resize-none bg-background/40 backdrop-blur-sm border-amber-200/20 dark:border-amber-800/20 focus-visible:ring-amber-400/30 focus-visible:border-amber-300/40 placeholder:text-muted-foreground/40"
+              className="text-sm resize-none bg-card/50 border-border focus-visible:ring-gold/30 focus-visible:border-gold/40 placeholder:text-muted-foreground/40"
             />
           </div>
         </div>
@@ -1256,21 +1244,21 @@ export default function DailyPlanner() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.4 }}
         >
-          <Card className="glass overflow-hidden">
-            <div className="px-5 pt-4 pb-2 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-950/10 dark:to-transparent">
+          <div className="neo-card card-lift overflow-hidden">
+            <div className="px-5 pt-4 pb-2 bg-gradient-to-b from-gold/8 to-transparent">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                    <StickyNote className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  </div>
+                  <span className="icon-well iw-amber w-8 h-8">
+                    <StickyNote className="w-4 h-4" />
+                  </span>
                   <h3 className="text-sm font-bold text-foreground">ملاحظات سريعة</h3>
-                  <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/30">
+                  <span className="pill pill-muted">
                     {arabicNum(notes.length)}
-                  </Badge>
+                  </span>
                 </div>
               </div>
             </div>
-            <CardContent className="p-3 space-y-2">
+            <div className="p-3 space-y-2">
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {notes.map((note) => (
                   <motion.div
@@ -1278,7 +1266,7 @@ export default function DailyPlanner() {
                     layout
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="relative group p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200/30 dark:border-amber-800/20"
+                    className="relative group p-3 rounded-2xl bg-card border border-gold/20 hover:shadow-lift transition-shadow"
                   >
                     {editingNoteId === note.id ? (
                       <div className="space-y-2">
@@ -1289,8 +1277,8 @@ export default function DailyPlanner() {
                           className="text-sm resize-none"
                         />
                         <div className="flex gap-1">
-                          <Button size="sm" onClick={handleSaveNoteEdit} className="h-6 text-[10px] px-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">حفظ</Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingNoteId(null)} className="h-6 text-[10px] px-2">إلغاء</Button>
+                          <Button size="sm" onClick={handleSaveNoteEdit} className="h-6 text-[10px] px-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:bg-forest/90 dark:hover:bg-lime/90">حفظ</Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingNoteId(null)} className="h-6 text-[10px] px-2 border-border bg-card hover:bg-secondary">إلغاء</Button>
                         </div>
                       </div>
                     ) : (
@@ -1299,7 +1287,7 @@ export default function DailyPlanner() {
                         <p className="text-[10px] text-muted-foreground/60 mt-2">
                           {new Date(note.createdAt).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
                         </p>
-                        <div className="absolute top-2 left-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute top-2 end-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => { setEditingNoteId(note.id); setEditNoteText(note.text) }}
                             className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground transition-colors"
@@ -1318,14 +1306,14 @@ export default function DailyPlanner() {
                   </motion.div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
       )}
 
       {/* ── Floating Quick Note Button ── */}
       <motion.div
-        className="fixed bottom-6 left-6 z-50"
+        className="fixed bottom-6 end-6 z-50"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ type: 'spring', delay: 0.5 }}
@@ -1335,11 +1323,11 @@ export default function DailyPlanner() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 text-white shadow-xl shadow-amber-500/30 flex items-center justify-center relative"
+              className="w-14 h-14 rounded-2xl bg-gold text-ink hover:bg-gold/90 shadow-xl shadow-gold/30 flex items-center justify-center relative"
             >
               <StickyNote className="w-6 h-6" />
               {notes.length > 0 && (
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                <div className="absolute -top-1 -start-1 w-5 h-5 rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center">
                   {notes.length}
                 </div>
               )}
@@ -1348,7 +1336,7 @@ export default function DailyPlanner() {
           <DialogContent className="sm:max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <StickyNote className="w-5 h-5 text-amber-500" />
+                <StickyNote className="w-5 h-5 text-gold" />
                 ملاحظة سريعة
               </DialogTitle>
             </DialogHeader>
@@ -1366,10 +1354,10 @@ export default function DailyPlanner() {
               />
               <Button
                 onClick={handleAddNote}
-                className="w-full bg-amber-500 hover:bg-amber-500/90 text-white"
+                className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:bg-forest/90 dark:hover:bg-lime/90"
                 disabled={!newNoteText.trim()}
               >
-                <StickyNote className="w-4 h-4 ml-2" />
+                <StickyNote className="w-4 h-4 me-2" />
                 حفظ الملاحظة
               </Button>
             </div>

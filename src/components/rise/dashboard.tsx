@@ -219,7 +219,7 @@ function getDayLabel(dateStr: string | null | undefined): string {
 function getPriorityColor(priority: string): string {
   switch (priority) {
     case 'high':
-      return 'bg-red-500/15 text-red-600 dark:text-red-400'
+      return 'bg-destructive/10 text-destructive'
     case 'medium':
       return 'bg-gold/15 text-gold'
     case 'low':
@@ -232,7 +232,7 @@ function getPriorityColor(priority: string): string {
 function getPriorityBorderColor(priority: string): string {
   switch (priority) {
     case 'high':
-      return 'border-r-2 border-r-red-500/60'
+      return 'border-s-2 border-s-destructive/60'
     case 'medium':
       return 'border-r-2 border-r-gold/60'
     case 'low':
@@ -565,9 +565,7 @@ function PremiumGlass({ children, className, style }: { children: React.ReactNod
   return (
     <div
       className={cn(
-        'glass rounded-2xl border border-white/10 dark:border-white/5',
-        'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1),0_1px_3px_rgba(0,0,0,0.04)]',
-        'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_1px_3px_rgba(0,0,0,0.2)]',
+        'neo-card rounded-2xl',
         className
       )}
       style={style}
@@ -650,18 +648,18 @@ function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: n
     glowColor = 'rgba(201, 154, 62, 0.25)'
     gradeColor = 'text-gold'
   } else {
-    strokeColor1 = 'oklch(0.55 0.18 25)'
-    strokeColor2 = 'oklch(0.50 0.15 20)'
-    glowColor = 'rgba(239, 68, 68, 0.25)'
-    gradeColor = 'text-red-500'
+    strokeColor1 = '#DC2626'
+    strokeColor2 = '#B91C1C'
+    glowColor = 'rgba(220, 38, 38, 0.22)'
+    gradeColor = 'text-destructive'
   }
 
   const breakdownItems = [
     { label: 'المهام', value: safeNum(breakdown.tasks), color: 'bg-emerald-accent' },
     { label: 'العادات', value: safeNum(breakdown.habits), color: 'bg-forest' },
     { label: 'التركيز', value: safeNum(breakdown.focus), color: 'bg-gold' },
-    { label: 'الصباح', value: safeNum(breakdown.morning), color: 'bg-amber-400' },
-    { label: 'السلسلة', value: safeNum(breakdown.streak), color: 'bg-orange-500' },
+    { label: 'الصباح', value: safeNum(breakdown.morning), color: 'bg-gold' },
+    { label: 'السلسلة', value: safeNum(breakdown.streak), color: 'bg-gold' },
   ]
 
   return (
@@ -798,7 +796,7 @@ function GoalDeltaBadge({ goalId }: { goalId: string }) {
       transition={{ delay: 0.5 }}
       className={cn(
         'flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
-        delta > 0 ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-red-500/10 text-red-500'
+        delta > 0 ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-destructive/10 text-destructive'
       )}
     >
       {delta > 0 ? (
@@ -969,7 +967,7 @@ function MotivationalWall() {
                   <Heart
                     className={cn(
                       'w-4 h-4 transition-colors',
-                      isFav ? 'fill-red-500 text-red-500' : 'text-muted-foreground/40'
+                      isFav ? 'fill-destructive text-destructive' : 'text-muted-foreground/40'
                     )}
                   />
                 </motion.div>
@@ -1104,7 +1102,7 @@ function OnThisDayWidget() {
                       'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold',
                       improvement >= 0
                         ? 'bg-emerald-accent/10 text-emerald-accent'
-                        : 'bg-red-500/10 text-red-500'
+                        : 'bg-destructive/10 text-destructive'
                     )}
                   >
                     {improvement >= 0 ? (
@@ -1407,7 +1405,7 @@ export default function Dashboard() {
                 animate={{ scale: [1, 1.25, 1], rotate: [0, 5, -5, 0] }}
                 transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
               >
-                <Flame className="w-5 h-5 text-orange-500" />
+                <Flame className="w-5 h-5 text-gold" />
               </motion.div>
               <div>
                 <p className="text-sm font-bold leading-none text-gradient-gold">{toArabicNum(user.streak)}</p>
@@ -1664,7 +1662,7 @@ export default function Dashboard() {
                               ? 'bg-gradient-to-l from-emerald-accent to-forest'
                               : goal.progress >= 40
                                 ? 'bg-gradient-to-l from-gold to-gold-light'
-                                : 'bg-gradient-to-l from-amber-400 to-gold'
+                                : 'bg-gradient-to-l from-gold/70 to-gold'
                           )}
                           initial={{ width: 0 }}
                           animate={{ width: `${Math.min(goal.progress, 100)}%` }}
@@ -1701,7 +1699,7 @@ export default function Dashboard() {
           {/* Today's Habits */}
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <SectionHeader icon={Flame} iconColor="text-orange-500" badge={
+              <SectionHeader icon={Flame} iconColor="text-gold" badge={
                 <Badge variant="secondary" className="text-[10px]">
                   {toArabicNum(today.habitsCompleted)} / {toArabicNum(today.habitsTotal)}
                 </Badge>
@@ -1852,7 +1850,7 @@ export default function Dashboard() {
         {health && (
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
-              <SectionHeader icon={Heart} iconColor="text-red-500">
+              <SectionHeader icon={Heart} iconColor="text-rose-accent">
                 الصحة اليوم
               </SectionHeader>
             </CardHeader>

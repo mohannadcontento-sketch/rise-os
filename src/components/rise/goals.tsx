@@ -15,16 +15,11 @@ import {
   Sparkles,
   Trash2,
   CheckCircle2,
-  Circle,
   Loader2,
-  Rocket,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -56,6 +51,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
+import { RiseIcon } from '@/components/rise/icons'
 
 /* ────────────── Types ────────────── */
 
@@ -89,18 +85,19 @@ const TYPE_LABELS: Record<Goal['type'], string> = {
   weekly: 'أسبوعي',
 }
 
+// Goal-type chips hue-map to the four identity accents (rule 4): gold / rose / violet / glass
 const TYPE_COLORS: Record<Goal['type'], string> = {
-  annual: 'bg-gold/15 text-gold border-gold/25',
-  quarterly: 'bg-emerald-accent/15 text-emerald-accent border-emerald-accent/25',
-  monthly: 'bg-forest/15 text-forest border-forest/25',
-  weekly: 'bg-forest-light/15 text-forest-light border-forest-light/25',
+  annual: 'bg-gold/15 text-gold',
+  quarterly: 'bg-rose-accent/15 text-rose-accent',
+  monthly: 'bg-violet-accent/15 text-violet-accent',
+  weekly: 'bg-glass/15 text-glass',
 }
 
 const TYPE_GRADIENT_OVERLAYS: Record<Goal['type'], string> = {
   annual: 'from-gold/8 via-gold/3 to-transparent',
-  quarterly: 'from-emerald-accent/8 via-emerald-accent/3 to-transparent',
-  monthly: 'from-forest/8 via-forest/3 to-transparent',
-  weekly: 'from-chart-4/8 via-chart-4/3 to-transparent',
+  quarterly: 'from-rose-accent/8 via-rose-accent/3 to-transparent',
+  monthly: 'from-violet-accent/8 via-violet-accent/3 to-transparent',
+  weekly: 'from-glass/8 via-glass/3 to-transparent',
 }
 
 const TYPE_ICONS: Record<Goal['type'], string> = {
@@ -111,10 +108,10 @@ const TYPE_ICONS: Record<Goal['type'], string> = {
 }
 
 const TYPE_GRADIENT_STOPS: Record<Goal['type'], { from: string; to: string }> = {
-  annual: { from: 'oklch(0.78 0.12 85)', to: 'oklch(0.65 0.08 85)' },
-  quarterly: { from: 'oklch(0.55 0.14 163)', to: 'oklch(0.35 0.10 160)' },
-  monthly: { from: 'oklch(0.45 0.10 200)', to: 'oklch(0.35 0.08 200)' },
-  weekly: { from: 'oklch(0.65 0.20 310)', to: 'oklch(0.55 0.15 310)' },
+  annual: { from: '#D4A853', to: '#B8862F' },
+  quarterly: { from: '#FF7A8C', to: '#E14B65' },
+  monthly: { from: '#C4B5FD', to: '#8B5CF6' },
+  weekly: { from: '#4DA2FF', to: '#007AFF' },
 }
 
 /* ────────────── Component ────────────── */
@@ -404,9 +401,7 @@ export function GoalsView() {
         {/* ── Header ── */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg">
-              <Target className="w-5 h-5 text-white" />
-            </div>
+            <RiseIcon glyph="goals" hue="rose" size="md" lift />
             <div>
               <h1 className="text-xl font-bold tracking-tight">الأهداف</h1>
               <p className="text-xs text-muted-foreground">حدد أهدافك وتابع تقدمك نحو القمة</p>
@@ -417,9 +412,9 @@ export function GoalsView() {
             <DialogTrigger asChild>
               <Button
                 size="sm"
-                className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg shadow-emerald-accent/20"
+                className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-rose-accent/20"
               >
-                <Plus className="w-4 h-4 ml-1.5" />
+                <Plus className="w-4 h-4 me-1.5" />
                 هدف جديد
               </Button>
             </DialogTrigger>
@@ -498,12 +493,12 @@ export function GoalsView() {
                 <Button
                   onClick={handleAddGoal}
                   disabled={!formTitle.trim() || saving}
-                  className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+                  className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90"
                 >
                   {saving ? (
-                    <Loader2 className="w-4 h-4 animate-spin ml-1.5" />
+                    <Loader2 className="w-4 h-4 animate-spin me-1.5" />
                   ) : (
-                    <Plus className="w-4 h-4 ml-1.5" />
+                    <Plus className="w-4 h-4 me-1.5" />
                   )}
                   إضافة
                 </Button>
@@ -519,17 +514,15 @@ export function GoalsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-emerald-accent" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">إجمالي الأهداف</p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="neo-card card-lift rounded-2xl p-4 flex items-center gap-3">
+              <span className="icon-well iw-rose w-10 h-10">
+                <Target className="w-5 h-5" />
+              </span>
+              <div>
+                <p className="text-2xl font-bold text-foreground"><span className="num" dir="ltr">{stats.total}</span></p>
+                <p className="text-xs text-muted-foreground">إجمالي الأهداف</p>
+              </div>
+            </div>
           </motion.div>
 
           <motion.div
@@ -537,17 +530,15 @@ export function GoalsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.08 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-gold" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.completed}</p>
-                  <p className="text-xs text-muted-foreground">مكتمل</p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="neo-card card-lift rounded-2xl p-4 flex items-center gap-3">
+              <span className="icon-well iw-amber w-10 h-10">
+                <Trophy className="w-5 h-5" />
+              </span>
+              <div>
+                <p className="text-2xl font-bold text-foreground"><span className="num" dir="ltr">{stats.completed}</span></p>
+                <p className="text-xs text-muted-foreground">مكتمل</p>
+              </div>
+            </div>
           </motion.div>
 
           <motion.div
@@ -555,17 +546,15 @@ export function GoalsView() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.16 }}
           >
-            <Card className="rounded-2xl border-0 shadow-sm glass">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-forest/10 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-forest" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{stats.avgProgress}%</p>
-                  <p className="text-xs text-muted-foreground">متوسط التقدم</p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="neo-card card-lift rounded-2xl p-4 flex items-center gap-3">
+              <span className="icon-well iw-forest w-10 h-10">
+                <TrendingUp className="w-5 h-5" />
+              </span>
+              <div>
+                <p className="text-2xl font-bold text-foreground"><span className="num" dir="ltr">{stats.avgProgress}%</span></p>
+                <p className="text-xs text-muted-foreground">متوسط التقدم</p>
+              </div>
+            </div>
           </motion.div>
         </div>
 
@@ -577,7 +566,7 @@ export function GoalsView() {
             transition={{ duration: 0.4, delay: 0.2 }}
           >
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-accent" />
+              <div className="w-2 h-2 rounded-full bg-rose-accent" />
               <h2 className="text-sm font-semibold">لوحة الرؤية</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -587,7 +576,7 @@ export function GoalsView() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 + i * 0.1 }}
-                  className={cn('premium-card rounded-2xl p-4 relative overflow-hidden')}
+                  className={cn('neo-card card-lift rounded-2xl p-4 relative overflow-hidden')}
                 >
                   <div className={cn('absolute inset-0 bg-gradient-to-br pointer-events-none', TYPE_GRADIENT_OVERLAYS[goal.type])} />
                   <div className="relative">
@@ -597,15 +586,15 @@ export function GoalsView() {
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{goal.vision}</p>
                     <div className="mt-3 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden">
+                      <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
                         <motion.div
-                          className="h-full rounded-full shimmer bg-gradient-to-l from-emerald-accent to-forest"
+                          className="h-full rounded-full shimmer bg-gradient-to-l from-rose-accent/80 to-rose-accent"
                           initial={{ width: 0 }}
                           animate={{ width: `${goal.progress}%` }}
                           transition={{ duration: 1, ease: 'easeOut', delay: 0.5 }}
                         />
                       </div>
-                      <span className="text-[10px] font-bold text-emerald-accent">{goal.progress}%</span>
+                      <span className="text-[10px] font-bold text-rose-accent"><span className="num" dir="ltr">{goal.progress}%</span></span>
                     </div>
                   </div>
                 </motion.div>
@@ -640,7 +629,7 @@ export function GoalsView() {
                   {isActive && (
                     <motion.div
                       layoutId="activeGoalTab"
-                      className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-3/4 bg-emerald-accent rounded-full z-20"
+                      className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-3/4 bg-rose-accent rounded-full z-20"
                       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                     />
                   )}
@@ -659,9 +648,7 @@ export function GoalsView() {
                   animate={{ opacity: 1, scale: 1 }}
                   className="flex flex-col items-center justify-center py-20 text-center"
                 >
-                  <div className="w-20 h-20 rounded-full bg-emerald-accent/10 flex items-center justify-center mb-6">
-                    <Rocket className="w-10 h-10 text-emerald-accent" />
-                  </div>
+                  <RiseIcon glyph="goals" hue="rose" size="lg" className="mx-auto mb-6" />
                   <h3 className="text-lg font-semibold mb-2">ابدأ رحلتك نحو النجاح</h3>
                   <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
                     {activeType !== 'all'
@@ -670,9 +657,9 @@ export function GoalsView() {
                   </p>
                   <Button
                     onClick={() => setAddOpen(true)}
-                    className="mt-6 rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white shadow-lg shadow-emerald-accent/20"
+                    className="mt-6 rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-rose-accent/20"
                   >
-                    <Plus className="w-4 h-4 ml-1.5" />
+                    <Plus className="w-4 h-4 me-1.5" />
                     أضف أول هدف
                   </Button>
                 </motion.div>
@@ -752,17 +739,17 @@ function GoalCard({
       exit={{ opacity: 0, y: -10, scale: 0.98 }}
       transition={{ duration: 0.35, delay: index * 0.05 }}
     >
-      <Card className="rounded-2xl border-0 shadow-sm glass overflow-hidden relative">
+      <div className="neo-card card-lift rounded-2xl overflow-hidden relative">
         {/* Gradient overlay based on goal type */}
         <div className={cn('absolute inset-0 bg-gradient-to-bl pointer-events-none rounded-2xl', TYPE_GRADIENT_OVERLAYS[goal.type])} />
 
         {/* ── Card Header ── */}
         <button
           onClick={onToggleExpand}
-          className="w-full text-right p-4 md:p-5 flex items-start gap-3 cursor-pointer relative z-10"
+          className="w-full text-start p-4 md:p-5 flex items-start gap-3 cursor-pointer relative z-10"
         >
           {/* Progress circle with gradient stroke and glow */}
-          <div className={cn('relative w-12 h-12 shrink-0 mt-0.5', isHighProgress && 'drop-shadow-[0_0_6px_oklch(0.55_0.14_163/0.4)]')}>
+          <div className={cn('relative w-12 h-12 shrink-0 mt-0.5', isHighProgress && 'drop-shadow-[0_0_6px_rgba(255,90,118,0.35)]')}>
             <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
               <circle
                 cx="24"
@@ -814,6 +801,8 @@ function GoalCard({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: index * 0.08 + 0.5 }}
+                className="num"
+                dir="ltr"
               >
                 {goal.progress}%
               </motion.span>
@@ -824,19 +813,18 @@ function GoalCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1.5">
               <h3 className="font-semibold text-sm md:text-base truncate">{goal.title}</h3>
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-2 py-0 rounded-full font-medium', TYPE_COLORS[goal.type])}
+              <span
+                className={cn('pill', TYPE_COLORS[goal.type])}
               >
-                <span className="ml-1">{TYPE_ICONS[goal.type]}</span>
+                <span className="me-1">{TYPE_ICONS[goal.type]}</span>
                 {TYPE_LABELS[goal.type]}
-              </Badge>
+              </span>
             </div>
 
             {/* Progress bar with shimmer */}
-            <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden mb-2 max-w-xs">
+            <div className="h-1.5 rounded-full bg-secondary overflow-hidden mb-2 max-w-xs">
               <motion.div
-                className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest shimmer"
+                className="h-full rounded-full bg-gradient-to-l from-rose-accent/80 to-rose-accent shimmer"
                 initial={{ width: 0 }}
                 animate={{ width: `${goal.progress}%` }}
                 transition={{ duration: 0.8, ease: 'easeOut', delay: index * 0.08 }}
@@ -854,14 +842,14 @@ function GoalCard({
                   <Calendar className="w-3 h-3" />
                   {formatDate(goal.deadline)}
                   {deadlineInfo && (
-                    <span className="text-[10px] mr-1">({deadlineInfo.text})</span>
+                    <span className="text-[10px] me-1">({deadlineInfo.text})</span>
                   )}
                 </motion.span>
               )}
               {totalMilestones > 0 && (
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" />
-                  {completedMilestones} / {totalMilestones}
+                  <span className="num" dir="ltr">{completedMilestones} / {totalMilestones}</span>
                 </span>
               )}
             </div>
@@ -891,11 +879,11 @@ function GoalCard({
                 {/* Vision */}
                 {goal.vision && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-accent">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-rose-accent">
                       <Eye className="w-3.5 h-3.5" />
                       الرؤية
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed pr-5">
+                    <p className="text-sm text-muted-foreground leading-relaxed ps-5">
                       {goal.vision}
                     </p>
                   </div>
@@ -908,7 +896,7 @@ function GoalCard({
                       <Sparkles className="w-3.5 h-3.5" />
                       لماذا؟
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed pr-5">
+                    <p className="text-sm text-muted-foreground leading-relaxed ps-5">
                       {goal.why}
                     </p>
                   </div>
@@ -919,12 +907,12 @@ function GoalCard({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-medium text-muted-foreground">
-                        المعالم ({completedMilestones}/{totalMilestones})
+                        المعالم (<span className="num" dir="ltr">{completedMilestones}/{totalMilestones}</span>)
                       </p>
                     </div>
-                    <div className="relative max-h-48 overflow-y-auto pl-1">
+                    <div className="relative max-h-48 overflow-y-auto ps-1">
                       {/* Timeline connecting line */}
-                      <div className="absolute top-3 bottom-3 right-[17px] w-px bg-border/50" />
+                      <div className="absolute top-3 bottom-3 start-[17px] w-px bg-border/50" />
                       <div className="space-y-1.5">
                         {goal.milestones
                           .sort((a, b) => a.order - b.order)
@@ -946,8 +934,8 @@ function GoalCard({
                                     transition={{ type: 'spring', stiffness: 500, damping: 15 }}
                                     className="relative"
                                   >
-                                    <div className="w-[18px] h-[18px] rounded-full bg-emerald-accent flex items-center justify-center shadow-sm shadow-emerald-accent/30">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                    <div className="w-[18px] h-[18px] rounded-full bg-rose-accent flex items-center justify-center shadow-sm shadow-rose-accent/30">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-ink" />
                                     </div>
                                     {/* Confetti-like sparkles */}
                                     {[0, 1, 2].map((i) => (
@@ -981,7 +969,7 @@ function GoalCard({
                                 {milestone.title}
                               </span>
                               {milestone.completed && (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <CheckCircle2 className="w-4 h-4 text-rose-accent opacity-0 group-hover:opacity-100 transition-opacity" />
                               )}
                             </motion.div>
                           ))}
@@ -995,7 +983,7 @@ function GoalCard({
                   <input
                     type="text"
                     placeholder="أضف معلماً جديداً..."
-                    className="flex-1 h-9 px-3 text-sm rounded-xl border border-border/60 bg-background/50 focus:border-emerald-accent/50 focus:outline-none transition-colors"
+                    className="flex-1 h-9 px-3 text-sm rounded-xl border border-border bg-card text-foreground focus:border-rose-accent/50 focus:outline-none transition-colors"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         const input = e.target as HTMLInputElement
@@ -1020,7 +1008,7 @@ function GoalCard({
                       }
                     }}
                   >
-                    <Plus className="w-3.5 h-3.5 ml-1" />
+                    <Plus className="w-3.5 h-3.5 me-1" />
                     إضافة
                   </Button>
                 </div>
@@ -1038,7 +1026,7 @@ function GoalCard({
                         }}
                         className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded-xl text-xs h-8"
                       >
-                        <Trash2 className="w-3.5 h-3.5 ml-1" />
+                        <Trash2 className="w-3.5 h-3.5 me-1" />
                         حذف الهدف
                       </Button>
                     </TooltipTrigger>
@@ -1049,7 +1037,7 @@ function GoalCard({
             </motion.div>
           )}
         </AnimatePresence>
-      </Card>
+      </div>
     </motion.div>
   )
 }

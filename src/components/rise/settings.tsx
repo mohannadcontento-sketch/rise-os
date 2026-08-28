@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Settings as SettingsIcon,
-  User,
   Palette,
   Bell,
   Sun,
@@ -33,22 +31,13 @@ import {
   Flame,
   Trophy,
   Star,
-  Users,
-  Bot,
-  Database,
-  Save,
-  Search,
   Volume2,
-  Eye,
-  RefreshCw,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import {
@@ -75,6 +64,8 @@ import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { AVATARS, type AvatarItem } from '@/lib/avatars'
 import { getToday } from '@/lib/rise-utils'
+import { RiseIcon } from '@/components/rise/icons'
+import { BellToggle } from '@/components/rise/kit-v2'
 
 /* ────────────── Types ────────────── */
 
@@ -320,10 +311,10 @@ export default function Settings() {
       label: 'فاتح',
       icon: Sun,
       preview: (
-        <div className="w-full h-12 rounded-lg bg-white border border-gray-200 shadow-sm flex items-center justify-center">
+        <div className="w-full h-12 rounded-lg bg-paper-soft border border-ink/15 shadow-sm flex items-center justify-center">
           <div className="flex gap-1">
-            <div className="w-4 h-4 rounded bg-gray-200" />
-            <div className="w-8 h-4 rounded bg-gray-100" />
+            <div className="w-4 h-4 rounded bg-ink/15" />
+            <div className="w-8 h-4 rounded bg-ink/10" />
           </div>
         </div>
       ),
@@ -333,10 +324,10 @@ export default function Settings() {
       label: 'داكن',
       icon: Moon,
       preview: (
-        <div className="w-full h-12 rounded-lg bg-gray-900 border border-gray-700 shadow-sm flex items-center justify-center">
+        <div className="w-full h-12 rounded-lg bg-ink border border-paper-soft/15 shadow-sm flex items-center justify-center">
           <div className="flex gap-1">
-            <div className="w-4 h-4 rounded bg-gray-700" />
-            <div className="w-8 h-4 rounded bg-gray-800" />
+            <div className="w-4 h-4 rounded bg-paper-soft/25" />
+            <div className="w-8 h-4 rounded bg-paper-soft/15" />
           </div>
         </div>
       ),
@@ -346,12 +337,12 @@ export default function Settings() {
       label: 'النظام',
       icon: Monitor,
       preview: (
-        <div className="w-full h-12 rounded-lg overflow-hidden flex shadow-sm border border-gray-200">
-          <div className="w-1/2 bg-white flex items-center justify-center">
-            <div className="w-2.5 h-2.5 rounded bg-gray-300" />
+        <div className="w-full h-12 rounded-lg overflow-hidden flex shadow-sm border border-border">
+          <div className="w-1/2 bg-paper-soft flex items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded bg-ink/25" />
           </div>
-          <div className="w-1/2 bg-gray-900 flex items-center justify-center">
-            <div className="w-2.5 h-2.5 rounded bg-gray-600" />
+          <div className="w-1/2 bg-ink flex items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded bg-paper-soft/40" />
           </div>
         </div>
       ),
@@ -389,8 +380,8 @@ export default function Settings() {
     <div className="space-y-6 max-w-2xl mx-auto">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <SettingsIcon className="w-6 h-6 text-emerald-accent" />
+        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+          <RiseIcon glyph="settings" hue="forest" size="md" lift />
           الإعدادات
         </h2>
         <p className="text-sm text-muted-foreground mt-1">خصّص تجربتك في RiseOS</p>
@@ -398,8 +389,8 @@ export default function Settings() {
 
       {/* Profile Section with Stats */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent premium-card">
-          <CardContent className="p-6">
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-forest/60">
+          <div className="p-6">
             <div className="flex items-start gap-5">
               {/* Avatar with gradient + animated glow — clickable to open picker */}
               <Dialog open={avatarPickerOpen} onOpenChange={setAvatarPickerOpen}>
@@ -423,11 +414,11 @@ export default function Settings() {
                           {AVATARS.find(a => a.id === selectedAvatar)!.svg}
                         </div>
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:from-emerald-accent dark:via-emerald-600 dark:to-emerald-900 flex items-center justify-center text-3xl font-bold text-white">
+                        <div className="w-full h-full bg-gradient-to-br from-forest via-emerald-accent to-gold dark:via-emerald-accent dark:to-forest flex items-center justify-center text-3xl font-bold text-paper-soft">
                           {String(displayName || 'م').charAt(0)}
                         </div>
                       )}
-                      <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-forest border-2 border-background flex items-center justify-center">
+                      <div className="absolute bottom-0 end-0 w-6 h-6 rounded-full bg-forest border-2 border-background flex items-center justify-center">
                         <Pencil className="w-3 h-3 text-white" />
                       </div>
                     </div>
@@ -449,7 +440,7 @@ export default function Settings() {
                         className={cn(
                           'flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all',
                           'hover:bg-muted/50',
-                          selectedAvatar === avatar.id && 'ring-2 ring-emerald-accent bg-emerald-accent/5'
+                          selectedAvatar === avatar.id && 'ring-2 ring-forest bg-forest/5 dark:ring-lime dark:bg-lime/10'
                         )}
                       >
                         <div
@@ -460,8 +451,8 @@ export default function Settings() {
                         </div>
                         <span className="text-[10px] text-muted-foreground truncate w-full text-center">{avatar.name}</span>
                         {selectedAvatar === avatar.id && (
-                          <div className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-emerald-accent flex items-center justify-center">
-                            <Check className="w-2.5 h-2.5 text-white" />
+                          <div className="absolute top-0.5 start-0.5 w-4 h-4 rounded-full bg-forest dark:bg-lime flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-paper-soft dark:text-ink" />
                           </div>
                         )}
                       </motion.button>
@@ -486,7 +477,7 @@ export default function Settings() {
                     <motion.button
                       whileTap={{ scale: 0.9 }}
                       onClick={saveName}
-                      className="p-1.5 rounded-lg bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20 transition-colors"
+                      className="p-1.5 rounded-lg bg-forest/10 text-forest hover:bg-forest/20 dark:text-lime dark:bg-lime/10 dark:hover:bg-lime/20 transition-colors"
                     >
                       <Check className="w-4 h-4" />
                     </motion.button>
@@ -526,49 +517,49 @@ export default function Settings() {
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-accent/10 border border-emerald-accent/20"
+                    className="pill pill-success"
                   >
-                    <Trophy className="w-3.5 h-3.5 text-emerald-accent" />
-                    <span className="text-xs font-bold text-emerald-accent">المستوى {userStats?.level ?? 1}</span>
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>المستوى <span className="num" dir="ltr">{userStats?.level ?? 1}</span></span>
                   </motion.div>
                   <motion.div
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gold/10 border border-gold/20"
+                    className="pill pill-lime"
                   >
-                    <Star className="w-3.5 h-3.5 text-gold" />
-                    <span className="text-xs font-bold text-gold">{userStats?.xp ?? 0} XP</span>
+                    <Star className="w-3.5 h-3.5" />
+                    <span><span className="num" dir="ltr">{userStats?.xp ?? 0}</span> XP</span>
                   </motion.div>
                   <motion.div
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4 }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20"
+                    className="pill bg-destructive/10 text-destructive"
                   >
-                    <Flame className="w-3.5 h-3.5 text-rose-500" />
-                    <span className="text-xs font-bold text-rose-500">{userStats?.streak ?? 0} يوم</span>
+                    <Flame className="w-3.5 h-3.5" />
+                    <span><span className="num" dir="ltr">{userStats?.streak ?? 0}</span> يوم</span>
                   </motion.div>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-amber-500/30 to-transparent" />
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-gold/30 to-transparent" />
 
       {/* Appearance */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-amber-500">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Palette className="w-4 h-4 text-amber-500" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-gold/50">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-violet"><Palette className="h-4 w-4" /></span>
               المظهر
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-5">
             {/* Theme Cards with Mini Preview */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">السمة</Label>
@@ -584,14 +575,14 @@ export default function Settings() {
                       className={cn(
                         'flex flex-col items-center gap-2.5 p-3 rounded-2xl border-2 transition-all',
                         isActive
-                          ? 'border-emerald-accent bg-emerald-accent/5 shadow-lg shadow-emerald-accent/15 ring-2 ring-emerald-accent/20'
-                          : 'border-transparent bg-muted/20 hover:bg-muted/40'
+                          ? 'border-forest bg-forest/5 shadow-lg shadow-forest/15 ring-2 ring-forest/20 dark:border-lime dark:bg-lime/10 dark:ring-lime/20'
+                          : 'border-border bg-card hover:bg-secondary'
                       )}
                     >
                       {t.preview}
                       <div className="flex items-center gap-1.5">
-                        <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-emerald-accent' : 'text-muted-foreground')} />
-                        <span className={cn('text-xs font-medium', isActive ? 'text-emerald-accent' : 'text-muted-foreground')}>
+                        <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-forest dark:text-lime' : 'text-muted-foreground')} />
+                        <span className={cn('text-xs font-medium', isActive ? 'text-forest dark:text-lime' : 'text-muted-foreground')}>
                           {t.label}
                         </span>
                       </div>
@@ -619,23 +610,23 @@ export default function Settings() {
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-emerald-700/30 to-transparent" />
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-forest/30 to-transparent" />
 
       {/* Notifications - Grouped */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-700 dark:border-r-emerald-400">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Bell className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-gold/50">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-amber"><Bell className="h-4 w-4" /></span>
               الإشعارات
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-5">
             {notifGroups.map((group) => (
               <div key={group.title}>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">{group.title}</p>
@@ -654,11 +645,7 @@ export default function Settings() {
                             <span className="text-[11px] text-muted-foreground">{item.desc}</span>
                           </div>
                         </div>
-                        <Switch
-                          checked={isChecked}
-                          onCheckedChange={(v) => updateNotification(item.key, v)}
-                          className="data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
-                        />
+                        <BellToggle enabled={isChecked} onToggle={(v) => updateNotification(item.key, v)} />
                       </div>
                     )
                   })}
@@ -666,23 +653,23 @@ export default function Settings() {
                 {group.title !== notifGroups[notifGroups.length - 1].title && <Separator className="mt-3" />}
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-sky-500/30 to-transparent" />
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-glass/30 to-transparent" />
 
       {/* Sounds */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-sky-600 dark:border-r-sky-400">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Volume2 className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-glass/50">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-blue"><Volume2 className="h-4 w-4" /></span>
               الأصوات
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-5">
             <div className="flex items-center justify-between py-2 px-1">
               <div>
                 <span className="text-sm font-medium block">تأثيرات صوتية</span>
@@ -694,14 +681,14 @@ export default function Settings() {
                   setSettings((prev) => ({ ...prev, sounds: v }))
                   if (v) playSound('success')
                 }}
-                className="data-[state=checked]:bg-sky-600 data-[state=checked]:border-sky-600"
+                className="data-[state=checked]:bg-forest dark:data-[state=checked]:bg-lime"
               />
             </div>
             {settings.sounds && (
               <div className="space-y-3 px-1">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm text-muted-foreground">مستوى الصوت</Label>
-                  <span className="text-xs font-mono text-muted-foreground">{Math.round(settings.soundVolume * 100)}%</span>
+                  <span className="text-xs text-muted-foreground"><span className="num" dir="ltr">{Math.round(settings.soundVolume * 100)}%</span></span>
                 </div>
                 <Slider
                   value={[settings.soundVolume]}
@@ -717,16 +704,16 @@ export default function Settings() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs w-full rounded-xl"
+                  className="text-xs w-full rounded-xl border-border bg-card hover:bg-secondary"
                   onClick={() => playSound('task-complete')}
                 >
-                  <Volume2 className="w-3.5 h-3.5 ml-1.5" />
+                  <Volume2 className="w-3.5 h-3.5 me-1.5" />
                   اختبار الصوت
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider ── */}
@@ -734,22 +721,23 @@ export default function Settings() {
 
       {/* Morning Routine */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-emerald-accent">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Clock className="w-4 h-4 text-emerald-accent" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-forest/50">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-amber"><Clock className="h-4 w-4" /></span>
               الروتين الصباحي
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <Sunrise className="w-3.5 h-3.5 text-amber-500" />
+                  <Sunrise className="w-3.5 h-3.5 text-gold" />
                   وقت الاستيقاظ
                 </Label>
                 <Input
                   type="time"
+                  dir="ltr"
                   value={settings.wakeUpTime}
                   onChange={(e) => setSettings((prev) => ({ ...prev, wakeUpTime: e.target.value }))}
                   className="text-center h-11 text-sm font-medium rounded-xl"
@@ -757,34 +745,35 @@ export default function Settings() {
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <Moon className="w-3.5 h-3.5 text-purple-500" />
+                  <Moon className="w-3.5 h-3.5 text-violet-accent" />
                   وقت النوم
                 </Label>
                 <Input
                   type="time"
+                  dir="ltr"
                   value={settings.sleepTime}
                   onChange={(e) => setSettings((prev) => ({ ...prev, sleepTime: e.target.value }))}
                   className="text-center h-11 text-sm font-medium rounded-xl"
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-purple-500/30 to-transparent" />
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-violet-accent/30 to-transparent" />
 
       {/* Goals Settings */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-purple-500">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Target className="w-4 h-4 text-purple-500" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-violet-accent/50">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-lime"><Target className="h-4 w-4" /></span>
               أهداف يومية
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-4">
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -793,6 +782,7 @@ export default function Settings() {
                 </Label>
                 <Input
                   type="number"
+                  dir="ltr"
                   min={1}
                   max={20}
                   value={settings.dailyWaterGoal}
@@ -807,6 +797,7 @@ export default function Settings() {
                 </Label>
                 <Input
                   type="number"
+                  dir="ltr"
                   min={1}
                   max={500}
                   value={settings.dailyReadingGoal}
@@ -821,6 +812,7 @@ export default function Settings() {
                 </Label>
                 <Input
                   type="number"
+                  dir="ltr"
                   min={1}
                   max={7}
                   value={settings.weeklyExerciseGoal}
@@ -829,23 +821,23 @@ export default function Settings() {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-blue-500/30 to-transparent" />
+      <div className="h-[2px] bg-gradient-to-l from-transparent via-glass/30 to-transparent" />
 
       {/* Data & Privacy */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-blue-500">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Shield className="w-4 h-4 text-blue-500" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-forest/50">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-forest"><Shield className="h-4 w-4" /></span>
               البيانات والخصوصية
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+          </div>
+          <div className="px-5 pb-5 space-y-4">
             {/* Storage Usage — real server storage */}
             <div className="p-4 rounded-xl bg-muted/20 space-y-3">
               <div className="flex items-center justify-between">
@@ -854,13 +846,13 @@ export default function Settings() {
                   <span className="text-sm font-medium">مساحة التخزين في الخادم</span>
                 </div>
                 <span className="text-xs font-semibold text-muted-foreground">
-                  {formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}
+                  <span className="num" dir="ltr">{formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}</span>
                 </span>
               </div>
               <Progress value={storagePercent} className="h-2" />
               <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span>{storagePercent}% مستخدم</span>
-                <span>{formatBytes(storageSize.total - storageSize.used)} متاح</span>
+                <span><span className="num" dir="ltr">{storagePercent}%</span> مستخدم</span>
+                <span><span className="num" dir="ltr">{formatBytes(storageSize.total - storageSize.used)}</span> متاح</span>
               </div>
               {/* Detailed breakdown */}
               {storageSize.counts && Object.keys(storageSize.counts).length > 0 && (
@@ -878,7 +870,7 @@ export default function Settings() {
                       return count > 0 ? (
                         <div key={key} className="flex justify-between">
                           <span>{labels[key] || key}</span>
-                          <span className="font-mono">{count}</span>
+                          <span className="num" dir="ltr">{count}</span>
                         </div>
                       ) : null
                     })}
@@ -893,15 +885,15 @@ export default function Settings() {
             {/* Export */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-accent/10">
-                  <Download className="w-4 h-4 text-emerald-accent" />
-                </div>
+                <span className="icon-well h-9 w-9 iw-forest">
+                  <Download className="h-4 w-4" />
+                </span>
                 <div>
                   <p className="text-sm font-medium">تصدير البيانات</p>
                   <p className="text-xs text-muted-foreground">تنزيل نسخة احتياطية JSON من بياناتك</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={handleExportData} className="text-xs">
+              <Button variant="outline" size="sm" onClick={handleExportData} className="text-xs border-border bg-card hover:bg-secondary">
                 تصدير
               </Button>
             </div>
@@ -909,9 +901,9 @@ export default function Settings() {
             {/* Import */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <Upload className="w-4 h-4 text-blue-500" />
-                </div>
+                <span className="icon-well h-9 w-9 iw-blue">
+                  <Upload className="h-4 w-4" />
+                </span>
                 <div>
                   <p className="text-sm font-medium">استيراد البيانات</p>
                   <p className="text-xs text-muted-foreground">استعادة نسخة احتياطية من ملف JSON</p>
@@ -925,13 +917,13 @@ export default function Settings() {
                   className="hidden"
                   onChange={handleImportData}
                 />
-                <Button variant="outline" size="sm" className="text-xs border-blue-500/30 text-blue-500 hover:bg-blue-500/10" asChild>
+                <Button variant="outline" size="sm" className="text-xs border-border bg-card hover:bg-secondary" asChild>
                   <span>استيراد</span>
                 </Button>
               </label>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* ── Gradient Divider (red) ── */}
@@ -1007,12 +999,12 @@ export default function Settings() {
                       >
                         {deletingAll ? (
                           <>
-                            <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
                             جاري الحذف...
                           </>
                         ) : (
                           <>
-                            <Trash2 className="w-4 h-4 ml-2" />
+                            <Trash2 className="w-4 h-4 me-2" />
                             حذف الكل نهائياً
                           </>
                         )}
@@ -1031,28 +1023,25 @@ export default function Settings() {
 
       {/* About RiseOS with branding */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <Card className="glass border border-border/30 overflow-hidden border-r-4 border-r-muted-foreground/30 premium-card">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base flex items-center gap-2.5">
-              <Info className="w-4 h-4 text-muted-foreground" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-muted-foreground/30">
+          <div className="p-5 pb-4">
+            <h3 className="text-base font-bold flex items-center gap-2.5">
+              <span className="icon-well h-7 w-7 iw-forest"><Info className="h-4 w-4" /></span>
               عن RiseOS
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             <div className="flex items-center gap-4 mb-5">
-              <motion.div
-                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-accent via-emerald-600 to-emerald-800 dark:to-emerald-900 flex items-center justify-center shadow-xl shadow-emerald-accent/20"
-                whileHover={{ scale: 1.05, rotate: -3 }}
-              >
-                <Zap className="w-7 h-7 text-white" />
+              <motion.div whileHover={{ scale: 1.05, rotate: -3 }} className="shrink-0">
+                <RiseIcon glyph="bolt" hue="forest" size="lg" lift />
               </motion.div>
               <div className="flex-1">
                 <h3 className="font-bold text-lg">RiseOS</h3>
                 <p className="text-xs text-muted-foreground">نظام تشغيل الحياة</p>
               </div>
-              <Badge variant="secondary" className="bg-emerald-accent/10 text-emerald-accent text-xs px-3 py-1">
-                v1.0.0
-              </Badge>
+              <span className="pill pill-success">
+                <span className="num" dir="ltr">v1.0.0</span>
+              </span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
               RiseOS هو نظام تشغيل حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
@@ -1060,13 +1049,13 @@ export default function Settings() {
             </p>
             <Separator className="my-4" />
             <div className="flex items-center gap-2">
-              <Heart className="w-3.5 h-3.5 text-rose-500" />
+              <Heart className="w-3.5 h-3.5 text-rose-accent" />
               <p className="text-xs text-muted-foreground">
                 صُنع بأيدٍ عربية. امتلك صباحك. امتلك حياتك.
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Version Footer */}
@@ -1077,7 +1066,7 @@ export default function Settings() {
             animate={{ rotate: [0, 360] }}
             transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
           >
-            <Zap className="w-4 h-4 text-emerald-accent" />
+            <Zap className="w-4 h-4 text-forest dark:text-lime" />
           </motion.div>
           <span className="text-gradient-forest font-bold text-sm">RiseOS</span>
         </div>

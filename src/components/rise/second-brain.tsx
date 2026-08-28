@@ -30,11 +30,10 @@ import {
   Clock,
   Eye,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { RiseIcon } from './icons'
 import {
   Dialog,
   DialogContent,
@@ -74,40 +73,40 @@ interface KnowledgeItem {
 /* ────────────── Config ────────────── */
 
 const typeConfig: Record<string, { label: string; icon: React.ElementType; color: string; stripColor: string; borderColor: string }> = {
-  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent', stripColor: 'bg-emerald-accent', borderColor: 'border-r-emerald-accent' },
-  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-sky-500/10 text-sky-500', stripColor: 'bg-sky-500', borderColor: 'border-r-sky-500' },
-  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold', stripColor: 'bg-gold', borderColor: 'border-r-gold' },
-  resource: { label: 'موارد', icon: FileText, color: 'bg-cyan-500/10 text-cyan-500', stripColor: 'bg-cyan-500', borderColor: 'border-r-cyan-500' },
-  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-purple-500/10 text-purple-500', stripColor: 'bg-purple-500', borderColor: 'border-r-purple-500' },
-  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500', borderColor: 'border-r-pink-500' },
-  research: { label: 'بحث', icon: Beaker, color: 'bg-rose-500/10 text-rose-500', stripColor: 'bg-rose-500', borderColor: 'border-r-rose-500' },
-  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-pink-500/10 text-pink-500', stripColor: 'bg-pink-500', borderColor: 'border-r-pink-500' },
+  project: { label: 'مشاريع', icon: FolderKanban, color: 'bg-emerald-accent/10 text-emerald-accent', stripColor: 'bg-emerald-accent', borderColor: 'border-s-emerald-accent' },
+  knowledge: { label: 'معرفة', icon: BookMarked, color: 'bg-glass/10 text-glass', stripColor: 'bg-glass', borderColor: 'border-s-glass' },
+  idea: { label: 'أفكار', icon: Lightbulb, color: 'bg-gold/10 text-gold', stripColor: 'bg-gold', borderColor: 'border-s-gold' },
+  resource: { label: 'موارد', icon: FileText, color: 'bg-[#06B6D4]/10 text-[#0E7490] dark:text-[#67E8F9]', stripColor: 'bg-[#06B6D4]', borderColor: 'border-s-[#06B6D4]' },
+  bookmark: { label: 'مفضلات', icon: Star, color: 'bg-rose-accent/10 text-rose-accent', stripColor: 'bg-rose-accent', borderColor: 'border-s-rose-accent' },
+  inspiration: { label: 'إلهام', icon: Sparkles, color: 'bg-violet-accent/10 text-violet-accent', stripColor: 'bg-violet-accent', borderColor: 'border-s-violet-accent' },
+  research: { label: 'بحث', icon: Beaker, color: 'bg-forest/10 text-forest dark:text-[#6EE7B7]', stripColor: 'bg-forest', borderColor: 'border-s-forest' },
+  design_ref: { label: 'مراجع تصميم', icon: Palette, color: 'bg-violet-accent/10 text-violet-accent', stripColor: 'bg-violet-accent', borderColor: 'border-s-violet-accent' },
 }
 
 const tagColors = [
   'bg-emerald-accent/15 text-emerald-accent',
-  'bg-forest/15 text-forest',
+  'bg-forest/15 text-forest dark:text-[#6EE7B7]',
   'bg-gold/15 text-gold',
-  'bg-purple-500/15 text-purple-500',
-  'bg-orange-500/15 text-orange-500',
-  'bg-rose-500/15 text-rose-500',
-  'bg-cyan-500/15 text-cyan-500',
-  'bg-pink-500/15 text-pink-500',
-  'bg-amber-500/15 text-amber-500',
-  'bg-lime-500/15 text-lime-600',
+  'bg-violet-accent/15 text-violet-accent',
+  'bg-glass/15 text-glass',
+  'bg-rose-accent/15 text-rose-accent',
+  'bg-[#06B6D4]/15 text-[#0E7490] dark:text-[#67E8F9]',
+  'bg-violet-accent/15 text-violet-accent',
+  'bg-gold/15 text-gold',
+  'bg-rose-accent/15 text-rose-accent',
 ]
 
 const tagBorderColors = [
   'border-emerald-accent/25',
   'border-forest/25',
   'border-gold/25',
-  'border-purple-500/25',
-  'border-orange-500/25',
-  'border-rose-500/25',
-  'border-cyan-500/25',
-  'border-pink-500/25',
-  'border-amber-500/25',
-  'border-lime-500/25',
+  'border-violet-accent/25',
+  'border-glass/25',
+  'border-rose-accent/25',
+  'border-[#06B6D4]/25',
+  'border-violet-accent/25',
+  'border-gold/25',
+  'border-rose-accent/25',
 ]
 
 const folders = [
@@ -327,14 +326,14 @@ export default function SecondBrain() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Network className="w-6 h-6 text-emerald-accent" />
+            <RiseIcon glyph="brain" hue="violet" size="md" lift />
             الدماغ الثاني
           </h2>
           <p className="text-sm text-muted-foreground mt-1">نظّم أفكارك ومعرفتك ومواريدك في مكان واحد</p>
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+            <Button className="gap-2 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90">
               <Plus className="w-4 h-4" />
               إضافة
             </Button>
@@ -384,7 +383,7 @@ export default function SecondBrain() {
                   <Input placeholder="رابط أو اسم المصدر" value={newSource} onChange={(e) => setNewSource(e.target.value)} />
                 </div>
               </div>
-              <Button onClick={handleAdd} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newTitle.trim()}>
+              <Button onClick={handleAdd} className="w-full bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90" disabled={!newTitle.trim()}>
                 إضافة
               </Button>
               <div className="flex gap-2">
@@ -470,11 +469,11 @@ export default function SecondBrain() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <Card className="glass overflow-hidden">
-          <div className="bg-gradient-to-l from-emerald-accent/8 via-emerald-accent/3 to-transparent p-4">
+        <div className="neo-card card-lift overflow-hidden">
+          <div className="bg-gradient-to-l from-violet-accent/8 via-violet-accent/3 to-transparent p-4">
             <div className="flex items-center gap-3 mb-3">
               <motion.div
-                className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center shadow-lg shadow-emerald-accent/20"
+                className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-accent to-[#7C3AED] flex items-center justify-center shadow-lg shadow-violet-accent/25"
                 whileHover={{ scale: 1.05, rotate: -5 }}
               >
                 <Zap className="w-4.5 h-4.5 text-white" />
@@ -493,10 +492,10 @@ export default function SecondBrain() {
                   if (e.key === 'Enter') handleQuickCapture()
                 }}
                 className={cn(
-                  'pl-11 pr-4 h-11 text-sm rounded-xl transition-all duration-300',
-                  'border-emerald-accent/30 focus:border-emerald-accent/60 focus:ring-emerald-accent/20',
+                  'pe-11 ps-4 h-11 text-sm rounded-xl transition-all duration-300',
+                  'border-violet-accent/30 focus:border-violet-accent/60 focus:ring-violet-accent/20',
                   'bg-background/50 focus:bg-background',
-                  quickCapture && !isCapturing && 'ring-2 ring-emerald-accent/15 border-emerald-accent/50'
+                  quickCapture && !isCapturing && 'ring-2 ring-violet-accent/15 border-violet-accent/50'
                 )}
                 disabled={isCapturing}
               />
@@ -505,9 +504,9 @@ export default function SecondBrain() {
                 onClick={handleQuickCapture}
                 disabled={!quickCapture.trim() || isCapturing}
                 className={cn(
-                  'absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-xl text-white transition-all duration-200',
+                  'absolute end-2 top-1/2 -translate-y-1/2 p-2 rounded-xl text-white transition-all duration-200',
                   quickCapture.trim() && !isCapturing
-                    ? 'bg-emerald-accent hover:bg-emerald-accent/90 shadow-md shadow-emerald-accent/25'
+                    ? 'bg-violet-accent hover:bg-violet-accent/90 shadow-md shadow-violet-accent/25'
                     : 'bg-muted/70 text-muted-foreground'
                 )}
               >
@@ -519,7 +518,7 @@ export default function SecondBrain() {
               </motion.button>
             </div>
           </div>
-        </Card>
+        </div>
       </motion.div>
 
       {/* Layout: Sidebar + Content */}
@@ -527,16 +526,16 @@ export default function SecondBrain() {
         {/* Sidebar */}
         <div className="lg:w-56 shrink-0 space-y-4">
           {/* Type Filter */}
-          <Card className="glass">
-            <CardContent className="p-3">
+          <div className="neo-card">
+            <div className="p-3">
               <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">النوع</p>
               <div className="space-y-0.5">
                 <button
                   onClick={() => setActiveType('all')}
                   className={cn(
-                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right',
+                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-start',
                     activeType === 'all'
-                      ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+                      ? 'bg-violet-accent/15 text-violet-accent shadow-sm shadow-violet-accent/10'
                       : 'text-muted-foreground hover:bg-muted/50'
                   )}
                 >
@@ -550,9 +549,9 @@ export default function SecondBrain() {
                       key={key}
                       onClick={() => setActiveType(key)}
                       className={cn(
-                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right',
+                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-start',
                         activeType === key
-                          ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+                          ? 'bg-violet-accent/15 text-violet-accent shadow-sm shadow-violet-accent/10'
                           : 'text-muted-foreground hover:bg-muted/50'
                       )}
                     >
@@ -562,12 +561,12 @@ export default function SecondBrain() {
                   )
                 })}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Folders */}
-          <Card className="glass">
-            <CardContent className="p-3">
+          <div className="neo-card">
+            <div className="p-3">
               <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">المجلدات</p>
               <div className="space-y-0.5">
                 {folders.map((folder) => {
@@ -577,16 +576,16 @@ export default function SecondBrain() {
                       key={folder.id}
                       onClick={() => setActiveFolder(folder.id)}
                       className={cn(
-                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-right relative',
+                        'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all text-start relative',
                         activeFolder === folder.id
-                          ? 'bg-emerald-accent/15 text-emerald-accent shadow-sm shadow-emerald-accent/10'
+                          ? 'bg-violet-accent/15 text-violet-accent shadow-sm shadow-violet-accent/10'
                           : 'text-muted-foreground hover:bg-muted/50'
                       )}
                     >
                       {activeFolder === folder.id && (
                         <motion.div
                           layoutId="folder-indicator"
-                          className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-full bg-emerald-accent"
+                          className="absolute start-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-full bg-violet-accent"
                         />
                       )}
                       <Icon className="w-3.5 h-3.5" />
@@ -595,13 +594,13 @@ export default function SecondBrain() {
                   )
                 })}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Tags Cloud - sized pills */}
           {allTagsWithCount.length > 0 && (
-            <Card className="glass">
-              <CardContent className="p-3">
+            <div className="neo-card">
+              <div className="p-3">
                 <p className="text-xs font-semibold text-muted-foreground mb-2 px-1 flex items-center gap-1.5">
                   <Tag className="w-3 h-3" />
                   الوسوم
@@ -623,12 +622,12 @@ export default function SecondBrain() {
                       style={count >= 3 ? { fontSize: `${10 + Math.min(count, 5) * 1.5}px` } : undefined}
                     >
                       {tag}
-                      {count >= 2 && <span className="opacity-60 mr-0.5">{count}</span>}
+                      {count >= 2 && <span className="opacity-60 ms-0.5 num">{count}</span>}
                     </motion.button>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </div>
 
@@ -637,12 +636,12 @@ export default function SecondBrain() {
           {/* Search + View Toggle */}
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="بحث في العناصر..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-9"
+                className="ps-9"
               />
             </div>
             <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
@@ -665,20 +664,18 @@ export default function SecondBrain() {
           {loading ? (
             <div className={cn('gap-3', viewMode === 'grid' ? 'grid sm:grid-cols-2' : 'flex flex-col')}>
               {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="glass">
-                  <CardContent className="p-4 space-y-3">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </CardContent>
-                </Card>
+                <div key={i} className="neo-card p-4 space-y-3">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
               ))}
             </div>
           ) : filtered.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-                <Network className="w-8 h-8 text-muted-foreground/50" />
-              </div>
+              <span className="icon-well h-16 w-16 bg-secondary text-muted-foreground/50 mb-4">
+                <Network className="w-8 h-8" />
+              </span>
               <p className="text-lg font-semibold text-muted-foreground">لا توجد عناصر</p>
               <p className="text-sm text-muted-foreground/70 mt-1">أضف أول عنصر أو استخدم التقاط السريع</p>
             </motion.div>
@@ -702,18 +699,18 @@ export default function SecondBrain() {
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ delay: i * 0.03 }}
                     >
-                      <Card className="glass group hover:shadow-lg transition-all overflow-hidden">
-                        {/* Colored left strip */}
+                      <div className="neo-card card-lift group hover:shadow-lg transition-all overflow-hidden">
+                        {/* Colored start strip */}
                         <div className="flex">
-                          <div className={cn('w-1 rounded-l-lg shrink-0', cfg.stripColor)} />
-                          <CardContent className="p-4 flex-1">
+                          <div className={cn('w-1 rounded-s-lg shrink-0', cfg.stripColor)} />
+                          <div className="p-4 flex-1">
                             {editingId === item.id ? (
                               <div className="space-y-3">
                                 <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="text-sm font-semibold" />
                                 <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={3} className="text-sm" />
                                 <div className="flex gap-2">
-                                  <Button size="sm" onClick={saveEdit} className="bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs">
-                                    <Check className="w-3 h-3 ml-1" /> حفظ
+                                  <Button size="sm" onClick={saveEdit} className="bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-xs">
+                                    <Check className="w-3 h-3 ms-1" /> حفظ
                                   </Button>
                                   <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="text-xs">
                                     إلغاء
@@ -745,7 +742,7 @@ export default function SecondBrain() {
                                         animate={item.isFavorite ? { scale: [1, 1.4, 1] } : { scale: 1 }}
                                         transition={{ type: 'tween', stiffness: 400, damping: 10 }}
                                       >
-                                        <Heart className={cn('w-3.5 h-3.5 transition-colors', item.isFavorite ? 'text-rose-500 fill-rose-500' : 'text-muted-foreground/30 hover:text-rose-400')} />
+                                        <Heart className={cn('w-3.5 h-3.5 transition-colors', item.isFavorite ? 'text-rose-accent fill-rose-accent' : 'text-muted-foreground/30 hover:text-rose-accent')} />
                                       </motion.span>
                                     </button>
                                     <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100">
@@ -760,16 +757,16 @@ export default function SecondBrain() {
                                 {tags.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-2">
                                     {tags.map((tag, ti) => (
-                                      <Badge
+                                      <span
                                         key={tag}
                                         className={cn(
-                                          'text-[10px] rounded-full px-2.5 py-0.5 font-medium border',
+                                          'pill border',
                                           tagColors[ti % tagColors.length],
                                           tagBorderColors[ti % tagBorderColors.length]
                                         )}
                                       >
                                         {tag}
-                                      </Badge>
+                                      </span>
                                     ))}
                                   </div>
                                 )}
@@ -779,9 +776,9 @@ export default function SecondBrain() {
                                 )}
                               </>
                             )}
-                          </CardContent>
+                          </div>
                         </div>
-                      </Card>
+                      </div>
                     </motion.div>
                   )
                 })}

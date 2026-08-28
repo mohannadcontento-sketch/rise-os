@@ -10,8 +10,6 @@ import {
   Award,
   BookOpen,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   Lightbulb,
   Brain,
   Sparkles,
@@ -22,12 +20,10 @@ import {
   TrendingUp,
   Flame,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Progress } from '@/components/ui/progress'
+import { RiseIcon } from '@/components/rise/icons'
 import {
   Dialog,
   DialogContent,
@@ -107,33 +103,35 @@ const defaultData: LearningData = {
 }
 
 const skillGradientColors = [
-  'from-emerald-accent/20 to-emerald-accent/5 text-emerald-accent border-emerald-accent/20',
-  'from-forest/20 to-forest/5 text-forest border-forest/20',
+  'from-glass/20 to-glass/5 text-glass border-glass/20',
+  'from-violet-accent/20 to-violet-accent/5 text-violet-accent border-violet-accent/20',
   'from-gold/20 to-gold/5 text-gold border-gold/20',
-  'from-purple-500/20 to-purple-500/5 text-purple-500 border-purple-500/20',
-  'from-orange-500/20 to-orange-500/5 text-orange-500 border-orange-500/20',
-  'from-rose-500/20 to-rose-500/5 text-rose-500 border-rose-500/20',
-  'from-cyan-500/20 to-cyan-500/5 text-cyan-500 border-cyan-500/20',
-  'from-amber-500/20 to-amber-500/5 text-amber-500 border-amber-500/20',
+  'from-emerald-accent/20 to-emerald-accent/5 text-emerald-accent border-emerald-accent/20',
+  'from-rose-accent/20 to-rose-accent/5 text-rose-accent border-rose-accent/20',
+  'from-forest/20 to-forest/5 text-forest border-forest/20',
+  'from-lime/25 to-lime/5 text-lime-deep border-lime/25',
+  'from-glass/30 to-glass/10 text-glass border-glass/30',
 ]
 
+/* Hex palette (identity-first: glass blue) for SVG/recharts/inline fills —
+   chart props can't take Tailwind classes; hexes mirror the token system. */
 const skillDotColors = [
-  'oklch(0.55 0.14 163)',
-  'oklch(0.45 0.08 160)',
-  'oklch(0.78 0.12 85)',
-  'oklch(0.65 0.15 300)',
-  'oklch(0.65 0.20 30)',
-  'oklch(0.60 0.18 15)',
-  'oklch(0.65 0.12 210)',
-  'oklch(0.72 0.15 75)',
+  '#007AFF',
+  '#A78BFA',
+  '#C99A3E',
+  '#34C759',
+  '#FF5A76',
+  '#06B6D4',
+  '#A8CC22',
+  '#F59E0B',
 ]
 
 function EmptyState({ icon: Icon, title, desc }: { icon: React.ElementType; title: string; desc: string }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-        <Icon className="w-8 h-8 text-muted-foreground/50" />
-      </div>
+      <span className="icon-well w-16 h-16 bg-secondary text-muted-foreground/50 mb-4">
+        <Icon className="w-8 h-8" />
+      </span>
       <p className="text-lg font-semibold text-muted-foreground">{title}</p>
       <p className="text-sm text-muted-foreground/70 mt-1 max-w-xs">{desc}</p>
     </motion.div>
@@ -613,28 +611,28 @@ export default function Learning() {
     <div dir="rtl" className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <GraduationCap className="w-6 h-6 text-emerald-accent" />
-            التعلم
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">تتبع أهدافك التعليمية ومهاراتك ودوراتك</p>
+        <div className="flex items-center gap-2">
+          <RiseIcon glyph="brain" hue="blue" size="md" lift />
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">التعلم</h2>
+            <p className="text-sm text-muted-foreground mt-1">تتبع أهدافك التعليمية ومهاراتك ودوراتك</p>
+          </div>
         </div>
         {learningStreak > 0 && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', damping: 12 }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-500/15 to-amber-500/15 border border-orange-400/20"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gold/15 border border-gold/20"
           >
             <motion.div
               animate={{ scale: [1, 1.15, 1] }}
               transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse' }}
             >
-              <Flame className="w-4 h-4 text-orange-500" />
+              <Flame className="w-4 h-4 text-gold" />
             </motion.div>
-            <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{learningStreak}</span>
-            <span className="text-xs text-orange-500/80">يوم تعلّم</span>
+            <span className="num text-sm font-bold text-gold" dir="ltr">{learningStreak}</span>
+            <span className="text-xs text-gold/80">يوم تعلّم</span>
           </motion.div>
         )}
       </div>
@@ -642,25 +640,23 @@ export default function Learning() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'أهداف نشطة', value: activeGoals, icon: Target, color: 'text-emerald-accent' },
-          { label: 'دورات مكتملة', value: completedCourses, icon: Award, color: 'text-gold' },
-          { label: 'مهارات', value: data.skills.length, icon: Brain, color: 'text-forest' },
-          { label: 'ساعات تعلم', value: totalHours, icon: TrendingUp, color: 'text-emerald-accent' },
+          { label: 'أهداف نشطة', value: activeGoals, icon: Target, well: 'iw-blue' },
+          { label: 'دورات مكتملة', value: completedCourses, icon: Award, well: 'iw-amber' },
+          { label: 'مهارات', value: data.skills.length, icon: Brain, well: 'iw-violet' },
+          { label: 'ساعات تعلم', value: totalHours, icon: TrendingUp, well: 'iw-lime' },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
-            <Card className="glass">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={cn('p-2 rounded-xl bg-background/80', stat.color)}>
-                    <stat.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  </div>
+            <div className="neo-card card-lift p-4">
+              <div className="flex items-center gap-3">
+                <span className={cn('icon-well w-9 h-9', stat.well)}>
+                  <stat.icon className="w-4 h-4" />
+                </span>
+                <div>
+                  <p className="num text-2xl font-bold text-foreground" dir="ltr">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -680,7 +676,9 @@ export default function Learning() {
             onClick={() => setActiveSection(tab.id)}
             className={cn(
               'gap-2 rounded-xl',
-              activeSection === tab.id && 'bg-emerald-accent hover:bg-emerald-accent/90 text-white'
+              activeSection === tab.id
+                ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:bg-forest/90 dark:hover:bg-lime/90'
+                : 'border-border bg-card hover:bg-secondary'
             )}
           >
             <tab.icon className="w-3.5 h-3.5" />
@@ -696,7 +694,7 @@ export default function Learning() {
             <div className="flex justify-end">
               <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+                  <Button size="sm" className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink">
                     <Plus className="w-4 h-4" />
                     هدف جديد
                   </Button>
@@ -712,7 +710,7 @@ export default function Learning() {
                       <label className="text-sm font-medium">الوصف</label>
                       <Textarea placeholder="ماذا تريد أن تتعلم؟ ولماذا؟" value={newGoalDesc} onChange={(e) => setNewGoalDesc(e.target.value)} rows={3} />
                     </div>
-                    <Button onClick={addGoal} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newGoalTitle.trim()}>
+                    <Button onClick={addGoal} className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink" disabled={!newGoalTitle.trim()}>
                       إضافة الهدف
                     </Button>
                   </div>
@@ -726,22 +724,22 @@ export default function Learning() {
               <div className="grid sm:grid-cols-2 gap-4">
                 {data.goals.map((goal, i) => (
                   <motion.div key={goal.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                    <Card className={cn(
-                      'glass premium-card',
-                      goal.status === 'completed' && 'border-r-emerald-accent/50 border-r-3',
-                      goal.status === 'active' && 'border-r-gold/50 border-r-3',
-                      goal.status === 'paused' && 'border-r-muted-foreground/30 border-r-3',
+                    <div className={cn(
+                      'bg-card border border-border rounded-2xl',
+                      goal.status === 'completed' && 'border-s-[3px] border-s-emerald-accent/50',
+                      goal.status === 'active' && 'border-s-[3px] border-s-gold/50',
+                      goal.status === 'paused' && 'border-s-[3px] border-s-muted-foreground/30',
                     )}>
-                      <CardContent className="p-5">
+                      <div className="p-5">
                         <div className="flex items-start justify-between gap-2 mb-3">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-sm">{goal.title}</h3>
                             {goal.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{goal.description}</p>}
                           </div>
                           <div className="flex items-center gap-1">
-                            <Badge variant="secondary" className={cn('text-[10px]', goal.status === 'completed' ? 'bg-emerald-accent/10 text-emerald-accent' : 'bg-gold/10 text-gold')}>
+                            <span className={cn('text-[10px] pill', goal.status === 'completed' ? 'pill-success' : goal.status === 'paused' ? 'pill-muted' : 'bg-gold/15 text-gold')}>
                               {goal.status === 'completed' ? 'مكتمل' : goal.status === 'paused' ? 'متوقف' : 'نشط'}
-                            </Badge>
+                            </span>
                             <button onClick={() => deleteGoal(goal.id)} className="p-1 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -750,11 +748,11 @@ export default function Learning() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-[11px] text-muted-foreground">
                             <span>التقدم</span>
-                            <span className="font-semibold text-foreground">{goal.progress}%</span>
+                            <span className="num font-semibold text-foreground" dir="ltr">{goal.progress}%</span>
                           </div>
-                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
                             <motion.div
-                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-forest"
+                              className="h-full rounded-full bg-gradient-to-l from-glass/80 to-glass"
                               initial={{ width: 0 }}
                               animate={{ width: `${goal.progress}%` }}
                               transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -767,16 +765,16 @@ export default function Learning() {
                                 onClick={() => updateGoalProgress(goal.id, val)}
                                 className={cn(
                                   'flex-1 h-6 rounded text-[10px] font-medium transition-colors',
-                                  goal.progress >= val ? 'bg-emerald-accent/15 text-emerald-accent' : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                  goal.progress >= val ? 'bg-glass/15 text-glass' : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                                 )}
                               >
-                                {val}%
+                                <span className="num" dir="ltr">{val}%</span>
                               </button>
                             ))}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -790,7 +788,7 @@ export default function Learning() {
             <div className="flex justify-end">
               <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+                  <Button size="sm" className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink">
                     <Plus className="w-4 h-4" />
                     دورة جديدة
                   </Button>
@@ -806,7 +804,7 @@ export default function Learning() {
                       <label className="text-sm font-medium">المنصة</label>
                       <Input placeholder="مثال: Udemy, Coursera..." value={newCoursePlatform} onChange={(e) => setNewCoursePlatform(e.target.value)} />
                     </div>
-                    <Button onClick={addCourse} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newCourseName.trim()}>
+                    <Button onClick={addCourse} className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink" disabled={!newCourseName.trim()}>
                       إضافة الدورة
                     </Button>
                   </div>
@@ -820,8 +818,8 @@ export default function Learning() {
               <div className="grid sm:grid-cols-2 gap-4">
                 {data.courses.map((course, i) => (
                   <motion.div key={course.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                    <Card className="glass">
-                      <CardContent className="p-5">
+                    <div className="neo-card card-lift">
+                      <div className="p-5">
                         <div className="flex items-start justify-between gap-2 mb-3">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-sm">{course.name}</h3>
@@ -844,11 +842,11 @@ export default function Learning() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-[11px] text-muted-foreground">
                             <span>{course.status === 'completed' ? 'مكتملة' : course.status === 'in_progress' ? 'قيد التعلم' : 'لم تبدأ'}</span>
-                            <span className="font-semibold text-foreground">{course.progress}%</span>
+                            <span className="num font-semibold text-foreground" dir="ltr">{course.progress}%</span>
                           </div>
-                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
                             <motion.div
-                              className="h-full rounded-full bg-gradient-to-l from-emerald-accent to-gold"
+                              className="h-full rounded-full bg-gradient-to-l from-glass/80 to-glass"
                               initial={{ width: 0 }}
                               animate={{ width: `${course.progress}%` }}
                               transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -860,11 +858,11 @@ export default function Learning() {
                             max={100}
                             value={course.progress}
                             onChange={(e) => updateCourseProgress(course.id, parseInt(e.target.value))}
-                            className="h-2 cursor-pointer accent-emerald-accent"
+                            className="h-2 cursor-pointer accent-glass"
                           />
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -878,7 +876,7 @@ export default function Learning() {
             <div className="flex justify-end gap-2">
               <Dialog open={skillDialogOpen} onOpenChange={setSkillDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+                  <Button size="sm" className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink">
                     <Plus className="w-4 h-4" />
                     مهارة جديدة
                   </Button>
@@ -901,7 +899,7 @@ export default function Learning() {
                             className={cn(
                               'flex-1 h-10 rounded-xl text-sm font-bold transition-all',
                               newSkillLevel >= level
-                                ? 'bg-emerald-accent text-white'
+                                ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink'
                                 : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                             )}
                           >
@@ -910,7 +908,7 @@ export default function Learning() {
                         ))}
                       </div>
                     </div>
-                    <Button onClick={addSkill} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newSkillName.trim()}>
+                    <Button onClick={addSkill} className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink" disabled={!newSkillName.trim()}>
                       إضافة المهارة
                     </Button>
                   </div>
@@ -929,14 +927,14 @@ export default function Learning() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
                   >
-                    <Card className="glass">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center gap-2">
+                    <div className="neo-card card-lift">
+                      <div className="pb-3">
+                        <h3 className="text-sm flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-gold" />
                           رادار المهارات
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
+                        </h3>
+                      </div>
+                      <div>
                         <div className="h-64 sm:h-80">
                           <ResponsiveContainer width="100%" height="100%">
                             <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
@@ -953,8 +951,8 @@ export default function Learning() {
                               <Radar
                                 name="المستوى"
                                 dataKey="level"
-                                stroke="oklch(0.55 0.14 163)"
-                                fill="oklch(0.55 0.14 163)"
+                                stroke="#007AFF"
+                                fill="#007AFF"
                                 fillOpacity={0.2}
                                 strokeWidth={2}
                                 dot={false}
@@ -962,8 +960,8 @@ export default function Learning() {
                             </RadarChart>
                           </ResponsiveContainer>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
                 )}
 
@@ -974,20 +972,20 @@ export default function Learning() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15 }}
                   >
-                    <Card className="glass">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-purple-500" />
+                    <div className="neo-card card-lift">
+                      <div className="pb-3">
+                        <h3 className="text-sm flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-glass" />
                           شجرة المهارات
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
+                        </h3>
+                      </div>
+                      <div>
                         <div className="overflow-x-auto pb-2">
                           <svg viewBox="0 0 600 120" className="w-full min-w-[400px] h-28">
                             <defs>
                               <linearGradient id="tree-line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity="0.3" />
-                                <stop offset="100%" stopColor="oklch(0.78 0.12 85)" stopOpacity="0.3" />
+                                <stop offset="0%" stopColor="#007AFF" stopOpacity="0.3" />
+                                <stop offset="100%" stopColor="#C99A3E" stopOpacity="0.3" />
                               </linearGradient>
                             </defs>
                             {/* Connecting lines */}
@@ -1028,8 +1026,8 @@ export default function Learning() {
                             })}
                           </svg>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
                 )}
 
@@ -1044,7 +1042,7 @@ export default function Learning() {
                       className="group relative"
                     >
                       {editingSkill === skill.id ? (
-                        <div className={cn('flex items-center gap-2 p-2 rounded-xl border bg-gradient-to-l border shadow-sm', skill.color)}>
+                        <div className={cn('flex items-center gap-2 p-2 rounded-xl border border-border bg-card bg-gradient-to-l shadow-sm', skill.color)}>
                           <Input
                             value={editSkillName}
                             onChange={(e) => setEditSkillName(e.target.value)}
@@ -1052,7 +1050,7 @@ export default function Learning() {
                             onKeyDown={(e) => e.key === 'Enter' && saveSkillEdit()}
                             autoFocus
                           />
-                          <button onClick={saveSkillEdit} className="p-1 rounded-md bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20">
+                          <button onClick={saveSkillEdit} className="p-1 rounded-md bg-glass/10 text-glass hover:bg-glass/20">
                             <Check className="w-3 h-3" />
                           </button>
                           <button onClick={() => setEditingSkill(null)} className="p-1 rounded-md hover:bg-muted text-muted-foreground">
@@ -1060,8 +1058,8 @@ export default function Learning() {
                           </button>
                         </div>
                       ) : (
-                        <Card className={cn('glass overflow-hidden border', skill.color, 'bg-gradient-to-l')}>
-                          <CardContent className="p-3">
+                        <div className={cn('bg-card border border-border rounded-2xl overflow-hidden bg-gradient-to-l', skill.color)}>
+                          <div className="p-3">
                             <div className="flex items-center gap-2.5">
                               <ProgressRing level={skill.level} color={skillDotColors[i % skillDotColors.length]} size={36} strokeWidth={2.5} />
                               <span className="text-sm font-medium">{skill.name}</span>
@@ -1079,8 +1077,8 @@ export default function Learning() {
                                 <X className="w-3 h-3" />
                               </button>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       )}
                     </motion.div>
                   ))}
@@ -1088,23 +1086,23 @@ export default function Learning() {
 
                 {/* Skill Bars Visual */}
                 {data.skills.length > 0 && (
-                  <Card className="glass">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-accent" />
+                  <div className="neo-card card-lift">
+                    <div className="pb-3">
+                      <h3 className="text-sm flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-glass" />
                         خريطة المهارات
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                    </div>
+                    <div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {data.skills.map((skill, i) => (
                           <div key={skill.id} className="flex items-center gap-3">
                             <div className="flex-1">
                               <div className="flex justify-between text-xs mb-1">
                                 <span className="font-medium">{skill.name}</span>
-                                <span className="text-muted-foreground">{skill.level}/5</span>
+                                <span className="num text-muted-foreground" dir="ltr">{skill.level}/5</span>
                               </div>
-                              <div className="h-2.5 rounded-full bg-muted/50 overflow-hidden">
+                              <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
                                 <motion.div
                                   className="h-full rounded-full"
                                   style={{ backgroundColor: skillDotColors[i % skillDotColors.length] }}
@@ -1117,8 +1115,8 @@ export default function Learning() {
                           </div>
                         ))}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
               </>
             )}
@@ -1131,7 +1129,7 @@ export default function Learning() {
             <div className="flex justify-end">
               <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2 bg-emerald-accent hover:bg-emerald-accent/90 text-white">
+                  <Button size="sm" className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink">
                     <Plus className="w-4 h-4" />
                     سجل جديد
                   </Button>
@@ -1145,9 +1143,9 @@ export default function Learning() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">الوقت (دقائق)</label>
-                      <Input type="number" placeholder="30" value={newLogMinutes} onChange={(e) => setNewLogMinutes(e.target.value)} />
+                      <Input type="number" placeholder="30" value={newLogMinutes} onChange={(e) => setNewLogMinutes(e.target.value)} dir="ltr" className="num" />
                     </div>
-                    <Button onClick={addLog} className="w-full bg-emerald-accent hover:bg-emerald-accent/90 text-white" disabled={!newLogContent.trim()}>
+                    <Button onClick={addLog} className="w-full bg-forest text-paper-soft dark:bg-lime dark:text-ink" disabled={!newLogContent.trim()}>
                       إضافة السجل
                     </Button>
                   </div>
@@ -1161,24 +1159,24 @@ export default function Learning() {
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {data.logs.map((log, i) => (
                   <motion.div key={log.id} initial={{ opacity: 0, x: 20, scale: 0.95 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ delay: i * 0.05, type: 'spring', damping: 18 }}>
-                    <Card className="glass">
-                      <CardContent className="p-4">
+                    <div className="neo-card card-lift">
+                      <div className="p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
-                              <BookOpen className="w-3.5 h-3.5 text-emerald-accent" />
+                              <BookOpen className="w-3.5 h-3.5 text-glass" />
                               <span className="text-[11px] text-muted-foreground">{new Date(log.date).toLocaleDateString('ar', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                               {log.minutesSpent > 0 && (
-                                <Badge variant="secondary" className="text-[10px] bg-emerald-accent/10 text-emerald-accent">
-                                  {log.minutesSpent} دقيقة
-                                </Badge>
+                                <span className="pill pill-info text-[10px]">
+                                  <span className="num" dir="ltr">{log.minutesSpent}</span> دقيقة
+                                </span>
                               )}
                             </div>
                             {editingLog === log.id ? (
                               <div className="flex gap-2">
                                 <Textarea value={editLogContent} onChange={(e) => setEditLogContent(e.target.value)} rows={2} className="text-sm" />
                                 <div className="flex flex-col gap-1">
-                                  <button onClick={() => saveLogEdit(log.id)} className="p-1.5 rounded-lg bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20">
+                                  <button onClick={() => saveLogEdit(log.id)} className="p-1.5 rounded-lg bg-glass/10 text-glass hover:bg-glass/20">
                                     <Check className="w-3.5 h-3.5" />
                                   </button>
                                   <button onClick={() => setEditingLog(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
@@ -1205,8 +1203,8 @@ export default function Learning() {
                             </button>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
                 ))}
               </div>

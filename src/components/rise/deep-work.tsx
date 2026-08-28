@@ -41,14 +41,13 @@ import {
   Link2,
   Loader2,
   Settings,
+  History,
   Moon,
   Droplets,
   CloudLightning,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
@@ -72,6 +71,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { getToday, toLocalDateStr } from '@/lib/rise-utils'
+import { RiseIcon } from '@/components/rise/icons'
 
 /* ────────────── Types ────────────── */
 
@@ -99,22 +99,22 @@ interface TaskOption {
 /* ────────────── Constants ────────────── */
 
 const DURATION_OPTIONS = [
-  { label: 'بومودورو', value: 25, icon: Timer, color: 'text-rose-400', bgAccent: 'bg-rose-400/5' },
-  { label: 'عميق ٥٠', value: 50, icon: Brain, color: 'text-emerald-accent', bgAccent: 'bg-emerald-accent/5' },
+  { label: 'بومودورو', value: 25, icon: Timer, color: 'text-rose-accent', bgAccent: 'bg-rose-accent/5' },
+  { label: 'عميق ٥٠', value: 50, icon: Brain, color: 'text-violet-accent', bgAccent: 'bg-violet-accent/5' },
   { label: 'عميق ٩٠', value: 90, icon: Target, color: 'text-forest', bgAccent: 'bg-forest/5' },
   { label: 'عميق ١٢٠', value: 120, icon: Zap, color: 'text-gold', bgAccent: 'bg-gold/5' },
-  { label: 'مخصص', value: 0, icon: Settings, color: 'text-blue-400', bgAccent: 'bg-blue-400/5' },
+  { label: 'مخصص', value: 0, icon: Settings, color: 'text-violet-accent', bgAccent: 'bg-violet-accent/5' },
 ]
 
 const AMBIENT_SOUNDS = [
-  { label: 'ضوء القمر', icon: Moon, file: '/sounds/moonlight-sonata.mp3', color: 'bg-indigo-400/10 text-indigo-300', waveColor: 'rgba(129, 140, 248, 0.08)' },
-  { label: 'مطر', icon: CloudRain, file: '/sounds/rain.mp3', color: 'bg-blue-400/10 text-blue-300', waveColor: 'rgba(96, 165, 250, 0.06)' },
-  { label: 'غابة', icon: TreePine, file: '/sounds/forest.mp3', color: 'bg-emerald-400/10 text-emerald-300', waveColor: 'rgba(16, 185, 129, 0.06)' },
-  { label: 'محيط', icon: Waves, file: '/sounds/ocean.mp3', color: 'bg-cyan-500/10 text-cyan-300', waveColor: 'rgba(6, 182, 212, 0.06)' },
-  { label: 'نار', icon: Flame, file: '/sounds/fire.mp3', color: 'bg-orange-500/10 text-orange-400', waveColor: 'rgba(249, 115, 22, 0.08)' },
-  { label: 'رياح', icon: Wind, file: '/sounds/wind.mp3', color: 'bg-teal-400/10 text-teal-300', waveColor: 'rgba(45, 212, 191, 0.06)' },
-  { label: 'جدول ماء', icon: Droplets, file: '/sounds/stream.mp3', color: 'bg-sky-400/10 text-sky-300', waveColor: 'rgba(56, 189, 248, 0.06)' },
-  { label: 'عاصفة', icon: CloudLightning, file: '/sounds/storm.mp3', color: 'bg-purple-500/10 text-purple-300', waveColor: 'rgba(168, 85, 247, 0.08)' },
+  { label: 'ضوء القمر', icon: Moon, file: '/sounds/moonlight-sonata.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(129, 140, 248, 0.08)' },
+  { label: 'مطر', icon: CloudRain, file: '/sounds/rain.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(96, 165, 250, 0.06)' },
+  { label: 'غابة', icon: TreePine, file: '/sounds/forest.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(16, 185, 129, 0.06)' },
+  { label: 'محيط', icon: Waves, file: '/sounds/ocean.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(6, 182, 212, 0.06)' },
+  { label: 'نار', icon: Flame, file: '/sounds/fire.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(249, 115, 22, 0.08)' },
+  { label: 'رياح', icon: Wind, file: '/sounds/wind.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(45, 212, 191, 0.06)' },
+  { label: 'جدول ماء', icon: Droplets, file: '/sounds/stream.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(56, 189, 248, 0.06)' },
+  { label: 'عاصفة', icon: CloudLightning, file: '/sounds/storm.mp3', color: 'bg-violet-accent/15 text-violet-accent', waveColor: 'rgba(168, 85, 247, 0.08)' },
 ]
 
 // Map label → MP3 file URL (for fast lookup)
@@ -746,9 +746,7 @@ export default function DeepWork() {
       {/* Header with Focus Zone toggle */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-emerald-accent flex items-center justify-center shadow-lg">
-            <Brain className="w-5 h-5 text-white" />
-          </div>
+          <RiseIcon glyph="focus" hue="violet" size="md" lift />
           <div>
             <h2 className="text-xl font-bold text-foreground">العمل العميق</h2>
             <p className="text-xs text-muted-foreground">ركّز وحقق أقصى إنتاجية</p>
@@ -772,9 +770,9 @@ export default function DeepWork() {
       {/* Motivational Quote */}
       <motion.div
         variants={itemVariants}
-        className="flex items-start gap-3 p-4 rounded-2xl bg-gradient-to-l from-forest/5 via-transparent to-gold/5 border border-forest/10"
+        className="flex items-start gap-3 p-4 rounded-2xl bg-gradient-to-l from-violet-accent/5 via-transparent to-gold/5 border border-violet-accent/10"
       >
-        <Quote className="w-4 h-4 text-forest/50 mt-0.5 shrink-0" />
+        <Quote className="w-4 h-4 text-violet-accent/60 mt-0.5 shrink-0" />
         <p className="text-xs text-muted-foreground leading-relaxed italic">{sessionQuote}</p>
       </motion.div>
 
@@ -793,7 +791,7 @@ export default function DeepWork() {
               className={cn(
                 'glass rounded-2xl p-4 text-center transition-all duration-200 relative overflow-hidden',
                 isActive
-                  ? 'ring-2 ring-emerald-accent/60 bg-emerald-accent/5 shadow-lg shadow-emerald-accent/10'
+                  ? 'ring-2 ring-violet-accent/60 bg-violet-accent/5 shadow-lg shadow-violet-accent/10'
                   : 'hover:bg-muted/30',
                 isRunning && 'opacity-50 cursor-not-allowed'
               )}
@@ -803,9 +801,9 @@ export default function DeepWork() {
                   className="absolute inset-0 pointer-events-none"
                   animate={{
                     boxShadow: [
-                      'inset 0 0 15px rgba(16,185,129,0.05)',
-                      'inset 0 0 25px rgba(16,185,129,0.1)',
-                      'inset 0 0 15px rgba(16,185,129,0.05)',
+                      'inset 0 0 15px rgba(139, 92, 246, 0.06)',
+                      'inset 0 0 25px rgba(139, 92, 246, 0.12)',
+                      'inset 0 0 15px rgba(139, 92, 246, 0.06)',
                     ],
                   }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -827,7 +825,7 @@ export default function DeepWork() {
           exit={{ opacity: 0, height: 0 }}
           className="flex items-center gap-2 p-4 rounded-2xl glass"
         >
-          <Clock className="w-5 h-5 text-blue-400 shrink-0" />
+          <Clock className="w-5 h-5 text-violet-accent shrink-0" />
           <input
             type="number"
             min="1"
@@ -836,15 +834,15 @@ export default function DeepWork() {
             onChange={(e) => setCustomDuration(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleCustomDurationSet() }}
             placeholder="أدخل عدد الدقائق (1-480)"
-            className="flex-1 h-10 px-3 rounded-xl border border-border/60 bg-card/50 text-sm focus:border-blue-400/50 focus:outline-none"
+            className="flex-1 h-10 px-3 rounded-xl border border-border/60 bg-card/50 text-sm focus:border-violet-accent/50 focus:outline-none"
             autoFocus
           />
           <Button
             onClick={handleCustomDurationSet}
             size="sm"
-            className="bg-blue-500 hover:bg-blue-600 text-white shrink-0"
+            className="bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 shrink-0"
           >
-            <Check className="w-4 h-4 ml-1" />
+            <Check className="w-4 h-4 me-1" />
             تعيين
           </Button>
         </motion.div>
@@ -907,10 +905,10 @@ export default function DeepWork() {
                     setTimeRemaining(selectedDuration * 60)
                     setSessionStartTime(null)
                   }}
-                  className="mt-4 bg-emerald-accent hover:bg-emerald-accent/90 text-white rounded-xl"
+                  className="mt-4 bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 rounded-xl"
                   size="sm"
                 >
-                  <Trophy className="w-4 h-4 ml-1" />
+                  <Trophy className="w-4 h-4 me-1" />
                   حفظ الجلسة
                 </Button>
               </motion.div>
@@ -921,9 +919,9 @@ export default function DeepWork() {
           <motion.div
             animate={isRunning && !isPaused ? {
               boxShadow: [
-                '0 0 20px rgba(16, 185, 129, 0.15)',
-                '0 0 40px rgba(16, 185, 129, 0.25)',
-                '0 0 20px rgba(16, 185, 129, 0.15)',
+                '0 0 20px rgba(139, 92, 246, 0.15)',
+                '0 0 40px rgba(139, 92, 246, 0.25)',
+                '0 0 20px rgba(139, 92, 246, 0.15)',
               ],
             } : isPaused ? {
               boxShadow: [
@@ -957,14 +955,14 @@ export default function DeepWork() {
                   fill="none" strokeWidth="2"
                   animate={{ opacity: [0.1, 0.4, 0.1], r: [128, 131, 128] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{ stroke: progress > 80 ? 'oklch(0.65 0.25 25)' : progress > 50 ? 'oklch(0.85 0.14 85)' : 'oklch(0.72 0.19 162)' }}
+                  style={{ stroke: progress > 80 ? '#EF4444' : progress > 50 ? '#F59E0B' : '#8B5CF6' }}
                 />
               )}
               {/* Dynamic gradient */}
               <defs>
                 <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor={progress > 80 ? 'oklch(0.65 0.25 25)' : progress > 50 ? 'oklch(0.85 0.14 85)' : 'var(--color-emerald-accent)'} />
-                  <stop offset="100%" stopColor={progress > 80 ? 'oklch(0.55 0.25 30)' : progress > 50 ? 'oklch(0.75 0.14 85)' : 'var(--color-forest)'} />
+                  <stop offset="0%" stopColor={progress > 80 ? '#EF4444' : progress > 50 ? '#F59E0B' : '#8B5CF6'} />
+                  <stop offset="100%" stopColor={progress > 80 ? '#DC2626' : progress > 50 ? '#D97706' : '#6D28D9'} />
                 </linearGradient>
               </defs>
               {/* Progress circle */}
@@ -981,7 +979,7 @@ export default function DeepWork() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 style={{
                   filter: isRunning && !isPaused
-                    ? `drop-shadow(0 0 8px ${progress > 80 ? 'oklch(0.65 0.25 25)' : 'var(--color-emerald-accent)'})`
+                    ? `drop-shadow(0 0 8px ${progress > 80 ? '#EF4444' : 'var(--color-violet-accent)'})`
                     : isPaused
                       ? 'drop-shadow(0 0 4px var(--color-gold))'
                       : 'none',
@@ -996,7 +994,7 @@ export default function DeepWork() {
               key={timeRemaining}
               initial={{ scale: 1.02 }}
               animate={{ scale: 1 }}
-              className="text-5xl font-bold text-foreground tracking-tight tabular-nums"
+              className="num font-mono text-5xl md:text-6xl font-extrabold text-foreground tracking-tight"
               style={{ direction: 'ltr' }}
             >
               {formatTime(timeRemaining)}
@@ -1008,7 +1006,7 @@ export default function DeepWork() {
             </span>
             {isRunning && !isPaused && (
               <motion.div
-                className="w-2 h-2 rounded-full bg-emerald-accent mt-2"
+                className="w-2 h-2 rounded-full bg-violet-accent mt-2"
                 animate={{ opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
                 transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse' }}
               />
@@ -1023,9 +1021,9 @@ export default function DeepWork() {
           <motion.div whileTap={{ scale: 0.95 }} className="flex gap-3">
             <Button
               onClick={handleStart}
-              className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 px-8"
+              className="bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 shadow-lg rounded-xl h-12 px-8"
             >
-              <Play className="w-5 h-5 ml-2" />
+              <Play className="w-5 h-5 me-2" />
               ابدأ
             </Button>
             <Button
@@ -1033,7 +1031,7 @@ export default function DeepWork() {
               variant="outline"
               className="rounded-xl h-12 px-6"
             >
-              <RotateCcw className="w-4 h-4 ml-1" />
+              <RotateCcw className="w-4 h-4 me-1" />
               إعادة
             </Button>
           </motion.div>
@@ -1046,7 +1044,7 @@ export default function DeepWork() {
               variant="outline"
               className="rounded-xl h-12 px-8 border-gold/30 text-gold hover:bg-gold/10"
             >
-              <Pause className="w-5 h-5 ml-2" />
+              <Pause className="w-5 h-5 me-2" />
               استراحة
             </Button>
             <Button
@@ -1054,7 +1052,7 @@ export default function DeepWork() {
               variant="outline"
               className="rounded-xl h-12 px-6 border-destructive/30 text-destructive hover:bg-destructive/10"
             >
-              <Square className="w-4 h-4 ml-1" />
+              <Square className="w-4 h-4 me-1" />
               إنهاء
             </Button>
           </motion.div>
@@ -1064,9 +1062,9 @@ export default function DeepWork() {
           <motion.div whileTap={{ scale: 0.95 }} className="flex gap-3">
             <Button
               onClick={handleResume}
-              className="bg-gradient-to-l from-emerald-accent to-forest hover:opacity-90 text-white shadow-lg rounded-xl h-12 px-8"
+              className="bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 shadow-lg rounded-xl h-12 px-8"
             >
-              <Play className="w-5 h-5 ml-2" />
+              <Play className="w-5 h-5 me-2" />
               استئناف
             </Button>
             <Button
@@ -1074,7 +1072,7 @@ export default function DeepWork() {
               variant="outline"
               className="rounded-xl h-12 px-6 border-destructive/30 text-destructive hover:bg-destructive/10"
             >
-              <Square className="w-4 h-4 ml-1" />
+              <Square className="w-4 h-4 me-1" />
               إنهاء
             </Button>
             <Button
@@ -1082,7 +1080,7 @@ export default function DeepWork() {
               variant="outline"
               className="rounded-xl h-12 px-6"
             >
-              <RotateCcw className="w-4 h-4 ml-1" />
+              <RotateCcw className="w-4 h-4 me-1" />
               إعادة
             </Button>
           </motion.div>
@@ -1095,8 +1093,8 @@ export default function DeepWork() {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md mx-auto"
       >
-        <Card className="glass border-0 shadow-sm">
-          <CardContent className="p-4">
+        <div className="neo-card card-lift p-4">
+          <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <StickyNote className="w-4 h-4 text-gold" />
@@ -1107,7 +1105,7 @@ export default function DeepWork() {
                   <Check className="w-3 h-3" /> محفوظ
                 </span>
               ) : (
-                <span className="text-[10px] text-amber-500/60">جاري الحفظ...</span>
+                <span className="text-[10px] text-gold/70">جاري الحفظ...</span>
               )}
             </div>
             <Textarea
@@ -1117,20 +1115,20 @@ export default function DeepWork() {
               className="min-h-[100px] resize-none rounded-xl border-0 bg-muted/50 focus:bg-muted transition-colors text-sm"
               dir="rtl"
             />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Ambient Sounds with unique colors and wave animation */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Waves className="w-4 h-4 text-emerald-accent" />
-              أصوات محيطية
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-3">
+            <span className="icon-well iw-violet w-8 h-8">
+              <Waves className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">أصوات محيطية</h3>
+          </div>
+          <div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
               {AMBIENT_SOUNDS.map((sound) => {
                 const Icon = sound.icon
@@ -1144,7 +1142,7 @@ export default function DeepWork() {
                     className={cn(
                       'rounded-2xl p-3 flex flex-col items-center gap-1.5 transition-all duration-200 border relative overflow-hidden',
                       isActive
-                        ? 'border-emerald-accent/40 shadow-sm'
+                        ? 'border-violet-accent/40 shadow-sm'
                         : 'border-transparent hover:bg-muted/30'
                     )}
                   >
@@ -1152,7 +1150,7 @@ export default function DeepWork() {
                     {isActive && (
                       <div className="absolute inset-0 overflow-hidden rounded-2xl">
                         <motion.div
-                          className="absolute bottom-0 left-0 right-0 h-full"
+                          className="absolute bottom-0 inset-x-0 h-full"
                           style={{ backgroundColor: sound.waveColor }}
                           animate={{
                             backgroundPosition: ['0% 100%', '100% 0%', '0% 100%'],
@@ -1162,7 +1160,7 @@ export default function DeepWork() {
                         {[...Array(3)].map((_, waveIdx) => (
                           <motion.div
                             key={waveIdx}
-                            className="absolute bottom-0 left-0 right-0 rounded-full"
+                            className="absolute bottom-0 inset-x-0 rounded-full"
                             style={{
                               backgroundColor: sound.waveColor,
                               height: '40%',
@@ -1204,58 +1202,52 @@ export default function DeepWork() {
                       <motion.div
                         animate={{ scale: [1, 1.5, 1], opacity: [1, 0.3, 1] }}
                         transition={{ type: 'tween', duration: 1.5, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                        className="w-1.5 h-1.5 rounded-full bg-emerald-accent relative z-10"
+                        className="w-1.5 h-1.5 rounded-full bg-violet-accent relative z-10"
                       />
                     )}
                   </motion.button>
                 )
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Statistics with glass gradient borders */}
       <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 md:gap-4">
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-emerald-accent/10 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-emerald-accent" />
-            </div>
-            <span className="text-2xl font-bold text-foreground count-up">{stats.totalMin}</span>
-            <span className="text-[11px] text-muted-foreground">إجمالي الدقائق</span>
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-gold" />
-            </div>
-            <span className="text-2xl font-bold text-foreground count-up">{stats.todaySessions}</span>
-            <span className="text-[11px] text-muted-foreground">جلسات اليوم</span>
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 shadow-sm relative overflow-hidden">
-          <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
-          <CardContent className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-forest" />
-            </div>
-            <span className="text-2xl font-bold text-foreground count-up">{stats.avgMin}</span>
-            <span className="text-[11px] text-muted-foreground">متوسط الجلسة</span>
-          </CardContent>
-        </Card>
+        <div className="neo-card card-lift p-4 flex flex-col items-center text-center gap-1.5 relative overflow-hidden">
+          <span className="icon-well iw-violet w-8 h-8">
+            <Clock className="w-4 h-4" />
+          </span>
+          <span dir="ltr" className="num text-2xl font-extrabold text-foreground count-up">{stats.totalMin}</span>
+          <span className="text-[11px] text-muted-foreground">إجمالي الدقائق</span>
+        </div>
+        <div className="neo-card card-lift p-4 flex flex-col items-center text-center gap-1.5 relative overflow-hidden">
+          <span className="icon-well iw-amber w-8 h-8">
+            <Zap className="w-4 h-4" />
+          </span>
+          <span dir="ltr" className="num text-2xl font-extrabold text-foreground count-up">{stats.todaySessions}</span>
+          <span className="text-[11px] text-muted-foreground">جلسات اليوم</span>
+        </div>
+        <div className="neo-card card-lift p-4 flex flex-col items-center text-center gap-1.5 relative overflow-hidden">
+          <span className="icon-well iw-forest w-8 h-8">
+            <TrendingUp className="w-4 h-4" />
+          </span>
+          <span dir="ltr" className="num text-2xl font-extrabold text-foreground count-up">{stats.avgMin}</span>
+          <span className="text-[11px] text-muted-foreground">متوسط الجلسة</span>
+        </div>
       </motion.div>
 
       {/* Focus Chart */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold">التركيز اليومي (آخر ١٤ يوم)</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-2">
+            <span className="icon-well iw-violet w-8 h-8">
+              <Timer className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">التركيز اليومي (آخر ١٤ يوم)</h3>
+          </div>
+          <div>
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} barCategoryGap="20%">
@@ -1287,7 +1279,7 @@ export default function DeepWork() {
                     {chartData.map((entry, index) => (
                       <Cell
                         key={index}
-                        fill={entry['دقائق'] > 0 ? 'var(--color-emerald-accent)' : 'var(--color-muted)'}
+                        fill={entry['دقائق'] > 0 ? 'var(--color-violet-accent)' : 'var(--color-muted)'}
                         fillOpacity={entry['دقائق'] > 0 ? 0.8 : 0.3}
                       />
                     ))}
@@ -1295,32 +1287,35 @@ export default function DeepWork() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
       {/* Session History with duration color coding */}
       <motion.div variants={itemVariants}>
-        <Card className="glass border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold">سجل الجلسات</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="neo-card card-lift p-5">
+          <div className="flex items-center gap-2.5 pb-3">
+            <span className="icon-well iw-violet w-8 h-8">
+              <History className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold text-foreground">سجل الجلسات</h3>
+          </div>
+          <div>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {(!data?.sessions || data.sessions.length === 0) ? (
                 <div className="text-center py-10">
-                  <Brain className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <RiseIcon glyph="focus" hue="violet" size="lg" className="mx-auto mb-3 opacity-50" />
                   <p className="text-sm text-muted-foreground">لا توجد جلسات سابقة</p>
                 </div>
               ) : (
                 data.sessions.slice(0, 20).map((session, index) => {
                   const durationColor = session.actualMin >= 45
-                    ? 'border-r-emerald-accent bg-emerald-accent/3'
+                    ? 'border-s-violet-accent'
                     : session.actualMin >= 20
-                      ? 'border-r-gold bg-gold/3'
-                      : 'border-r-muted-foreground/30 bg-muted/10'
+                      ? 'border-s-gold'
+                      : 'border-s-muted-foreground/30'
                   const iconColor = session.actualMin >= 45
-                    ? 'bg-emerald-accent/15 text-emerald-accent'
+                    ? 'bg-violet-accent/15 text-violet-accent'
                     : session.actualMin >= 20
                       ? 'bg-gold/15 text-gold'
                       : 'bg-muted/30 text-muted-foreground'
@@ -1331,7 +1326,7 @@ export default function DeepWork() {
                       initial={{ opacity: 0, x: 10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.03 }}
-                      className={cn('flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors border-r-3', durationColor)}
+                      className={cn('neo-card flex items-center gap-3 p-3 rounded-xl transition-colors border-s-4', durationColor)}
                     >
                       <div
                         className={cn('w-9 h-9 rounded-lg flex items-center justify-center', iconColor)}
@@ -1347,20 +1342,14 @@ export default function DeepWork() {
                           <span className="text-sm font-medium text-foreground">
                             {session.type}
                           </span>
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              'text-[10px] rounded-full border-0',
-                              session.completed
-                                ? 'bg-emerald-accent/10 text-emerald-accent'
-                                : 'bg-gold/10 text-gold'
-                            )}
+                          <span
+                            className={cn('pill', session.completed ? 'pill-success' : 'pill-muted')}
                           >
                             {session.completed ? 'مكتمل' : 'غير مكتمل'}
-                          </Badge>
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                          <span className={cn('font-semibold', session.actualMin >= 45 ? 'text-emerald-accent' : session.actualMin >= 20 ? 'text-gold' : '')}>{session.actualMin} دقيقة</span>
+                          <span className={cn('num font-semibold', session.actualMin >= 45 ? 'text-violet-accent' : session.actualMin >= 20 ? 'text-gold' : '')}>{session.actualMin} دقيقة</span>
                           <span>•</span>
                           <span>
                             {new Date(session.startedAt).toLocaleDateString('ar-EG', {
@@ -1382,15 +1371,15 @@ export default function DeepWork() {
                 })
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
       {/* Task Linking Dialog */}
       <Dialog open={linkTaskOpen} onOpenChange={(open) => { if (!open) { setLinkTaskOpen(false); setSelectedTaskId('none') } }}>
         <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Link2 className="w-5 h-5 text-emerald-accent" />
+              <Link2 className="w-5 h-5 text-violet-accent" />
               هل تريد ربط هذه الجلسة بمهمة؟
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -1399,13 +1388,13 @@ export default function DeepWork() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             {/* Session Summary */}
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-l from-emerald-accent/10 via-gold/5 to-transparent border border-emerald-accent/20">
-              <div className="w-10 h-10 rounded-xl bg-emerald-accent/15 flex items-center justify-center">
-                <Trophy className="w-5 h-5 text-emerald-accent" />
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-l from-violet-accent/10 via-gold/5 to-transparent border border-violet-accent/20">
+              <div className="w-10 h-10 rounded-xl bg-violet-accent/15 flex items-center justify-center">
+                <Trophy className="w-5 h-5 text-violet-accent" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-bold">{lastSessionMin} دقيقة من التركيز</p>
-                <p className="text-xs text-gold font-medium">+{lastSessionXp} خبرة</p>
+                <p className="num text-sm font-bold">{lastSessionMin} دقيقة من التركيز</p>
+                <p className="num text-xs text-gold font-medium">+{lastSessionXp} خبرة</p>
               </div>
             </div>
 
@@ -1423,7 +1412,7 @@ export default function DeepWork() {
                       <span className="flex items-center gap-2">
                         <span className={cn(
                           'w-2 h-2 rounded-full',
-                          t.priority === 'urgent' ? 'bg-red-500' : t.priority === 'high' ? 'bg-orange-500' : t.priority === 'medium' ? 'bg-gold' : 'bg-blue-500'
+                          t.priority === 'urgent' ? 'bg-destructive' : t.priority === 'high' ? 'bg-gold' : t.priority === 'medium' ? 'bg-violet-accent' : 'bg-glass'
                         )} />
                         {t.title}
                       </span>
@@ -1444,9 +1433,9 @@ export default function DeepWork() {
             <Button
               onClick={handleLinkTask}
               disabled={selectedTaskId === 'none' || linkingTask}
-              className="rounded-xl bg-gradient-to-l from-emerald-accent to-forest text-white"
+              className="rounded-xl bg-forest text-paper-soft dark:bg-lime dark:text-ink"
             >
-              {linkingTask && <Loader2 className="w-4 h-4 ml-1.5 animate-spin" />}
+              {linkingTask && <Loader2 className="w-4 h-4 me-1.5 animate-spin" />}
               ربط الجلسة
             </Button>
           </DialogFooter>

@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
-  BarChart3,
   Zap,
   CheckCircle2,
   Clock,
@@ -26,11 +25,10 @@ import {
   ArrowLeftRight,
   Medal,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { RiseIcon } from './icons'
 import { apiFetch } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import {
@@ -88,14 +86,8 @@ const periodLabels: Record<Period, string> = {
   yearly: 'سنوي',
 }
 
-const CHART_COLORS = [
-  'oklch(0.55 0.14 163)',
-  'oklch(0.78 0.12 85)',
-  'oklch(0.65 0.10 200)',
-  'oklch(0.70 0.15 300)',
-  'oklch(0.60 0.20 25)',
-  'oklch(0.35 0.10 160)',
-]
+/* Violet main + lime accent — analytics identity */
+const CHART_COLORS = ['#8B5CF6', '#D6FF3D', '#C99A3E', '#FF5A76', '#007AFF', '#2A4A3E']
 
 const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
@@ -114,27 +106,21 @@ const ARABIC_LABELS: Record<string, string> = {
 
 function GlassTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey?: string }>; label?: string }) {
   if (!active || !payload?.length) return null
-  const isDark = document.documentElement.classList.contains('dark')
   return (
     <div
-      className={cn(
-        'rounded-xl px-3.5 py-2.5 text-xs space-y-1.5 shadow-lg',
-        isDark
-          ? 'bg-[oklch(0.18_0.02_155/0.92)] border border-[oklch(0.30_0.02_155)]'
-          : 'bg-[oklch(0.98_0.002_106/0.92)] border border-[oklch(0.88_0.01_160)]'
-      )}
-      style={{ backdropFilter: 'blur(16px)', boxShadow: isDark ? '0 4px 24px oklch(0 0 0/0.3)' : '0 4px 24px oklch(0.55 0.14 163/0.08)' }}
+      className="rounded-xl border border-border bg-card/95 px-3.5 py-2.5 text-xs space-y-1.5 shadow-lg backdrop-blur-xl"
+      style={{ boxShadow: '0 4px 24px rgba(11,16,21,0.14)' }}
     >
-      <p className={cn('font-semibold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{label}</p>
+      <p className="font-semibold text-foreground">{label}</p>
       {payload.map((entry, i) => (
         <div key={i} className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className={isDark ? 'text-[oklch(0.70_0.01_160)]' : 'text-[oklch(0.50_0.01_160)]'}>
+            <span className="text-muted-foreground">
               {ARABIC_LABELS[entry.dataKey || entry.name] || entry.name}
             </span>
           </div>
-          <span className={cn('font-bold', isDark ? 'text-[oklch(0.93_0.01_106)]' : 'text-[oklch(0.15_0.01_160)]')}>{typeof entry.value === 'number' ? entry.value : '—'}</span>
+          <span className="font-bold num text-foreground" dir="ltr">{typeof entry.value === 'number' ? entry.value : '—'}</span>
         </div>
       ))}
     </div>
@@ -169,8 +155,8 @@ function getGrade(score: number): { letter: string; color: string; glow: string 
   if (score >= 65) return { letter: 'B', color: 'text-forest', glow: '' }
   if (score >= 55) return { letter: 'C+', color: 'text-gold', glow: '' }
   if (score >= 45) return { letter: 'C', color: 'text-gold', glow: '' }
-  if (score >= 35) return { letter: 'D', color: 'text-orange-500', glow: '' }
-  return { letter: 'F', color: 'text-red-500', glow: '' }
+  if (score >= 35) return { letter: 'D', color: 'text-rose-accent', glow: '' }
+  return { letter: 'F', color: 'text-destructive', glow: '' }
 }
 
 /* ────────────── Component ────────────── */
@@ -485,14 +471,14 @@ export default function Analytics() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-emerald-accent" />
+            <RiseIcon glyph="analytics" hue="violet" size="md" lift />
             التحليلات
           </h2>
           <p className="text-sm text-muted-foreground mt-1">نظرة شاملة على أدائك وتقدمك</p>
         </div>
         {/* Period Selector with glass gradient border */}
         <motion.div
-          className="p-[1px] rounded-xl bg-gradient-to-l from-emerald-accent/40 via-emerald-accent/15 to-amber-500/30 shadow-lg shadow-emerald-accent/5"
+          className="p-[1px] rounded-xl bg-gradient-to-l from-violet-accent/40 via-violet-accent/15 to-gold/30 shadow-lg shadow-violet-accent/5"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
@@ -506,7 +492,7 @@ export default function Analytics() {
                 className={cn(
                   'rounded-lg text-xs transition-all',
                   period === p
-                    ? 'bg-gradient-to-l from-emerald-accent to-emerald-accent/80 text-white font-semibold shadow-md shadow-emerald-accent/20'
+                    ? 'bg-foreground text-background font-semibold shadow-md'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -520,25 +506,23 @@ export default function Analytics() {
       {/* Overview Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'إجمالي الخبرة', value: totalXP, icon: Zap, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-          { label: 'المهام المنجزة', value: totalTasks, icon: CheckCircle2, color: 'text-emerald-accent', bg: 'bg-emerald-accent/10' },
-          { label: 'ساعات التركيز', value: totalFocusHours, icon: Clock, color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-700/10 dark:bg-emerald-400/10' },
-          { label: 'السلسلة الحالية', value: currentStreak, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+          { label: 'إجمالي الخبرة', value: totalXP, icon: Zap, well: 'iw-amber' },
+          { label: 'المهام المنجزة', value: totalTasks, icon: CheckCircle2, well: 'iw-lime' },
+          { label: 'ساعات التركيز', value: totalFocusHours, icon: Clock, well: 'iw-blue' },
+          { label: 'السلسلة الحالية', value: currentStreak, icon: Flame, well: 'iw-rose' },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
-            <Card className="glass">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={cn('p-2 rounded-xl', stat.bg, stat.color)}>
-                    <stat.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold"><AnimatedCounter target={stat.value} /></p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  </div>
+            <div className="neo-card card-lift p-4">
+              <div className="flex items-center gap-3">
+                <span className={cn('icon-well h-9 w-9', stat.well)}>
+                  <stat.icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-2xl font-extrabold font-mono num" dir="ltr"><AnimatedCounter target={stat.value} /></p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -562,7 +546,7 @@ export default function Analytics() {
                 <p className="text-xs text-muted-foreground">التقدير العام</p>
               </div>
             </div>
-            <div className="flex-1 text-center sm:text-right space-y-3">
+            <div className="flex-1 text-center sm:text-start space-y-3">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">متوسط الدرجة ({periodLabels[period]})</p>
                 <p className="text-4xl font-black text-foreground">
@@ -573,7 +557,7 @@ export default function Analytics() {
               <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
                 <div className="flex items-center gap-1 text-xs">
                   <span className="text-muted-foreground">الأفضل:</span>
-                  {bestDay && <span className="font-bold text-emerald-accent">{bestDay.name} ({bestDay.avg})</span>}
+                  {bestDay && <span className="font-bold text-emerald-accent">{bestDay.name} (<span className="num" dir="ltr">{bestDay.avg}</span>)</span>}
                 </div>
                 <span className="text-muted-foreground/30">|</span>
                 <div className="flex items-center gap-1 text-xs">
@@ -583,7 +567,7 @@ export default function Analytics() {
                     className={cn(
                       "flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all",
                       compareMode
-                        ? "bg-emerald-accent/15 text-emerald-accent border border-emerald-accent/30"
+                        ? "bg-violet-accent/15 text-violet-accent border border-violet-accent/30"
                         : "bg-muted/30 text-muted-foreground hover:text-foreground"
                     )}
                   >
@@ -601,59 +585,61 @@ export default function Analytics() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {bestDay && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-            <Card className="glass border-emerald-accent/20 overflow-hidden">
+            <div className="neo-card card-lift overflow-hidden">
               <div className="bg-gradient-to-l from-emerald-accent/8 to-transparent p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 rounded-lg bg-emerald-accent/15">
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                  </div>
+                  <span className="icon-well h-7 w-7 iw-amber">
+                    <Trophy className="h-4 w-4" />
+                  </span>
                   <p className="text-xs font-semibold text-muted-foreground">أفضل يوم</p>
                 </div>
                 <p className="text-3xl font-bold text-emerald-accent mb-1">{bestDay.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  متوسط الدرجة: <span className="font-bold text-foreground text-lg">{bestDay.avg}</span>
+                  متوسط الدرجة: <span className="font-bold text-foreground text-lg num" dir="ltr">{bestDay.avg}</span>
                 </p>
               </div>
-            </Card>
+            </div>
           </motion.div>
         )}
         {worstDay && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-            <Card className="glass border-rose-500/20 overflow-hidden">
-              <div className="bg-gradient-to-l from-rose-500/8 to-transparent p-5">
+            <div className="neo-card card-lift overflow-hidden">
+              <div className="bg-gradient-to-l from-rose-accent/8 to-transparent p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 rounded-lg bg-rose-500/15">
-                    <AlertCircle className="w-4 h-4 text-rose-500" />
-                  </div>
+                  <span className="icon-well h-7 w-7 iw-rose">
+                    <AlertCircle className="h-4 w-4" />
+                  </span>
                   <p className="text-xs font-semibold text-muted-foreground">يوم يحتاج تحسين</p>
                 </div>
-                <p className="text-3xl font-bold text-rose-500 mb-1">{worstDay.name}</p>
+                <p className="text-3xl font-bold text-rose-accent mb-1">{worstDay.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  متوسط الدرجة: <span className="font-bold text-foreground text-lg">{worstDay.avg}</span>
+                  متوسط الدرجة: <span className="font-bold text-foreground text-lg num" dir="ltr">{worstDay.avg}</span>
                 </p>
               </div>
-            </Card>
+            </div>
           </motion.div>
         )}
         {weeklyComparison && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
-            <Card className="glass border-blue-500/20 overflow-hidden">
-              <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
+            <div className="neo-card card-lift overflow-hidden">
+              <div className="p-5 pb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <span className="icon-well h-7 w-7 iw-blue">
+                    <Calendar className="h-4 w-4" />
+                  </span>
                   مقارنة أسبوعية
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4 px-4">
+                </h3>
+              </div>
+              <div className="px-5 pb-5">
                 <div className="h-32">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={weeklyComparison.scoreData} barSize={28}>
-                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                       <Tooltip content={<GlassTooltip />} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]} name="الدرجة">
                         {weeklyComparison.scoreData.map((_, i) => (
-                          <Cell key={i} fill={i === 0 ? 'oklch(0.70 0.05 200 / 0.5)' : 'oklch(0.55 0.14 163)'} />
+                          <Cell key={i} fill={i === 0 ? '#C4B5FD' : '#8B5CF6'} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -661,19 +647,19 @@ export default function Analytics() {
                 </div>
                 <div className="flex items-center justify-center gap-1.5 mt-1">
                   {weeklyComparison.scoreChange >= 0 ? (
-                    <Badge className="bg-emerald-accent/10 text-emerald-accent border-0 text-[10px] gap-0.5">
+                    <span className="pill bg-emerald-accent/10 text-emerald-accent gap-0.5">
                       <ArrowUpRight className="w-3 h-3" />
-                      +{Math.abs(weeklyComparison.scoreChange)}%
-                    </Badge>
+                      <span className="num" dir="ltr">+{Math.abs(weeklyComparison.scoreChange)}%</span>
+                    </span>
                   ) : (
-                    <Badge className="bg-rose-500/10 text-rose-500 border-0 text-[10px] gap-0.5">
+                    <span className="pill bg-rose-accent/10 text-rose-accent gap-0.5">
                       <ArrowDownRight className="w-3 h-3" />
-                      {weeklyComparison.scoreChange}%
-                    </Badge>
+                      <span className="num" dir="ltr">{weeklyComparison.scoreChange}%</span>
+                    </span>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </motion.div>
         )}
       </div>
@@ -681,46 +667,46 @@ export default function Analytics() {
       {/* Personal Records */}
       {personalRecords && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-          <Card className="glass border-amber-500/20 overflow-hidden border-r-4 border-r-amber-500">
-            <div className="bg-gradient-to-l from-amber-500/8 to-transparent p-4">
+          <div className="neo-card card-lift overflow-hidden border-s-4 border-s-gold">
+            <div className="bg-gradient-to-l from-gold/8 to-transparent p-4">
               <div className="flex items-center gap-2 mb-4">
-                <div className="p-1.5 rounded-lg bg-amber-500/15">
-                  <Trophy className="w-4 h-4 text-amber-500" />
-                </div>
+                <span className="icon-well h-7 w-7 iw-amber">
+                  <Trophy className="h-4 w-4" />
+                </span>
                 <p className="text-sm font-semibold">الأرقام القياسية الشخصية</p>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="text-center p-3 rounded-xl bg-background/50">
-                  <div className="p-2 w-10 h-10 mx-auto rounded-xl bg-amber-500/10 mb-2">
-                    <Star className="w-5 h-5 text-amber-500 mx-auto" />
-                  </div>
-                  <p className="text-2xl font-bold">{personalRecords.highestScore}</p>
+                <div className="text-center p-3 rounded-xl bg-card/60">
+                  <span className="icon-well h-10 w-10 mx-auto mb-2 iw-amber">
+                    <Star className="h-5 w-5" />
+                  </span>
+                  <p className="text-2xl font-bold font-mono num" dir="ltr">{personalRecords.highestScore}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">أعلى درجة يومية</p>
                 </div>
-                <div className="text-center p-3 rounded-xl bg-background/50">
-                  <div className="p-2 w-10 h-10 mx-auto rounded-xl bg-emerald-accent/10 mb-2">
-                    <Timer className="w-5 h-5 text-emerald-accent mx-auto" />
-                  </div>
-                  <p className="text-2xl font-bold">{personalRecords.longestFocus}</p>
+                <div className="text-center p-3 rounded-xl bg-card/60">
+                  <span className="icon-well h-10 w-10 mx-auto mb-2 iw-violet">
+                    <Timer className="h-5 w-5" />
+                  </span>
+                  <p className="text-2xl font-bold font-mono num" dir="ltr">{personalRecords.longestFocus}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">أطول جلسة تركيز (دقيقة)</p>
                 </div>
-                <div className="text-center p-3 rounded-xl bg-background/50">
-                  <div className="p-2 w-10 h-10 mx-auto rounded-xl bg-emerald-700/10 dark:bg-emerald-400/10 mb-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-700 dark:text-emerald-400 mx-auto" />
-                  </div>
-                  <p className="text-2xl font-bold">{personalRecords.mostTasks}</p>
+                <div className="text-center p-3 rounded-xl bg-card/60">
+                  <span className="icon-well h-10 w-10 mx-auto mb-2 iw-lime">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </span>
+                  <p className="text-2xl font-bold font-mono num" dir="ltr">{personalRecords.mostTasks}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">أعلى إنجاز مهام</p>
                 </div>
-                <div className="text-center p-3 rounded-xl bg-background/50">
-                  <div className="p-2 w-10 h-10 mx-auto rounded-xl bg-orange-500/10 mb-2">
-                    <Flame className="w-5 h-5 text-orange-500 mx-auto" />
-                  </div>
-                  <p className="text-2xl font-bold">{personalRecords.longestStreak}</p>
+                <div className="text-center p-3 rounded-xl bg-card/60">
+                  <span className="icon-well h-10 w-10 mx-auto mb-2 iw-rose">
+                    <Flame className="h-5 w-5" />
+                  </span>
+                  <p className="text-2xl font-bold font-mono num" dir="ltr">{personalRecords.longestStreak}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">أطول سلسلة عادات</p>
                 </div>
               </div>
             </div>
-          </Card>
+          </div>
         </motion.div>
       )}
 
@@ -728,35 +714,37 @@ export default function Analytics() {
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Productivity Trend */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="glass overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-accent" />
+          <div className="neo-card card-lift">
+            <div className="p-5 pb-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span className="icon-well h-7 w-7 iw-violet">
+                  <TrendingUp className="h-4 w-4" />
+                </span>
                 اتجاه الإنتاجية
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="px-5 pb-5">
               {productivityData.length > 0 ? (
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={productivityData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
-                      <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} />
                       <Tooltip content={<GlassTooltip />} />
                       <Line
                         type="monotone"
                         dataKey="score"
-                        stroke="oklch(0.55 0.14 163)"
+                        stroke="#8B5CF6"
                         strokeWidth={2.5}
-                        dot={{ r: 3, fill: 'oklch(0.55 0.14 163)' }}
+                        dot={{ r: 3, fill: '#8B5CF6' }}
                         activeDot={{ r: 5 }}
                         name="الدرجة"
                       >
                         <defs>
                           <linearGradient id="prodLineGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.15} />
-                            <stop offset="100%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+                            <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.15} />
+                            <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                       </Line>
@@ -764,40 +752,47 @@ export default function Analytics() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات</div>
+                <div className="h-56 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <span className="icon-well h-12 w-12 bg-secondary text-muted-foreground/50">
+                    <TrendingUp className="h-5 w-5" />
+                  </span>
+                  لا توجد بيانات
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
 
         {/* Habit Completion Trend */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Card className="glass overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Target className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+          <div className="neo-card card-lift">
+            <div className="p-5 pb-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span className="icon-well h-7 w-7 iw-lime">
+                  <Target className="h-4 w-4" />
+                </span>
                 نسبة إكمال العادات
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="px-5 pb-5">
               {habitTrendData.length > 0 ? (
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={habitTrendData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
-                      <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} unit="%" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} unit="%" />
                       <Tooltip content={<GlassTooltip />} />
                       <defs>
                         <linearGradient id="habitGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="oklch(0.55 0.14 163)" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <Area
                         type="monotone"
                         dataKey="rate"
-                        stroke="oklch(0.55 0.14 163)"
+                        stroke="#8B5CF6"
                         fill="url(#habitGrad)"
                         strokeWidth={2}
                         name="النسبة"
@@ -806,10 +801,15 @@ export default function Analytics() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات</div>
+                <div className="h-56 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <span className="icon-well h-12 w-12 bg-secondary text-muted-foreground/50">
+                    <Target className="h-5 w-5" />
+                  </span>
+                  لا توجد بيانات
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
       </div>
 
@@ -817,51 +817,55 @@ export default function Analytics() {
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Focus Time Distribution */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="glass overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Brain className="w-4 h-4 text-amber-500" />
+          <div className="neo-card card-lift">
+            <div className="p-5 pb-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span className="icon-well h-7 w-7 iw-violet">
+                  <Brain className="h-4 w-4" />
+                </span>
                 توزيع وقت التركيز (بالساعات)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="px-5 pb-5">
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={focusByDayData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
-                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: 'oklch(0.5 0.01 160)' }} />
-                    <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                    <XAxis dataKey="day" tick={{ fontSize: 9, fill: '#94A3B8' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} />
                     <Tooltip content={<GlassTooltip />} />
                     <Bar
                       dataKey="hours"
-                      fill="oklch(0.55 0.14 163)"
+                      fill="#8B5CF6"
                       radius={[6, 6, 0, 0]}
                       name="ساعات"
                     >
                       <defs>
                         <linearGradient id="focusBarGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="oklch(0.55 0.14 163)" stopOpacity={1} />
-                          <stop offset="100%" stopColor="oklch(0.35 0.10 160)" stopOpacity={0.6} />
+                          <stop offset="0%" stopColor="#8B5CF6" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#6D28D9" stopOpacity={0.6} />
                         </linearGradient>
                       </defs>
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
 
         {/* Goal Progress Distribution (Pie) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-          <Card className="glass overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-500" />
+          <div className="neo-card card-lift">
+            <div className="p-5 pb-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span className="icon-well h-7 w-7 iw-amber">
+                  <Sparkles className="h-4 w-4" />
+                </span>
                 توزيع التقدم حسب المجال
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="px-5 pb-5">
               {goalDistributionData.length > 0 ? (
                 <div className="h-56 flex items-center">
                   <div className="w-1/2 h-full">
@@ -889,61 +893,75 @@ export default function Analytics() {
                       <div key={item.name} className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
                         <span className="text-xs text-muted-foreground flex-1">{item.name}</span>
-                        <span className="text-xs font-semibold">{item.value}</span>
+                        <span className="text-xs font-semibold num" dir="ltr">{item.value}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات</div>
+                <div className="h-56 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <span className="icon-well h-12 w-12 bg-secondary text-muted-foreground/50">
+                    <Sparkles className="h-5 w-5" />
+                  </span>
+                  لا توجد بيانات
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
       </div>
 
-      {/* Health Trends - Glass Card */}
+      {/* Health Trends */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <Card className="glass overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-rose-500" />
+        <div className="neo-card card-lift">
+          <div className="p-5 pb-3">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-rose">
+                <Sparkles className="h-4 w-4" />
+              </span>
               اتجاهات الصحة
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             {healthTrendsData.length > 0 ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={healthTrendsData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.005 160)" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
-                    <YAxis tick={{ fontSize: 10, fill: 'oklch(0.5 0.01 160)' }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94A3B8' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} />
                     <Tooltip content={<GlassTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 11, direction: 'rtl' }} />
-                    <Line type="monotone" dataKey="sleep" stroke="oklch(0.55 0.10 250)" strokeWidth={2} name="النوم (ساعات)" />
-                    <Line type="monotone" dataKey="water" stroke="oklch(0.60 0.15 200)" strokeWidth={2} name="الماء (كؤوس)" />
-                    <Line type="monotone" dataKey="mood" stroke="oklch(0.78 0.12 85)" strokeWidth={2} name="المزاج" />
+                    <Line type="monotone" dataKey="sleep" stroke="#8B5CF6" strokeWidth={2} name="النوم (ساعات)" />
+                    <Line type="monotone" dataKey="water" stroke="#007AFF" strokeWidth={2} name="الماء (كؤوس)" />
+                    <Line type="monotone" dataKey="mood" stroke="#C99A3E" strokeWidth={2} name="المزاج" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">لا توجد بيانات صحية</div>
+              <div className="h-64 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                <span className="icon-well h-12 w-12 bg-secondary text-muted-foreground/50">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                لا توجد بيانات صحية
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Insights - Colored Cards */}
+      {/* Insights */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <Card className="glass overflow-hidden border-r-4 border-r-emerald-accent">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-amber-500" />
+        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-violet-accent">
+          <div className="p-5 pb-3">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span className="icon-well h-7 w-7 iw-amber">
+                <Lightbulb className="h-4 w-4" />
+              </span>
               رؤى وتحليلات
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="px-5 pb-5">
             {/* Auto-generated Arabic insights */}
             <div className="grid sm:grid-cols-2 gap-3 mb-4">
               {bestDay && (
@@ -976,11 +994,11 @@ export default function Analytics() {
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="p-3.5 rounded-xl bg-sky-500/5 border border-sky-500/10"
+                  className="p-3.5 rounded-xl bg-glass/5 border border-glass/10"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <Brain className="w-4 h-4 text-sky-500" />
-                    <span className="text-xs font-semibold text-sky-500">تركيز عميق</span>
+                    <Brain className="w-4 h-4 text-glass" />
+                    <span className="text-xs font-semibold text-glass">تركيز عميق</span>
                   </div>
                   <p className="text-sm text-foreground">أطول جلسة تركيز: {personalRecords.longestFocus} دقيقة 🧠</p>
                 </motion.div>
@@ -993,15 +1011,15 @@ export default function Analytics() {
                     "p-3.5 rounded-xl border",
                     weeklyComparison.scoreChange >= 0
                       ? "bg-emerald-accent/5 border-emerald-accent/10"
-                      : "bg-red-500/5 border-red-500/10"
+                      : "bg-destructive/5 border-destructive/10"
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     {weeklyComparison.scoreChange >= 0
                       ? <TrendingUp className="w-4 h-4 text-emerald-accent" />
-                      : <TrendingDown className="w-4 h-4 text-red-500" />
+                      : <TrendingDown className="w-4 h-4 text-destructive" />
                     }
-                    <span className={cn("text-xs font-semibold", weeklyComparison.scoreChange >= 0 ? "text-emerald-accent" : "text-red-500")}>
+                    <span className={cn("text-xs font-semibold", weeklyComparison.scoreChange >= 0 ? "text-emerald-accent" : "text-destructive")}>
                       {weeklyComparison.scoreChange >= 0 ? 'تحسن' : 'تراجع'}
                     </span>
                   </div>
@@ -1024,14 +1042,14 @@ export default function Analytics() {
                   className={cn(
                     'flex items-start gap-3 p-3.5 rounded-xl transition-colors',
                     item.type === 'positive' && 'bg-emerald-accent/5 border border-emerald-accent/10',
-                    item.type === 'negative' && 'bg-rose-500/5 border border-rose-500/10',
+                    item.type === 'negative' && 'bg-rose-accent/5 border border-rose-accent/10',
                     item.type === 'neutral' && 'bg-muted/30 border border-border/20'
                   )}
                 >
                   <div className={cn(
                     'p-2 rounded-xl shrink-0',
                     item.type === 'positive' && 'bg-emerald-accent/10 text-emerald-accent',
-                    item.type === 'negative' && 'bg-rose-500/10 text-rose-500',
+                    item.type === 'negative' && 'bg-rose-accent/10 text-rose-accent',
                     item.type === 'neutral' && 'bg-muted/50 text-muted-foreground'
                   )}>
                     {item.type === 'positive' ? (
@@ -1045,25 +1063,24 @@ export default function Analytics() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <item.icon className="w-3 h-3 text-muted-foreground" />
-                      <Badge
-                        variant="secondary"
+                      <span
                         className={cn(
-                          'text-[9px] px-1.5 py-0 h-4 border-0',
+                          'pill h-4 px-1.5 py-0',
                           item.type === 'positive' && 'bg-emerald-accent/10 text-emerald-accent',
-                          item.type === 'negative' && 'bg-rose-500/10 text-rose-500',
+                          item.type === 'negative' && 'bg-rose-accent/10 text-rose-accent',
                           item.type === 'neutral' && 'bg-muted/50 text-muted-foreground'
                         )}
                       >
                         {item.label}
-                      </Badge>
+                      </span>
                     </div>
                     <p className="text-sm leading-relaxed">{item.text}</p>
                   </div>
                 </motion.div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </motion.div>
     </div>
   )

@@ -110,10 +110,10 @@ function generateFallbackResponse(message: string): string {
 /* ────────────── Quick Actions ────────────── */
 
 const quickActions = [
-  { id: 'morning', label: 'نصيحة صباحية', icon: Sun, color: 'bg-gold/10 text-gold hover:bg-gold/20', triggerWord: 'صباح' },
-  { id: 'review', label: 'مراجعة أسبوعية', icon: TrendingUp, color: 'bg-emerald-accent/10 text-emerald-accent hover:bg-emerald-accent/20', triggerWord: 'مراجعة' },
-  { id: 'habits', label: 'اقتراح عادات', icon: Target, color: 'bg-forest/10 text-forest hover:bg-forest/20', triggerWord: 'عادة' },
-  { id: 'productivity', label: 'نصيحة إنتاجية', icon: Lightbulb, color: 'bg-purple-500/10 text-purple-500 hover:bg-purple-500/20', triggerWord: 'تركيز' },
+  { id: 'morning', label: 'نصيحة صباحية', icon: Sun, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'صباح' },
+  { id: 'review', label: 'مراجعة أسبوعية', icon: TrendingUp, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'مراجعة' },
+  { id: 'habits', label: 'اقتراح عادات', icon: Target, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'عادة' },
+  { id: 'productivity', label: 'نصيحة إنتاجية', icon: Lightbulb, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'تركيز' },
 ]
 
 /* ────────────── AI Avatar ────────────── */
@@ -122,7 +122,7 @@ function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: bo
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <motion.div
-        className="absolute inset-[-6px] rounded-full border border-dashed border-emerald-accent/30"
+        className="absolute inset-[-6px] rounded-full border border-dashed border-violet-accent/30"
         animate={{ rotate: 360 }}
         transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
       />
@@ -132,7 +132,7 @@ function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: bo
         transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
       />
       <motion.div
-        className="absolute w-2 h-2 rounded-full bg-emerald-accent"
+        className="absolute w-2 h-2 rounded-full bg-violet-accent"
         style={{ top: -6, left: '50%', marginLeft: -4 }}
         animate={{ rotate: 360 }}
         transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
@@ -145,8 +145,8 @@ function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: bo
       </motion.div>
       <div className={cn(
         'relative z-10 rounded-full flex items-center justify-center',
-        'bg-gradient-to-br from-emerald-accent via-forest to-emerald-accent',
-        'shadow-lg shadow-emerald-accent/20'
+        'bg-gradient-to-br from-violet-accent via-[#7C3AED] to-violet-accent',
+        'shadow-lg shadow-violet-accent/25'
       )} style={{ width: size, height: size }}>
         <Brain className={cn('text-white', size > 35 ? 'w-5 h-5' : 'w-3.5 h-3.5')} />
       </div>
@@ -160,10 +160,10 @@ function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: bo
 }
 
 const suggestedPrompts = [
-  { icon: Brain, text: 'كيف أبني تركيزاً أعمق؟', color: 'text-emerald-accent' },
-  { icon: Target, text: 'ساعدني في تحديد أهدافي', color: 'text-forest' },
-  { icon: Heart, text: 'نصيحة للصحة النفسية', color: 'text-rose-400' },
-  { icon: Moon, text: 'روتين مسائي مثالي', color: 'text-purple-400' },
+  { icon: Brain, text: 'كيف أبني تركيزاً أعمق؟', color: 'text-violet-accent' },
+  { icon: Target, text: 'ساعدني في تحديد أهدافي', color: 'text-violet-accent' },
+  { icon: Heart, text: 'نصيحة للصحة النفسية', color: 'text-violet-accent' },
+  { icon: Moon, text: 'روتين مسائي مثالي', color: 'text-violet-accent' },
 ]
 
 /* ────────────── Component ────────────── */
@@ -306,15 +306,15 @@ export default function AICoach() {
   const hasMessages = messages.length > 0
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative overflow-hidden rounded-3xl">
+    <div className="space-y-6 max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative overflow-hidden rounded-3xl bg-card">
       {/* Shifting gradient background */}
       <motion.div
         className="absolute inset-0 -z-10 rounded-3xl"
         animate={{
           background: [
-            'linear-gradient(135deg, oklch(0.97 0.01 160 / 0.5), oklch(0.98 0.01 155 / 0.3))',
-            'linear-gradient(135deg, oklch(0.96 0.02 85 / 0.4), oklch(0.97 0.01 160 / 0.3))',
-            'linear-gradient(135deg, oklch(0.97 0.01 160 / 0.5), oklch(0.98 0.01 155 / 0.3))',
+            'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(214,255,61,0.04))',
+            'linear-gradient(135deg, rgba(201,154,62,0.05), rgba(139,92,246,0.04))',
+            'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(214,255,61,0.04))',
           ],
         }}
         transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
@@ -345,8 +345,8 @@ export default function AICoach() {
             <p className="text-sm text-muted-foreground mt-0.5">
               مساعدك الشخصي للنمو والتطوير
               {aiUsage && (
-                <span className="mr-2 text-xs opacity-70">
-                  ({aiUsage.used}/{aiUsage.limit} رسالة)
+                <span className="ms-2 text-xs opacity-70">
+                  (<span className="num" dir="ltr">{aiUsage.used}/{aiUsage.limit}</span> رسالة)
                 </span>
               )}
             </p>
@@ -380,7 +380,7 @@ export default function AICoach() {
                   onClick={() => handleQuickAction(action.id)}
                   className="flex items-center gap-3 p-4 rounded-2xl glass transition-all hover:shadow-lg relative overflow-hidden group"
                 >
-                  <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-violet-accent/20 via-transparent to-gold/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   <div className="p-2 rounded-xl bg-background/60">
                     <Icon className="w-5 h-5" />
                   </div>
@@ -448,13 +448,13 @@ export default function AICoach() {
               <div className={cn(
                 'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed backdrop-blur-sm',
                 msg.role === 'ai'
-                  ? 'glass rounded-tr-sm shadow-sm'
-                  : 'bg-gradient-to-br from-emerald-accent to-forest text-white rounded-tl-sm shadow-md shadow-emerald-accent/10'
+                  ? 'bg-secondary text-foreground rounded-tr-sm shadow-sm'
+                  : 'bg-forest text-paper-soft rounded-tl-sm shadow-md shadow-violet-accent/10 dark:bg-lime dark:text-ink'
               )}>
                 <p className="whitespace-pre-wrap">{msg.content}</p>
                 <div className={cn(
                   'flex items-center gap-2 mt-1.5',
-                  msg.role === 'ai' ? 'text-muted-foreground/60' : 'text-white/60'
+                  msg.role === 'ai' ? 'text-muted-foreground/60' : 'text-paper-soft/70 dark:text-ink/60'
                 )}>
                   <p className="text-[10px]">
                     {new Date(msg.timestamp).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
@@ -480,12 +480,12 @@ export default function AICoach() {
             className="flex gap-3"
           >
             <AIAvatar size={32} />
-            <div className="glass rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+            <div className="bg-secondary rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
               <div className="flex gap-1.5">
                 {[0, 1, 2].map((i) => (
                   <motion.div
                     key={i}
-                    className="w-2 h-2 rounded-full bg-emerald-accent"
+                    className="w-2 h-2 rounded-full bg-violet-accent"
                     animate={{ opacity: [0.3, 1, 0.3], y: [0, -6, 0] }}
                     transition={{
                       duration: 0.8,
@@ -542,7 +542,7 @@ export default function AICoach() {
             className={cn(
               'p-2.5 rounded-xl transition-all',
               input.trim() && !isTyping
-                ? 'bg-emerald-accent text-white hover:bg-emerald-accent/90'
+                ? 'bg-violet-accent text-white hover:bg-violet-accent/90'
                 : 'bg-muted/50 text-muted-foreground/30'
             )}
           >

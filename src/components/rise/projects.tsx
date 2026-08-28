@@ -13,24 +13,17 @@ import {
   Clock,
   Zap,
   MoreHorizontal,
-  FolderKanban,
   Sparkles,
   Loader2,
-  X,
   TrendingUp,
   ListChecks,
   Star,
-  Users,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Progress } from '@/components/ui/progress'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -61,6 +54,8 @@ import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
+import { RainbowCheckbox } from '@/components/rise/kit-v2'
+import { RiseIcon, RiseGlyphIcon } from '@/components/rise/icons'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
 
@@ -189,15 +184,15 @@ function TeamAvatars() {
       {names.slice(0, 4).map((name, i) => (
         <div
           key={name}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 border-background -mr-2 last:mr-0"
-          style={{ backgroundColor: colors[i], zIndex: 4 - i }}
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold border-2 border-background -me-2 last:me-0"
+          style={{ backgroundColor: `${colors[i]}2E`, color: colors[i], zIndex: 4 - i }}
           title={name}
         >
           {String(name || 'م').charAt(0)}
         </div>
       ))}
       {names.length > 4 && (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-medium text-muted-foreground bg-muted border-2 border-background -mr-2">
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-medium text-muted-foreground bg-muted border-2 border-background -me-2">
           +{names.length - 4}
         </div>
       )}
@@ -221,16 +216,15 @@ function FeaturedProject({ project, onClick }: { project: Project; onClick: () =
       className="cursor-pointer"
       onClick={onClick}
     >
-      <div className="premium-card rounded-2xl overflow-hidden relative">
-        <div
-          className="absolute inset-0 bg-gradient-to-bl pointer-events-none"
-          style={{ background: `linear-gradient(135deg, ${project.color}12, ${project.color}04, transparent)` }}
-        />
+      {/* Gradient-top-panel hero: violet→indigo strip inside a dark navy card */}
+      <div className="rounded-2xl overflow-hidden relative bg-[#141B33] border border-white/5 shadow-tile">
+        <div className="h-1.5 w-full bg-gradient-to-l from-violet-accent to-indigo-500" />
+        <div className="absolute -top-14 -start-8 h-36 w-36 rounded-full bg-violet-accent/20 blur-3xl pointer-events-none" />
         <div className="relative p-6 flex flex-col sm:flex-row items-center gap-6">
           <div className="relative">
             <ProgressRing progress={progress} size={100} strokeWidth={6} color={project.color} />
             <motion.div
-              className="absolute -top-1 -right-1"
+              className="absolute -top-1 -start-1"
               animate={{ y: [0, -4, 0] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             >
@@ -239,29 +233,29 @@ function FeaturedProject({ project, onClick }: { project: Project; onClick: () =
               </div>
             </motion.div>
           </div>
-          <div className="flex-1 text-center sm:text-right">
+          <div className="flex-1 text-center sm:text-start">
             <div className="flex items-center gap-2 justify-center sm:justify-start mb-1">
-              <FolderKanban className="w-5 h-5" style={{ color: project.color }} />
-              <h3 className="text-lg font-bold">{project.name}</h3>
-              <Badge
-                variant="secondary"
+              <RiseGlyphIcon glyph="projects" className="w-5 h-5 text-violet-accent" />
+              <h3 className="text-lg font-bold text-white">{project.name}</h3>
+              <span
                 className={cn(
-                  'text-[10px] px-2 py-0 rounded-full font-medium',
-                  project.status === 'active' && 'bg-emerald-accent/10 text-emerald-accent border border-emerald-accent/20',
-                  project.status === 'completed' && 'bg-gold/10 text-gold border border-gold/20',
-                  project.status === 'archived' && 'bg-muted text-muted-foreground border border-muted/30'
+                  'pill',
+                  project.status === 'active' && 'pill-success',
+                  project.status === 'completed' && 'pill-lime',
+                  project.status === 'archived' && 'pill-muted'
                 )}
               >
                 {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'متوقف'}
-              </Badge>
+              </span>
             </div>
             {project.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed mt-1">{project.description}</p>
+              <p className="text-sm text-white/60 leading-relaxed mt-1">{project.description}</p>
             )}
             <div className="flex items-center gap-4 mt-3 justify-center sm:justify-start">
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="text-xs text-white/60 flex items-center gap-1">
                 <ListChecks className="w-3.5 h-3.5" />
-                {progress}% مكتمل
+                <span className="num" dir="ltr">{progress}%</span>
+                مكتمل
               </span>
               <TeamAvatars />
             </div>
@@ -282,11 +276,9 @@ function EmptyState() {
       className="flex flex-col items-center justify-center py-16 text-center"
     >
       <div className="relative mb-6">
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-accent/20 to-forest/20 flex items-center justify-center">
-          <FolderKanban className="w-10 h-10 text-emerald-accent/60" />
-        </div>
+        <RiseIcon glyph="projects" hue="violet" size="lg" className="mx-auto" />
         <motion.div
-          className="absolute -top-1 -left-1 w-6 h-6 rounded-full bg-gold/20 flex items-center justify-center"
+          className="absolute -top-1 -end-1 w-6 h-6 rounded-full bg-gold/20 flex items-center justify-center"
           animate={{ y: [0, -4, 0] }}
           transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
         >
@@ -574,9 +566,9 @@ export function Projects() {
           </Button>
         </div>
 
-        {/* Project info card with subtle gradient header */}
+        {/* Project info card */}
         <div
-          className="glass rounded-2xl overflow-hidden mb-6"
+          className="neo-card rounded-2xl overflow-hidden mb-6"
         >
           {/* Subtle gradient header */}
           <div
@@ -590,9 +582,9 @@ export function Projects() {
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
-                style={{ backgroundColor: selectedProject.color + '18' }}
+                style={{ backgroundColor: selectedProject.color + '18', color: selectedProject.color }}
               >
-                <FolderKanban className="w-6 h-6" style={{ color: selectedProject.color }} />
+                <RiseGlyphIcon glyph="projects" className="w-6 h-6" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-xl font-bold truncate">{selectedProject.name}</h3>
@@ -612,7 +604,7 @@ export function Projects() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => openEditDialog(selectedProject)}>
-                      <Pencil className="w-4 h-4 ml-2" />
+                      <Pencil className="w-4 h-4 me-2" />
                       تعديل
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -620,9 +612,9 @@ export function Projects() {
                       onClick={() => {
                         deleteProject(selectedProject.id)
                       }}
-                      className="text-red-500 focus:text-red-500"
+                      className="text-destructive focus:text-destructive"
                     >
-                      <Trash2 className="w-4 h-4 ml-2" />
+                      <Trash2 className="w-4 h-4 me-2" />
                       حذف
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -630,7 +622,7 @@ export function Projects() {
                 <Button
                   size="sm"
                   onClick={() => setAddTaskOpen(true)}
-                  className="h-9 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20"
+                  className="h-9 rounded-xl gap-1.5 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-xs font-semibold shadow-lg shadow-violet-accent/20"
                 >
                   <Plus className="w-4 h-4" />
                   مهمة
@@ -648,7 +640,7 @@ export function Projects() {
             ].map((s) => (
               <div key={s.label} className="bg-muted/50 rounded-xl p-3 text-center">
                 <s.icon className={cn('w-4 h-4 mx-auto mb-1', s.color)} />
-                <p className={cn('text-lg font-bold', s.color)}>{s.value}</p>
+                <p className={cn('text-lg font-bold', s.color)}><span className="num" dir="ltr">{s.value}</span></p>
                 <p className="text-[10px] text-muted-foreground">{s.label}</p>
               </div>
             ))}
@@ -658,12 +650,11 @@ export function Projects() {
           <div className="mt-4">
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
               <span>التقدم الكلي</span>
-              <span className="font-medium">{progress}%</span>
+              <span className="font-medium"><span className="num" dir="ltr">{progress}%</span></span>
             </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="h-2 rounded-full bg-secondary overflow-hidden">
               <motion.div
-                className="h-full rounded-full"
-                style={{ backgroundColor: selectedProject.color }}
+                className="h-full rounded-full bg-gradient-to-l from-violet-accent/80 to-violet-accent"
                 initial={{ width: 0 }}
                 animate={{ width: `${progress}%` }}
                 transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -676,7 +667,7 @@ export function Projects() {
         {/* Tasks grouped by status */}
         <div className="space-y-4">
           {[
-            { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-blue-500' },
+            { key: 'todo', label: 'للتنفيذ', icon: Circle, color: 'text-glass' },
             { key: 'in_progress', label: 'قيد التنفيذ', icon: Clock, color: 'text-gold' },
             { key: 'done', label: 'مكتمل', icon: CheckCircle2, color: 'text-emerald-accent' },
           ].map((group) => {
@@ -686,9 +677,7 @@ export function Projects() {
                 <div className={cn('flex items-center gap-2 mb-2 px-1', group.color)}>
                   <group.icon className="w-4 h-4" />
                   <span className="text-sm font-semibold">{group.label}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 rounded-full">
-                    {groupTasks.length}
-                  </Badge>
+                  <span className="pill pill-muted"><span className="num" dir="ltr">{groupTasks.length}</span></span>
                 </div>
                 <AnimatePresence mode="popLayout">
                   {groupTasks.length === 0 ? (
@@ -696,7 +685,7 @@ export function Projects() {
                       key="empty"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="glass rounded-2xl p-5 text-center text-sm text-muted-foreground"
+                      className="rounded-2xl border border-dashed border-border bg-card/50 p-5 text-center text-sm text-muted-foreground"
                     >
                       لا توجد مهام
                     </motion.div>
@@ -715,12 +704,11 @@ export function Projects() {
                           layout
                           className="group"
                         >
-                          <div className="glass rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:shadow-emerald-accent/5 hover:-translate-y-0.5">
+                          <div className="bg-card border border-border rounded-2xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-lift hover:-translate-y-0.5">
                             <div className="pt-0.5">
-                              <Checkbox
+                              <RainbowCheckbox
                                 checked={task.status === 'done'}
-                                onCheckedChange={() => toggleTask(task)}
-                                className="w-5 h-5 rounded-full border-2 data-[state=checked]:bg-emerald-accent data-[state=checked]:border-emerald-accent"
+                                onChange={() => toggleTask(task)}
                               />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -733,16 +721,15 @@ export function Projects() {
                                 >
                                   {task.title}
                                 </span>
-                                <Badge
-                                  variant="secondary"
-                                  className={cn('text-[10px] px-1.5 py-0 h-5 font-medium rounded-full', priorityColors[task.priority])}
+                                <span
+                                  className={cn('pill', priorityColors[task.priority])}
                                 >
                                   {priorityLabels[task.priority]}
-                                </Badge>
+                                </span>
                                 {task.xpReward > 0 && (
                                   <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
                                     <Zap className="w-3 h-3" />
-                                    {task.xpReward}
+                                    <span className="num" dir="ltr">{task.xpReward}</span>
                                   </span>
                                 )}
                               </div>
@@ -755,7 +742,7 @@ export function Projects() {
                               {task.subtasks.length > 0 && (
                                 <span className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
                                   <CheckCircle2 className="w-3 h-3" />
-                                  {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length} مهام فرعية
+                                  <span className="num" dir="ltr">{task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}</span> مهام فرعية
                                 </span>
                               )}
                             </div>
@@ -775,9 +762,9 @@ export function Projects() {
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => deleteTask(task.id)}
-                                    className="text-red-500 focus:text-red-500"
+                                    className="text-destructive focus:text-destructive"
                                   >
-                                    <Trash2 className="w-4 h-4 ml-2" />
+                                    <Trash2 className="w-4 h-4 me-2" />
                                     حذف
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -810,7 +797,7 @@ export function Projects() {
                   placeholder="ماذا تريد إنجازه؟"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="rounded-xl h-10 focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                  className="rounded-xl h-10 focus:ring-2 focus:ring-violet-accent/40 focus:border-violet-accent"
                   onKeyDown={(e) => e.key === 'Enter' && addTaskToProject()}
                 />
               </div>
@@ -818,7 +805,7 @@ export function Projects() {
                 <div>
                   <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
                   <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                    <SelectTrigger className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent">
+                    <SelectTrigger className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-violet-accent/40 focus:border-violet-accent">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -835,7 +822,7 @@ export function Projects() {
                     type="date"
                     value={newTaskDueDate}
                     onChange={(e) => setNewTaskDueDate(e.target.value)}
-                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-emerald-accent/40 focus:border-emerald-accent"
+                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-violet-accent/40 focus:border-violet-accent"
                   />
                 </div>
               </div>
@@ -847,9 +834,9 @@ export function Projects() {
               <Button
                 onClick={addTaskToProject}
                 disabled={!newTaskTitle.trim() || taskSubmitting}
-                className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+                className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-sm font-semibold shadow-lg shadow-violet-accent/20"
               >
-                {taskSubmitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                {taskSubmitting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
                 إضافة
               </Button>
             </DialogFooter>
@@ -865,12 +852,12 @@ export function Projects() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="relative flex-1 w-full sm:max-w-xs">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="ابحث في المشاريع..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-9 h-10 rounded-xl glass border-0 bg-transparent text-sm"
+            className="ps-9 h-10 rounded-xl bg-card border-border text-sm"
           />
         </div>
 
@@ -879,7 +866,7 @@ export function Projects() {
             <Button
               size="sm"
               onClick={openAddDialog}
-              className="h-10 rounded-xl gap-1.5 bg-emerald-accent hover:bg-emerald-accent/90 text-white text-xs font-semibold shadow-lg shadow-emerald-accent/20"
+              className="h-10 rounded-xl gap-1.5 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-xs font-semibold shadow-lg shadow-violet-accent/20"
             >
               <Plus className="w-4 h-4" />
               مشروع جديد
@@ -936,9 +923,9 @@ export function Projects() {
               <Button
                 onClick={saveProject}
                 disabled={!formName.trim() || submitting}
-                className="rounded-xl bg-emerald-accent hover:bg-emerald-accent/90 text-white text-sm font-semibold shadow-lg shadow-emerald-accent/20"
+                className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-sm font-semibold shadow-lg shadow-violet-accent/20"
               >
-                {submitting && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                {submitting && <Loader2 className="w-4 h-4 me-2 animate-spin" />}
                 {editingProject ? 'حفظ التعديلات' : 'إنشاء المشروع'}
               </Button>
             </DialogFooter>
@@ -981,7 +968,7 @@ export function Projects() {
                   className="group cursor-pointer"
                   onClick={() => setSelectedProjectId(project.id)}
                 >
-                  <div className="glass rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-emerald-accent/5 h-full flex flex-col">
+                  <div className="neo-card card-lift rounded-2xl overflow-hidden h-full flex flex-col">
                     {/* Color accent bar with gradient overlay */}
                     <div className="h-1.5 w-full relative overflow-hidden">
                       <div className="absolute inset-0" style={{ background: `linear-gradient(to left, transparent, ${project.color}, ${project.color}80)` }} />
@@ -992,9 +979,9 @@ export function Projects() {
                       <div className="flex items-start justify-between mb-4">
                         <div
                           className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: project.color + '15' }}
+                          style={{ backgroundColor: project.color + '15', color: project.color }}
                         >
-                          <FolderKanban className="w-5 h-5" style={{ color: project.color }} />
+                          <RiseGlyphIcon glyph="projects" className="w-5 h-5" />
                         </div>
                         <div className="flex items-center gap-1">
                           {/* Progress ring */}
@@ -1010,15 +997,15 @@ export function Projects() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project) }}>
-                                <Pencil className="w-4 h-4 ml-2" />
+                                <Pencil className="w-4 h-4 me-2" />
                                 تعديل
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={(e) => { e.stopPropagation(); deleteProject(project.id) }}
-                                className="text-red-500 focus:text-red-500"
+                                className="text-destructive focus:text-destructive"
                               >
-                                <Trash2 className="w-4 h-4 ml-2" />
+                                <Trash2 className="w-4 h-4 me-2" />
                                 حذف
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -1043,40 +1030,40 @@ export function Projects() {
                         <div className="flex items-center gap-3">
                           <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                             <ListChecks className="w-3.5 h-3.5" />
-                            {doneCount}/{taskCount} مهمة
+                            <span className="num" dir="ltr">{doneCount}/{taskCount}</span>
+                            مهمة
                           </span>
                           {doneCount > 0 && (
                             <span className="text-[11px] text-emerald-accent flex items-center gap-1">
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              {doneCount} مكتمل
+                              <span className="num" dir="ltr">{doneCount}</span>
+                              مكتمل
                             </span>
                           )}
                         </div>
-                        <Badge
-                          variant="secondary"
+                        <span
                           className={cn(
-                            'text-[10px] h-5 px-2 rounded-full font-medium border',
-                            project.status === 'active' && 'bg-emerald-accent/10 text-emerald-accent border-emerald-accent/20',
-                            project.status === 'completed' && 'bg-gold/10 text-gold border-gold/20',
-                            project.status === 'archived' && 'bg-muted text-muted-foreground border-muted/30'
+                            'pill',
+                            project.status === 'active' && 'pill-success',
+                            project.status === 'completed' && 'pill-lime',
+                            project.status === 'archived' && 'pill-muted'
                           )}
                         >
                           {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'متوقف'}
-                        </Badge>
+                        </span>
                       </div>
 
                       {/* Progress bar with micro text */}
                       <div className="mt-3">
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                           <motion.div
-                            className="h-full rounded-full"
-                            style={{ backgroundColor: project.color }}
+                            className="h-full rounded-full bg-gradient-to-l from-violet-accent/80 to-violet-accent"
                             initial={{ width: 0 }}
                             animate={{ width: `${calculatedProgress}%` }}
                             transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
                           />
                         </div>
-                        <p className="text-[10px] text-muted-foreground/70 mt-1 text-left">{doneCount} من {taskCount} مهام مكتملة</p>
+                        <p className="text-[10px] text-muted-foreground/70 mt-1 text-end">{doneCount} من {taskCount} مهام مكتملة</p>
                       </div>
                     </div>
                   </div>
@@ -1093,21 +1080,21 @@ export function Projects() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass rounded-2xl p-5"
+          className="neo-card rounded-2xl p-5"
         >
           <h4 className="text-sm font-bold mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-accent" />
+            <TrendingUp className="w-4 h-4 text-violet-accent" />
             ملخص المشاريع
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'إجمالي المشاريع', value: projects.length, color: 'text-foreground' },
-              { label: 'نشطة', value: projects.filter((p) => p.status === 'active').length, color: 'text-emerald-accent' },
+              { label: 'نشطة', value: projects.filter((p) => p.status === 'active').length, color: 'text-violet-accent' },
               { label: 'إجمالي المهام', value: tasks.filter((t) => t.projectId).length, color: 'text-gold' },
               { label: 'مهام مكتملة', value: tasks.filter((t) => t.projectId && t.status === 'done').length, color: 'text-forest' },
             ].map((s) => (
               <div key={s.label} className="bg-muted/50 rounded-xl p-3 text-center">
-                <p className={cn('text-xl font-bold', s.color)}>{s.value}</p>
+                <p className={cn('text-xl font-bold', s.color)}><span className="num" dir="ltr">{s.value}</span></p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
               </div>
             ))}

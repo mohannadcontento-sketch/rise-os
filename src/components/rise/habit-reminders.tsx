@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Bell, BellOff, Clock } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import { RiseIcon } from './icons'
+import { BellToggle } from './kit-v2'
 import { toast } from 'sonner'
 
 interface Habit {
@@ -98,10 +99,10 @@ export function HabitReminders({ habits, onToggleReminder }: HabitRemindersProps
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-2xl p-4 border border-gold/20"
+          className="neo-card card-lift rounded-2xl p-4 border-s-4 border-s-gold/50"
         >
           <div className="flex items-center gap-2 mb-3">
-            <Bell className="w-4 h-4 text-gold" />
+            <RiseIcon glyph="bell" hue="amber" size="sm" />
             <h3 className="text-sm font-bold">التذكيرات القادمة</h3>
           </div>
           <div className="space-y-2">
@@ -111,12 +112,12 @@ export function HabitReminders({ habits, onToggleReminder }: HabitRemindersProps
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3 }}
-                className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gold/5"
+                className="flex items-center gap-3 px-3 py-2 rounded-xl bg-card border border-border"
               >
                 <span className="text-lg">{habit.icon}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold truncate">{habit.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{habit.reminderTime}</p>
+                  <p className="text-[10px] text-muted-foreground num" dir="ltr">{habit.reminderTime}</p>
                 </div>
                 <span className="text-[10px] font-medium text-gold whitespace-nowrap">
                   {formatMinutesLeft(minutesLeft)}
@@ -164,18 +165,11 @@ export function ReminderBell({ habit, onToggle }: ReminderBellProps) {
 
   return (
     <div className="relative">
-      <motion.button
-        whileTap={{ scale: 0.85 }}
-        onClick={handleToggle}
-        className={cn(
-          'w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200',
-          habit.reminderTime
-            ? 'text-gold bg-gold/10 hover:bg-gold/20'
-            : 'text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/40'
-        )}
-      >
-        {habit.reminderTime ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
-      </motion.button>
+      <BellToggle
+        enabled={!!habit.reminderTime}
+        onToggle={() => handleToggle()}
+        className="h-8 w-8 rounded-lg"
+      />
 
       {/* Time input popover */}
       {settingTime && (
@@ -183,7 +177,7 @@ export function ReminderBell({ habit, onToggle }: ReminderBellProps) {
           initial={{ opacity: 0, scale: 0.9, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="absolute top-full mt-1 left-0 z-30 glass rounded-xl p-3 shadow-lg border border-white/10 dark:border-white/5 min-w-[180px]"
+          className="absolute top-full mt-1 left-0 z-30 bg-popover text-popover-foreground rounded-2xl p-3 shadow-lift border border-border min-w-[180px]"
         >
           <div className="flex items-center gap-2 mb-2">
             <Clock className="w-3.5 h-3.5 text-gold" />
@@ -193,14 +187,15 @@ export function ReminderBell({ habit, onToggle }: ReminderBellProps) {
             type="time"
             value={timeInput}
             onChange={(e) => setTimeInput(e.target.value)}
-            className="rounded-lg h-8 text-xs text-center mb-2"
+            className="rounded-lg h-8 text-xs text-center mb-2 num"
+            dir="ltr"
           />
           <div className="flex gap-1.5">
             <Button
               size="sm"
               variant="outline"
               onClick={handleCancel}
-              className="flex-1 h-7 text-[10px] rounded-lg"
+              className="flex-1 h-7 text-[10px] rounded-lg border-border bg-card hover:bg-secondary"
             >
               إلغاء
             </Button>
@@ -208,7 +203,7 @@ export function ReminderBell({ habit, onToggle }: ReminderBellProps) {
               size="sm"
               onClick={handleSave}
               disabled={!timeInput}
-              className="flex-1 h-7 text-[10px] rounded-lg bg-gold hover:bg-gold/90 text-forest-dark"
+              className="flex-1 h-7 text-[10px] rounded-lg bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90"
             >
               حفظ
             </Button>
