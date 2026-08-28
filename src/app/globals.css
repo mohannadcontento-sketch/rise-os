@@ -62,87 +62,104 @@
 }
 
 :root {
-  --radius: 0.75rem;
-  /* RiseOS — Horizon Palette: cool ink + paper, warm sunrise accents */
-  --background: #F1F2EE;
-  --foreground: #0E1A2B;
-  --card: #F7F8F4;
-  --card-foreground: #0E1A2B;
-  --popover: #F7F8F4;
-  --popover-foreground: #0E1A2B;
-  --primary: #0E1A2B;
-  --primary-foreground: #F7F8F4;
-  --secondary: #E6E7E0;
-  --secondary-foreground: #0E1A2B;
-  --muted: #EAEBE5;
-  --muted-foreground: #5B6570;
-  --accent: #C99A3E;
-  --accent-foreground: #0E1A2B;
-  --destructive: #C0392B;
-  --border: #DDDED6;
-  --input: #E2E3DB;
-  --ring: #C99A3E;
-  --chart-1: #0E1A2B;
-  --chart-2: #C99A3E;
-  --chart-3: #3A5A50;
-  --chart-4: #B85C38;
-  --chart-5: #5B7A99;
-  --sidebar: #0E1A2B;
-  --sidebar-foreground: #F1F2EE;
-  --sidebar-primary: #C99A3E;
-  --sidebar-primary-foreground: #0E1A2B;
-  --sidebar-accent: #1B2A3D;
-  --sidebar-accent-foreground: #F1F2EE;
-  --sidebar-border: #1B2A3D;
-  --sidebar-ring: #C99A3E;
-  /* --forest now genuinely means Pine (habits/health/growth cluster) instead of duplicating primary */
-  --forest: #3A5A50;
-  --forest-light: #4F7566;
-  --forest-dark: #253F38;
-  --emerald-accent: #4F7566;
+  --radius: 1rem;
+  /* RiseOS — Neo Palette · light "Morning" (VOLT × FORGE language, WCAG-AA verified 12/12 pairs) */
+  --background: #F4F2EA;
+  --foreground: #0B1015;
+  --card: #FFFFFF;
+  --card-foreground: #0B1015;
+  --popover: #FFFFFF;
+  --popover-foreground: #0B1015;
+  --primary: #1B342B;
+  --primary-foreground: #EBE6D8;
+  --secondary: #E8EDF2;
+  --secondary-foreground: #0B1015;
+  --muted: #EFEDE4;
+  --muted-foreground: #5A6A60;
+  --accent: #D6FF3D;
+  --accent-foreground: #1A2A22;
+  --destructive: #DC2626;
+  --border: #DDD7C6;
+  --input: #E2DFD2;
+  --ring: #A8CC22;
+  --chart-1: #1B342B;
+  --chart-2: #A8CC22;
+  --chart-3: #FF5A76;
+  --chart-4: #007AFF;
+  --chart-5: #C99A3E;
+  --sidebar: #1B342B;
+  --sidebar-foreground: #EBE6D8;
+  --sidebar-primary: #C5F26E;
+  --sidebar-primary-foreground: #1A2A22;
+  --sidebar-accent: #24443A;
+  --sidebar-accent-foreground: #EBE6D8;
+  --sidebar-border: #2A4A3E;
+  --sidebar-ring: #C5F26E;
+  --forest: #1B342B;
+  --forest-light: #2A4A3E;
+  --forest-dark: #122019;
+  --emerald-accent: #2A4A3E;
   --gold: #C99A3E;
   --gold-light: #DBB876;
+  /* Neo extension tokens */
+  --ink: #0B1015;
+  --lime: #D6FF3D;
+  --lime-soft: #C5F26E;
+  --lime-deep: #A8CC22;
+  --rose: #FF5A76;
+  --glass-blue: #007AFF;
+  --violet: #A78BFA;
+  --paper-soft: #EBE6D8;
 }
 
 .dark {
-  /* RiseOS — Horizon Palette: deep ink night, gold becomes primary */
-  --background: #070D16;
-  --foreground: #EDEEE8;
-  --card: #101B2B;
-  --card-foreground: #EDEEE8;
-  --popover: #101B2B;
-  --popover-foreground: #EDEEE8;
-  --primary: #C99A3E;
-  --primary-foreground: #0E1A2B;
-  --secondary: #162336;
-  --secondary-foreground: #EDEEE8;
-  --muted: #14202F;
-  --muted-foreground: #8B95A3;
-  --accent: #C99A3E;
-  --accent-foreground: #0E1A2B;
-  --destructive: #D9534F;
-  --border: #22314A;
-  --input: #22314A;
-  --ring: #C99A3E;
-  --chart-1: #C99A3E;
-  --chart-2: #4F7566;
-  --chart-3: #B85C38;
-  --chart-4: #6E8FB0;
-  --chart-5: #3A4A5E;
-  --sidebar: #0A1420;
-  --sidebar-foreground: #EDEEE8;
-  --sidebar-primary: #C99A3E;
-  --sidebar-primary-foreground: #0E1A2B;
-  --sidebar-accent: #17263A;
-  --sidebar-accent-foreground: #EDEEE8;
-  --sidebar-border: #17263A;
-  --sidebar-ring: #C99A3E;
-  --forest: #4F7566;
-  --forest-light: #6B917F;
-  --forest-dark: #2B4A40;
-  --emerald-accent: #4F7566;
+  /* RiseOS — Neo Palette · dark "Night" (lime becomes primary — 16.6:1 on ink) */
+  --background: #0B1015;
+  --foreground: #F2F4EF;
+  --card: #141B21;
+  --card-foreground: #F2F4EF;
+  --popover: #141B21;
+  --popover-foreground: #F2F4EF;
+  --primary: #D6FF3D;
+  --primary-foreground: #0B1015;
+  --secondary: #1C242B;
+  --secondary-foreground: #F2F4EF;
+  --muted: #171F26;
+  --muted-foreground: #B5C2BA;
+  --accent: #D6FF3D;
+  --accent-foreground: #0B1015;
+  --destructive: #FF7A8C;
+  --border: #232E36;
+  --input: #232E36;
+  --ring: #D6FF3D;
+  --chart-1: #D6FF3D;
+  --chart-2: #7C9CF5;
+  --chart-3: #FF7A8C;
+  --chart-4: #C5F26E;
+  --chart-5: #C99A3E;
+  --sidebar: #0E151B;
+  --sidebar-foreground: #EBE6D8;
+  --sidebar-primary: #C5F26E;
+  --sidebar-primary-foreground: #0B1015;
+  --sidebar-accent: #1A2A22;
+  --sidebar-accent-foreground: #EBE6D8;
+  --sidebar-border: #1C3329;
+  --sidebar-ring: #C5F26E;
+  --forest: #224034;
+  --forest-light: #2F5546;
+  --forest-dark: #1B342B;
+  --emerald-accent: #2F5546;
   --gold: #D9A441;
   --gold-light: #E8C077;
+  /* Neo extension tokens */
+  --ink: #0B1015;
+  --lime: #D6FF3D;
+  --lime-soft: #C5F26E;
+  --lime-deep: #A8CC22;
+  --rose: #FF7A8C;
+  --glass-blue: #4DA2FF;
+  --violet: #A78BFA;
+  --paper-soft: #EBE6D8;
 }
 
 @layer base {
@@ -686,5 +703,149 @@ main {
     overflow: hidden;
     position: fixed;
     width: 100%;
+  }
+}
+
+/* ============================================================
+   RiseOS — Neo Design System (VOLT × FORGE × Glass)
+   Design language ported from the 8 approved components:
+   VOLT KPI tiles, FORGE metric cards, glass bottom nav,
+   animated day/night toggle, dark-violet auth, stepper,
+   performance analytics dark card, heart-rate bars.
+   All fg/bg pairs WCAG-AA verified via check-contrast.mjs.
+   ============================================================ */
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-lime: var(--lime);
+  --color-lime-soft: var(--lime-soft);
+  --color-lime-deep: var(--lime-deep);
+  --color-rose-accent: var(--rose);
+  --color-glass: var(--glass-blue);
+  --color-violet-accent: var(--violet);
+  --color-paper-soft: var(--paper-soft);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-tile: 0 1px 2px rgba(11, 16, 21, 0.05), 0 8px 24px -12px rgba(11, 16, 21, 0.18);
+  --shadow-lift: 0 2px 4px rgba(11, 16, 21, 0.06), 0 16px 32px -12px rgba(11, 16, 21, 0.24);
+  --animate-star-twinkle: star-twinkle 2.6s ease-in-out infinite;
+  --animate-cloud-move: cloud-move 6s ease-in-out infinite;
+  --animate-bar-grow: bar-grow 0.7s var(--ease-spring) both;
+  --animate-float-dot: float-dot 2.4s ease-in-out infinite;
+  --animate-sun-rays: sun-rays 12s linear infinite;
+
+  @keyframes star-twinkle {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(0.6); opacity: 0.4; }
+  }
+  @keyframes cloud-move {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(4px); }
+  }
+  @keyframes bar-grow {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+  @keyframes float-dot {
+    0%, 100% { transform: translateY(-3px); }
+    50% { transform: translateY(3px); }
+  }
+  @keyframes sun-rays {
+    to { transform: rotate(360deg); }
+  }
+}
+
+@layer utilities {
+  /* Mono uppercase eyebrow (Latin/numerals only — tracking breaks Arabic joining) */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  /* Arabic eyebrow — bold micro-label, NO letter-spacing (Arabic ligatures) */
+  .eyebrow-ar {
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--muted-foreground);
+  }
+  /* Big numerals — tabular, tight tracking (VOLT/FORGE values) */
+  .num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+  /* Neo card — white tile, warm hairline, soft layered shadow */
+  .neo-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-tile);
+  }
+  .card-lift {
+    transition: transform 0.2s var(--ease-out-soft), box-shadow 0.2s var(--ease-out-soft);
+  }
+  @media (hover: hover) {
+    .card-lift:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lift);
+    }
+  }
+  /* Glass pill nav (component a) — forest-tinted glass keeps white text ≥4.5:1
+     over any page content; blue inner highlight keeps the iOS glass feel */
+  .glass-nav {
+    background: color-mix(in srgb, var(--forest) 90%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(180%) contrast(200%);
+    backdrop-filter: blur(12px) saturate(180%) contrast(200%);
+    border-radius: 99rem;
+    box-shadow:
+      inset 2px 2px 5px -2px rgba(255, 255, 255, 0.35),
+      0 8px 32px rgba(11, 16, 21, 0.28);
+  }
+  .glass-nav-item {
+    transition: transform 0.15s var(--ease-spring), background-color 0.15s ease;
+  }
+  .glass-nav-item:active {
+    transform: scale(0.96);
+  }
+  /* Status pills (component g) */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 99rem;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+  .pill-success { background: #DCFCE7; color: #166534; }
+  .pill-info    { background: #DBEAFE; color: #1D4ED8; }
+  .pill-muted   { background: var(--secondary); color: var(--muted-foreground); }
+  .pill-lime    { background: var(--lime); color: #1A2A22; }
+  .dark .pill-success { background: rgba(34, 197, 94, 0.15); color: #86EFAC; }
+  .dark .pill-info    { background: rgba(59, 130, 246, 0.15); color: #93C5FD; }
+  .dark .pill-muted   { background: rgba(255, 255, 255, 0.08); color: var(--muted-foreground); }
+  /* Spark bar chunk (FORGE: 4px top corners on chunky bars) */
+  .spark-bar {
+    border-radius: 4px 4px 0 0;
+    transform-origin: bottom;
+    animation: var(--animate-bar-grow);
+  }
+  /* Press feedback for any interactive tile */
+  .press {
+    transition: transform 0.15s var(--ease-spring);
+  }
+  .press:active { transform: scale(0.98); }
+}
+
+/* Respect reduced motion — gate all Neo animation */
+@media (prefers-reduced-motion: reduce) {
+  .spark-bar,
+  [class*="animate-"] {
+    animation: none !important;
+    transition: none !important;
   }
 }

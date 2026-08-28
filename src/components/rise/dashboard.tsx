@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { KpiTile, MetricCard, Pill } from './neo'
 import {
   AreaChart,
   Area,
@@ -1274,6 +1275,24 @@ export default function Dashboard() {
   const habitTrend = (dailyScores || []).map((d: any) => d.habitScore || 0)
   const focusTrend = (dailyScores || []).map((d: any) => d.focusScore || 0)
 
+  /* Neo: weekly aggregates for the FORGE metric card */
+  const trendDelta = (arr: number[]) => {
+    if (!arr || arr.length < 2) return undefined
+    const diff = Math.round(arr[arr.length - 1] - arr[0])
+    if (diff === 0) return '±'
+    return `${diff > 0 ? '+' : '−'}${Math.abs(diff)}`
+  }
+  const trendDir = (arr: number[]): 'up' | 'down' | 'flat' => {
+    if (!arr || arr.length < 2) return 'flat'
+    const diff = arr[arr.length - 1] - arr[0]
+    return diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'
+  }
+  const weekAvg = chartData.length
+    ? Math.round(chartData.reduce((s: number, d: any) => s + (d.score || 0), 0) / chartData.length)
+    : 0
+  const bestIdx = chartData.reduce((best: number, d: any, i: number) =>
+    (d.score || 0) > ((chartData[best] as any)?.score || 0) ? i : best, 0)
+
   return (
     <motion.div
       className="space-y-6 p-4 lg:p-6"
@@ -1414,105 +1433,82 @@ export default function Dashboard() {
 
       {/* ══════════ 3. Score Cards Row ══════════ */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        {/* Morning Score */}
+        {/* Morning Score — Neo VOLT tile */}
         <motion.div variants={itemVariants}>
-          <PremiumGlass className="p-4 lg:p-5 cursor-default">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <CircularProgress
-                value={today.morningScore}
-                size={56}
-                strokeWidth={4}
-                color="stroke-gold"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">درجة الصباح</p>
-                <p className="text-lg sm:text-xl font-bold text-foreground">
-                  <AnimatedNumber value={today.morningScore} />
-                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">/ ١٠٠</span>
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
-              <MiniSparkline data={morningTrend} color="bg-gold" />
-            </div>
-          </PremiumGlass>
+          <KpiTile
+            label="درجة الصباح"
+            icon={Sun}
+            value={<AnimatedNumber value={today.morningScore} />}
+            unit="/ ١٠٠"
+            delta={trendDelta(morningTrend)}
+            deltaDir={trendDir(morningTrend)}
+            spark={morningTrend.slice(-7)}
+            sparkTone="mixed"
+            footer="اتجاه آخر ٧ أيام"
+          />
         </motion.div>
 
-        {/* Tasks Completed */}
+        {/* Tasks Completed — Neo VOLT tile */}
         <motion.div variants={itemVariants}>
-          <PremiumGlass className="p-4 lg:p-5 cursor-default">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-accent/10 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-accent" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">المهام المكتملة</p>
-                <p className="text-lg sm:text-xl font-bold text-foreground">
-                  <AnimatedNumber value={today.tasksCompleted} />
-                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">
-                    / {toArabicNum(today.tasksTotal)}
-                  </span>
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
-              <MiniSparkline data={taskTrend} color="bg-emerald-accent" />
-            </div>
-          </PremiumGlass>
+          <KpiTile
+            label="المهام المكتملة"
+            icon={CheckCircle2}
+            value={<AnimatedNumber value={today.tasksCompleted} />}
+            unit={`/ ${toArabicNum(today.tasksTotal)}`}
+            delta={trendDelta(taskTrend)}
+            deltaDir={trendDir(taskTrend)}
+            spark={taskTrend.slice(-7)}
+            sparkTone="lime"
+            footer="اتجاه آخر ٧ أيام"
+          />
         </motion.div>
 
-        {/* Habits */}
+        {/* Habits — Neo VOLT tile */}
         <motion.div variants={itemVariants}>
-          <PremiumGlass className="p-4 lg:p-5 cursor-default">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-forest/10 flex items-center justify-center shrink-0">
-                <Target className="w-6 h-6 sm:w-7 sm:h-7 text-forest" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">العادات</p>
-                <p className="text-lg sm:text-xl font-bold text-foreground">
-                  <AnimatedNumber value={today.habitsCompleted} />
-                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">
-                    / {toArabicNum(today.habitsTotal)}
-                  </span>
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
-              <MiniSparkline data={habitTrend} color="bg-forest" />
-            </div>
-          </PremiumGlass>
+          <KpiTile
+            label="العادات"
+            icon={Target}
+            value={<AnimatedNumber value={today.habitsCompleted} />}
+            unit={`/ ${toArabicNum(today.habitsTotal)}`}
+            delta={trendDelta(habitTrend)}
+            deltaDir={trendDir(habitTrend)}
+            spark={habitTrend.slice(-7)}
+            sparkTone="lime"
+            footer="اتجاه آخر ٧ أيام"
+          />
         </motion.div>
 
-        {/* Focus */}
+        {/* Focus — Neo VOLT tile */}
         <motion.div variants={itemVariants}>
-          <PremiumGlass className="p-4 lg:p-5 cursor-default">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gold/10 flex items-center justify-center shrink-0">
-                <Clock className="w-6 h-6 sm:w-7 sm:h-7 text-gold" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] sm:text-xs text-muted-foreground mb-0.5">التركيز</p>
-                <p className="text-lg sm:text-xl font-bold text-foreground">
-                  <AnimatedNumber value={today.focusMin} />
-                  <span className="text-xs sm:text-sm font-normal text-muted-foreground mr-1">دقيقة</span>
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 sm:mt-3 flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">الاتجاه</span>
-              <MiniSparkline data={focusTrend} color="bg-gold" />
-            </div>
-          </PremiumGlass>
+          <KpiTile
+            label="التركيز"
+            icon={Clock}
+            value={<AnimatedNumber value={today.focusMin} />}
+            unit="دقيقة"
+            delta={trendDelta(focusTrend)}
+            deltaDir={trendDir(focusTrend)}
+            spark={focusTrend.slice(-7)}
+            sparkTone="rose"
+            footer="اتجاه آخر ٧ أيام"
+          />
         </motion.div>
       </motion.div>
 
-      {/* ══════════ 3. Weekly Score Chart ══════════ */}
+      {/* ══════════ 3. Weekly Score — FORGE card + chart ══════════ */}
       {chartData.length > 0 && (
-        <motion.div variants={itemVariants}>
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+          {/* FORGE forest metric card */}
+          <MetricCard
+            variant="forest"
+            title="متوسط الإنتاجية الأسبوعي"
+            value={weekAvg}
+            unit="٪"
+            pill={<Pill tone="lime">آخر ٧ أيام</Pill>}
+            bars={chartData.map((d: any, i: number) => ({ value: d.score || 0, accent: i === bestIdx }))}
+            caption={`أفضل يوم: ${chartData[bestIdx]?.dayLabel ?? '—'} • درجة ${Math.round(chartData[bestIdx]?.score || 0)}`}
+          />
+          {/* Weekly area chart */}
+          <div className="lg:col-span-2">
           <Card className="border-0 shadow-none bg-transparent gap-0 py-0">
             <CardHeader className="pb-3 pt-0">
               <SectionHeader icon={TrendingUp} iconColor="text-emerald-accent">
@@ -1561,6 +1557,7 @@ export default function Dashboard() {
               </PremiumGlass>
             </CardContent>
           </Card>
+          </div>
         </motion.div>
       )}
 

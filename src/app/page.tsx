@@ -32,6 +32,8 @@ import { cn } from '@/lib/utils'
 import type { ModuleId } from '@/store/app-store'
 import { apiPost, apiGet, clearAllCache } from '@/lib/api-fetch'
 import { ModuleErrorBoundary } from '@/components/module-error-boundary'
+import { ThemeToggle } from '@/components/rise/neo'
+import { GlassNav } from '@/components/rise/glass-nav'
 
 // Keyboard shortcuts hook — lightweight, can be eagerly imported
 import { useKeyboardShortcuts } from '@/components/rise/keyboard-shortcuts'
@@ -229,7 +231,6 @@ export default function RiseOSApp() {
     journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
   }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
   const [fabOpen, setFabOpen] = useState(false)
-  const [themeRotating, setThemeRotating] = useState(false)
   const mountedRef = useRef(false)
 
   // ─── Day-rollover detection ───────────────────────────────────────────
@@ -414,13 +415,6 @@ export default function RiseOSApp() {
     return `${days[now.getDay()]}، ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
   }, [])
 
-  /* Theme toggle with rotation */
-  const handleThemeToggle = useCallback(() => {
-    setThemeRotating(true)
-    setTheme(theme === 'dark' ? 'light' : 'dark')
-    setTimeout(() => setThemeRotating(false), 500)
-  }, [theme, setTheme])
-
   const ActiveComponent = moduleComponents[activeModule]
   const ModuleIcon = moduleIconMap[activeModule]
 
@@ -487,24 +481,8 @@ export default function RiseOSApp() {
           {/* Notifications */}
           <Suspense fallback={null}><NotificationBell /></Suspense>
 
-          {/* Theme toggle with rotation */}
-          {mounted && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onClick={handleThemeToggle}
-              aria-label={theme === 'dark' ? 'التبديل للوضع الفاتح' : 'التبديل للوضع الداكن'}
-            >
-              <span className={cn(themeRotating && 'theme-rotate', 'inline-flex')}>
-                {theme === 'dark' ? (
-                  <Sun className="w-4 h-4" />
-                ) : (
-                  <Moon className="w-4 h-4" />
-                )}
-              </span>
-            </Button>
-          )}
+          {/* Animated day/night theme toggle (Neo) */}
+          {mounted && <ThemeToggle />}
 
           {/* User avatar / logout */}
           {mounted && auth && (
@@ -529,7 +507,7 @@ export default function RiseOSApp() {
         <div className="flex-1 overflow-y-auto" style={{ containIntrinsicSize: 'auto' }}>
             <div
               key={activeModule}
-              className="p-3 sm:p-4 md:p-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
+              className="p-3 sm:p-4 md:p-6 pb-28 lg:pb-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
             >
               {/* Module title with accent bar & date */}
               <div className="mb-4 sm:mb-6 flex items-stretch gap-2 sm:gap-3 module-title-animate" key={`title-${activeModule}`}>
@@ -552,6 +530,9 @@ export default function RiseOSApp() {
             </div>
         </div>
       </main>
+
+      {/* Mobile glass bottom navigation (Neo) */}
+      <GlassNav />
 
       {/* Command palette — lazy loaded */}
       <Suspense fallback={null}>

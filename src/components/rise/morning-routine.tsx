@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Stepper, type StepStatus } from './neo'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -886,6 +887,29 @@ export default function MorningRoutine() {
               transition={{ duration: 0.6, ease: 'easeOut' }}
             />
           </div>
+        </div>
+      </motion.div>
+
+      {/* ── Neo Stepper — section-by-section routine progress ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.12 }}
+      >
+        <div className="neo-card p-5">
+          <p className="eyebrow-ar mb-4">مراحل الروتين</p>
+          <Stepper
+            steps={SECTIONS.map((sec) => {
+              const done = sec.items.filter((i) => completedIds.has(i.id)).length
+              const status: StepStatus =
+                done === sec.items.length ? 'completed' : done > 0 ? 'active' : 'pending'
+              return {
+                title: sec.title,
+                description: `${arabicNum(done)} من ${arabicNum(sec.items.length)} مهام`,
+                status,
+              }
+            })}
+          />
         </div>
       </motion.div>
 
