@@ -336,8 +336,13 @@ export function Stepper({
 
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
+  // rAF-deferred mount flag: avoids synchronous setState-in-effect
+  // (react-compiler lint rule) while preventing hydration mismatch.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   const isDark = mounted && resolvedTheme === "dark";
 
   return (
