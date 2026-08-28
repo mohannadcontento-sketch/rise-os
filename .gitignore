@@ -78,3 +78,10 @@ MCP_SETUP.md
 supabase-migration-*.sql
 supabase-schema.sql
 *.db
+
+# === local dev/test artifacts (do not commit) ===
+.playwright-mcp/
+.zcode/
+test-results/
+.tmp-*.mjs
+.env.audit-backup

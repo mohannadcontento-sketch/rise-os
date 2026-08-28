@@ -12,6 +12,20 @@ export function getToday(): string {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Local-calendar YYYY-MM-DD for an arbitrary Date — never UTC-shifted.
+ * `.toISOString().split('T')[0]` returns the UTC day, which is the
+ * PREVIOUS calendar day for any time between local midnight and UTC
+ * midnight in positive-offset timezones (e.g. Egypt, UTC+2/+3).
+ */
+export function toLocalDateStr(d: Date): string {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+
 export function getWeekDays(): string[] {
   const start = startOfWeek(new Date(), { weekStartsOn: 6 }) // Saturday
   const end = new Date()

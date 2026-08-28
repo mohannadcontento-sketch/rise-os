@@ -90,11 +90,17 @@ export function withAuth<T = any>(
   return async (req: NextRequest): Promise<T | NextResponse> => {
     try {
       const userId = await requireAuth(req)
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'مطلوب تسجيل الدخول', code: 'UNAUTHORIZED' },
+          { status: 401 }
+        )
+      }
       const { setCurrentAuthToken } = await import('@/lib/data')
       const token = req.headers.get('Authorization')?.replace('Bearer ', '') || ''
       setCurrentAuthToken(token)
 
-      return await handler(req, userId as string)
+      return await handler(req, userId)
     } catch (err) {
       if (err instanceof AuthError) {
         return NextResponse.json({ error: err.message, code: 'UNAUTHORIZED' }, { status: err.statusCode })

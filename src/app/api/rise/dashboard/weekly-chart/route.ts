@@ -13,9 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) {
-      return NextResponse.json({ scores: [] })
-    }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const weekDays: string[] = []
     for (let i = 6; i >= 0; i--) {

@@ -132,7 +132,7 @@ function formatBytes(bytes: number | null | undefined): string {
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   try {
-    return new Date(dateStr).toLocaleDateString('ar-SA', {
+    return new Date(dateStr).toLocaleDateString('ar-EG', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -145,7 +145,7 @@ function formatDate(dateStr: string | null | undefined): string {
 function formatDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   try {
-    return new Date(dateStr).toLocaleDateString('ar-SA', {
+    return new Date(dateStr).toLocaleDateString('ar-EG', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

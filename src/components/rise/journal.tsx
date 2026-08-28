@@ -34,6 +34,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
+import { getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -202,7 +203,7 @@ export default function Journal() {
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [tagInput, setTagInput] = useState('')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = getToday()
 
   /* ─── Fetch ─── */
   const { refreshKey } = useDataRefresh()
@@ -336,7 +337,7 @@ export default function Journal() {
   /* ─── Helpers ─── */
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
-    return d.toLocaleDateString('ar-SA', {
+    return d.toLocaleDateString('ar-EG', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -459,7 +460,7 @@ export default function Journal() {
                 {MOOD_EMOJIS.find(m => m.value === form.mood)?.label}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {new Date().toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
             </div>
             {moodTrend.length >= 2 && (
@@ -903,7 +904,7 @@ export default function Journal() {
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <CalendarDays className="w-3 h-3" />
                                 <span>
-                                  {new Date(entry.date).toLocaleDateString('ar-SA', {
+                                  {new Date(entry.date).toLocaleDateString('ar-EG', {
                                     month: 'short',
                                     day: 'numeric',
                                   })}

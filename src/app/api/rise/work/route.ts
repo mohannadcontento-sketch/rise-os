@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ sessions: [] })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const sessions = await data.workSessions.list(userId, 50)
     return NextResponse.json({ sessions })

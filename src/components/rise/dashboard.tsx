@@ -56,6 +56,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -825,7 +826,7 @@ function MotivationalWall() {
   })
   const [seenToday, setSeenToday] = useState<Set<number>>(() => {
     try {
-      const todayKey = new Date().toISOString().split('T')[0]
+      const todayKey = getToday()
       const stored = localStorage.getItem('rise-seen-quotes-today')
       if (stored) {
         const parsed = JSON.parse(stored) as { date: string; indices: number[] }
@@ -850,7 +851,7 @@ function MotivationalWall() {
 
   // Save seen today
   useEffect(() => {
-    const todayKey = new Date().toISOString().split('T')[0]
+    const todayKey = getToday()
     localStorage.setItem('rise-seen-quotes-today', JSON.stringify({
       date: todayKey,
       indices: [...seenToday],
@@ -1675,7 +1676,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] text-muted-foreground">
-                          الموعد: {goal.deadline ? new Date(goal.deadline).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' }) : '—'}
+                          الموعد: {goal.deadline ? new Date(goal.deadline).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' }) : '—'}
                         </p>
                         <GoalDeltaBadge goalId={goal.id} />
                       </div>

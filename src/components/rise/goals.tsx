@@ -360,7 +360,7 @@ export function GoalsView() {
   function formatDate(dateStr: string) {
     if (!dateStr) return ''
     const d = new Date(dateStr)
-    return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })
+    return d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
   function getDeadlineInfo(deadline: string) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { pickAllowed } from '@/lib/sanitize'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,9 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) {
-      return NextResponse.json({ goals: [] })
-    }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const goals = await data.goals.list(userId)
     return NextResponse.json({ goals })
@@ -31,11 +31,16 @@ export async function POST(req: NextRequest) {
     // Add milestone to existing goal: { goalId, milestoneTitle }
     if (body.goalId && body.milestoneTitle) {
       const milestone = await data.goals.addMilestone(body.goalId, userId, body.milestoneTitle)
+      bustAggregateCache(userId)
       return NextResponse.json(milestone)
     }
 
-    // Create new goal
-    const goal = await data.goals.create(userId, body)
+    // Create new goal — whitelist columns (legacy client fields break the write)
+    const goal = await data.goals.create(
+      userId,
+      pickAllowed(body, ['title', 'vision', 'why', 'type', 'progress', 'status', 'deadline'])
+    )
+    bustAggregateCache(userId)
     return NextResponse.json(goal)
   } catch (error) {
     console.error('Goals POST error:', error)
@@ -68,11 +73,22 @@ export async function PUT(req: NextRequest) {
           await data.goals.update(goal.id, userId, { progress, status: progress === 100 ? 'done' : 'active' })
         }
       } catch { /* non-critical */ }
+      bustAggregateCache(userId)
       return NextResponse.json(updated)
     }
 
     const { id, ...updateBody } = body
-    const goal = await data.goals.update(id, userId, updateBody)
+    // FIX: a stale client used to PUT without a valid id → Postgres
+    // 'invalid input syntax for type uuid: "undefined"'. Fail cleanly instead.
+    if (!id || typeof id !== 'string' || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: 'معرّف الهدف مطلوب' }, { status: 400 })
+    }
+    const goal = await data.goals.update(
+      id,
+      userId,
+      pickAllowed(updateBody, ['title', 'vision', 'why', 'type', 'progress', 'status', 'deadline'])
+    )
+    bustAggregateCache(userId)
     return NextResponse.json(goal)
   } catch (error) {
     console.error('Goals PUT error:', error)
@@ -91,6 +107,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.goals.remove(id, userId)
+    bustAggregateCache(userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Goals DELETE error:', error)

@@ -74,6 +74,7 @@ import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { AVATARS, type AvatarItem } from '@/lib/avatars'
+import { getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -249,7 +250,7 @@ export default function Settings() {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `riseos-export-${new Date().toISOString().split('T')[0]}.json`
+        a.download = `riseos-export-${getToday()}.json`
         a.click()
         URL.revokeObjectURL(url)
         toast.success('تم تصدير البيانات بنجاح', { id: 'export' })

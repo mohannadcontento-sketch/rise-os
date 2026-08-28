@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ records: [], summary: { income: 0, expense: 0, balance: 0 } })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const records = await data.financeRecords.list(userId)
     return NextResponse.json({ records })

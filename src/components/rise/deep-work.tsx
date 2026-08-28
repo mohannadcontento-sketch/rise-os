@@ -71,6 +71,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { getToday, toLocalDateStr } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -687,7 +688,7 @@ export default function DeepWork() {
   const stats = useMemo(() => {
     const sessions = data?.sessions || []
     const totalMin = sessions.reduce((sum, s) => sum + (s.actualMin || 0), 0)
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = getToday()
     const todaySessions = sessions.filter((s) => s.startedAt?.startsWith(todayStr))
     const todayMin = todaySessions.reduce((sum, s) => sum + (s.actualMin || 0), 0)
     const avgMin = sessions.length
@@ -703,7 +704,7 @@ export default function DeepWork() {
     for (let i = 13; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().split('T')[0]
+      const key = toLocalDateStr(d)
       days[key] = 0
     }
     sessions.forEach((s) => {
@@ -713,7 +714,7 @@ export default function DeepWork() {
       }
     })
     return Object.entries(days).map(([date, min]) => ({
-      day: new Date(date).toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric' }),
+      day: new Date(date).toLocaleDateString('ar-EG', { weekday: 'short', day: 'numeric' }),
       دقائق: min,
     }))
   }, [data])
@@ -1362,7 +1363,7 @@ export default function DeepWork() {
                           <span className={cn('font-semibold', session.actualMin >= 45 ? 'text-emerald-accent' : session.actualMin >= 20 ? 'text-gold' : '')}>{session.actualMin} دقيقة</span>
                           <span>•</span>
                           <span>
-                            {new Date(session.startedAt).toLocaleDateString('ar-SA', {
+                            {new Date(session.startedAt).toLocaleDateString('ar-EG', {
                               month: 'short',
                               day: 'numeric',
                               hour: '2-digit',

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const userId = await requireAuth(req)
   setCurrentAuthToken(req)
-  if (!userId) {
-    return NextResponse.json({ projects: [] })
-  }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
   try {
     const projects = await data.projects.list(userId)
@@ -28,6 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const project = await data.projects.create(userId, body)
+    bustAggregateCache(userId)
     return NextResponse.json(project)
   } catch (error) {
     console.error('Projects POST error:', error)
@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest) {
   try {
     const { id, ...body } = await req.json()
     const project = await data.projects.update(id, userId, body)
+    bustAggregateCache(userId)
     return NextResponse.json(project)
   } catch (error) {
     console.error('Projects PUT error:', error)
@@ -61,6 +62,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.projects.remove(id, userId)
+    bustAggregateCache(userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Projects DELETE error:', error)

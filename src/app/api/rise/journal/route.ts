@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ journal: null, recentJournals: [] })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const today = getToday()
 
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
     // Remove date from body since upsert handles it via the date parameter
     const { date: _d, ...journalData } = body
     const result = await data.journals.upsert(userId, journalDate, journalData)
+    bustAggregateCache(userId)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Journal POST error:', error)

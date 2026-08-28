@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ notifications: [], unreadCount: 0 })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
     const unreadOnly = searchParams.get('unreadOnly') === 'true'

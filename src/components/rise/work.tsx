@@ -259,6 +259,16 @@ export default function WorkSessions() {
         return
       }
       const session = await res.json()
+      // FIX: apiFetch queues writes while offline and returns a fake
+      // `{ success: true, offline: true }` response — such a "session" has
+      // no real id, finalize would silently no-op, and the whole session
+      // (plus its XP) was lost. Fail closed with a clear message instead.
+      if (!session?.id || session?.offline) {
+        toast.error('بدء جلسة العمل يتطلب اتصالاً بالإنترنت', {
+          description: 'أعد المحاولة عند استعادة الاتصال',
+        })
+        return
+      }
       setSessionId(session.id)
       setPlannedMin(total)
       setSessionTitle(titleInput.trim())

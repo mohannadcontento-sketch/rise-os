@@ -1,6 +1,5 @@
-import { isAdmin } from "@/lib/audit";
+import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin, ADMIN_EMAIL } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +7,9 @@ export const dynamic = 'force-dynamic'
 // GET all users
 export async function GET(request: NextRequest) {
   try {
-    const userId = await requireAuth(request)
-    if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+    const adminId = await requireAdmin(request)
+    if (!adminId) {
+      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
     const admin = await getSupabaseAdmin()
@@ -50,9 +49,9 @@ export async function GET(request: NextRequest) {
 // POST — update user role
 export async function POST(request: NextRequest) {
   try {
-    const userId = await requireAuth(request)
-    if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+    const adminId = await requireAdmin(request)
+    if (!adminId) {
+      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
     const { userId: targetUserId, role } = await request.json()
@@ -87,9 +86,9 @@ export async function POST(request: NextRequest) {
 // DELETE — remove user
 export async function DELETE(request: NextRequest) {
   try {
-    const adminId = await requireAuth(request)
+    const adminId = await requireAdmin(request)
     if (!adminId) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
     const { userId: targetUserId } = await request.json()

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { pickAllowed } from '@/lib/sanitize'
+import { getToday } from '@/lib/rise-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,10 +10,10 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ items: [], linkedTasks: [] })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
-    const date = searchParams.get('date') || new Date().toISOString().split('T')[0]
+    const date = searchParams.get('date') || getToday()
 
     const [items, allTasks] = await Promise.all([
       data.plannerItems.list(userId, date),
@@ -68,7 +70,12 @@ export async function POST(req: NextRequest) {
       .reduce((max: number, i: any) => Math.max(max, i.order ?? 0), -1)
     const nextOrder = maxOrder + 1
 
-    const item = await data.plannerItems.create(userId, { ...body, order: nextOrder })
+    // FIX: whitelist columns — legacy client fields (e.g. blocks) used to
+    // break the create with PGRST204.
+    const item = await data.plannerItems.create(
+      userId,
+      { ...pickAllowed(body, ['date', 'section', 'time', 'title']), order: nextOrder }
+    )
     return NextResponse.json(item)
   } catch (error) {
     console.error('Planner POST error:', error)
@@ -83,7 +90,14 @@ export async function PUT(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { id, ...body } = await req.json()
-    const item = await data.plannerItems.update(id, userId, body)
+    if (!id || typeof id !== 'string' || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: 'معرّف العنصر مطلوب' }, { status: 400 })
+    }
+    const item = await data.plannerItems.update(
+      id,
+      userId,
+      pickAllowed(body, ['date', 'section', 'time', 'title', 'completed', 'order'])
+    )
     return NextResponse.json(item)
   } catch (error) {
     console.error('Planner PUT error:', error)

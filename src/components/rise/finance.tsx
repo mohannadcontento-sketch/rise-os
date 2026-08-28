@@ -62,6 +62,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
+import { getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -142,7 +143,7 @@ const EMPTY_FORM = {
   category: '',
   description: '',
   amount: 0,
-  date: new Date().toISOString().split('T')[0],
+  date: getToday(),
   recurring: false,
 }
 
@@ -281,7 +282,7 @@ export default function Finance() {
           }
         }
         setDialogOpen(false)
-        setForm({ ...EMPTY_FORM, date: new Date().toISOString().split('T')[0] })
+        setForm({ ...EMPTY_FORM, date: getToday() })
         fetchFinance()
       } else {
         toastError('إضافة السجل')
@@ -443,7 +444,7 @@ export default function Finance() {
       d.setMonth(d.getMonth() - i)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       months[key] = {
-        month: d.toLocaleDateString('ar-SA', { month: 'short' }),
+        month: d.toLocaleDateString('ar-EG', { month: 'short' }),
         دخل: 0,
         مصروفات: 0,
       }
@@ -469,7 +470,7 @@ export default function Finance() {
   }
 
   const formatAmount = (amount: number) => {
-    return amount.toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    return amount.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
   }
 
   /* ─── Loading ─── */
@@ -1250,7 +1251,7 @@ export default function Finance() {
                                     <span>{record.category}</span>
                                     <span>•</span>
                                     <span>
-                                      {new Date(record.date).toLocaleDateString('ar-SA', {
+                                      {new Date(record.date).toLocaleDateString('ar-EG', {
                                         month: 'short',
                                         day: 'numeric',
                                       })}

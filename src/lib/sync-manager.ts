@@ -93,9 +93,24 @@ class SyncManager {
   };
 
   /**
+   * Persistently log server-rejected mutations so data loss is visible
+   * to the user (diagnostics screen / support) instead of silent.
+   * Capped ring buffer in localStorage — never throws.
+   */
+  private static recordFailure(store: string, action: string, recordId: string, status: number): void {
+    try {
+      const KEY = 'rise-sync-failures';
+      const raw = localStorage.getItem(KEY);
+      const list: unknown[] = raw ? JSON.parse(raw) : [];
+      list.push({ store, action, recordId, status, at: new Date().toISOString() });
+      localStorage.setItem(KEY, JSON.stringify(list.slice(-50)));
+    } catch { /* diagnostics are best-effort */ }
+  }
+
+  /**
    * Full sync cycle:
-   *  1. Push unsynced local changes to the server (server-wins on conflict).
-   *  2. Pull latest data from the server and update IndexedDB.
+   *  1. Push unsynced local changes to the server (transient failures retry).
+   *  2. Pull latest data from the server and MERGE into IndexedDB.
    */
   private async sync(): Promise<void> {
     if (this.syncing) return; // prevent concurrent syncs
@@ -116,8 +131,11 @@ class SyncManager {
 
   /**
    * Push all unsynced IndexedDB records to the server API.
-   * Uses server-wins: if the server rejects or returns different data, we
-   * accept the server version.
+   * Conflict policy:
+   *  - Server accepted        → mark synced, adopt returned row.
+   *  - Permanent rejection    → mark synced (avoid infinite retry loop)
+   *                             but record it in the failure log.
+   *  - Transient failure      → leave unsynced; retried next cycle.
    */
   private async pushUnsynced(): Promise<void> {
     const unsynced = await getOfflineDB().getUnsynced();
@@ -172,9 +190,17 @@ class SyncManager {
               // Response might not have JSON body — that's OK
             }
           }
+        } else if (response.status === 429 || response.status >= 500) {
+          // Transient (overloaded / auth hiccup) — retry next sync cycle
+          console.warn(
+            `[SyncManager] Transient ${response.status} for ${record.action} on ${record.storeName}/${record.recordId} — will retry`
+          );
         } else {
-          // Server rejected — server wins, still mark synced to avoid retry loop
+          // DATA-PRESERVATION FIX: a permanent 4xx rejection used to be
+          // marked synced silently ("server wins"), discarding the user's
+          // mutation. Keep skipping retries for these, but surface them.
           processedIds.push(record.id!);
+          SyncManager.recordFailure(record.storeName, record.action, String(record.recordId), response.status);
           console.warn(
             `[SyncManager] Server rejected ${record.action} on ${record.storeName}/${record.recordId}: ${response.status}`
           );
@@ -195,8 +221,15 @@ class SyncManager {
   }
 
   /**
-   * Pull latest data from each API endpoint and update IndexedDB.
-   * Server data overwrites local data (server-wins).
+   * Pull latest data from each API endpoint and MERGE into IndexedDB.
+   *
+   * DATA-PRESERVATION FIX: this used to clear() each store and refill it
+   * from the server, wiping any locally-created row that hadn't been
+   * pushed yet (e.g., when its push was rejected or the previous push
+   * cycle failed). Now:
+   *  - server rows are upserted by id (server fields win on conflict),
+   *  - local rows missing from the server are deleted ONLY if they have
+   *    no pending unsynced mutation.
    */
   private async pullFromServer(): Promise<void> {
     const stores: StoreName[] = [
@@ -234,11 +267,35 @@ class SyncManager {
           }
         }
 
-        if (items.length > 0) {
-          // Clear local store and repopulate from server
-          await getOfflineDB().clear(store);
-          for (const item of items) {
-            await getOfflineDB().add(store, item);
+        const db = getOfflineDB();
+
+        // Rows with a pending local mutation must never be dropped here.
+        const unsynced = await db.getUnsynced();
+        const pendingIds = new Set(
+          unsynced.filter((r) => r.storeName === store).map((r) => String(r.recordId))
+        );
+
+        const existing = await db.getAll(store);
+        const existingById = new Map(existing.map((row: any) => [String(row.id), row]));
+        const serverIds = new Set<string>();
+
+        for (const item of items) {
+          const id = item && item.id != null ? String(item.id) : null;
+          if (!id) continue;
+          serverIds.add(id);
+          if (existingById.has(id)) {
+            await db.update(store, { ...existingById.get(id), ...item });
+          } else {
+            await db.add(store, item);
+          }
+        }
+
+        // Delete local rows the server no longer has — but only ones that
+        // are fully synced (never a pending offline creation/update).
+        for (const row of existing as any[]) {
+          const id = String(row.id);
+          if (!serverIds.has(id) && !pendingIds.has(id)) {
+            await db.delete(store, id);
           }
         }
       } catch {

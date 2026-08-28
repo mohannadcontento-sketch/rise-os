@@ -87,3 +87,17 @@ export async function isAdmin(userId: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Combined guard for admin-only API routes: authenticate, then authorize.
+ * Returns the userId when the caller is an admin, otherwise null.
+ * Every /api/rise/admin/* route MUST call this — importing isAdmin alone
+ * is not enough (several routes imported it without ever calling it).
+ */
+export async function requireAdmin(req: NextRequest): Promise<string | null> {
+  const { requireAuth } = await import('@/lib/auth')
+  const userId = await requireAuth(req)
+  if (!userId) return null
+  if (!(await isAdmin(userId))) return null
+  return userId
+}

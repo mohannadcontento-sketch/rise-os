@@ -13,9 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) {
-      return NextResponse.json({ recentTasks: [], recentJournals: [] })
-    }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const [tasks, journals] = await Promise.all([
       data.tasks.list(userId).catch(() => []),

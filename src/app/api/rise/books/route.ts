@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ books: [] })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const books = await data.books.list(userId)
     return NextResponse.json({ books })
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
     const record = await data.books.create(userId, dataFields)
+    bustAggregateCache(userId)
     return NextResponse.json(record)
   } catch (error) {
     console.error('Books POST error:', error)
@@ -44,6 +46,7 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     const record = await data.books.update(id, userId, body)
+    bustAggregateCache(userId)
     return NextResponse.json(record)
   } catch (error) {
     console.error('Books PUT error:', error)
@@ -62,6 +65,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.books.remove(id, userId)
+    bustAggregateCache(userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Books DELETE error:', error)

@@ -259,13 +259,9 @@ export function useKeyboardShortcuts() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey
       if (!ctrl) {
-        // Escape handler
-        if (e.key === 'Escape') {
-          // Close any open dialog by dispatching event
-          const closeEvent = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-          document.activeElement?.dispatchEvent(closeEvent)
-          return
-        }
+        // FIX: Escape used to re-dispatch a synthetic bubbling keydown that
+        // this same listener received again — unbounded recursion. Radix
+        // dialogs already close themselves on Escape, so nothing to do here.
         return
       }
 

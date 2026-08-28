@@ -1,34 +1,23 @@
 import { NextRequest } from 'next/server'
 import { getSupabaseAdmin, getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
+import { enterRequestContext, getRequestAuthToken } from '@/lib/request-context'
 
 // ============================================================
 // Auth Token Context (set by API routes before data calls)
+//
+// SECURITY: the token lives in an AsyncLocalStorage bound to this
+// request's async execution context — never in a module global,
+// which concurrent requests on a long-lived server could overwrite
+// (cross-user data access). Existing call sites keep working as-is.
 // ============================================================
 
-let _currentAuthToken: string | undefined
-
 /**
- * Set the current request's auth token so sb() can create an authenticated client.
+ * Bind the current request's auth token so sb() can create an
+ * authenticated client for THIS request only.
  * P1#3: Reads from httpOnly cookie FIRST, then Authorization header.
  */
 export function setCurrentAuthToken(tokenOrReq: string | undefined | NextRequest) {
-  if (typeof tokenOrReq === 'string') {
-    _currentAuthToken = tokenOrReq || undefined
-    return
-  }
-  // NextRequest — read cookie first, then header
-  if (tokenOrReq && typeof tokenOrReq === 'object' && 'cookies' in tokenOrReq) {
-    const req = tokenOrReq as NextRequest
-    const cookieToken = req.cookies.get('rise-access')?.value
-    if (cookieToken) {
-      _currentAuthToken = cookieToken
-      return
-    }
-    const headerToken = req.headers.get('Authorization')?.replace('Bearer ', '')
-    _currentAuthToken = headerToken || undefined
-    return
-  }
-  _currentAuthToken = tokenOrReq as string | undefined
+  enterRequestContext(tokenOrReq)
 }
 
 // ============================================================
@@ -86,13 +75,14 @@ function toCamel<T = Record<string, any>>(obj: unknown): T {
 async function sb() {
   try {
     // P1#1 FIX: Try anon client WITH user JWT FIRST (RLS enforced)
-    if (_currentAuthToken && isSupabaseConfigured()) {
+    const currentAuthToken = getRequestAuthToken()
+    if (currentAuthToken && isSupabaseConfigured()) {
       const { createClient } = await import('@supabase/supabase-js')
       const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
       const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
       if (SUPABASE_URL && SUPABASE_ANON_KEY) {
         return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          global: { headers: { Authorization: `Bearer ${_currentAuthToken}` } },
+          global: { headers: { Authorization: `Bearer ${currentAuthToken}` } },
         })
       }
     }

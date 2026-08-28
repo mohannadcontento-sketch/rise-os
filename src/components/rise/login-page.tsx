@@ -27,6 +27,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // Client-side validation (mirrors server Zod messages) — the Supabase
+    // client path below bypasses /api/auth/*, whose Zod schema normally
+    // returns these, so without this check users get a misleading
+    // "wrong email or password" for validation failures.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('بريد إلكتروني غير صالح')
+      return
+    }
+    if (password.length < 8) {
+      setError('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -200,7 +214,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Name (signup only) */}
             {mode === 'signup' && (
               <div>

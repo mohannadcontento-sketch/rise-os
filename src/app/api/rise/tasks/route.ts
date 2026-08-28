@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getPaginationParams, paginatedResponse } from '@/lib/pagination'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,9 +57,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) {
-      return NextResponse.json({ tasks: [], projects: [] })
-    }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const [allTasks, projects] = await Promise.all([
       data.tasks.list(userId),
@@ -117,6 +116,7 @@ export async function POST(req: NextRequest) {
     }
 
     const task = await data.tasks.create(userId, cleanData)
+    bustAggregateCache(userId)
     return NextResponse.json(task)
   } catch (error) {
     console.error('Tasks POST error:', error)
@@ -144,6 +144,7 @@ export async function PUT(req: NextRequest) {
 
     const { id, ...updateData } = parsed.data
     const task = await data.tasks.update(id, userId, updateData)
+    bustAggregateCache(userId)
     return NextResponse.json(task)
   } catch (error) {
     console.error('Tasks PUT error:', error)
@@ -162,6 +163,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.tasks.remove(id, userId)
+    bustAggregateCache(userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Tasks DELETE error:', error)

@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { apiGet } from '@/lib/api-fetch'
+import { getToday, toLocalDateStr } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -61,7 +62,7 @@ const STORAGE_KEY = 'rise-weekly-review'
 
 const emptyReview = (): WeeklyReview => ({
   id: crypto.randomUUID(),
-  weekStart: new Date().toISOString().split('T')[0],
+  weekStart: getToday(),
   review: { wentWell: '', improved: '', lessons: '' },
   numbers: { tasksCompleted: 0, focusHours: 0, pagesRead: 0, habitsRate: 50 },
   goals: { items: [{ text: '', achieved: false }, { text: '', achieved: false }, { text: '', achieved: false }], score: 5 },
@@ -160,7 +161,7 @@ export default function WeeklyReview() {
     try {
       const weekStart = new Date()
       weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-      const weekStartStr = weekStart.toISOString().split('T')[0]
+      const weekStartStr = toLocalDateStr(weekStart)
 
       // Fetch tasks
       let tasksCompleted = 0
@@ -170,7 +171,7 @@ export default function WeeklyReview() {
         const tasks = tasksData.tasks || []
         tasksCompleted = tasks.filter((t: { done: boolean; createdAt: string }) => {
           if (!t.done) return false
-          const taskDate = new Date(t.createdAt).toISOString().split('T')[0]
+          const taskDate = toLocalDateStr(new Date(t.createdAt))
           return taskDate >= weekStartStr
         }).length
       } catch { /* ignore */ }
@@ -184,7 +185,7 @@ export default function WeeklyReview() {
         focusMinutes = sessions
           .filter((s: { completed: boolean; startedAt: string }) => {
             if (!s.completed) return false
-            const sDate = new Date(s.startedAt).toISOString().split('T')[0]
+            const sDate = toLocalDateStr(new Date(s.startedAt))
             return sDate >= weekStartStr
           })
           .reduce((sum: number, s: { actualMin: number }) => sum + (s.actualMin || 0), 0)

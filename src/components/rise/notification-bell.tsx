@@ -89,6 +89,7 @@ export function NotificationBell() {
   const loadingRef = useRef(false)
   const mountedRef = useRef(true)
   const prevUnreadRef = useRef(-1)
+  const lastFetchAtRef = useRef(0)
 
   useEffect(() => {
     return () => { mountedRef.current = false }
@@ -145,10 +146,32 @@ export function NotificationBell() {
           prevUnreadRef.current = newUnread
           setNotifications(newNotifs)
           setUnreadCount(newUnread)
+          lastFetchAtRef.current = Date.now()
         }
       }
     } catch { /* silent */ }
     finally { loadingRef.current = false }
+  }, [])
+
+  // Lightweight badge-only fetch (tiny payload) for background polling —
+  // avoids pulling the full notifications list every cycle.
+  const fetchBadgeCount = useCallback(async () => {
+    try {
+      const r = await apiGet('/api/rise/notifications?unreadOnly=true')
+      if (!r.ok) return
+      const data = await r.json()
+      lastFetchAtRef.current = Date.now()
+      if (mountedRef.current && data) {
+        const newUnread = data.unreadCount || 0
+        if (prevUnreadRef.current >= 0 && newUnread > prevUnreadRef.current) {
+          playSound('notification')
+          setWiggling(true)
+          setTimeout(() => setWiggling(false), 600)
+        }
+        prevUnreadRef.current = newUnread
+        setUnreadCount(newUnread)
+      }
+    } catch { /* silent */ }
   }, [])
 
   // Fetch on open + initial + when data changes (real-time)
@@ -160,34 +183,41 @@ export function NotificationBell() {
   // Poll every 30s when panel is open
   useEffect(() => {
     if (!open) return
-    const poll = setInterval(fetchNotifications, 30000)
+    const poll = setInterval(() => {
+      // EGRESS: skip ticks while the tab is hidden — the visibilitychange
+      // handler below refetches on return.
+      if (document.hidden) return
+      fetchNotifications()
+    }, 30000)
     pollRef.current = poll
     return () => clearInterval(poll)
   }, [open, fetchNotifications])
 
-  // Poll every 45s globally for badge count (even when closed)
+  // Poll every 3 min globally for badge count (even when closed).
+  // PERF/EGRESS: was 45s — with the tab left open this endpoint dominated
+  // Supabase egress (most polls return zero unread). The panel-open poll
+  // above stays at 30s because the user is actively looking, and any data
+  // change still refreshes the badge instantly via useDataRefresh.
+  // Ticks are skipped entirely while the tab is hidden; coming back to the
+  // tab refetches immediately if a full interval has elapsed.
   useEffect(() => {
+    const REFRESH_MS = 180000
     const poll = setInterval(() => {
-      if (!open) {
-        apiGet('/api/rise/notifications?unreadOnly=true')
-          .then(r => r.ok ? r.json() : null)
-          .then(data => {
-            if (mountedRef.current && data) {
-              const newUnread = data.unreadCount || 0
-              if (prevUnreadRef.current >= 0 && newUnread > prevUnreadRef.current) {
-                playSound('notification')
-                setWiggling(true)
-                setTimeout(() => setWiggling(false), 600)
-              }
-              prevUnreadRef.current = newUnread
-              setUnreadCount(newUnread)
-            }
-          })
-          .catch(() => {})
+      if (document.hidden || open) return
+      void fetchBadgeCount()
+    }, REFRESH_MS)
+    const handleVisibility = () => {
+      if (document.hidden || open) return
+      if (Date.now() - lastFetchAtRef.current >= REFRESH_MS) {
+        void fetchBadgeCount()
       }
-    }, 45000)
-    return () => clearInterval(poll)
-  }, [open])
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [open, fetchBadgeCount])
 
   // Close on outside click + escape
   useEffect(() => {

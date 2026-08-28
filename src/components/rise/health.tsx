@@ -45,6 +45,7 @@ import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
+import { getToday, toLocalDateStr } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -140,7 +141,7 @@ export default function Health() {
   const [form, setForm] = useState({ ...EMPTY_LOG })
   const [exerciseNotes, setExerciseNotes] = useState('')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = getToday()
 
   /* ─── Fetch ─── */
   const { refreshKey } = useDataRefresh()
@@ -211,10 +212,10 @@ export default function Health() {
     for (let i = 13; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().split('T')[0]
+      const key = toLocalDateStr(d)
       days.push({
         date: key,
-        label: d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }),
+        label: d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }),
       })
     }
     return days
@@ -284,7 +285,7 @@ export default function Health() {
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-30)
     return weightLogs.map((l) => ({
-      day: new Date(l.date).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }),
+      day: new Date(l.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }),
       الوزن: l.weight,
     }))
   }, [data])
@@ -447,7 +448,7 @@ export default function Health() {
               <span>·</span>
               <span>ماء {data?.todayLog?.waterGlasses || 0} كوب</span>
               <span>·</span>
-              <span>خطوات {data?.todayLog?.steps?.toLocaleString('ar-SA') || '٠'}</span>
+              <span>خطوات {data?.todayLog?.steps?.toLocaleString('ar-EG') || '٠'}</span>
             </div>
           </div>
         </div>
@@ -1043,7 +1044,7 @@ export default function Health() {
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={30} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value.toLocaleString('ar-SA')}`, 'خطوات']} />
+                      <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value.toLocaleString('ar-EG')}`, 'خطوات']} />
                       <defs>
                         <linearGradient id="stepsGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="var(--color-emerald-accent)" stopOpacity={0.3} />

@@ -9,17 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) {
-      const fb = {
-        metadata: { application: 'RiseOS', version: '1.0.0', exportDate: new Date().toISOString(), note: 'تسجيل الدخول مطلوب' },
-        المهام: [],
-        المشاريع: [],
-      }
-      return new NextResponse(JSON.stringify(fb, null, 2), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="riseos-export.json"' },
-      })
-    }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const supabase = await getSupabaseAdmin()
 

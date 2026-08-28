@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ logs: [], todayLog: null })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const today = getToday()
     const last30 = getLast30Days()
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await data.healthLogs.upsert(userId, targetDate, cleanData)
+    bustAggregateCache(userId)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Health POST error:', error)

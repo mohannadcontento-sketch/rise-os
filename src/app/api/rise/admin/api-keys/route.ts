@@ -1,6 +1,5 @@
-import { isAdmin } from "@/lib/audit";
+import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +7,10 @@ export const dynamic = 'force-dynamic'
 // GET: List all API keys with user info
 export async function GET(request: NextRequest) {
   try {
-    const userId = await requireAuth(request)
-    if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+    // SECURITY: admin-only — this endpoint enumerates every user's keys.
+    const adminId = await requireAdmin(request)
+    if (!adminId) {
+      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
     const supabase = await getSupabaseAdmin()
@@ -20,10 +20,11 @@ export async function GET(request: NextRequest) {
 
     const sb = supabase as any
 
-    // Fetch all API keys
+    // SECURITY: never select the raw `key` column — only the hash,
+    // used to derive a non-secret display fingerprint.
     const { data: keys, error } = await sb
       .from('user_api_keys')
-      .select('*')
+      .select('id, user_id, name, key_hash, created_at, last_used_at')
       .order('created_at', { ascending: false })
       .limit(100)
 
@@ -51,9 +52,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Also try to get emails from auth.users via profiles or raw_name
-    // Fall back to user_id as name if no profile found
-
     const result = (keys || []).map((k: any) => {
       const profile = profileMap[k.user_id]
       return {
@@ -62,7 +60,7 @@ export async function GET(request: NextRequest) {
         userId: k.user_id,
         userName: profile?.name || k.user_id?.slice(0, 8) || 'مستخدم محذوف',
         userEmail: profile?.email || '—',
-        keyPreview: k.key.slice(0, 12),
+        keyPreview: (k.key_hash || '').slice(0, 8) || '—',
         createdAt: k.created_at,
         lastUsedAt: k.last_used_at || null,
         usageCount: 0,
@@ -79,9 +77,9 @@ export async function GET(request: NextRequest) {
 // DELETE: Revoke an API key
 export async function DELETE(request: NextRequest) {
   try {
-    const userId = await requireAuth(request)
-    if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+    const adminId = await requireAdmin(request)
+    if (!adminId) {
+      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

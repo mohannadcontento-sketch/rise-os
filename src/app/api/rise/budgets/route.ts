@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ budgets: [] })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     let budgets: { category: string; limit: number }[] = []
 

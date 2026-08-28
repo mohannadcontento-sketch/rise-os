@@ -117,12 +117,12 @@ function getTodayStr(): string {
 
 function getDayName(dateStr: string): string {
   const d = new Date(dateStr)
-  return d.toLocaleDateString('ar-SA', { weekday: 'long' })
+  return d.toLocaleDateString('ar-EG', { weekday: 'long' })
 }
 
 function getShortDate(dateStr: string): string {
   const d = new Date(dateStr)
-  return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
 }
 
 function calcStreak(logs: HabitLog[], habitId: string): { current: number; longest: number } {
@@ -208,6 +208,15 @@ export function HabitsView() {
   const [saving, setSaving] = useState(false)
   const [flashCard, setFlashCard] = useState<string | null>(null)
 
+  // FIX: rapid double-clicks used to fire /earn-xp twice for one completion.
+  // Keyed per habit+day to mirror the server's per-day dedupe policy.
+  const xpAwardedRef = useRef<Set<string>>(new Set())
+  const awardXpOnce = (key: string, amount: number, reason: string) => {
+    if (xpAwardedRef.current.has(key)) return
+    xpAwardedRef.current.add(key)
+    apiPost('/api/rise/earn-xp', { amount, reason }).catch(() => {})
+  }
+
   // Form state
   const [formName, setFormName] = useState('')
   const [formIcon, setFormIcon] = useState('🎯')
@@ -279,7 +288,7 @@ export function HabitsView() {
             notifyHabitComplete(habit.name, streak.current)
           }
           if (!existingLog) {
-            apiPost('/api/rise/earn-xp', { amount: habit?.xpReward || 15, reason: `habit:${habitId}` }).catch(() => {})
+            awardXpOnce(`habit-done:${habitId}:${todayStr}`, habit?.xpReward || 15, `habit:${habitId}`)
           }
         }
       } catch {

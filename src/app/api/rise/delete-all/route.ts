@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,10 @@ export async function DELETE(req: NextRequest) {
       'goals', 'projects', 'journals', 'focus_sessions',
       'health_logs', 'finance_records', 'books', 'knowledge_items',
       'planner_items', 'morning_logs', 'daily_scores', 'user_achievements',
-      'notifications', 'user_settings' // Added user_settings for complete cleanup
+      'notifications',
+      'work_sessions', // FIX: was missing — work sessions survived a full wipe
+      'user_api_keys', // FIX: was missing — revoked keys must not survive deletion
+      'user_settings' // Added user_settings for complete cleanup
     ]
 
     let deletedCount = 0
@@ -69,6 +73,8 @@ export async function DELETE(req: NextRequest) {
     try {
       await client.from('user_storage').update({ storage_used: 0 }).eq('user_id', userId)
     } catch { /* ignore */ }
+
+    bustAggregateCache(userId)
 
     return NextResponse.json({ success: true, deleted: deletedCount })
   } catch (error) {

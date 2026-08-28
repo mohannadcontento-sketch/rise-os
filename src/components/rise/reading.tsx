@@ -51,6 +51,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
+import { getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -230,7 +231,7 @@ export default function Reading() {
       currentPage: newPage,
       progress,
       status,
-      endDate: progress >= 100 ? new Date().toISOString().split('T')[0] : undefined,
+      endDate: progress >= 100 ? getToday() : undefined,
     })
     if (progress >= 100) playSound('complete')
     else playSound('save')
@@ -247,7 +248,7 @@ export default function Reading() {
       currentPage: page,
       progress,
       status,
-      endDate: progress >= 100 ? new Date().toISOString().split('T')[0] : undefined,
+      endDate: progress >= 100 ? getToday() : undefined,
     })
     if (progress >= 100) playSound('complete')
     else playSound('save')

@@ -1,6 +1,5 @@
-import { isAdmin } from "@/lib/audit";
+import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { setCurrentAuthToken } from '@/lib/data'
 
@@ -8,10 +7,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    // Guard: require admin access
-    const userId = await requireAuth(request)
-    if (!userId) {
-      return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+    // Guard: authenticate AND require admin role
+    const adminId = await requireAdmin(request)
+    if (!adminId) {
+      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
     // Set auth token for data layer

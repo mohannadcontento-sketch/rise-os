@@ -45,6 +45,7 @@ import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastSaved } from '@/lib/toast-helpers'
 import { notifyMorningComplete } from '@/lib/notifications'
+import { getToday, toLocalDateStr } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -155,7 +156,8 @@ function getMorningGreeting(): string {
 }
 
 function getTodayStr() {
-  return new Date().toISOString().split('T')[0]
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function formatTimer(seconds: number) {
@@ -529,6 +531,10 @@ export default function MorningRoutine() {
   const sessionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevAllDoneRef = useRef(false)
 
+  // FIX: completing the routine twice a day (toggle off/on) fired /earn-xp
+  // again. Keyed per day to mirror the server's per-day dedupe policy.
+  const xpAwardedRef = useRef<Set<string>>(new Set())
+
   const movementTimer = useSectionTimer(SECTIONS[0].timerDefault)
   const reflectionTimer = useSectionTimer(SECTIONS[1].timerDefault)
   const growthTimer = useSectionTimer(SECTIONS[2].timerDefault)
@@ -568,8 +574,8 @@ export default function MorningRoutine() {
       const stored = localStorage.getItem(getSessionStorageKey())
       if (stored) {
         const startTime = parseInt(stored)
-        const today = new Date().toISOString().split('T')[0]
-        const storedDate = new Date(startTime).toISOString().split('T')[0]
+        const today = getToday()
+        const storedDate = toLocalDateStr(new Date(startTime))
         if (storedDate === today) {
           setSessionActive(true)
           setSessionStartTime(startTime)
@@ -652,7 +658,7 @@ export default function MorningRoutine() {
           const tasksRes = await apiFetch(`/api/rise/tasks`)
           if (tasksRes.ok) {
             const tasksData = await tasksRes.json()
-            const todayStr = new Date().toISOString().split('T')[0]
+            const todayStr = getToday()
             const todayScheduled = (tasksData.tasks || []).filter(
               (t: any) => t.dueDate === todayStr && t.dueTime && t.status !== 'done'
             ).map((t: any) => ({ id: t.id, title: t.title, dueTime: t.dueTime }))
@@ -678,7 +684,7 @@ export default function MorningRoutine() {
       const d = new Date()
       d.setDate(d.getDate() - i)
       mockLogs.push({
-        date: d.toISOString().split('T')[0],
+        date: toLocalDateStr(d),
         score: i === 0 ? score : Math.floor(Math.random() * 60) + 40,
         completedItems: '[]',
         totalItems: totalCount,
@@ -718,7 +724,11 @@ export default function MorningRoutine() {
         if (ids.size === totalCount && totalCount > 0) {
           playSound('achievement')
           const totalXp = SECTIONS.reduce((sum, s) => sum + s.items.reduce((isum, item) => isum + item.xp, 0), 0)
-          apiPost('/api/rise/earn-xp', { amount: totalXp, reason: 'morning-routine-complete' }).catch(() => {})
+          const xpKey = `morning-routine:${dateStr}`
+          if (!xpAwardedRef.current.has(xpKey)) {
+            xpAwardedRef.current.add(xpKey)
+            apiPost('/api/rise/earn-xp', { amount: totalXp, reason: 'morning-routine-complete' }).catch(() => {})
+          }
         }
       } catch {
         toast.error('فشل الاتصال بالخادم')

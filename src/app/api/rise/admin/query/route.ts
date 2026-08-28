@@ -1,14 +1,15 @@
-import { isAdmin } from "@/lib/audit";
+import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = await requireAuth(request)
-    if (!userId) {
+    // SECURITY: authenticate AND authorize — this route executes raw SQL
+    // with a service-role client, so it must be admin-only.
+    const adminId = await requireAdmin(request)
+    if (!adminId) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
@@ -18,11 +19,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'يجب توفير استعلام SQL' }, { status: 400 })
     }
 
-    const trimmedSql = sql.trim().slice(0, 10000)
+    let trimmedSql = sql.trim().slice(0, 10000)
 
-    // Only allow SELECT queries for safety
-    if (!/^\s*SELECT\s/i.test(trimmedSql)) {
-      return NextResponse.json({ error: 'يُسمح فقط باستعلامات SELECT' }, { status: 400 })
+    // SECURITY: single read-only statement only.
+    // - Must start with SELECT (blocks WITH/CTE-wrapped writes, EXPLAIN, etc.)
+    // - Any embedded semicolon means multiple statements → reject
+    //   (the old start-anchored regex let "SELECT 1; DROP TABLE x" through).
+    if (!/^SELECT\s/i.test(trimmedSql)) {
+      return NextResponse.json(
+        { error: 'يُسمح فقط باستعلامات SELECT مفردة' },
+        { status: 400 }
+      )
+    }
+    if (trimmedSql.endsWith(';')) trimmedSql = trimmedSql.slice(0, -1).trimEnd()
+    if (trimmedSql.includes(';')) {
+      return NextResponse.json(
+        { error: 'لا يُسمح إلا بعبارة واحدة (بدون فواصل منقوطة)' },
+        { status: 400 }
+      )
     }
 
     const supabase = await getSupabaseAdmin()

@@ -46,6 +46,7 @@ import {
   PolarRadiusAxis,
   ResponsiveContainer,
 } from 'recharts'
+import { getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -531,7 +532,7 @@ export default function Learning() {
     if (!newLogContent.trim()) return
     const content = newLogContent.trim()
     const minutes = parseInt(newLogMinutes) || 0
-    const date = new Date().toISOString().split('T')[0]
+    const date = getToday()
     const tempId = `temp-${Date.now()}`
     const optimistic: LearningLog = { id: tempId, date, content, minutesSpent: minutes }
     setData((prev) => ({ ...prev, logs: [optimistic, ...prev.logs] }))

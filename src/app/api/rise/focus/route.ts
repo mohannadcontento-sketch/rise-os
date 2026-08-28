@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
+    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const sessions = await data.focusSessions.list(userId, 50)
 
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await data.focusSessions.create(userId, parsed.data)
+    bustAggregateCache(userId)
     return NextResponse.json(session)
   } catch (error) {
     console.error('Focus POST error:', error)
@@ -86,6 +88,7 @@ export async function PUT(req: NextRequest) {
 
     const { id, ...updateData } = parsed.data
     const session = await data.focusSessions.update(id, userId, updateData)
+    bustAggregateCache(userId)
     return NextResponse.json(session)
   } catch (error) {
     console.error('Focus PUT error:', error)

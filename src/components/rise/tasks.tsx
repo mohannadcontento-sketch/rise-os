@@ -199,6 +199,17 @@ const priorityDotColors: Record<string, string> = {
 export function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+
+  // FIX: rapid double-clicks used to fire /earn-xp twice for one completion.
+  // The server now dedupes too (xp_awards table) — this just avoids the
+  // wasted request and optimistic flicker.
+  const xpAwardedRef = useRef<Set<string>>(new Set())
+  const awardXpOnce = (key: string, amount: number, reason: string) => {
+    if (xpAwardedRef.current.has(key)) return
+    xpAwardedRef.current.add(key)
+    apiPost('/api/rise/earn-xp', { amount, reason }).catch(() => {})
+  }
+
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
   const [addOpen, setAddOpen] = useState(false)
@@ -298,7 +309,7 @@ export function Tasks() {
       if (!isDone) {
         playSound('task-complete')
         notifyTaskComplete(task.title, task.xpReward)
-        apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
+        awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
         checkUnblockedTasks(task.id)
       }
     } catch {
@@ -317,7 +328,7 @@ export function Tasks() {
       fetchData()
       if (newStatus === 'done') {
         playSound('task-complete')
-        apiPost('/api/rise/earn-xp', { amount: task.xpReward || 10, reason: `task:${task.id}` }).catch(() => {})
+        awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
         checkUnblockedTasks(task.id)
       }
     } catch {

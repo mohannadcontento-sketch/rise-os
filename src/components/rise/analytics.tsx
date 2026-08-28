@@ -50,6 +50,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
+import { toLocalDateStr, getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -244,7 +245,7 @@ export default function Analytics() {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(today)
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().split('T')[0]
+      const key = toLocalDateStr(d)
       const dayLogs = habits.logs.filter((l) => l.date === key)
       const total = habits.habits.length
       const completed = dayLogs.filter((l) => l.completed).length
@@ -441,7 +442,7 @@ export default function Analytics() {
       }
     }
     if (habits) {
-      const today = new Date().toISOString().split('T')[0]
+      const today = getToday()
       const todayCompleted = habits.logs.filter((l) => l.date === today && l.completed).length
       const rate = habits.habits.length > 0 ? Math.round((todayCompleted / habits.habits.length) * 100) : 0
       items.push({

@@ -453,6 +453,9 @@ function saveQueue(queue: QueuedRequest[]): void {
 
 function enqueueRequest(url: string, method: string, body: string | undefined): void {
   const queue = getQueue()
+  // FIX: a double-click while offline used to enqueue the SAME write twice
+  // (twoXP awards / two creates after reconnect). Skip exact duplicates.
+  if (queue.some(q => q.url === url && q.method === method && q.body === body)) return
   if (queue.length >= MAX_QUEUE_SIZE) queue.shift() // Remove oldest
   queue.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -465,11 +468,16 @@ function enqueueRequest(url: string, method: string, body: string | undefined): 
   saveQueue(queue)
 }
 
+// Give up on a queued request after this many transient failures — prevents
+// an undead request from blocking the queue forever.
+const MAX_QUEUE_RETRIES = 20
+
 async function flushQueue(): Promise<void> {
   const queue = getQueue()
   if (queue.length === 0) return
 
   const remaining: QueuedRequest[] = []
+  let changed = false // any request resolved (sent OR permanently dropped)
   const authHeaders = getAuthHeaders()
 
   for (const item of queue) {
@@ -491,20 +499,45 @@ async function flushQueue(): Promise<void> {
       })
       clearTimeout(timeoutId)
 
-      if (!res.ok && res.status !== 408) {
+      if (res.ok) {
+        changed = true // success → remove from queue
+      } else if (
+        (res.status === 408 || res.status === 429 || res.status >= 500) &&
+        item.retries < MAX_QUEUE_RETRIES
+      ) {
+        // Transient failure — retry next cycle.
+        // FIX: timeouts (408) used to be REMOVED here as if they had
+        // succeeded, losing the mutation even though the server may never
+        // have processed it.
         remaining.push({ ...item, retries: item.retries + 1 })
+      } else if (res.status === 408 || res.status === 429 || res.status >= 500) {
+        console.warn(
+          `[apiFetch] Dropping queued ${item.method} ${item.url} after ${item.retries} transient failures`
+        )
+        changed = true
+      } else {
+        // Permanent 4xx rejection — retrying can never succeed. Drop it,
+        // log loudly, and refresh the UI so it reflects server state.
+        console.error(
+          `[apiFetch] Server permanently rejected queued ${item.method} ${item.url}: ${res.status}`
+        )
+        changed = true
       }
-      // Success or timeout → remove from queue
     } catch {
+      // Network still down — retry next cycle.
       remaining.push({ ...item, retries: item.retries + 1 })
     }
   }
 
   saveQueue(remaining)
 
-  // If all succeeded and we had items, invalidate GET cache to refresh
-  if (remaining.length === 0 && queue.length > 0) {
+  // FIX: components were never told that queued writes landed, so their
+  // state stayed stale until the next poll. Notify them to re-fetch.
+  if (changed) {
     invalidateCache()
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rise:data-changed'))
+    }
   }
 }
 

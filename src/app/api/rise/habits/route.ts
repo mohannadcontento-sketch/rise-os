@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { pickAllowed } from '@/lib/sanitize'
+import { bustAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,9 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireAuth(req)
     setCurrentAuthToken(req)
-    if (!userId) {
-      return NextResponse.json({ habits: [], logs: [] })
-    }
+if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const habitsWithLogs = await data.habits.list(userId)
     const logs = habitsWithLogs.flatMap(h => h.logs)
@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
-    const habit = await data.habits.create(userId, body)
+    // FIX: whitelist columns — a stale client bundle sending legacy fields
+    // (e.g. target_days) used to break the write with PGRST204.
+    const habit = await data.habits.create(
+      userId,
+      pickAllowed(body, ['name', 'description', 'icon', 'color', 'frequency', 'targetCount', 'reminderTime', 'xpReward'])
+    )
+    bustAggregateCache(userId)
     return NextResponse.json(habit)
   } catch (error) {
     console.error('Habits POST error:', error)
@@ -55,12 +61,18 @@ export async function PUT(req: NextRequest) {
         body.completed,
         body.count !== undefined ? body.count : 1,
       )
+      bustAggregateCache(userId)
       return NextResponse.json(log)
     }
 
     // Normal habit update
     const { id, ...updateBody } = body
-    const habit = await data.habits.update(id, userId, updateBody)
+    const habit = await data.habits.update(
+      id,
+      userId,
+      pickAllowed(updateBody, ['name', 'description', 'icon', 'color', 'frequency', 'targetCount', 'reminderTime', 'xpReward'])
+    )
+    bustAggregateCache(userId)
     return NextResponse.json(habit)
   } catch (error) {
     console.error('Habits PUT error:', error)
@@ -79,6 +91,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.habits.remove(id, userId)
+    bustAggregateCache(userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Habits DELETE error:', error)
