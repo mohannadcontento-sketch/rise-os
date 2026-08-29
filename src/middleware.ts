@@ -77,7 +77,6 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/auth/login': { limit: 5, window: '1 m' },
   '/api/auth/signup': { limit: 3, window: '1 m' },
   '/api/auth/refresh': { limit: 10, window: '1 m' },
-  '/api/rise/ai-chat': { limit: 20, window: '1 h' },
   // FIX: Increased from 100 to 300/min for /api/rise — the dashboard is
   // fetched by multiple components (sidebar 30s poll, dashboard on mount,
   // analytics, settings) plus useDataRefresh re-fetches. 100/min was too

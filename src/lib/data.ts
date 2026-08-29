@@ -132,7 +132,7 @@ export const data = {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
       if (error) throw error
-      return toCamel(rows ?? [])
+      return toCamel<any[]>(rows ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -563,7 +563,7 @@ export const data = {
         .order('created_at', { ascending: false })
         .limit(limit)
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
@@ -596,7 +596,7 @@ export const data = {
         .order('started_at', { ascending: false })
         .limit(limit)
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -637,7 +637,7 @@ export const data = {
         .order('started_at', { ascending: false })
         .limit(limit)
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async get(id: string, userId: string) {
@@ -694,7 +694,7 @@ export const data = {
 
       const { data, error } = await query.order('date', { ascending: false })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
@@ -725,7 +725,7 @@ export const data = {
         .eq('user_id', userId)
         .order('date', { ascending: false })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -762,7 +762,7 @@ export const data = {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -812,7 +812,7 @@ export const data = {
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -864,7 +864,7 @@ export const data = {
         .order('section', { ascending: true })
         .order('order', { ascending: true })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -919,7 +919,7 @@ export const data = {
 
       const { data, error } = await query.order('date', { ascending: false })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
@@ -951,7 +951,7 @@ export const data = {
         .order('created_at', { ascending: false })
         .limit(50)
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
@@ -1015,7 +1015,7 @@ export const data = {
         .in('date', dates)
         .order('date', { ascending: true })
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async upsert(userId: string, date: string, body: Record<string, any>) {
@@ -1045,7 +1045,7 @@ export const data = {
         .select('*')
         .eq('user_id', userId)
       if (error) throw error
-      return toCamel(data ?? [])
+      return toCamel<any[]>(data ?? [])
     },
 
     async create(userId: string, body: Record<string, any>) {
