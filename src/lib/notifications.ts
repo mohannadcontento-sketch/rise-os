@@ -1,8 +1,12 @@
 import { toast } from 'sonner'
 import { apiPost } from '@/lib/api-fetch'
+import { isNotificationEnabled, showBrowserNotification } from '@/lib/notification-prefs'
 
 // ============================================================
 // RiseOS Notifications — with varied motivational messages
+// Every celebration is gated by the user's Settings toggles
+// (rise-settings.notifications) and also fires a browser
+// notification when the tab is not focused.
 // ============================================================
 
 // Push notification to server (for persistence)
@@ -10,6 +14,34 @@ export async function pushNotification(data: { title: string; body?: string; typ
   try {
     await apiPost('/api/rise/notifications', data)
   } catch { /* silent */ }
+}
+
+/** Shared celebration pipeline: respects prefs + notifies browser when unfocused */
+function celebrate(opts: {
+  prefKey: 'taskDone' | 'habitDone' | 'focusDone' | 'morning'
+  message: string
+  detail: string
+  icon: string
+  actionUrl?: string
+  type?: string
+}) {
+  try {
+    if (!isNotificationEnabled(opts.prefKey)) return
+    toast.success(opts.message, {
+      description: opts.detail,
+      duration: 4000,
+    })
+    showBrowserNotification(opts.message, { body: opts.detail, tag: `rise-${opts.prefKey}` })
+    pushNotification({
+      title: opts.message,
+      body: opts.detail,
+      type: opts.type || 'success',
+      icon: opts.icon,
+      actionUrl: opts.actionUrl,
+    })
+  } catch {
+    // never break the UI
+  }
 }
 
 // ─── Motivational message pools (50+ messages for variety) ───
@@ -105,99 +137,59 @@ function randomMessage(pool: string[]): string {
 
 // Show when user completes all morning routine items
 export function notifyMorningComplete(score: number, xp: number) {
-  try {
-    const msg = randomMessage(MORNING_MESSAGES)
-    toast.success(msg, {
-      description: `درجتك: ${score}% | +${xp} XP`,
-      duration: 4000,
-    })
-    pushNotification({
-      title: msg,
-      body: `درجتك: ${score}% | +${xp} XP`,
-      type: 'success',
-      icon: '🌅',
-    })
-  } catch {
-    // never break the UI
-  }
+  celebrate({
+    prefKey: 'morning',
+    message: randomMessage(MORNING_MESSAGES),
+    detail: `درجتك: ${score}% | +${xp} XP`,
+    icon: '🌅',
+    actionUrl: 'morning',
+  })
 }
 
 // Show when user completes a task
 export function notifyTaskComplete(title: string, xp: number) {
-  try {
-    const msg = randomMessage(TASK_MESSAGES)
-    toast.success(msg, {
-      description: `${title} | +${xp} XP`,
-      duration: 4000,
-    })
-    pushNotification({
-      title: msg,
-      body: `${title} | +${xp} XP`,
-      type: 'success',
-      icon: '🎉',
-    })
-  } catch {
-    // never break the UI
-  }
+  celebrate({
+    prefKey: 'taskDone',
+    message: randomMessage(TASK_MESSAGES),
+    detail: `${title} | +${xp} XP`,
+    icon: '🎉',
+    actionUrl: 'tasks',
+  })
 }
 
 // Show when user completes a habit
 export function notifyHabitComplete(name: string, streak: number) {
-  try {
-    const msg = randomMessage(HABIT_MESSAGES)
-    const streakMsg = streak > 1 ? ` | 🔥 ${streak} يوم متتالي` : ''
-    toast.success(msg, {
-      description: `${name}${streakMsg}`,
-      duration: 4000,
-    })
-    pushNotification({
-      title: msg,
-      body: `${name}${streakMsg}`,
-      type: 'success',
-      icon: '🔥',
-    })
-  } catch {
-    // never break the UI
-  }
+  const streakMsg = streak > 1 ? ` | 🔥 ${streak} يوم متتالي` : ''
+  celebrate({
+    prefKey: 'habitDone',
+    message: randomMessage(HABIT_MESSAGES),
+    detail: `${name}${streakMsg}`,
+    icon: '🔥',
+    actionUrl: 'habits',
+  })
 }
 
 // Show when user completes a focus session
 export function notifyFocusComplete(minutes: number, xp: number) {
-  try {
-    const msg = randomMessage(FOCUS_MESSAGES)
-    toast.success(msg, {
-      description: `${minutes} دقيقة تركيز | +${xp} XP`,
-      duration: 4000,
-    })
-    pushNotification({
-      title: msg,
-      body: `${minutes} دقيقة تركيز | +${xp} XP`,
-      type: 'success',
-      icon: '🧠',
-    })
-  } catch {
-    // never break the UI
-  }
+  celebrate({
+    prefKey: 'focusDone',
+    message: randomMessage(FOCUS_MESSAGES),
+    detail: `${minutes} دقيقة تركيز | +${xp} XP`,
+    icon: '🧠',
+    actionUrl: 'deepwork',
+  })
 }
 
 // Show when user completes a work session ("الشغل")
 export function notifyWorkComplete(activeMinutes: number, qualityScore: number, xp: number) {
-  try {
-    const msg = randomMessage(WORK_MESSAGES)
-    const hours = Math.floor(activeMinutes / 60)
-    const mins = activeMinutes % 60
-    const timeLabel = hours > 0 ? `${hours}س ${mins}د` : `${mins}د`
-    toast.success(msg, {
-      description: `${timeLabel} شغل فعلي | جودة ${qualityScore}٪ | +${xp} XP`,
-      duration: 5000,
-    })
-    pushNotification({
-      title: msg,
-      body: `${timeLabel} شغل فعلي | جودة ${qualityScore}٪ | +${xp} XP`,
-      type: 'success',
-      icon: '💼',
-    })
-  } catch {
-    // never break the UI
-  }
+  const hours = Math.floor(activeMinutes / 60)
+  const mins = activeMinutes % 60
+  const timeLabel = hours > 0 ? `${hours}س ${mins}د` : `${mins}د`
+  celebrate({
+    prefKey: 'focusDone',
+    message: randomMessage(WORK_MESSAGES),
+    detail: `${timeLabel} شغل فعلي | جودة ${qualityScore}٪ | +${xp} XP`,
+    icon: '💼',
+    actionUrl: 'work',
+  })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RiseIcon } from './icons'
 import { BellToggle } from './kit-v2'
-import { toast } from 'sonner'
 
 interface Habit {
   id: string
@@ -27,40 +26,21 @@ interface HabitRemindersProps {
 
 export function HabitReminders({ habits, onToggleReminder }: HabitRemindersProps) {
   const [currentTime, setCurrentTime] = useState<string | null>(null)
-  const [notifiedHabits, setNotifiedHabits] = useState<Set<string>>(new Set())
 
-  /* ── Check current time every minute ── */
-  const prevHourRef = useRef<string>('')
-
+  /* ── Keep a live clock for the "upcoming" banner ──
+     NOTE: the actual reminder firing moved to the global ReminderEngine
+     (mounted in the app shell) so reminders work on every page and are
+     delivered as toast + browser notification + bell inbox. This component
+     only renders the upcoming-reminders banner — no duplicate toasts. */
   useEffect(() => {
-    const checkTime = () => {
+    const update = () => {
       const now = new Date()
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-      setCurrentTime(timeStr)
-
-      // Reset notified set when hour changes
-      const currentHour = timeStr.slice(0, 2)
-      if (prevHourRef.current && prevHourRef.current !== currentHour) {
-        setNotifiedHabits(new Set())
-      }
-      prevHourRef.current = currentHour
-
-      // Check for matching reminders
-      habits.forEach((habit) => {
-        if (habit.reminderTime && habit.reminderTime === timeStr && !notifiedHabits.has(habit.id)) {
-          toast(`حان وقت ${habit.name}! ⏰`, {
-            description: `لا تنسَ إتمام عادتك اليوم`,
-            duration: 6000,
-          })
-          setNotifiedHabits((prev) => new Set(prev).add(habit.id))
-        }
-      })
+      setCurrentTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)
     }
-
-    checkTime()
-    const interval = setInterval(checkTime, 60000)
+    update()
+    const interval = setInterval(update, 60000)
     return () => clearInterval(interval)
-  }, [habits, notifiedHabits])
+  }, [])
 
   const habitsWithReminders = useMemo(
     () => habits.filter((h) => h.reminderTime),

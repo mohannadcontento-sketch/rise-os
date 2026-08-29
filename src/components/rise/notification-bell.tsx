@@ -327,10 +327,12 @@ export function NotificationBell() {
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
             className={cn(
-              'absolute left-0 top-full mt-2 w-80 sm:w-96 z-50',
+              // Mobile: fixed sheet anchored under the header, fits any screen
+              'fixed inset-x-3 top-16 z-50 max-h-[75vh] overflow-hidden',
+              // Desktop: anchored popover next to the bell
+              'sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-96',
               'bg-popover text-popover-foreground rounded-2xl border border-border',
-              'shadow-lift',
-              'overflow-hidden'
+              'shadow-lift'
             )}
           >
             {/* Header */}

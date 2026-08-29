@@ -57,6 +57,7 @@ const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.
 
 import Onboarding from '@/components/rise/onboarding'
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
+const ReminderEngine = lazy(() => import('@/components/rise/reminder-engine').then(m => ({ default: m.ReminderEngine })))
 
 // Lazy load all modules
 const Dashboard = lazy(() => import('@/components/rise/dashboard').then(m => ({ default: m.default })))
@@ -324,6 +325,20 @@ export default function RiseOSApp() {
     }
   }, [setAuth])
 
+  // Notification clicks & reminder CTAs dispatch 'rise:navigate' with a
+  // module id (or /app/<id>) — jump to that module.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      const target = String(detail || '').replace(/^\/app\/?/, '').replace(/^\//, '')
+      if ((moduleNames as Record<string, string>)[target]) {
+        setActiveModule(target as ModuleId)
+      }
+    }
+    window.addEventListener('rise:navigate', handler)
+    return () => window.removeEventListener('rise:navigate', handler)
+  }, [setActiveModule])
+
   /* ── Global search ── */
   const handleSearchQuery = useCallback((query: string) => {
     setSearchQuery(query)
@@ -385,6 +400,9 @@ export default function RiseOSApp() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Suspense fallback={null}><Sidebar /></Suspense>
+
+      {/* Global reminder dispatcher — habit/wake/sleep reminders on every page */}
+      <Suspense fallback={null}><ReminderEngine /></Suspense>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
@@ -642,7 +660,7 @@ export default function RiseOSApp() {
 
       {/* ══════════ FAB - Quick Add ══════════ */}
         {activeModule !== 'dashboard' && activeModule !== 'settings' && (
-          <div className="fixed bottom-5 right-5 z-50 flex flex-col-reverse items-center gap-3">
+          <div className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 z-50 flex flex-col-reverse items-center gap-3 lg:bottom-5 lg:right-5">
             {/* Action items */}
               {fabOpen && (
                 <div

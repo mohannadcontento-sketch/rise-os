@@ -26,7 +26,8 @@ export function GlassNav() {
   return (
     <nav
       aria-label="التنقل السريع"
-      className="glass-nav fixed bottom-3 z-50 flex items-center gap-1 p-1.5 ltr:left-1/2 ltr:-translate-x-1/2 rtl:right-1/2 rtl:translate-x-1/2 lg:hidden"
+      className="glass-nav fixed z-50 flex items-center gap-1 p-1.5 ltr:left-1/2 ltr:-translate-x-1/2 rtl:right-1/2 rtl:translate-x-1/2 lg:hidden"
+      style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
     >
       {NAV_ITEMS.map(({ id, label, glyph }) => {
         const active = activeModule === id;

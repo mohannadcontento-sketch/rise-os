@@ -32,12 +32,14 @@ import {
   Trophy,
   Star,
   Volume2,
+  CheckCircle2,
+  BellRing,
+  MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import {
@@ -66,6 +68,12 @@ import { AVATARS, type AvatarItem } from '@/lib/avatars'
 import { getToday } from '@/lib/rise-utils'
 import { RiseIcon } from '@/components/rise/icons'
 import { BellToggle } from '@/components/rise/kit-v2'
+import {
+  getBrowserPermissionState,
+  requestBrowserPermission,
+  showBrowserNotification,
+  type BrowserPermissionState,
+} from '@/lib/notification-prefs'
 
 /* ────────────── Types ────────────── */
 
@@ -78,12 +86,11 @@ interface SettingsData {
   weeklyExerciseGoal: number
   notifications: {
     morning: boolean
-    exercise: boolean
-    reading: boolean
-    focus: boolean
-    water: boolean
-    prayer: boolean
     sleep: boolean
+    habits: boolean
+    taskDone: boolean
+    habitDone: boolean
+    focusDone: boolean
   }
   sounds: boolean
   soundVolume: number
@@ -101,12 +108,11 @@ const defaultSettings: SettingsData = {
   weeklyExerciseGoal: 5,
   notifications: {
     morning: true,
-    exercise: true,
-    reading: false,
-    focus: true,
-    water: true,
-    prayer: true,
     sleep: true,
+    habits: true,
+    taskDone: true,
+    habitDone: true,
+    focusDone: true,
   },
   sounds: true,
   soundVolume: 0.5,
@@ -128,6 +134,45 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+/* ────────────── Section shell ────────────── */
+
+function SectionCard({
+  icon: Icon,
+  well,
+  title,
+  desc,
+  children,
+  className,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  well: string
+  title: string
+  desc?: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('neo-card card-lift overflow-hidden', className)}>
+      <div className="p-5 pb-4">
+        <h3 className="text-base font-bold flex items-center gap-2.5">
+          <span className={cn('icon-well h-7 w-7', well)}>
+            <Icon className="h-4 w-4" />
+          </span>
+          <span>
+            {title}
+            {desc && (
+              <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                {desc}
+              </span>
+            )}
+          </span>
+        </h3>
+      </div>
+      <div className="px-5 pb-5 space-y-4">{children}</div>
+    </div>
+  )
 }
 
 /* ────────────── Component ────────────── */
@@ -160,20 +205,34 @@ export default function Settings() {
     if (typeof window === 'undefined') return defaultSettings
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) return { ...defaultSettings, ...JSON.parse(stored) }
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return {
+          ...defaultSettings,
+          ...parsed,
+          // Deep-merge notifications so newly-added pref keys always exist
+          notifications: { ...defaultSettings.notifications, ...(parsed?.notifications || {}) },
+        }
+      }
     } catch { /* ignore */ }
     return defaultSettings
   })
   const [editName, setEditName] = useState(() => {
-    // Prefer auth store name, fallback to settings
     return auth?.userName && auth.userName !== 'مستخدم' ? auth.userName : settings.userName
   })
-  // Sync settings.userName from auth store
   const displayName = auth?.userName && auth.userName !== 'مستخدم' ? auth.userName : settings.userName
   const [storageSize, setStorageSize] = useState({ used: 0, total: 10 * 1024 * 1024, percent: 0, counts: {} as Record<string, number> })
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Fetch user stats
   const [userStats, setUserStats] = useState<{ level: number; xp: number; xpToNext: number; streak: number } | null>(null)
+
+  // Browser notification permission state (live)
+  const [permission, setPermission] = useState<BrowserPermissionState>('unsupported')
+  useEffect(() => {
+    setPermission(getBrowserPermissionState())
+    const onFocus = () => setPermission(getBrowserPermissionState())
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   useEffect(() => {
     apiFetch(`/api/rise/dashboard`)
@@ -194,7 +253,6 @@ export default function Settings() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-    // Also save to the separate name key
     localStorage.setItem(NAME_KEY, settings.userName)
   }, [settings])
 
@@ -212,7 +270,6 @@ export default function Settings() {
     setIsEditingName(false)
     toast.success('تم تحديث الاسم')
 
-    // Sync to server
     try {
       await apiPost('/api/rise/user/name', { name: newName })
       window.dispatchEvent(new CustomEvent('rise:user-updated'))
@@ -269,8 +326,7 @@ export default function Settings() {
       }
     }
     reader.readAsText(file)
-    // Reset file input
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    fileInputRef.current!.value = ''
   }
 
   const [deletingAll, setDeletingAll] = useState(false)
@@ -278,7 +334,6 @@ export default function Settings() {
   const handleResetData = async () => {
     setDeletingAll(true)
     try {
-      // Delete ALL data from server database
       const res = await apiDelete('/api/rise/delete-all')
       if (!res.ok) {
         toast.error('فشل حذف البيانات من الخادم')
@@ -286,7 +341,6 @@ export default function Settings() {
       }
       const result = await res.json().catch(() => ({}))
 
-      // Also clear local cache
       const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-') && k !== 'rise-auth' && k !== 'rise-user-info')
       allKeys.forEach((key) => localStorage.removeItem(key))
       setSettings(defaultSettings)
@@ -303,6 +357,49 @@ export default function Settings() {
     } finally {
       setDeletingAll(false)
     }
+  }
+
+  /* ── Browser notifications controls ── */
+  const handleEnableNotifications = async () => {
+    const result = await requestBrowserPermission()
+    setPermission(result)
+    if (result === 'granted') {
+      toast.success('تم تفعيل إشعارات المتصفح')
+      showBrowserNotification('إشعارات RiseOS مفعّلة 🎉', {
+        body: 'هكذا ستوصلك التنبيهات والتذكيرات حتى لو كان المتصفح بالخلفية',
+        force: true,
+        tag: 'rise-welcome',
+      })
+    } else if (result === 'denied') {
+      toast.error('الإشعارات محظورة', {
+        description: 'اسمح بالإشعارات لهذا الموقع من إعدادات المتصفح ثم أعد المحاولة',
+      })
+    }
+  }
+
+  const handleTestNotification = () => {
+    playSound('notification')
+    const ok = showBrowserNotification('🔔 إشعار تجريبي من RiseOS', {
+      body: 'ممتاز! الإشعارات تعمل بشكل كامل الآن',
+      force: true,
+      tag: 'rise-test',
+    })
+    if (ok) {
+      toast.success('وصلك الإشعار؟ هكذا ستظهر التذكيرات')
+    } else {
+      toast.error('لم يُرسل الإشعار', {
+        description: permission === 'denied'
+          ? 'الإشعارات محظورة من المتصفح — اسمح لها أولاً'
+          : 'فعّل إشعارات المتصفح أولاً من الزر أعلاه',
+      })
+    }
+  }
+
+  const permissionMeta: Record<BrowserPermissionState, { label: string; className: string }> = {
+    granted: { label: 'مفعّلة ✓', className: 'bg-emerald-accent/10 text-emerald-accent' },
+    denied: { label: 'محظورة', className: 'bg-destructive/10 text-destructive' },
+    default: { label: 'غير مفعّلة', className: 'bg-gold/10 text-gold' },
+    unsupported: { label: 'غير مدعومة', className: 'bg-muted text-muted-foreground' },
   }
 
   const themes = [
@@ -349,27 +446,22 @@ export default function Settings() {
     },
   ]
 
+  /* Real toggle groups — each key is read live by the notification engine */
   const notifGroups = [
     {
-      title: 'صباحي',
+      title: 'التذكيرات اليومية',
       items: [
-        { key: 'morning', label: 'تذكير صباحي', desc: 'بداية روتينك الصباحي', icon: Sunrise },
-        { key: 'sleep', label: 'تذكير نوم', desc: 'وقت النوم والاسترخاء', icon: Moon },
+        { key: 'morning', label: 'تذكير الاستيقاظ', desc: `يومياً الساعة ${settings.wakeUpTime}`, icon: Sunrise },
+        { key: 'sleep', label: 'تذكير النوم', desc: `يومياً الساعة ${settings.sleepTime}`, icon: Moon },
+        { key: 'habits', label: 'تذكيرات العادات', desc: 'حسب وقت كل عادة — تعمل من أي صفحة', icon: Bell },
       ],
     },
     {
-      title: 'صحية',
+      title: 'احتفالات الإنجاز',
       items: [
-        { key: 'exercise', label: 'تذكير تمارين', desc: 'تمارينك الرياضية اليومية', icon: Dumbbell },
-        { key: 'water', label: 'تذكير ماء', desc: 'شرب الماء بانتظام', icon: Droplets },
-      ],
-    },
-    {
-      title: 'إنتاجية',
-      items: [
-        { key: 'reading', label: 'تذكير قراءة', desc: 'هدف القراءة اليومي', icon: BookOpen },
-        { key: 'focus', label: 'تذكير تركيز', desc: 'جلسات العمل العميق', icon: Target },
-        { key: 'prayer', label: 'تذكير صلاة', desc: 'أوقات الصلاة', icon: Clock },
+        { key: 'taskDone', label: 'إتمام المهام', desc: 'رسالة تحفيزية عند إتمام مهمة', icon: CheckCircle2 },
+        { key: 'habitDone', label: 'إتمام العادات', desc: 'رسالة تحفيزية عند إتمام عادة', icon: Flame },
+        { key: 'focusDone', label: 'جلسات التركيز والشغل', desc: 'عند إنهاء جلسة عمل عميق', icon: Target },
       ],
     },
   ]
@@ -377,26 +469,23 @@ export default function Settings() {
   const storagePercent = storageSize.percent || Math.min(100, Math.round((storageSize.used / storageSize.total) * 100))
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
-          <RiseIcon glyph="settings" hue="forest" size="md" lift />
-          الإعدادات
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">خصّص تجربتك في RiseOS</p>
-      </div>
-
-      {/* Profile Section with Stats */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-forest/60">
-          <div className="p-6">
-            <div className="flex items-start gap-5">
-              {/* Avatar with gradient + animated glow — clickable to open picker */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start max-w-5xl">
+      {/* Profile — full width */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="md:col-span-2"
+      >
+        <div className="neo-card card-lift overflow-hidden relative">
+          {/* subtle top accent */}
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-l from-emerald-accent/60 via-gold/50 to-forest/60" />
+          <div className="p-5">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              {/* Avatar — clickable to open picker */}
               <Dialog open={avatarPickerOpen} onOpenChange={setAvatarPickerOpen}>
                 <DialogTrigger asChild>
                   <motion.div
-                    className="relative cursor-pointer"
+                    className="relative cursor-pointer shrink-0"
                     whileHover={{ scale: 1.05, rotate: -3 }}
                     whileTap={{ scale: 0.98 }}
                   >
@@ -438,7 +527,7 @@ export default function Settings() {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleSelectAvatar(avatar)}
                         className={cn(
-                          'flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all',
+                          'relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all',
                           'hover:bg-muted/50',
                           selectedAvatar === avatar.id && 'ring-2 ring-forest bg-forest/5 dark:ring-lime dark:bg-lime/10'
                         )}
@@ -460,14 +549,14 @@ export default function Settings() {
                   </div>
                 </DialogContent>
               </Dialog>
-              <div className="flex-1 space-y-3">
+              <div className="flex-1 space-y-3 w-full">
                 {/* Name */}
                 {isEditingName ? (
                   <div className="flex items-center gap-2">
                     <Input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="text-sm font-semibold h-9"
+                      className="text-sm font-semibold h-9 neo-input"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') saveName()
@@ -499,6 +588,7 @@ export default function Settings() {
                           whileTap={{ scale: 0.9 }}
                           onClick={() => { setEditName(displayName); setIsEditingName(true) }}
                           className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors opacity-50 hover:opacity-100"
+                          aria-label="تعديل الاسم"
                         >
                           <Pencil className="w-3 h-3" />
                         </motion.button>
@@ -509,34 +599,19 @@ export default function Settings() {
                 {/* Email */}
                 <div>
                   <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">البريد</Label>
-                  <p className="text-sm text-muted-foreground">{auth?.userEmail || 'user@riseos.app'}</p>
+                  <p className="text-sm text-muted-foreground" dir="ltr">{auth?.userEmail || 'user@riseos.app'}</p>
                 </div>
                 {/* Stats Row */}
-                <div className="flex items-center gap-3 pt-1">
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="pill pill-success"
-                  >
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="pill pill-success">
                     <Trophy className="w-3.5 h-3.5" />
                     <span>المستوى <span className="num" dir="ltr">{userStats?.level ?? 1}</span></span>
                   </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="pill pill-lime"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="pill pill-lime">
                     <Star className="w-3.5 h-3.5" />
                     <span><span className="num" dir="ltr">{userStats?.xp ?? 0}</span> XP</span>
                   </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="pill bg-destructive/10 text-destructive"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="pill bg-destructive/10 text-destructive">
                     <Flame className="w-3.5 h-3.5" />
                     <span><span className="num" dir="ltr">{userStats?.streak ?? 0}</span> يوم</span>
                   </motion.div>
@@ -547,61 +622,48 @@ export default function Settings() {
         </div>
       </motion.div>
 
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-gold/30 to-transparent" />
-
       {/* Appearance */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-gold/50">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-violet"><Palette className="h-4 w-4" /></span>
-              المظهر
-            </h3>
-          </div>
-          <div className="px-5 pb-5 space-y-5">
-            {/* Theme Cards with Mini Preview */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">السمة</Label>
-              <div className="grid grid-cols-3 gap-3">
-                {themes.map((t) => {
-                  const Icon = t.icon
-                  const isActive = theme === t.value
-                  return (
-                    <motion.button
-                      key={t.value}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setTheme(t.value)}
-                      className={cn(
-                        'flex flex-col items-center gap-2.5 p-3 rounded-2xl border-2 transition-all',
-                        isActive
-                          ? 'border-forest bg-forest/5 shadow-lg shadow-forest/15 ring-2 ring-forest/20 dark:border-lime dark:bg-lime/10 dark:ring-lime/20'
-                          : 'border-border bg-card hover:bg-secondary'
-                      )}
-                    >
-                      {t.preview}
-                      <div className="flex items-center gap-1.5">
-                        <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-forest dark:text-lime' : 'text-muted-foreground')} />
-                        <span className={cn('text-xs font-medium', isActive ? 'text-forest dark:text-lime' : 'text-muted-foreground')}>
-                          {t.label}
-                        </span>
-                      </div>
-                    </motion.button>
-                  )
-                })}
-              </div>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
+        <SectionCard icon={Palette} well="iw-violet" title="المظهر" desc="السمة واللغة">
+          <div className="space-y-4">
+            <Label className="text-sm font-medium">السمة</Label>
+            <div className="grid grid-cols-3 gap-3">
+              {themes.map((t) => {
+                const Icon = t.icon
+                const isActive = theme === t.value
+                return (
+                  <motion.button
+                    key={t.value}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setTheme(t.value)}
+                    className={cn(
+                      'flex flex-col items-center gap-2.5 p-3 rounded-2xl border-2 transition-all',
+                      isActive
+                        ? 'border-forest bg-forest/5 shadow-lg shadow-forest/15 ring-2 ring-forest/20 dark:border-lime dark:bg-lime/10 dark:ring-lime/20'
+                        : 'border-border bg-card hover:bg-secondary'
+                    )}
+                  >
+                    {t.preview}
+                    <div className="flex items-center gap-1.5">
+                      <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-forest dark:text-lime' : 'text-muted-foreground')} />
+                      <span className={cn('text-xs font-medium', isActive ? 'text-forest dark:text-lime' : 'text-muted-foreground')}>
+                        {t.label}
+                      </span>
+                    </div>
+                  </motion.button>
+                )
+              })}
             </div>
 
-            <Separator />
+            <div className="h-px bg-border/60" />
 
-            {/* Language */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-muted-foreground" />
                 <Label className="text-sm font-medium">اللغة</Label>
               </div>
               <Select defaultValue="ar" disabled>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-32 neo-input">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -611,328 +673,334 @@ export default function Settings() {
               </Select>
             </div>
           </div>
-        </div>
+        </SectionCard>
       </motion.div>
 
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-forest/30 to-transparent" />
-
-      {/* Notifications - Grouped */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-gold/50">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-amber"><Bell className="h-4 w-4" /></span>
-              الإشعارات
-            </h3>
-          </div>
-          <div className="px-5 pb-5 space-y-5">
-            {notifGroups.map((group) => (
-              <div key={group.title}>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">{group.title}</p>
-                <div className="space-y-1">
-                  {group.items.map((item) => {
-                    const Icon = item.icon
-                    const isChecked = settings.notifications[item.key as keyof typeof settings.notifications]
-                    return (
-                      <div key={item.key} className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="p-1.5 rounded-lg bg-muted/50">
-                            <Icon className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium block">{item.label}</span>
-                            <span className="text-[11px] text-muted-foreground">{item.desc}</span>
-                          </div>
-                        </div>
-                        <BellToggle enabled={isChecked} onToggle={(v) => updateNotification(item.key, v)} />
-                      </div>
-                    )
-                  })}
+      {/* Notifications — everything notification-related lives here */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+        <SectionCard icon={Bell} well="iw-amber" title="الإشعارات والتذكيرات" desc="تذكيرات حقيقية تعمل من أي صفحة">
+          {/* Browser permission */}
+          <div className="p-3.5 rounded-xl bg-gold/[0.06] border border-gold/20 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="icon-well h-8 w-8 iw-amber">
+                  <BellRing className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">إشعارات المتصفح</p>
+                  <p className="text-[11px] text-muted-foreground">توصلك حتى والموقع بالخلفية</p>
                 </div>
-                {group.title !== notifGroups[notifGroups.length - 1].title && <Separator className="mt-3" />}
               </div>
-            ))}
+              <span className={cn('pill text-[10px] shrink-0', permissionMeta[permission].className)}>
+                {permissionMeta[permission].label}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              {permission !== 'granted' && permission !== 'unsupported' && (
+                <Button
+                  size="sm"
+                  onClick={handleEnableNotifications}
+                  className="flex-1 h-8 text-xs rounded-lg bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90"
+                >
+                  <BellRing className="w-3.5 h-3.5 me-1.5" />
+                  تفعيل الإشعارات
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleTestNotification}
+                disabled={permission === 'unsupported'}
+                className="flex-1 h-8 text-xs rounded-lg border-border bg-card hover:bg-secondary"
+              >
+                <MessageSquare className="w-3.5 h-3.5 me-1.5" />
+                إشعار تجريبي
+              </Button>
+            </div>
           </div>
-        </div>
-      </motion.div>
 
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-glass/30 to-transparent" />
-
-      {/* Sounds */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-glass/50">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-blue"><Volume2 className="h-4 w-4" /></span>
-              الأصوات
-            </h3>
-          </div>
-          <div className="px-5 pb-5 space-y-5">
-            <div className="flex items-center justify-between py-2 px-1">
-              <div>
-                <span className="text-sm font-medium block">تأثيرات صوتية</span>
-                <span className="text-[11px] text-muted-foreground">أصوات تفاعلية للمهام والعادات والإشعارات</span>
-              </div>
-              <Switch
-                checked={settings.sounds}
-                onCheckedChange={(v) => {
-                  setSettings((prev) => ({ ...prev, sounds: v }))
-                  if (v) playSound('success')
-                }}
-                className="data-[state=checked]:bg-forest dark:data-[state=checked]:bg-lime"
+          {/* Reminder times — these POWER the global reminder engine */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Sunrise className="w-3.5 h-3.5 text-gold" />
+                وقت الاستيقاظ
+              </Label>
+              <Input
+                type="time"
+                dir="ltr"
+                value={settings.wakeUpTime}
+                onChange={(e) => setSettings((prev) => ({ ...prev, wakeUpTime: e.target.value }))}
+                className="text-center h-10 text-sm font-medium rounded-xl neo-input num"
               />
             </div>
-            {settings.sounds && (
-              <div className="space-y-3 px-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm text-muted-foreground">مستوى الصوت</Label>
-                  <span className="text-xs text-muted-foreground"><span className="num" dir="ltr">{Math.round(settings.soundVolume * 100)}%</span></span>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Moon className="w-3.5 h-3.5 text-violet-accent" />
+                وقت النوم
+              </Label>
+              <Input
+                type="time"
+                dir="ltr"
+                value={settings.sleepTime}
+                onChange={(e) => setSettings((prev) => ({ ...prev, sleepTime: e.target.value }))}
+                className="text-center h-10 text-sm font-medium rounded-xl neo-input num"
+              />
+            </div>
+          </div>
+
+          {/* Toggle groups — now actually wired to the engine */}
+          {notifGroups.map((group) => (
+            <div key={group.title}>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{group.title}</p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  const isChecked = settings.notifications[item.key as keyof typeof settings.notifications]
+                  return (
+                    <div key={item.key} className="flex items-center justify-between py-2 px-2 rounded-xl hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-lg bg-muted/50">
+                          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <span className="text-[13px] font-medium block">{item.label}</span>
+                          <span className="text-[10px] text-muted-foreground num">{item.desc}</span>
+                        </div>
+                      </div>
+                      <BellToggle enabled={!!isChecked} onToggle={(v) => updateNotification(item.key, v)} />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1 px-1">
+            <Clock className="w-3 h-3" />
+            تُطبق فوراً — تذكيرات العادات تُقرأ من صفحة العادات لكل عادة على حدة
+          </p>
+        </SectionCard>
+      </motion.div>
+
+      {/* Sounds */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+        <SectionCard icon={Volume2} well="iw-blue" title="الأصوات" desc="مؤثرات تفاعلية للإنجازات">
+          <div className="flex items-center justify-between py-1.5 px-1">
+            <div>
+              <span className="text-sm font-medium block">تأثيرات صوتية</span>
+              <span className="text-[11px] text-muted-foreground">أصوات للمهام والعادات والإشعارات</span>
+            </div>
+            <Switch
+              checked={settings.sounds}
+              onCheckedChange={(v) => {
+                setSettings((prev) => ({ ...prev, sounds: v }))
+                if (v) playSound('success')
+              }}
+              className="data-[state=checked]:bg-forest dark:data-[state=checked]:bg-lime"
+            />
+          </div>
+          {settings.sounds && (
+            <div className="space-y-3 px-1 pt-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm text-muted-foreground">مستوى الصوت</Label>
+                <span className="text-xs text-muted-foreground"><span className="num" dir="ltr">{Math.round(settings.soundVolume * 100)}%</span></span>
+              </div>
+              <Slider
+                value={[settings.soundVolume]}
+                min={0}
+                max={1}
+                step={0.05}
+                onValueChange={([v]) => {
+                  setSettings((prev) => ({ ...prev, soundVolume: v }))
+                  playSound('click')
+                }}
+                className="w-full"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs w-full rounded-xl border-border bg-card hover:bg-secondary"
+                onClick={() => playSound('task-complete')}
+              >
+                <Volume2 className="w-3.5 h-3.5 me-1.5" />
+                اختبار الصوت
+              </Button>
+            </div>
+          )}
+        </SectionCard>
+      </motion.div>
+
+      {/* Daily goals */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+        <SectionCard icon={Target} well="iw-lime" title="أهداف يومية" desc="تظهر في الصحة والروتين">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Droplets className="w-3 h-3" />
+                الماء (كؤوس)
+              </Label>
+              <Input
+                type="number"
+                dir="ltr"
+                min={1}
+                max={20}
+                value={settings.dailyWaterGoal}
+                onChange={(e) => setSettings((prev) => ({ ...prev, dailyWaterGoal: parseInt(e.target.value) || 8 }))}
+                className="text-center h-11 text-base font-bold rounded-xl neo-input num"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <BookOpen className="w-3 h-3" />
+                القراءة (صفحة)
+              </Label>
+              <Input
+                type="number"
+                dir="ltr"
+                min={1}
+                max={500}
+                value={settings.dailyReadingGoal}
+                onChange={(e) => setSettings((prev) => ({ ...prev, dailyReadingGoal: parseInt(e.target.value) || 30 }))}
+                className="text-center h-11 text-base font-bold rounded-xl neo-input num"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Dumbbell className="w-3 h-3" />
+                التمرين (أيام)
+              </Label>
+              <Input
+                type="number"
+                dir="ltr"
+                min={1}
+                max={7}
+                value={settings.weeklyExerciseGoal}
+                onChange={(e) => setSettings((prev) => ({ ...prev, weeklyExerciseGoal: parseInt(e.target.value) || 5 }))}
+                className="text-center h-11 text-base font-bold rounded-xl neo-input num"
+              />
+            </div>
+          </div>
+        </SectionCard>
+      </motion.div>
+
+      {/* Data & Privacy */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <SectionCard icon={Shield} well="iw-forest" title="البيانات والخصوصية" desc="نسخ احتياطي ومساحة الخادم">
+          {/* Storage */}
+          <div className="p-4 rounded-xl bg-muted/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">مساحة التخزين في الخادم</span>
+              </div>
+              <span className="text-xs font-semibold text-muted-foreground">
+                <span className="num" dir="ltr">{formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}</span>
+              </span>
+            </div>
+            <Progress value={storagePercent} className="h-2" />
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span><span className="num" dir="ltr">{storagePercent}%</span> مستخدم</span>
+              <span><span className="num" dir="ltr">{formatBytes(storageSize.total - storageSize.used)}</span> متاح</span>
+            </div>
+            {storageSize.counts && Object.keys(storageSize.counts).length > 0 && (
+              <div className="pt-2 border-t border-border/40 space-y-1">
+                <p className="text-[10px] font-semibold text-muted-foreground">تفاصيل البيانات:</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-muted-foreground">
+                  {Object.entries(storageSize.counts).map(([key, count]) => {
+                    const labels: Record<string, string> = {
+                      tasks: 'المهام', habits: 'العادات', journals: 'اليوميات',
+                      focusSessions: 'جلسات التركيز', healthLogs: 'الصحة',
+                      financeRecords: 'المالية', books: 'الكتب', knowledgeItems: 'المعرفة',
+                      plannerItems: 'المخطط', morningLogs: 'الروتين', goals: 'الأهداف',
+                      projects: 'المشاريع', achievements: 'الإنجازات', dailyScores: 'الدرجات',
+                    }
+                    return count > 0 ? (
+                      <div key={key} className="flex justify-between">
+                        <span>{labels[key] || key}</span>
+                        <span className="num" dir="ltr">{count}</span>
+                      </div>
+                    ) : null
+                  })}
                 </div>
-                <Slider
-                  value={[settings.soundVolume]}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onValueChange={([v]) => {
-                    setSettings((prev) => ({ ...prev, soundVolume: v }))
-                    playSound('click')
-                  }}
-                  className="w-full"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs w-full rounded-xl border-border bg-card hover:bg-secondary"
-                  onClick={() => playSound('task-complete')}
-                >
-                  <Volume2 className="w-3.5 h-3.5 me-1.5" />
-                  اختبار الصوت
-                </Button>
               </div>
             )}
           </div>
-        </div>
-      </motion.div>
 
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-emerald-accent/30 to-transparent" />
-
-      {/* Morning Routine */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-forest/50">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-amber"><Clock className="h-4 w-4" /></span>
-              الروتين الصباحي
-            </h3>
-          </div>
-          <div className="px-5 pb-5 space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <Sunrise className="w-3.5 h-3.5 text-gold" />
-                  وقت الاستيقاظ
-                </Label>
-                <Input
-                  type="time"
-                  dir="ltr"
-                  value={settings.wakeUpTime}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, wakeUpTime: e.target.value }))}
-                  className="text-center h-11 text-sm font-medium rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <Moon className="w-3.5 h-3.5 text-violet-accent" />
-                  وقت النوم
-                </Label>
-                <Input
-                  type="time"
-                  dir="ltr"
-                  value={settings.sleepTime}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, sleepTime: e.target.value }))}
-                  className="text-center h-11 text-sm font-medium rounded-xl"
-                />
+          {/* Export */}
+          <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
+            <div className="flex items-center gap-3">
+              <span className="icon-well h-9 w-9 iw-forest">
+                <Download className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium">تصدير البيانات</p>
+                <p className="text-[11px] text-muted-foreground">نسخة احتياطية JSON</p>
               </div>
             </div>
+            <Button variant="outline" size="sm" onClick={handleExportData} className="text-xs border-border bg-card hover:bg-secondary shrink-0">
+              تصدير
+            </Button>
           </div>
-        </div>
-      </motion.div>
 
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-violet-accent/30 to-transparent" />
-
-      {/* Goals Settings */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-violet-accent/50">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-lime"><Target className="h-4 w-4" /></span>
-              أهداف يومية
-            </h3>
-          </div>
-          <div className="px-5 pb-5 space-y-4">
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Droplets className="w-3 h-3" />
-                  هدف الماء (كؤوس)
-                </Label>
-                <Input
-                  type="number"
-                  dir="ltr"
-                  min={1}
-                  max={20}
-                  value={settings.dailyWaterGoal}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, dailyWaterGoal: parseInt(e.target.value) || 8 }))}
-                  className="text-center h-12 text-lg font-bold rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <BookOpen className="w-3 h-3" />
-                  هدف القراءة (صفحة)
-                </Label>
-                <Input
-                  type="number"
-                  dir="ltr"
-                  min={1}
-                  max={500}
-                  value={settings.dailyReadingGoal}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, dailyReadingGoal: parseInt(e.target.value) || 30 }))}
-                  className="text-center h-12 text-lg font-bold rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Dumbbell className="w-3 h-3" />
-                  هدف التمرين (أيام/أسبوع)
-                </Label>
-                <Input
-                  type="number"
-                  dir="ltr"
-                  min={1}
-                  max={7}
-                  value={settings.weeklyExerciseGoal}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, weeklyExerciseGoal: parseInt(e.target.value) || 5 }))}
-                  className="text-center h-12 text-lg font-bold rounded-xl"
-                />
+          {/* Import */}
+          <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
+            <div className="flex items-center gap-3">
+              <span className="icon-well h-9 w-9 iw-blue">
+                <Upload className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium">استيراد البيانات</p>
+                <p className="text-[11px] text-muted-foreground">استعادة من ملف JSON</p>
               </div>
             </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-glass/30 to-transparent" />
-
-      {/* Data & Privacy */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-forest/50">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-forest"><Shield className="h-4 w-4" /></span>
-              البيانات والخصوصية
-            </h3>
-          </div>
-          <div className="px-5 pb-5 space-y-4">
-            {/* Storage Usage — real server storage */}
-            <div className="p-4 rounded-xl bg-muted/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <HardDrive className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">مساحة التخزين في الخادم</span>
-                </div>
-                <span className="text-xs font-semibold text-muted-foreground">
-                  <span className="num" dir="ltr">{formatBytes(storageSize.used)} / {formatBytes(storageSize.total)}</span>
-                </span>
-              </div>
-              <Progress value={storagePercent} className="h-2" />
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span><span className="num" dir="ltr">{storagePercent}%</span> مستخدم</span>
-                <span><span className="num" dir="ltr">{formatBytes(storageSize.total - storageSize.used)}</span> متاح</span>
-              </div>
-              {/* Detailed breakdown */}
-              {storageSize.counts && Object.keys(storageSize.counts).length > 0 && (
-                <div className="pt-2 border-t border-border/40 space-y-1">
-                  <p className="text-[10px] font-semibold text-muted-foreground">تفاصيل البيانات:</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-muted-foreground">
-                    {Object.entries(storageSize.counts).map(([key, count]) => {
-                      const labels: Record<string, string> = {
-                        tasks: 'المهام', habits: 'العادات', journals: 'اليوميات',
-                        focusSessions: 'جلسات التركيز', healthLogs: 'الصحة',
-                        financeRecords: 'المالية', books: 'الكتب', knowledgeItems: 'المعرفة',
-                        plannerItems: 'المخطط', morningLogs: 'الروتين', goals: 'الأهداف',
-                        projects: 'المشاريع', achievements: 'الإنجازات', dailyScores: 'الدرجات',
-                      }
-                      return count > 0 ? (
-                        <div key={key} className="flex justify-between">
-                          <span>{labels[key] || key}</span>
-                          <span className="num" dir="ltr">{count}</span>
-                        </div>
-                      ) : null
-                    })}
-                  </div>
-                </div>
-              )}
-              <p className="text-[10px] text-muted-foreground">
-                البيانات مخزنة بأمان في قاعدة البيانات على الخادم.
-              </p>
-            </div>
-
-            {/* Export */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
-              <div className="flex items-center gap-3">
-                <span className="icon-well h-9 w-9 iw-forest">
-                  <Download className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium">تصدير البيانات</p>
-                  <p className="text-xs text-muted-foreground">تنزيل نسخة احتياطية JSON من بياناتك</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleExportData} className="text-xs border-border bg-card hover:bg-secondary">
-                تصدير
+            <label className="cursor-pointer shrink-0">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportData}
+              />
+              <Button variant="outline" size="sm" className="text-xs border-border bg-card hover:bg-secondary" asChild>
+                <span>استيراد</span>
               </Button>
-            </div>
-
-            {/* Import */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/20 hover:bg-muted/30 transition-colors">
-              <div className="flex items-center gap-3">
-                <span className="icon-well h-9 w-9 iw-blue">
-                  <Upload className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium">استيراد البيانات</p>
-                  <p className="text-xs text-muted-foreground">استعادة نسخة احتياطية من ملف JSON</p>
-                </div>
-              </div>
-              <label className="cursor-pointer">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  onChange={handleImportData}
-                />
-                <Button variant="outline" size="sm" className="text-xs border-border bg-card hover:bg-secondary" asChild>
-                  <span>استيراد</span>
-                </Button>
-              </label>
-            </div>
+            </label>
           </div>
-        </div>
+        </SectionCard>
       </motion.div>
 
-      {/* ── Gradient Divider (red) ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-destructive/30 to-transparent" />
+      {/* About */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
+        <SectionCard icon={Info} well="iw-forest" title="عن RiseOS">
+          <div className="flex items-center gap-4 mb-4">
+            <motion.div whileHover={{ scale: 1.05, rotate: -3 }} className="shrink-0">
+              <RiseIcon glyph="bolt" hue="forest" size="lg" lift />
+            </motion.div>
+            <div className="flex-1">
+              <h3 className="font-bold text-lg">RiseOS</h3>
+              <p className="text-xs text-muted-foreground">نظام تشغيل الحياة</p>
+            </div>
+            <span className="pill pill-success">
+              <span className="num" dir="ltr">v1.0.0</span>
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            RiseOS هو نظام تشغيل حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
+            تحقيق أهدافك، وعيش حياة أكثر وعياً وإنتاجية.
+          </p>
+          <div className="h-px bg-border/60" />
+          <div className="flex items-center gap-2">
+            <Heart className="w-3.5 h-3.5 text-rose-accent" />
+            <p className="text-xs text-muted-foreground">
+              صُنع بأيدٍ عربية. امتلك صباحك. امتلك حياتك.
+            </p>
+          </div>
+        </SectionCard>
+      </motion.div>
 
-      {/* Danger Zone with red glow */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+      {/* Danger Zone — full width */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="md:col-span-2">
         <div className="rounded-2xl border-2 border-dashed border-destructive/40 overflow-hidden hover:border-destructive/60 transition-colors group relative">
-          {/* Red glow effect */}
           <motion.div
             className="absolute inset-0 rounded-2xl pointer-events-none"
             animate={{ boxShadow: ['inset 0 0 20px rgba(220, 38, 38, 0.05)', 'inset 0 0 40px rgba(220, 38, 38, 0.08)', 'inset 0 0 20px rgba(220, 38, 38, 0.05)'] }}
@@ -948,20 +1016,20 @@ export default function Settings() {
                 <p className="text-xs text-muted-foreground mt-0.5">هذه الإجراءات لا يمكن التراجع عنها</p>
               </div>
             </div>
-            <div className="flex items-center justify-between p-4 rounded-xl border-2 border-dashed border-destructive/30 group-hover:border-destructive/60 group-hover:bg-destructive/5 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border-2 border-dashed border-destructive/30 group-hover:border-destructive/60 group-hover:bg-destructive/5 transition-all">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-destructive/10">
                   <Trash2 className="w-5 h-5 text-destructive" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-destructive">حذف جميع البيانات</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">سيتم حذف جميع بياناتك من قاعدة البيانات على الخادم نهائياً</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">سيتم حذف جميع بياناتك من قاعدة البيانات نهائياً</p>
                 </div>
               </div>
               <Dialog open={resetDialogOpen} onOpenChange={(open) => { setResetDialogOpen(open); if (!open) setConfirmText('') }}>
                 <DialogTrigger asChild>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button variant="outline" size="sm" className="text-xs border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50">
+                    <Button variant="outline" size="sm" className="text-xs border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 shrink-0">
                       حذف الكل
                     </Button>
                   </motion.div>
@@ -984,7 +1052,7 @@ export default function Settings() {
                       placeholder="اكتب تأكيد هنا..."
                       value={confirmText}
                       onChange={(e) => setConfirmText(e.target.value)}
-                      className="h-12 text-center text-lg font-mono rounded-xl"
+                      className="h-12 text-center text-lg font-mono rounded-xl neo-input"
                       dir="ltr"
                       autoFocus
                     />
@@ -1018,48 +1086,8 @@ export default function Settings() {
         </div>
       </motion.div>
 
-      {/* ── Gradient Divider ── */}
-      <div className="h-[2px] bg-gradient-to-l from-transparent via-muted-foreground/20 to-transparent" />
-
-      {/* About RiseOS with branding */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-        <div className="neo-card card-lift overflow-hidden border-s-4 border-s-muted-foreground/30">
-          <div className="p-5 pb-4">
-            <h3 className="text-base font-bold flex items-center gap-2.5">
-              <span className="icon-well h-7 w-7 iw-forest"><Info className="h-4 w-4" /></span>
-              عن RiseOS
-            </h3>
-          </div>
-          <div className="px-5 pb-5">
-            <div className="flex items-center gap-4 mb-5">
-              <motion.div whileHover={{ scale: 1.05, rotate: -3 }} className="shrink-0">
-                <RiseIcon glyph="bolt" hue="forest" size="lg" lift />
-              </motion.div>
-              <div className="flex-1">
-                <h3 className="font-bold text-lg">RiseOS</h3>
-                <p className="text-xs text-muted-foreground">نظام تشغيل الحياة</p>
-              </div>
-              <span className="pill pill-success">
-                <span className="num" dir="ltr">v1.0.0</span>
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              RiseOS هو نظام تشغيل حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
-              تحقيق أهدافك، وعيش حياة أكثر وعياً وإنتاجية.
-            </p>
-            <Separator className="my-4" />
-            <div className="flex items-center gap-2">
-              <Heart className="w-3.5 h-3.5 text-rose-accent" />
-              <p className="text-xs text-muted-foreground">
-                صُنع بأيدٍ عربية. امتلك صباحك. امتلك حياتك.
-              </p>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
       {/* Version Footer */}
-      <div className="text-center pt-4 pb-2">
+      <div className="md:col-span-2 text-center pt-2 pb-2">
         <div className="h-[1px] bg-gradient-to-l from-transparent via-border to-transparent mb-4" />
         <div className="flex items-center justify-center gap-2 mb-2">
           <motion.div
@@ -1071,7 +1099,6 @@ export default function Settings() {
           <span className="text-gradient-forest font-bold text-sm">RiseOS</span>
         </div>
         <p className="text-[10px] text-muted-foreground">نظام تشغيل الحياة — الإصدار ١.٠.٠</p>
-        <p className="text-[10px] text-muted-foreground/60 mt-1">صُنع بأيدٍ عربية 🇸🇦</p>
       </div>
     </div>
   )

@@ -17,6 +17,7 @@ import {
   Target,
   PencilLine,
   Repeat,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -470,7 +471,7 @@ export function HabitsView() {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-4 md:p-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <Skeleton className="h-8 w-40" />
           <Skeleton className="h-10 w-10 rounded-xl" />
@@ -492,24 +493,27 @@ export function HabitsView() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="space-y-6 p-4 md:p-6">
-        {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <RiseIcon glyph="habits" hue="lime" size="md" lift />
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">تتبع العادات</h1>
-              <p className="text-xs text-muted-foreground">
-                كرر العادات الجيدة كل يوم وحقق النجاح
-              </p>
-            </div>
+      <div className="space-y-5">
+        {/* ── Toolbar (the shell header already shows the module title) ── */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="pill pill-lime shrink-0">
+              <Sparkles className="w-3 h-3" />
+              <span className="num" dir="ltr">{habits.length}</span> عادة نشطة
+            </span>
+            {stats.currentStreak > 0 && (
+              <span className="pill bg-destructive/10 text-destructive shrink-0">
+                <Flame className="w-3 h-3" />
+                <span className="num" dir="ltr">{stats.currentStreak}</span> يوم متتالي
+              </span>
+            )}
           </div>
 
           <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) resetForm() }}>
             <DialogTrigger asChild>
               <Button
                 size="sm"
-                className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-forest/20 dark:shadow-lime/20"
+                className="rounded-xl bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg shadow-forest/20 dark:shadow-lime/20 shrink-0"
               >
                 <Plus className="w-4 h-4 me-1.5" />
                 عادة جديدة
@@ -674,36 +678,21 @@ export function HabitsView() {
                 <p className="text-xs text-muted-foreground/70 mt-2">
                   {stats.todayRate >= 80 ? '🌟 أداء ممتاز! استمر على هذا النحو' : stats.todayRate >= 50 ? '💪 جيد! واصل التحسن' : stats.todayRate >= 25 ? '🌱 لا بأس، كل خطوة مهمة' : '✨ ابدأ بإتمام عادة واحدة'}
                 </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Best Streak Celebration ── */}
-        {stats.longestStreak > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-          >
-            <div className="premium-card rounded-2xl p-4 relative overflow-hidden border border-gold/25">
-              <div className="absolute top-1/2 -translate-y-1/2 start-4 w-20 h-20 rounded-full bg-gold/[0.06] blur-2xl pointer-events-none" />
-              <div className="relative flex items-center gap-3">
-                <motion.div
-                  animate={{ scale: [1, 1.15, 1], rotate: [0, 8, -8, 0] }}
-                  transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                  className="shrink-0"
-                >
-                  <RiseIcon glyph="trophy" hue="amber" size="md" lift />
-                </motion.div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gradient-gold">
-                    أفضل سلسلة: <span className="num" dir="ltr">{stats.longestStreak}</span> يوم
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {stats.longestStreak >= 30 ? '🏆 إنجاز خارق! أنت منضبط جداً' : stats.longestStreak >= 14 ? '🔥 سلسلة رائعة! واصل الحماس' : '💪 بداية جيدة! حافظ على الاستمرارية'}
-                  </p>
-                </div>
+                {/* Best streak chip — merged into the hero (was a separate card) */}
+                {stats.longestStreak > 0 && (
+                  <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/25">
+                    <motion.span
+                      animate={{ rotate: [0, 10, -10, 0] }}
+                      transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                      className="inline-flex"
+                    >
+                      <RiseIcon glyph="trophy" hue="amber" size="sm" className="!rounded-lg" />
+                    </motion.span>
+                    <span className="text-xs font-bold text-gradient-gold">
+                      أفضل سلسلة: <span className="num" dir="ltr">{stats.longestStreak}</span> يوم
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -711,84 +700,44 @@ export function HabitsView() {
 
         {/* ── Statistics ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
-              {/* Gradient border effect */}
-              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-emerald-accent/20 via-transparent to-gold/20 pointer-events-none" />
-              <CardContent className="p-4 flex items-center gap-3 relative">
-                <div className="w-9 h-9 rounded-xl bg-emerald-accent/10 flex items-center justify-center">
-                  <Target className="w-4.5 h-4.5 text-emerald-accent" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold num" dir="ltr">{stats.total}</p>
-                  <p className="text-[10px] text-muted-foreground">إجمالي العادات</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.06 }}
-          >
-            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
-              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-emerald-accent/20 pointer-events-none" />
-              <CardContent className="p-4 flex items-center gap-3 relative">
-                <div className="w-9 h-9 rounded-xl bg-gold/10 flex items-center justify-center">
-                  <Zap className="w-4.5 h-4.5 text-gold" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold num" dir="ltr">{stats.todayRate}%</p>
-                  <p className="text-[10px] text-muted-foreground">إنجاز اليوم</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.12 }}
-          >
-            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
-              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-forest/20 via-transparent to-gold/20 pointer-events-none" />
-              <CardContent className="p-4 flex items-center gap-3 relative">
-                <div className="w-9 h-9 rounded-xl bg-forest/10 flex items-center justify-center">
-                  <Flame className="w-4.5 h-4.5 text-forest" />
-                </div>
-                <div>
-                  <p className="text-xl font-bold num" dir="ltr">{stats.currentStreak}</p>
-                  <p className="text-[10px] text-muted-foreground">سلسلة حالية</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.18 }}
-          >
-            <Card className="rounded-2xl border-0 shadow-sm glass relative overflow-hidden">
-              <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-gold/20 via-transparent to-forest/20 pointer-events-none" />
-              <CardContent className="p-4 flex items-center gap-3 relative">
-                <div className="w-9 h-9 rounded-xl bg-gold-light/20 flex items-center justify-center">
-                  <Crown className="w-4.5 h-4.5 text-gold" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold truncate max-w-[80px]">
-                    {stats.bestHabit ? `${stats.bestHabit.icon} ${stats.bestHabit.name}` : '—'}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">أفضل عادة</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+          {([
+            {
+              icon: Target, well: 'bg-emerald-accent/10', iconColor: 'text-emerald-accent',
+              value: <span className="num" dir="ltr">{stats.total}</span>, label: 'إجمالي العادات', delay: 0,
+            },
+            {
+              icon: Zap, well: 'bg-gold/10', iconColor: 'text-gold',
+              value: <span className="num" dir="ltr">{stats.todayRate}%</span>, label: 'إنجاز اليوم', delay: 0.06,
+            },
+            {
+              icon: Flame, well: 'bg-forest/10', iconColor: 'text-forest dark:text-emerald-accent',
+              value: <span className="num" dir="ltr">{stats.currentStreak}</span>, label: 'سلسلة حالية', delay: 0.12,
+            },
+            {
+              icon: Crown, well: 'bg-gold-light/20', iconColor: 'text-gold',
+              value: stats.bestHabit ? <span className="truncate max-w-[90px] inline-block">{stats.bestHabit.icon} {stats.bestHabit.name}</span> : '—',
+              label: 'أفضل عادة', delay: 0.18,
+            },
+          ] as const).map((s) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: s.delay }}
+            >
+              <Card className="rounded-2xl border-0 shadow-sm glass h-full">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', s.well)}>
+                    <s.icon className={cn('w-4 h-4', s.iconColor)} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold leading-tight">{s.value}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
         </div>
 
         {/* ── Today's Habits ── */}
@@ -825,7 +774,7 @@ export function HabitsView() {
                     >
                       <Card
                         className={cn(
-                          'rounded-2xl border-0 shadow-sm overflow-hidden transition-all duration-300',
+                          'group rounded-2xl border-0 shadow-sm overflow-hidden transition-all duration-300',
                           isCompleted
                             ? 'bg-card ring-1'
                             : 'glass'
@@ -850,7 +799,7 @@ export function HabitsView() {
                           )}
                         </AnimatePresence>
 
-                        <CardContent className="p-4 relative">
+                        <CardContent className="p-3.5 relative">
                           {/* Color accent strip */}
                           <div
                             className="absolute top-0 right-0 left-0 h-1 transition-opacity duration-300"
@@ -860,58 +809,55 @@ export function HabitsView() {
                             }}
                           />
 
-                          {/* Delete button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deleteHabit(habit.id)
-                            }}
-                            className="absolute top-2 end-2 w-6 h-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-                            style={{ opacity: 0.4 }}
-                            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.4')}
-                          >
-                            <span className="text-[10px]">✕</span>
-                          </button>
-
-                          {/* Reminder Bell */}
-                          <div className="absolute top-2 end-9">
+                          {/* Header row: icon + name + reminder + delete */}
+                          <div className="flex items-center gap-2 mb-2.5">
+                            <span className="text-xl shrink-0" aria-hidden="true">{habit.icon}</span>
+                            <p className="text-xs font-semibold truncate flex-1 min-w-0">{habit.name}</p>
                             <ReminderBell habit={habit} onToggle={handleToggleReminder} />
-                          </div>
-
-                          {/* Icon and name */}
-                          <div className="text-center mb-3">
-                            <motion.div
-                              animate={isCompleted ? { scale: [1, 1.2, 1] } : {}}
-                              transition={{ type: 'tween', duration: 0.3 }}
-                              className="text-3xl mb-1.5"
-                            >
-                              {habit.icon}
-                            </motion.div>
-                            <p className="text-xs font-semibold truncate">{habit.name}</p>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    deleteHabit(habit.id)
+                                  }}
+                                  aria-label={`حذف ${habit.name}`}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-[10px] px-2 py-1 rounded-lg">
+                                حذف العادة
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
 
                           {/* Streak with animated flame for streak > 3 */}
-                          {streak.current > 0 && (
-                            <div className="flex items-center justify-center gap-1 mb-3">
-                              <motion.div
-                                animate={streak.current > 3 ? { scale: [1, 1.3, 1] } : {}}
-                                transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                              >
-                                <Flame
-                                  className="w-4 h-4"
-                                  style={{ color: habit.color, filter: streak.current > 5 ? 'drop-shadow(0 0 4px oklch(0.55 0.18 25 / 0.4))' : 'none' }}
-                                />
-                              </motion.div>
-                              <span
-                                className="text-xs font-bold"
-                                style={{ color: habit.color }}
-                              >
-                                {streak.current}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">يوم</span>
-                            </div>
-                          )}
+                          <div className="h-6 flex items-center justify-center gap-1 mb-2">
+                            {streak.current > 0 ? (
+                              <>
+                                <motion.div
+                                  animate={streak.current > 3 ? { scale: [1, 1.3, 1] } : {}}
+                                  transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                                >
+                                  <Flame
+                                    className="w-4 h-4"
+                                    style={{ color: habit.color, filter: streak.current > 5 ? 'drop-shadow(0 0 4px oklch(0.55 0.18 25 / 0.4))' : 'none' }}
+                                  />
+                                </motion.div>
+                                <span
+                                  className="text-xs font-bold"
+                                  style={{ color: habit.color }}
+                                >
+                                  {streak.current}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">يوم</span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/50">ابدأ سلسلتك اليوم</span>
+                            )}
+                          </div>
 
                           {/* Toggle button with pulsing ring when completed */}
                           <div className="relative">
