@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
-import { getToday } from '@/lib/rise-utils'
+import { getTodayCairo, isoToCairoDate, taskCompletedDay, computeStreakFromActivity } from '@/lib/rise-utils'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 
@@ -40,7 +40,9 @@ async function computeScores(userId: string, dates: string[]) {
   const [tasks, habitsWithLogs, focusSessions, morningLogs, streak] = await Promise.all([
     data.tasks.list(userId),
     data.habits.list(userId),
-    data.focusSessions.list(userId),
+    // BIG limit: per-date focus buckets span a month — the old default (50)
+    // silently dropped older sessions from the charts.
+    data.focusSessions.list(userId, 1000),
     data.morningLogs.list(userId, dates),
     getUserStreak(userId),
   ])
@@ -52,16 +54,44 @@ async function computeScores(userId: string, dates: string[]) {
 
   const dayTaskScore = (date: string) => {
     const scheduled = personal.filter((t: any) => t.dueDate === date)
+    // TZ FIX: bucket completions into the Cairo day (was raw UTC slice).
     const bonus = personal.filter(
-      (t: any) => !t.dueDate && t.status === 'done' &&
-        t.completedAt && String(t.completedAt).slice(0, 10) === date,
+      (t: any) => !t.dueDate && t.status === 'done' && taskCompletedDay(t) === date,
     )
     const done = scheduled.filter((t: any) => t.status === 'done').length + bonus.length
     const total = scheduled.length + bonus.length
     return total > 0 ? (done / total) * 100 : 0
   }
 
-  const streakScore = Math.min((streak / 30) * 100, 100)
+  // LIVE STREAK (same rule as the dashboard route): the stored profiles.streak
+  // never updates in Supabase mode — derive it from real activity instead.
+  const streakActiveDays = new Set<string>()
+  for (const h of habitsWithLogs as any[]) {
+    for (const l of (h.logs || []) as any[]) {
+      if (l.completed && l.date) streakActiveDays.add(String(l.date).slice(0, 10))
+    }
+  }
+  for (const t of tasks as any[]) {
+    if (t.status === 'done') {
+      const day = taskCompletedDay(t)
+      if (day) streakActiveDays.add(day)
+    }
+  }
+  for (const s of focusSessions as any[]) {
+    if (s.completed) {
+      const day = isoToCairoDate(s.startedAt)
+      if (day) streakActiveDays.add(day)
+    }
+  }
+  for (const m of (morningLogs as any[]) || []) {
+    if (m?.date) streakActiveDays.add(String(m.date).slice(0, 10))
+  }
+  const liveStreak = Math.max(
+    computeStreakFromActivity(streakActiveDays, getTodayCairo()),
+    streak || 0,
+  )
+
+  const streakScore = Math.min((liveStreak / 30) * 100, 100)
 
   return dates.map((date) => {
     const tasksScore = dayTaskScore(date)
@@ -75,7 +105,7 @@ async function computeScores(userId: string, dates: string[]) {
     const habitsScore = totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0
 
     const dayFocusSessions = focusSessions.filter(
-      (s: any) => s.startedAt && s.startedAt.startsWith(date)
+      (s: any) => isoToCairoDate(s.startedAt) === date
     )
     const todayFocusMin = dayFocusSessions.filter((s: any) => s.completed).reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
     const focusScore = Math.min((todayFocusMin / 120) * 100, 100)
@@ -114,15 +144,18 @@ export async function GET(req: NextRequest) {
 
     if (datesParam) {
       const dates = [...new Set(datesParam.split(',').map(d => d.trim()).filter(Boolean))]
-      const key = `agg:${userId}:scores:${[...dates].sort().join(',')}`
+      // _v in the cache key = cross-instance freshness after writes
+      const { searchParams: sp } = new URL(req.url)
+      const versionKey = sp.get('_v') || '0'
+      const key = `agg:${userId}:scores:${[...dates].sort().join(',')}:v${versionKey}`
       const scores = await withAggregateCache(key, () => computeScores(userId, dates))
       return NextResponse.json({ scores })
     }
 
     // Default: calculate for today with breakdown
-    const today = getToday()
+    const today = getTodayCairo()
     const result = (
-      await withAggregateCache(`agg:${userId}:scores:${today}`, () =>
+      await withAggregateCache(`agg:${userId}:scores:${today}:v0`, () =>
         computeScores(userId, [today])
       )
     )[0]

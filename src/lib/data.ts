@@ -251,7 +251,11 @@ export const data = {
 
     async update(id: string, userId: string, body: Record<string, any>) {
       const client = await sb()
-      const updateBody: Record<string, any> = { ...body }
+      // Subtasks are a SEPARATE table — never send them as a task column
+      // (Supabase rejects unknown columns with PGRST204, failing the whole
+      // update). Strip them here and sync the subtasks table instead.
+      const { subtasks: stBody, ...restBody } = body
+      const updateBody: Record<string, any> = { ...restBody }
       if (body.status === 'done') {
         updateBody.completedAt = new Date().toISOString()
       } else if (body.status && body.status !== 'done') {
@@ -265,7 +269,35 @@ export const data = {
         .select()
         .single()
       if (error) throw error
-      return toCamel(data)
+
+      // Subtask sync (toggleSubtask sends the FULL list): replace the
+      // task's rows with the provided ones. Delete-then-insert keeps this
+      // correct for reorders/completions/deletions in one shot.
+      let subtasksOut: any[] = []
+      if (Array.isArray(stBody)) {
+        const { error: delErr } = await client
+          .from('subtasks')
+          .delete()
+          .eq('task_id', id)
+        if (!delErr && stBody.length > 0) {
+          const stRows = stBody.map((s: any) => toSnake({ ...s, taskId: id }))
+          const { data: inserted } = await client
+            .from('subtasks')
+            .insert(stRows)
+            .select()
+          subtasksOut = inserted ?? []
+        }
+      } else {
+        // No subtasks payload — return the existing ones so callers always
+        // see the current list.
+        const { data: existing } = await client
+          .from('subtasks')
+          .select('*')
+          .eq('task_id', id)
+        subtasksOut = existing ?? []
+      }
+
+      return toCamel({ ...data, subtasks: subtasksOut })
     },
 
     async remove(id: string, userId: string) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
-import { getToday, getLast30Days, getWeekDays } from '@/lib/rise-utils'
+import { getToday, getLast30Days, getWeekDays, isoToCairoDate, taskCompletedDay, computeStreakFromActivity, getTodayCairo } from '@/lib/rise-utils'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
@@ -67,9 +67,11 @@ function dayScopedCounts(allTasks: any[], date: string) {
   const personal = allTasks.filter((t: any) => !t.projectId && t.status !== 'cancelled')
 
   const scheduledToday = personal.filter((t: any) => t.dueDate === date)
+  // TZ FIX: completedAt is a UTC timestamp — bucket it into the CAIRO day
+  // (taskCompletedDay) instead of comparing the raw UTC string, which
+  // miscounted completions between 00:00–02:00 Cairo into the previous day.
   const bonusDoneToday = personal.filter(
-    (t: any) => !t.dueDate && t.status === 'done' &&
-      t.completedAt && String(t.completedAt).slice(0, 10) === date,
+    (t: any) => !t.dueDate && t.status === 'done' && taskCompletedDay(t) === date,
   )
 
   const scheduledDone = scheduledToday.filter((t: any) => t.status === 'done').length
@@ -84,10 +86,10 @@ function dayScopedCounts(allTasks: any[], date: string) {
 }
 
 async function computeDashboard(userId: string, req: NextRequest) {
-  // Client-driven local date (Cairo) — falls back to server date if absent
+  // Client-driven local date (Cairo) — falls back to Cairo-local server date
   const { searchParams } = new URL(req.url)
   const dateParam = searchParams.get('date')
-  const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : getToday()
+  const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : getTodayCairo()
   const last30 = getLast30Days()
   const weekDays = getWeekDays()
 
@@ -110,7 +112,9 @@ async function computeDashboard(userId: string, req: NextRequest) {
     fetchUserProfile(userId, req),
     data.tasks.list(userId).catch(() => []),
     data.habits.list(userId).catch(() => []),
-    data.focusSessions.list(userId).catch(() => []),
+    // BIG limit: focus sessions also feed the LIFETIME totalFocusMin stat —
+    // the old default (last 50) silently truncated the lifetime sum.
+    data.focusSessions.list(userId, 1000).catch(() => []),
     data.healthLogs.list(userId, [today]).catch(() => []),
     data.morningLogs.list(userId, [today]).catch(() => []),
     data.userAchievements.list(userId).catch(() => []),
@@ -150,11 +154,46 @@ async function computeDashboard(userId: string, req: NextRequest) {
   const { tasksCompleted: completedTasksToday, tasksTotal, overdue } = dayScopedCounts(allTasks, today)
   const completedHabitsToday = todayHabitsLogs.filter((l: any) => l.completed).length
   const totalHabits = habits.length
+  // TZ FIX: bucket each session's UTC start time into its Cairo day.
   const todayFocusMin = focusSessions
     .filter(
-      (s: any) => String(s.startedAt).startsWith(today) && s.completed,
+      (s: any) => isoToCairoDate(s.startedAt) === today && s.completed,
     )
     .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
+
+  // ═══ LIVE LIFETIME STATS ═══
+  // خلل سابق: profiles.total_tasks_done / total_focus_min / streak ما كانوا
+  // بيتكتبوا أبداً في وضع Supabase (الإنتاج) — فكانوا بيعرضوا أصفار للأبد.
+  // دلوقتي بتتحسب مباشرة من البيانات الفعلية — دقيقة 100% ومش محتاجة migration.
+  const liveTotalTasksDone = allTasks.filter((t: any) => t.status === 'done').length
+  const liveTotalFocusMin = focusSessions
+    .filter((s: any) => s.completed)
+    .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
+
+  // LIVE STREAK — any completed habit log / done personal task / morning log /
+  // completed focus session marks the day as "active".
+  const activeDays = new Set<string>()
+  for (const h of habitsWithLogs as any[]) {
+    for (const l of (h.logs || []) as any[]) {
+      if (l.completed && l.date) activeDays.add(String(l.date).slice(0, 10))
+    }
+  }
+  for (const t of allTasks) {
+    if (t.status === 'done') {
+      const day = taskCompletedDay(t)
+      if (day) activeDays.add(day)
+    }
+  }
+  for (const s of focusSessions as any[]) {
+    if (s.completed) {
+      const day = isoToCairoDate(s.startedAt)
+      if (day) activeDays.add(day)
+    }
+  }
+  for (const m of (morningResult as any[]) || []) {
+    if (m?.date) activeDays.add(String(m.date).slice(0, 10))
+  }
+  const liveStreak = Math.max(computeStreakFromActivity(activeDays, today), userProfile?.streak || 0)
 
   // Extract single records from arrays
   const healthLog = healthResult.length > 0 ? healthResult[0] : null
@@ -201,10 +240,11 @@ async function computeDashboard(userId: string, req: NextRequest) {
       name: userProfile?.name || 'مستخدم RiseOS',
       level: userProfile?.level || 1,
       xp: userProfile?.xp || 0,
-      streak: userProfile?.streak || 0,
-      longestStreak: userProfile?.longestStreak || 0,
-      totalFocusMin: userProfile?.totalFocusMin || 0,
-      totalTasksDone: userProfile?.totalTasksDone || 0,
+      // LIVE-COMPUTED — the stored columns never update in Supabase mode.
+      streak: liveStreak,
+      longestStreak: Math.max(userProfile?.longestStreak || 0, liveStreak),
+      totalFocusMin: liveTotalFocusMin,
+      totalTasksDone: liveTotalTasksDone,
       xpToNextLevel: userProfile?.xpToNextLevel || 100,
       avatar: userProfile?.avatar || null,
     },
@@ -279,12 +319,16 @@ export async function GET(req: NextRequest) {
 
     // Cache key MUST include the requested date — day-scoped payloads differ
     // per day (yesterday's cached numbers must never leak into today).
+    // _v (client data-version): bumped after every write — guarantees the
+    // first read after a mutation is a cache MISS even on a different
+    // serverless instance (the per-instance bust alone can't do that).
+    const { searchParams: sp2 } = new URL(req.url)
     const dateKey = (() => {
-      const { searchParams } = new URL(req.url)
-      const d = searchParams.get('date')
+      const d = sp2.get('date')
       return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : 'server'
     })()
-    const payload = await withAggregateCache(`agg:${userId}:dashboard:${dateKey}`, () =>
+    const versionKey = sp2.get('_v') || '0'
+    const payload = await withAggregateCache(`agg:${userId}:dashboard:${dateKey}:v${versionKey}`, () =>
       computeDashboard(userId, req)
     )
     return NextResponse.json(payload)

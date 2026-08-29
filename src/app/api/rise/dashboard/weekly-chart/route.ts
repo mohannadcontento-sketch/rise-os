@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
+import { isoToCairoDate } from '@/lib/rise-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,11 +16,14 @@ export async function GET(req: NextRequest) {
     setCurrentAuthToken(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+    // TZ FIX: the 7-day window used to be built with toISOString() (UTC) —
+    // mislabeled days for Cairo users between 00:00–02:00 local. Bucket each
+    // instant into its Cairo-local day instead.
     const weekDays: string[] = []
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      weekDays.push(d.toISOString().split('T')[0])
+      weekDays.push(isoToCairoDate(d) || d.toISOString().split('T')[0])
     }
 
     const scores = await data.dailyScores.list(userId, weekDays).catch(() => [])

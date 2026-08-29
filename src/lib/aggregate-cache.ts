@@ -15,7 +15,11 @@ const store = new Map<string, CacheEntry>()
 // Memory bound: aggregates are small JSON objects (~KBs); 2000 entries ≈ few MB max.
 const MAX_ENTRIES = 2000
 
-export const AGGREGATE_TTL_MS = 60_000
+// 20s (was 60s): bounds how long a DIFFERENT serverless instance can serve a
+// pre-mutation payload. Instant-feel after a mutation matters more than the
+// extra Supabase hops, and writes also bust per-instance + send _v from the
+// client which forces a cache miss on the first read after any mutation.
+export const AGGREGATE_TTL_MS = 20_000
 
 function evictIfNeeded() {
   while (store.size >= MAX_ENTRIES) {

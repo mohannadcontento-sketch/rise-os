@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { setCurrentAuthToken } from '@/lib/data'
-import { calculateXpForLevel } from '@/lib/rise-utils'
+import { calculateXpForLevel, isoToCairoDate } from '@/lib/rise-utils'
 import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 
@@ -90,10 +90,11 @@ export async function POST(req: NextRequest) {
     // ─── IDEMPOTENCY: reject duplicate awards (double-submit farming) ───
     // task:<id> pays once ever; habit:<id> and the morning routine pay once
     // per local calendar day. Session-based sources (work/focus) repeat.
-    // Server-local calendar day — a stable daily bucket for dedupe. It may
-    // differ from the user's wall-clock day by a few hours; that only
-    // shifts the boundary of when a daily action can be re-awarded.
-    const localDay = new Date().toLocaleDateString('en-CA')
+    // TZ FIX: the daily bucket used the SERVER's local day (UTC on Vercel) —
+    // a habit checked at 00:30 Cairo was treated as the same "day" as the
+    // previous evening, so the re-award after midnight was wrongly blocked
+    // (and vice versa). Bucket by Cairo-local day instead.
+    const localDay = isoToCairoDate(new Date()) || new Date().toLocaleDateString('en-CA')
     let dedupeKey: string | null = null
     if (reason.startsWith('task:')) dedupeKey = reason
     else if (reason.startsWith('habit:') || reason === 'morning-routine-complete') {

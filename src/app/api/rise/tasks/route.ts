@@ -34,6 +34,14 @@ const TaskCreateSchema = z.object({
 
 // FIX: Removed .strict() — the frontend may send extra fields (dependsOn,
 // recurringPattern, etc.) during updates. .strict() rejected them with 400.
+// FIX#2: 'subtasks' added — toggleSubtask() used to send it and Zod silently
+// STRIPPED it, so the update "succeeded" while subtask checkmarks were never
+// persisted (they flipped back on the next refetch).
+const TaskSubtaskSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1).max(200),
+  completed: z.boolean().optional(),
+})
 const TaskUpdateSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(200).optional(),
@@ -51,6 +59,7 @@ const TaskUpdateSchema = z.object({
   dependsOn: z.string().optional().nullable(),
   isRecurring: z.boolean().optional(),
   recurringPattern: z.string().optional().nullable(),
+  subtasks: z.array(TaskSubtaskSchema).max(50).optional(),
 })
 
 export async function GET(req: NextRequest) {

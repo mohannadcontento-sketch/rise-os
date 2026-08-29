@@ -119,6 +119,34 @@ export function clearAllCache(): void {
 
 export { invalidateCache }
 
+// ─── Data-version token (cross-instance cache busting) ───
+// Serverless note: the server-side aggregate cache (aggregate-cache.ts) lives
+// in ONE function instance. A write that lands on instance A cannot bust the
+// cached dashboard payload on instance B, so a read after a write could serve
+// stale numbers for up to the cache TTL.
+// FIX: every successful write bumps a client-side version counter stored in
+// localStorage; every GET sends it as &_v=. The server includes _v in the
+// aggregate cache key, so the first read after ANY mutation is a guaranteed
+// cache MISS → fresh compute, even on a different instance.
+const DATA_VERSION_KEY = 'rise-data-version'
+
+function getDataVersion(): string {
+  try { return localStorage.getItem(DATA_VERSION_KEY) || '0' } catch { return '0' }
+}
+
+function bumpDataVersion(): void {
+  try { localStorage.setItem(DATA_VERSION_KEY, String(Date.now())) } catch { /* ignore */ }
+}
+
+/**
+ * Force the next GET to bypass any server-side aggregate cache.
+ * Used on day rollover (useToday) so the new day never reads the old day's
+ * cached payload.
+ */
+export function bumpDataVersionExport(): void {
+  bumpDataVersion()
+}
+
 // ─── Auth helpers ───
 
 function getAuthHeaders(): Record<string, string> {
@@ -238,6 +266,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   if (!options.method || options.method === 'GET') {
     const separator = url.includes('?') ? '&' : '?'
     fetchUrl = `${url}${separator}_t=${Date.now()}`
+    // _v = data version — busts the SERVER-side aggregate cache after writes
+    fetchUrl += `&_v=${getDataVersion()}`
   }
 
   let response: Response
@@ -319,6 +349,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // Invalidate cache on successful POST/PUT/DELETE
   if (response.ok && options.method && options.method !== 'GET') {
     invalidateCache()
+    bumpDataVersion() // next GET carries a new _v → server cache misses → fresh data
     // Notify all components to re-fetch their data
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rise:data-changed'))
@@ -535,6 +566,7 @@ async function flushQueue(): Promise<void> {
   // state stayed stale until the next poll. Notify them to re-fetch.
   if (changed) {
     invalidateCache()
+    bumpDataVersion() // same cross-instance bust as online writes
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rise:data-changed'))
     }

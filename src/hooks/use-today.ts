@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clearAllCache } from '@/lib/api-fetch'
+import { clearAllCache, bumpDataVersionExport } from '@/lib/api-fetch'
 
 /**
  * Returns today's date string (yyyy-MM-dd) and re-renders the component
@@ -32,6 +32,10 @@ export function useToday(): string {
         setToday(now)
         // Global side-effects: clear cache + notify all components to re-fetch
         try { clearAllCache() } catch { /* ignore */ }
+        // CRITICAL: bump the data-version token so the next GET's &_v= is new
+        // — the server-side aggregate cache (keyed per date AND version) can
+        // never serve the previous day's payload after midnight.
+        try { bumpDataVersionExport() } catch { /* ignore */ }
         window.dispatchEvent(new CustomEvent('rise:day-changed', { detail: { date: now } }))
         window.dispatchEvent(new CustomEvent('rise:data-changed', { detail: { reason: 'day-rollover' } }))
         window.dispatchEvent(new CustomEvent('rise:user-updated'))

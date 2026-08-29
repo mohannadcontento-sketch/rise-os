@@ -84,6 +84,106 @@ export function calculateXpForLevel(level: number): number {
   return Math.floor(100 * Math.pow(1.15, level - 1))
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   TIMEZONE-SAFE DAY HELPERS (توقيت القاهرة)
+
+   خلل سابق: الـ timestamps (completed_at / started_at) بتتخزن UTC، والمقارنة
+   كانت `String(ts).slice(0,10) === date` — يعني بتقارن تاريخ UTC بتاريخ
+   العميل المحلي. في مصر (UTC+2/+3) أي إنجاز بين 12:00 و2:00 صباحاً بالقاهرة
+   كان بيتحسب على يوم الأمس، وجلسات التركيز كذلك.
+
+   isoToCairoDate() بتحوّل أي timestamp لتاريخ القاهرة (yyyy-MM-dd) عبر Intl
+   (بيدعم DST تلقائياً). الـ fallback هو التاريخ المحلي لو Intl غير متاح.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const CAIRO_TIMEZONE = 'Africa/Cairo'
+
+// Module-level formatter (cheap to reuse; Intl construction is expensive)
+const cairoDayFormatter = (() => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: CAIRO_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  } catch {
+    return null // Intl/timezone unavailable (old runtime) — fallback below
+  }
+})()
+
+/**
+ * Convert any date/ISO-timestamp to the Cairo-local calendar day (yyyy-MM-dd).
+ * This is THE canonical way to bucket a stored timestamp into a day —
+ * never use `String(ts).slice(0, 10)` (that yields the UTC day).
+ */
+export function isoToCairoDate(value: string | Date | null | undefined): string | null {
+  if (!value) return null
+  try {
+    const d = value instanceof Date ? value : new Date(value)
+    if (isNaN(d.getTime())) return null
+    if (cairoDayFormatter) return cairoDayFormatter.format(d) // en-CA → yyyy-MM-dd
+    return toLocalDateStr(d)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Server-safe "today in Cairo" — used as a FALLBACK when the client doesn't
+ * send its own ?date= (the client date stays authoritative when present).
+ * On Vercel the server clock is UTC, so getToday() alone shifts the day.
+ */
+export function getTodayCairo(): string {
+  return isoToCairoDate(new Date()) || getToday()
+}
+
+/**
+ * Task completion day — prefers the bucket date of completedAt converted to
+ * Cairo. Returns null for tasks that were never completed.
+ */
+export function taskCompletedDay(t: { completedAt?: string | Date | null }): string | null {
+  if (!t?.completedAt) return null
+  return isoToCairoDate(t.completedAt)
+}
+
+/**
+ * LIVE STREAK — consecutive active days ending today (or yesterday, with a
+ * one-day grace period: the user is "still on streak" until the day ends).
+ *
+ * خلل سابق: profiles.streak كان بيتحدث في mock mode فقط — في الإنتاج
+ * (Supabase) ظل صفر للأبد. دلوقتي السلسلة بتتحسب من النشاط الفعلي:
+ * عادة مكتملة / مهمة منجزة / سجل صباحي / جلسة تركيز مكتملة.
+ *
+ * @param activeDays set of yyyy-MM-dd strings with at least one completion
+ * @param today      the client's local today (yyyy-MM-dd)
+ */
+export function computeStreakFromActivity(activeDays: Set<string>, today: string): number {
+  if (activeDays.size === 0) return 0
+
+  // Walk back day-by-day from `today` using noon-time Date arithmetic
+  // (noon avoids DST edge cases when subtracting days).
+  const dayAtOffset = (base: string, offsetDays: number): string => {
+    const [y, m, d] = base.split('-').map(Number)
+    const dt = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0)
+    dt.setDate(dt.getDate() + offsetDays)
+    return toLocalDateStr(dt)
+  }
+
+  let streak = 0
+  // Grace: if today has no activity yet, start counting from yesterday —
+  // the streak isn't broken until the whole day passes without action.
+  let cursor = activeDays.has(today) ? today : dayAtOffset(today, -1)
+  if (activeDays.has(cursor)) {
+    while (activeDays.has(cursor)) {
+      streak++
+      cursor = dayAtOffset(cursor, -1)
+      if (streak > 3650) break // sanity bound (~10 years)
+    }
+  }
+  return streak
+}
+
 export function getHeatLevel(value: number, max: number = 4): number {
   if (max === 0) return 0
   const ratio = value / max

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { withAggregateCache } from '@/lib/aggregate-cache'
+import { taskCompletedDay, getTodayCairo } from '@/lib/rise-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,9 +34,9 @@ async function computeSummary(userId: string, date: string) {
   // never reset when the day ends.
   const personal = tasks.filter((t: any) => !t.projectId && t.status !== 'cancelled')
   const scheduledToday = personal.filter((t: any) => t.dueDate === date)
+  // TZ FIX: bucket completedAt into the Cairo day (was raw UTC slice).
   const bonusDoneToday = personal.filter(
-    (t: any) => !t.dueDate && t.status === 'done' &&
-      t.completedAt && String(t.completedAt).slice(0, 10) === date,
+    (t: any) => !t.dueDate && t.status === 'done' && taskCompletedDay(t) === date,
   )
   const todayTasksDone = scheduledToday.filter((t: any) => t.status === 'done').length + bonusDoneToday.length
   const todayTasksTotal = scheduledToday.length + bonusDoneToday.length
@@ -79,9 +80,12 @@ export async function GET(req: NextRequest) {
     // Client-local date (Cairo) — same contract as /api/rise/dashboard
     const { searchParams } = new URL(req.url)
     const dateParam = searchParams.get('date')
-    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : new Date().toISOString().split('T')[0]
+    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : getTodayCairo()
 
-    const summary = await withAggregateCache(`agg:${userId}:summary:${date}`, () => computeSummary(userId, date))
+    // _v in the cache key = cross-instance freshness after writes (see
+    // api-fetch.ts data-version docs)
+    const versionKey = searchParams.get('_v') || '0'
+    const summary = await withAggregateCache(`agg:${userId}:summary:${date}:v${versionKey}`, () => computeSummary(userId, date))
     return NextResponse.json(summary)
   } catch (error) {
     console.error('Dashboard summary error:', error)
