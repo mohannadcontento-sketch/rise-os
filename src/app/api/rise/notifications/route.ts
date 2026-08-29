@@ -6,10 +6,13 @@ import { data, setCurrentAuthToken } from '@/lib/data'
 export const dynamic = 'force-dynamic'
 
 // P1#5: Zod validation for notifications
+// NOTE: type values MUST match the DB CHECK constraint on notifications.type
+// (info|success|warning|error|achievement|reminder|system) — any other value
+// makes the INSERT fail silently in Supabase.
 const NotificationCreateSchema = z.object({
   title: z.string().min(1, 'العنوان مطلوب').max(200),
   body: z.string().max(1000).optional(),
-  type: z.enum(['info', 'success', 'warning', 'error', 'achievement', 'reminder', 'habit', 'task', 'goal']).optional(),
+  type: z.enum(['info', 'success', 'warning', 'error', 'achievement', 'reminder', 'system']).optional(),
   icon: z.string().max(10).optional(),
   actionUrl: z.string().max(500).optional().nullable(),
 }).strict()
@@ -29,12 +32,20 @@ export async function GET(req: NextRequest) {
 
     const notifications = await data.notifications.list(userId)
 
-    let filtered = notifications
+    // CRITICAL: DB column is `read` (single word) so toCamel keeps it as `read`,
+    // but the client bell reads `isRead`. Map it here once so the UI stays correct —
+    // otherwise every notification renders as "unread" forever.
+    const normalized = notifications.map((n: any) => ({
+      ...n,
+      isRead: !!n.read,
+    }))
+
+    let filtered = normalized
     if (unreadOnly) {
-      filtered = notifications.filter((n: any) => !n.read)
+      filtered = normalized.filter((n: any) => !n.read)
     }
 
-    const unreadCount = notifications.filter((n: any) => !n.read).length
+    const unreadCount = normalized.filter((n: any) => !n.read).length
     return NextResponse.json({ notifications: filtered, unreadCount })
   } catch (error) {
     console.error('Notifications GET error:', error)
@@ -107,8 +118,28 @@ export async function DELETE(req: NextRequest) {
     setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+    // Batch delete: ?id=<uuid> (single) | ?ids=a,b,c | ?all=true
     const { searchParams } = new URL(req.url)
+    const all = searchParams.get('all') === 'true'
+    const idsParam = searchParams.get('ids')
     const id = searchParams.get('id')
+
+    if (all) {
+      const notifications = await data.notifications.list(userId)
+      for (const n of notifications) {
+        await data.notifications.remove(n.id, userId)
+      }
+      return NextResponse.json({ success: true, deleted: notifications.length })
+    }
+
+    if (idsParam) {
+      const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 100)
+      for (const nid of ids) {
+        await data.notifications.remove(nid, userId)
+      }
+      return NextResponse.json({ success: true, deleted: ids.length })
+    }
+
     if (!id) {
       return NextResponse.json({ error: 'المعرّف مطلوب' }, { status: 400 })
     }

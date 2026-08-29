@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, BellRing, CheckCheck, Trash2, X } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, Trash2, X, BellOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { RiseGlyphIcon } from './icons'
@@ -10,6 +10,7 @@ import { apiGet, apiPut, apiDelete } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { cn } from '@/lib/utils'
 import { playSound } from '@/lib/sounds'
+import { getBrowserPermissionState, requestBrowserPermission, showBrowserNotification } from '@/lib/notification-prefs'
 
 interface Notification {
   id: string
@@ -18,8 +19,14 @@ interface Notification {
   type?: string
   icon?: string
   actionUrl?: string
-  isRead: boolean
+  read?: boolean
+  isRead?: boolean
   createdAt: string
+}
+
+/** DB column is `read`; older payloads may lack `isRead` — normalize once. */
+function isUnread(n: Notification): boolean {
+  return !(n.isRead ?? n.read ?? false)
 }
 
 // Type-based icon color mapping
@@ -61,10 +68,17 @@ function timeAgo(dateStr: string): string {
     const days = Math.floor(hours / 24)
 
     if (seconds < 60) return 'الآن'
+    if (minutes === 1) return 'منذ دقيقة'
+    if (minutes === 2) return 'منذ دقيقتين'
     if (minutes < 60) return `منذ ${minutes} دقائق`
+    if (hours === 1) return 'منذ ساعة'
+    if (hours === 2) return 'منذ ساعتين'
     if (hours < 24) return `منذ ${hours} ساعات`
+    if (days === 1) return 'منذ يوم'
+    if (days === 2) return 'منذ يومين'
     if (days < 7) return `منذ ${days} أيام`
-    return `منذ ${Math.floor(days / 7)} أسابيع`
+    const weeks = Math.floor(days / 7)
+    return weeks === 1 ? 'منذ أسبوع' : `منذ ${weeks} أسابيع`
   } catch {
     return ''
   }
@@ -84,6 +98,7 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [wiggling, setWiggling] = useState(false)
+  const [permState, setPermState] = useState<ReturnType<typeof getBrowserPermissionState>>('unsupported')
   const panelRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const loadingRef = useRef(false)
@@ -114,7 +129,7 @@ export function NotificationBell() {
 
             // Show browser notification for new unread (only when tab not focused)
             if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
-              const latestUnread = newNotifs.filter(n => !n.isRead).slice(0, newUnread - prevUnreadRef.current)
+              const latestUnread = newNotifs.filter(isUnread).slice(0, newUnread - prevUnreadRef.current)
               for (const notif of latestUnread) {
                 try {
                   new Notification(notif.title, {
@@ -135,11 +150,6 @@ export function NotificationBell() {
                   }
                 }
               }
-            }
-
-            // Request permission on first notification if not yet granted
-            if (newUnread > 0 && 'Notification' in window && Notification.permission === 'default') {
-              Notification.requestPermission().catch(() => {})
             }
           }
 
@@ -179,6 +189,11 @@ export function NotificationBell() {
   useEffect(() => {
     fetchNotifications()
   }, [fetchNotifications, refreshKey])
+
+  // Sync browser permission state (also reacts to Settings changes)
+  useEffect(() => {
+    setPermState(getBrowserPermissionState())
+  }, [open])
 
   // Poll every 30s when panel is open
   useEffect(() => {
@@ -241,7 +256,7 @@ export function NotificationBell() {
   }, [open])
 
   const markAsRead = async (id: string) => {
-    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, isRead: true } : n)))
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, isRead: true, read: true } : n)))
     setUnreadCount(prev => Math.max(0, prev - 1))
     try {
       await apiPut('/api/rise/notifications', { ids: [id] })
@@ -249,9 +264,9 @@ export function NotificationBell() {
   }
 
   const markAllAsRead = async () => {
-    const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id)
+    const unreadIds = notifications.filter(isUnread).map(n => n.id)
     if (unreadIds.length === 0) return
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, read: true })))
     setUnreadCount(0)
     try {
       await apiPut('/api/rise/notifications', { ids: unreadIds })
@@ -261,7 +276,7 @@ export function NotificationBell() {
   const deleteNotification = async (id: string) => {
     const notif = notifications.find(n => n.id === id)
     setNotifications(prev => prev.filter(n => n.id !== id))
-    if (notif && !notif.isRead) {
+    if (notif && isUnread(notif)) {
       setUnreadCount(prev => Math.max(0, prev - 1))
     }
     try {
@@ -274,17 +289,34 @@ export function NotificationBell() {
     setNotifications([])
     setUnreadCount(0)
     try {
+      // Single batch request instead of one DELETE per notification
+      await apiDelete('/api/rise/notifications?all=true')
+    } catch {
+      // Fallback: legacy per-id deletion
       for (const id of ids) {
-        await apiDelete(`/api/rise/notifications?id=${id}`)
+        try { await apiDelete(`/api/rise/notifications?id=${id}`) } catch { /* silent */ }
       }
-    } catch { /* silent */ }
+    }
   }
 
   const handleClickNotif = (notif: Notification) => {
-    if (!notif.isRead) markAsRead(notif.id)
+    if (isUnread(notif)) markAsRead(notif.id)
     if (notif.actionUrl) {
       window.dispatchEvent(new CustomEvent('rise:navigate', { detail: notif.actionUrl }))
       setOpen(false)
+    }
+  }
+
+  const handleEnableNotifications = async () => {
+    const state = await requestBrowserPermission()
+    setPermState(state)
+    if (state === 'granted') {
+      playSound('success')
+      showBrowserNotification('تم تفعيل الإشعارات ✓', {
+        body: 'ستصلك التنبيهات والتذكيرات هنا',
+        tag: 'rise-permission-granted',
+        force: true,
+      })
     }
   }
 
@@ -373,6 +405,26 @@ export function NotificationBell() {
               </div>
             </div>
 
+            {/* Browser permission nudge — actionable, only when still undecided */}
+            {permState === 'default' && (
+              <div className="px-4 py-3 bg-gold/[0.07] border-b border-border flex items-center gap-3">
+                <span className="w-8 h-8 rounded-lg bg-gold/15 text-gold flex items-center justify-center shrink-0">
+                  <BellOff className="w-4 h-4" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold">فعّل إشعارات المتصفح</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">لتصلك التنبيهات والتذكيرات حتى لو التطبيق مقفول</p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-[11px] font-bold bg-gold hover:bg-gold/90 text-ink"
+                  onClick={handleEnableNotifications}
+                >
+                  تفعيل
+                </Button>
+              </div>
+            )}
+
             {/* Notifications list */}
             <ScrollArea className="max-h-96">
               {notifications.length === 0 ? (
@@ -397,7 +449,7 @@ export function NotificationBell() {
                         className={cn(
                           'group flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors',
                           'hover:bg-secondary',
-                          !notif.isRead && 'bg-rose-accent/[0.04]'
+                          isUnread(notif) && 'bg-rose-accent/[0.04]'
                         )}
                         onClick={() => handleClickNotif(notif)}
                       >
@@ -411,11 +463,11 @@ export function NotificationBell() {
                           <div className="flex items-center gap-2">
                             <p className={cn(
                               'text-sm truncate',
-                              notif.isRead ? 'text-muted-foreground' : 'text-foreground font-semibold'
+                              isUnread(notif) ? 'text-foreground font-semibold' : 'text-muted-foreground'
                             )}>
                               {notif.title}
                             </p>
-                            {!notif.isRead && (
+                            {isUnread(notif) && (
                               <span className="w-2 h-2 rounded-full bg-rose-accent shrink-0" />
                             )}
                           </div>

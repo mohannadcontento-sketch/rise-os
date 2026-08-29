@@ -1,555 +1,511 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+/**
+ * المدرب الذكي — بلا ذكاء اصطناعي (طلب المستخدم).
+ *
+ * مساعد قائم على أزرار معروفة: تصنيفات → أسئلة → إجابات عملية
+ * مستخرجة من قاعدة معارف محلية دقيقة مبنية على كتب حقيقية.
+ * كل شيء يعمل بلا إنترنت وبلا أي API.
+ */
+
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Sparkles,
-  Send,
-  Sun,
-  TrendingUp,
-  Target,
-  Lightbulb,
-  Trash2,
-  User,
+  Repeat,
   Brain,
-  Heart,
-  Moon,
-  MessageCircle,
   Zap,
-  AlertCircle,
-  Wifi,
-  WifiOff,
+  Target,
+  Sunrise,
+  Moon,
+  Flame,
+  Hourglass,
+  Clock,
+  Wallet,
+  BookOpen,
+  HeartPulse,
+  Search,
+  X,
+  ChevronLeft,
+  ListOrdered,
+  Sparkles,
+  Library,
+  History,
+  ArrowLeft,
+  type LucideIcon,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { apiPost } from '@/lib/api-fetch'
-import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
+import {
+  COACH_TOPICS,
+  entriesByTopic,
+  getEntry,
+  relatedTo,
+  searchKnowledge,
+  coachStats,
+  type TopicId,
+  type KnowledgeEntry,
+} from '@/lib/coach-knowledge'
 
-/* ────────────── Types ────────────── */
+/* ─────────────── أيقونات التصنيفات ─────────────── */
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'ai'
-  content: string
-  timestamp: number
-  isFallback?: boolean
+const TOPIC_ICONS: Record<string, LucideIcon> = {
+  Repeat, Brain, Zap, Target, Sunrise, Moon, Flame, Hourglass, Clock, Wallet, BookOpen, HeartPulse,
 }
 
-/* ────────────── Fallback Response Engine ────────────── */
-
-function randomFrom(arr: string[]): string {
-  return arr[Math.floor(Math.random() * arr.length)]
+const HUE_STYLES: Record<string, string> = {
+  emerald: 'bg-emerald-accent/10 text-emerald-accent',
+  violet: 'bg-violet-accent/10 text-violet-accent',
+  gold: 'bg-gold/10 text-gold',
+  rose: 'bg-rose-accent/10 text-rose-accent',
 }
 
-function generateFallbackResponse(message: string): string {
-  const msg = message.toLowerCase()
-
-  if (msg.includes('صباح') || msg.includes('صباحي')) {
-    return randomFrom([
-      '🌿 صباح الخير! ابدأ يومك بهدوء. خذ نفساً عميقاً، اشرب كوب ماء دافئ، وامنح نفسك 5 دقائق من التأمل قبل الانطلاق.',
-      '☀️ تذكر: أول 60 دقيقة من يومك تحدد مساره. استثمرها فيما يهمك حقاً.',
-      '💧 نصيحة صباحية: لا تفتح هاتفك خلال أول 30 دقيقة. اكتب 3 أشياء تشكر الله عليها.',
-    ])
-  }
-
-  if (msg.includes('عادة') || msg.includes('عادات')) {
-    return randomFrom([
-      '🎯 لا تحاول بناء عادات متعددة دفعة واحدة. ابدأ بعادة واحدة صغيرة وثبتها لمدة 21 يوماً.',
-      '📊 متوسط بناء عادة جديدة هو 66 يوماً. كن صبوراً مع نفسك.',
-      '🔥 سر العادات: اجعلها سهلة جداً لدرجة أنك لا تستطيع رفضها.',
-    ])
-  }
-
-  if (msg.includes('تركيز') || msg.includes('إنتاجي') || msg.includes('عمل')) {
-    return randomFrom([
-      '🧠 قاعدة العمل العميق: اختر مهمة واحدة، أغلق كل المشتتات، واعمل لمدة 50 دقيقة متواصلة.',
-      '⚡ أهم مهارة في عصرنا: القدرة على التركيز العميق. تدرب يومياً.',
-      '📋 في نهاية كل يوم، اكتب أهم 3 مهام للغد. هذه البساطة هي سر الإنتاجية.',
-    ])
-  }
-
-  if (msg.includes('هدف') || msg.includes('أهداف')) {
-    return randomFrom([
-      '🎯 الأهداف الذكية: محددة، قابلة للقياس، واقعية، ومحددة بوقت.',
-      '🚀 اقسم أهدافك الكبيرة إلى خطوات صغيرة يمكنك تنفيذها اليوم.',
-    ])
-  }
-
-  if (msg.includes('نوم') || msg.includes('صحة') || msg.includes('صح')) {
-    return randomFrom([
-      '😴 النوم هو أقوى أدواتك. 7-8 ساعات تزيد إنتاجيتك بنسبة 20%.',
-      '💧 لا تقلل من شرب الماء! الجفاف يقلل التركيز والطاقة.',
-      '🏃 حتى 15 دقيقة من المشي تزيد إبداعك بنسبة 60%.',
-    ])
-  }
-
-  if (msg.includes('تحفيز') || msg.includes('محبط') || msg.includes('صعب') || msg.includes('تعب')) {
-    return randomFrom([
-      '💪 تذكر: كل شخص ناجح مر بلحظات إحباط. الفرق هو القدرة على الاستمرار.',
-      '🌟 لا تقارن بدايتك بموسم حصاد الآخرين. 1% تحسن يومياً = 37 مرة أفضل.',
-      '🔥 "النجاح ليس نهائياً والفشل ليس قاتلاً. الشجاعة للاستمرار هي ما يهم."',
-    ])
-  }
-
-  if (msg.includes('مراجعة') || msg.includes('مراجع')) {
-    return randomFrom([
-      '📊 حان وقت المراجعة! ما الذي سار بشكل جيد؟ ما الذي يمكن تحسينه؟',
-      '🔄 قارن نفسك بنفسك الأسبوع الماضي. التقدم بالنسبة لنفسك هو المقياس الحقيقي.',
-    ])
-  }
-
-  return randomFrom([
-    '🌟 أنا هنا لمساعدتك! يمكنك سؤالي عن: بناء العادات، زيادة التركيز، تحديد الأهداف، تحسين الصحة، أو الحصول على تحفيز.',
-    '💡 تذكير: أفضل استثمار هو الاستثمار في نفسك. خصص 30 دقيقة يومياً للتعلم والتطوير.',
-    '🌱 نموذج 1%: إذا تحسنت 1% كل يوم، بعد سنة ستكون 37 مرة أفضل.',
-    '🎯 لا تنتظر الدافع لتبدأ. ابدأ والدافع سيأتي.',
-  ])
+const HUE_SOLID: Record<string, string> = {
+  emerald: 'bg-emerald-accent text-white',
+  violet: 'bg-violet-accent text-white',
+  gold: 'bg-gold text-ink',
+  rose: 'bg-rose-accent text-white',
 }
 
-/* ────────────── Quick Actions ────────────── */
+/* ─────────────── التنقل الداخلي ─────────────── */
 
-const quickActions = [
-  { id: 'morning', label: 'نصيحة صباحية', icon: Sun, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'صباح' },
-  { id: 'review', label: 'مراجعة أسبوعية', icon: TrendingUp, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'مراجعة' },
-  { id: 'habits', label: 'اقتراح عادات', icon: Target, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'عادة' },
-  { id: 'productivity', label: 'نصيحة إنتاجية', icon: Lightbulb, color: 'bg-violet-accent/10 text-violet-accent hover:bg-violet-accent/15', triggerWord: 'تركيز' },
-]
+type View =
+  | { type: 'home' }
+  | { type: 'topic'; topicId: TopicId }
+  | { type: 'answer'; entryId: string }
 
-/* ────────────── AI Avatar ────────────── */
+const RECENT_KEY = 'rise-coach-recent'
+const RECENT_LIMIT = 6
 
-function AIAvatar({ size = 40, isOnline = true }: { size?: number; isOnline?: boolean }) {
+function loadRecent(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    return raw ? (JSON.parse(raw) as string[]).slice(0, RECENT_LIMIT) : []
+  } catch { return [] }
+}
+
+/* ─────────────── الواجهة ─────────────── */
+
+export default function AICoach() {
+  const [view, setView] = useState<View>({ type: 'home' })
+  const [query, setQuery] = useState('')
+  const [recent, setRecent] = useState<string[]>([])
+  const stats = useMemo(() => coachStats(), [])
+
+  useEffect(() => {
+    setRecent(loadRecent())
+  }, [])
+
+  const openEntry = useCallback((entry: KnowledgeEntry) => {
+    playSound('click')
+    setRecent((prev) => {
+      const next = [entry.id, ...prev.filter((id) => id !== entry.id)].slice(0, RECENT_LIMIT)
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+    setView({ type: 'answer', entryId: entry.id })
+  }, [])
+
+  const openTopic = useCallback((topicId: TopicId) => {
+    playSound('click')
+    setQuery('')
+    setView({ type: 'topic', topicId })
+  }, [])
+
+  const goHome = useCallback(() => {
+    playSound('click')
+    setQuery('')
+    setView({ type: 'home' })
+  }, [])
+
+  const searchResults = useMemo(() => {
+    if (query.trim().length < 2) return []
+    return searchKnowledge(query, 6)
+  }, [query])
+
+  const navigateToModule = useCallback((moduleId: string) => {
+    playSound('navigate')
+    window.dispatchEvent(new CustomEvent('rise:navigate', { detail: moduleId }))
+  }, [])
+
+  const activeTopic = view.type === 'topic' ? COACH_TOPICS.find((t) => t.id === view.topicId) : undefined
+  const activeEntry = view.type === 'answer' ? getEntry(view.entryId) : undefined
+
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <motion.div
-        className="absolute inset-[-6px] rounded-full border border-dashed border-violet-accent/30"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-      />
-      <motion.div
-        className="absolute inset-[-10px] rounded-full border border-dashed border-gold/20"
-        animate={{ rotate: -360 }}
-        transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-      />
-      <motion.div
-        className="absolute w-2 h-2 rounded-full bg-violet-accent"
-        style={{ top: -6, left: '50%', marginLeft: -4 }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-      >
-        <motion.div
-          className="w-2 h-2 rounded-full bg-gold"
-          animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
-          transition={{ type: 'tween', duration: 2, repeat: Infinity, repeatType: 'reverse' }}
-        />
-      </motion.div>
-      <div className={cn(
-        'relative z-10 rounded-full flex items-center justify-center',
-        'bg-gradient-to-br from-violet-accent via-[#7C3AED] to-violet-accent',
-        'shadow-lg shadow-violet-accent/25'
-      )} style={{ width: size, height: size }}>
-        <Brain className={cn('text-white', size > 35 ? 'w-5 h-5' : 'w-3.5 h-3.5')} />
+    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative rounded-3xl">
+      {/* ── Header ── */}
+      <div className="shrink-0 flex items-start justify-between gap-3 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-violet-accent via-[#7C3AED] to-gold shadow-lg shadow-violet-accent/20">
+              <BookOpen className="w-6 h-6 text-white" />
+            </div>
+            <span className="absolute -bottom-1 -end-1 w-4 h-4 rounded-full bg-lime border-2 border-background flex items-center justify-center">
+              <Sparkles className="w-2 h-2 text-ink" />
+            </span>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">المدرب الذكي</h2>
+            <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>اضغط زراً… وخذ خطوات عملية من الكتب</span>
+            </p>
+          </div>
+        </div>
+        <span className="hidden sm:inline-flex pill bg-violet-accent/10 text-violet-accent text-[11px] gap-1.5 shrink-0" title="حجم قاعدة المعارف">
+          <Library className="w-3.5 h-3.5" />
+          <span className="num" dir="ltr">{stats.entries}</span> مقالة من <span className="num" dir="ltr">{stats.books}</span> كتاب
+        </span>
       </div>
-      {/* Online indicator */}
-      <div className={cn(
-        'absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full border-2 border-background',
-        isOnline ? 'bg-emerald-accent' : 'bg-muted-foreground/50'
-      )} />
+
+      {/* ── Search ── */}
+      <div className="shrink-0 pb-4">
+        <div className="relative">
+          <Search className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60 pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ابحث في المعارف… مثال: كسرت سلسلتي، تأجيل، قهوة"
+            className="w-full h-12 ps-10 pe-10 rounded-2xl glass bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 focus:ring-2 ring-violet-accent/30 transition-shadow"
+            dir="rtl"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute end-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+              aria-label="مسح البحث"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Body ── */}
+      <div className="flex-1 overflow-y-auto min-h-0 neo-scroll pb-2">
+        <AnimatePresence mode="wait">
+          {/* بحث نشط */}
+          {searchResults.length > 0 ? (
+            <motion.div
+              key="search"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="space-y-2"
+            >
+              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Search className="w-3.5 h-3.5" />
+                نتائج البحث (<span className="num" dir="ltr">{searchResults.length}</span>)
+              </p>
+              {searchResults.map(({ entry, score }) => (
+                <QuestionButton
+                  key={entry.id}
+                  entry={entry}
+                  showTopic
+                  hot={score >= 12}
+                  onClick={() => openEntry(entry)}
+                />
+              ))}
+            </motion.div>
+          ) : query.trim().length >= 2 ? (
+            <motion.div
+              key="no-results"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="text-center py-10 px-4"
+            >
+              <span className="icon-well mb-3 h-14 w-14 bg-secondary text-muted-foreground/50">
+                <Search className="w-6 h-6" />
+              </span>
+              <p className="text-sm text-muted-foreground">لا نتائج مطابقة — جرّب كلمة أبسط</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">أو اختر تصنيفاً من الأزرار بالأسفل</p>
+            </motion.div>
+          ) : view.type === 'home' ? (
+            <motion.div key="home" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-5">
+              {/* Hero micro */}
+              <div className="glass rounded-2xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-lime/90 flex items-center justify-center shrink-0">
+                  <Zap className="w-5 h-5 text-ink" />
+                </div>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  <span className="font-bold text-foreground">بدون ذكاء اصطناعي</span> — مدرب مجرّب:
+                  اختر موضوعاً، اضغط سؤالاً، وخذ خطوات مجرّبة من <span className="font-semibold text-foreground">{stats.books}</span> كتاب في التنمية والإنتاجية.
+                </p>
+              </div>
+
+              {/* آخر ما فتحته */}
+              {recent.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5" />
+                    آخر ما قرأته
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                    {recent.map((id) => {
+                      const entry = getEntry(id)
+                      if (!entry) return null
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => openEntry(entry)}
+                          className="shrink-0 max-w-[220px] text-start px-3.5 py-2 rounded-xl glass hover:bg-muted/40 transition-colors"
+                        >
+                          <span className="block text-xs font-semibold truncate">{entry.title}</span>
+                          <span className="block text-[10px] text-muted-foreground/70 mt-0.5 truncate">{entry.book}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* التصنيفات */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2.5">اختر موضوعاً</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {COACH_TOPICS.map((topic, i) => {
+                    const Icon = TOPIC_ICONS[topic.icon] || BookOpen
+                    const count = entriesByTopic(topic.id).length
+                    return (
+                      <motion.button
+                        key={topic.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => openTopic(topic.id)}
+                        className="group relative p-4 rounded-2xl glass text-start hover:shadow-md transition-all overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between mb-2.5">
+                          <span className={cn('w-9 h-9 rounded-xl flex items-center justify-center', HUE_STYLES[topic.hue])}>
+                            <Icon className="w-4.5 h-4.5 w-[18px] h-[18px]" />
+                          </span>
+                          <span className="text-[10px] font-bold text-muted-foreground/60 bg-muted/50 rounded-full px-2 py-0.5 num" dir="ltr">
+                            {count}
+                          </span>
+                        </div>
+                        <p className="font-bold text-sm">{topic.label}</p>
+                        <p className="text-[11px] text-muted-foreground/80 mt-0.5 leading-snug">{topic.desc}</p>
+                      </motion.button>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          ) : view.type === 'topic' && activeTopic ? (
+            <motion.div key={`topic-${activeTopic.id}`} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} className="space-y-3">
+              <BackButton onClick={goHome} label="كل المواضيع" />
+              <div className="glass rounded-2xl p-4 flex items-center gap-3">
+                <span className={cn('w-11 h-11 rounded-xl flex items-center justify-center', HUE_SOLID[activeTopic.hue])}>
+                  {(() => { const Icon = TOPIC_ICONS[activeTopic.icon] || BookOpen; return <Icon className="w-5 h-5" /> })()}
+                </span>
+                <div>
+                  <p className="font-bold">{activeTopic.label}</p>
+                  <p className="text-xs text-muted-foreground">{activeTopic.desc} — اختر سؤالاً:</p>
+                </div>
+              </div>
+              {entriesByTopic(activeTopic.id).map((entry, i) => (
+                <motion.div key={entry.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                  <QuestionButton entry={entry} onClick={() => openEntry(entry)} />
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : view.type === 'answer' && activeEntry ? (
+            <motion.div key={`answer-${activeEntry.id}`} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} className="space-y-4">
+              <BackButton
+                onClick={() => setView({ type: 'topic', topicId: activeEntry.topic })}
+                label={COACH_TOPICS.find((t) => t.id === activeEntry.topic)?.label || 'رجوع'}
+              />
+              <AnswerCard entry={activeEntry} onAction={navigateToModule} onRelated={openEntry} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Footer note ── */}
+      <div className="shrink-0 pt-3 text-center">
+        <p className="text-[10px] text-muted-foreground/50">
+          كل الإجابات محلية من الكتب — تعمل بلا إنترنت، ولا يُرسل أي سؤال لأي خادم
+        </p>
+      </div>
     </div>
   )
 }
 
-const suggestedPrompts = [
-  { icon: Brain, text: 'كيف أبني تركيزاً أعمق؟', color: 'text-violet-accent' },
-  { icon: Target, text: 'ساعدني في تحديد أهدافي', color: 'text-violet-accent' },
-  { icon: Heart, text: 'نصيحة للصحة النفسية', color: 'text-violet-accent' },
-  { icon: Moon, text: 'روتين مسائي مثالي', color: 'text-violet-accent' },
-]
+/* ─────────────── مكونات صغيرة ─────────────── */
 
-/* ────────────── Component ────────────── */
-
-export default function AICoach() {
-  const { auth } = useRiseStore()
-  const STORAGE_KEY = 'rise-ai-chat'
-
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window === 'undefined') return []
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) return JSON.parse(stored)
-    } catch { /* ignore */ }
-    return []
-  })
-  const [input, setInput] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null)
-  const [aiUsage, setAiUsage] = useState<{ used: number; limit: number; total: number } | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
-    }
-  }, [messages])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping])
-
-  const sendToAI = useCallback(async (message: string, history: ChatMessage[]) => {
-    try {
-      const chatHistory = history.slice(-6).map(m => ({
-        role: m.role,
-        content: m.content,
-      }))
-
-      const res = await apiPost('/api/rise/ai-chat', {
-        message,
-        userId: auth?.userId || '',
-        history: chatHistory,
-      })
-
-      if (!res.ok) throw new Error('Failed')
-
-      const data = await res.json()
-
-      if (data.usage) {
-        setAiUsage(data.usage)
-      }
-
-      // Detect API status
-      if (apiOnline === null) {
-        setApiOnline(!data.fallback)
-      }
-
-      return { response: data.response, fallback: data.fallback }
-    } catch {
-      return { response: generateFallbackResponse(message), fallback: true }
-    }
-  }, [auth, apiOnline])
-
-  const addAIMessage = useCallback((content: string, isFallback = false) => {
-    setIsTyping(true)
-    const delay = isFallback ? Math.min(content.length * 5, 1000) : 1500
-    setTimeout(() => {
-      setIsTyping(false)
-      playSound('message')
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'ai',
-          content,
-          timestamp: Date.now(),
-          isFallback,
-        },
-      ])
-    }, delay)
-  }, [])
-
-  const handleQuickAction = useCallback((actionId: string) => {
-    const action = quickActions.find((a) => a.id === actionId)
-    if (!action) return
-
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: action.label,
-      timestamp: Date.now(),
-    }
-
-    setMessages((prev) => [...prev, userMsg])
-
-    // Use local fallback for quick actions for instant response
-    const response = generateFallbackResponse(action.triggerWord)
-    addAIMessage(response, true)
-  }, [addAIMessage])
-
-  const handleSend = useCallback(async () => {
-    if (!input.trim() || isTyping) return
-    const userMessage = input.trim()
-    setInput('')
-
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: userMessage,
-      timestamp: Date.now(),
-    }
-
-    const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
-
-    setIsTyping(true)
-    const { response, fallback } = await sendToAI(userMessage, messages)
-    setIsTyping(false)
-    playSound('message')
-
-    setMessages(prev => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: 'ai',
-        content: response,
-        timestamp: Date.now(),
-        isFallback: fallback,
-      },
-    ])
-  }, [input, isTyping, messages, sendToAI])
-
-  const clearChat = () => {
-    setMessages([])
-    localStorage.removeItem(STORAGE_KEY)
-  }
-
-  const hasMessages = messages.length > 0
-
+function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <div className="space-y-6 max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative overflow-hidden rounded-3xl bg-card">
-      {/* Shifting gradient background */}
-      <motion.div
-        className="absolute inset-0 -z-10 rounded-3xl"
-        animate={{
-          background: [
-            'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(214,255,61,0.04))',
-            'linear-gradient(135deg, rgba(201,154,62,0.05), rgba(139,92,246,0.04))',
-            'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(214,255,61,0.04))',
-          ],
-        }}
-        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-        style={{ backgroundSize: '300% 300%' }}
-      />
-      <div className="absolute inset-0 -z-10 noise-bg opacity-30 rounded-3xl" />
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <ArrowLeft className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
+      {label}
+    </button>
+  )
+}
 
-      {/* Header */}
-      <div className="flex items-center justify-between shrink-0 relative z-10">
-        <div className="flex items-center gap-3">
-          <AIAvatar size={44} isOnline={apiOnline !== false} />
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">المدرب الذكي</h2>
-              {apiOnline === false && (
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                  <WifiOff className="w-3 h-3" />
-                  وضع محلي
-                </span>
-              )}
-              {apiOnline === true && (
-                <span className="flex items-center gap-1 text-[10px] text-emerald-accent bg-emerald-accent/10 px-2 py-0.5 rounded-full">
-                  <Wifi className="w-3 h-3" />
-                  متصل
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              مساعدك الشخصي للنمو والتطوير
-              {aiUsage && (
-                <span className="ms-2 text-xs opacity-70">
-                  (<span className="num" dir="ltr">{aiUsage.used}/{aiUsage.limit}</span> رسالة)
-                </span>
-              )}
-            </p>
+function QuestionButton({
+  entry,
+  onClick,
+  showTopic,
+  hot,
+}: {
+  entry: KnowledgeEntry
+  onClick: () => void
+  showTopic?: boolean
+  hot?: boolean
+}) {
+  const topic = COACH_TOPICS.find((t) => t.id === entry.topic)
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-start p-4 rounded-2xl glass hover:bg-muted/30 transition-all group relative overflow-hidden"
+    >
+      <div className="flex items-start gap-3">
+        <span className="w-8 h-8 rounded-lg bg-violet-accent/10 text-violet-accent flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+          <ListOrdered className="w-4 h-4" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-snug flex items-center gap-2 flex-wrap">
+            {entry.title}
+            {hot && (
+              <span className="text-[9px] font-bold bg-lime text-ink rounded-full px-1.5 py-0.5">تطابق قوي</span>
+            )}
+          </p>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5">
+              <BookOpen className="w-3 h-3" />
+              {entry.book}
+            </span>
+            {showTopic && topic && (
+              <span className="text-[10px] text-muted-foreground/70">{topic.label}</span>
+            )}
           </div>
         </div>
-        {hasMessages && (
-          <Button variant="ghost" size="sm" onClick={clearChat} className="gap-1.5 text-xs text-muted-foreground hover:text-destructive">
-            <Trash2 className="w-3.5 h-3.5" />
-            مسح المحادثة
-          </Button>
-        )}
+        <ChevronLeft className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1 group-hover:text-violet-accent group-hover:-translate-x-0.5 transition-all rtl:rotate-180 ltr:rotate-180" />
       </div>
+    </button>
+  )
+}
 
-      {/* Quick Actions */}
-      {!hasMessages && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="shrink-0 relative z-10"
-        >
-          <div className="grid grid-cols-2 gap-3">
-            {quickActions.map((action, i) => {
-              const Icon = action.icon
-              return (
-                <motion.button
-                  key={action.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => handleQuickAction(action.id)}
-                  className="flex items-center gap-3 p-4 rounded-2xl glass transition-all hover:shadow-lg relative overflow-hidden group"
-                >
-                  <div className="absolute inset-0 rounded-2xl p-[1px] bg-gradient-to-br from-violet-accent/20 via-transparent to-gold/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                  <div className="p-2 rounded-xl bg-background/60">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <span className="font-semibold text-sm text-right">{action.label}</span>
-                </motion.button>
-              )
-            })}
+function AnswerCard({
+  entry,
+  onAction,
+  onRelated,
+}: {
+  entry: KnowledgeEntry
+  onAction: (moduleId: string) => void
+  onRelated: (entry: KnowledgeEntry) => void
+}) {
+  const topic = COACH_TOPICS.find((t) => t.id === entry.topic)
+  const related = relatedTo(entry)
+  const actions = entry.actions || (topic ? [{ label: `افتح ${topic.label}`, moduleId: defaultModuleFor(entry.topic) }] : [])
+
+  return (
+    <div className="space-y-4">
+      {/* بطاقة الإجابة */}
+      <div className="glass rounded-3xl overflow-hidden">
+        <div className="bg-gradient-to-l from-violet-accent/15 via-transparent to-gold/10 p-5 pb-4">
+          <h3 className="text-lg font-bold leading-snug">{entry.title}</h3>
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-violet-accent/15 text-violet-accent rounded-full px-2.5 py-1">
+              <Library className="w-3 h-3" />
+              {entry.book}
+            </span>
+            <span className="text-[11px] text-muted-foreground bg-muted/50 rounded-full px-2.5 py-1">
+              {entry.author}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-5 pt-4 space-y-5">
+          {/* الفكرة */}
+          <div>
+            <p className="text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-wide">الفكرة</p>
+            <p className="text-sm leading-relaxed text-foreground/90">{entry.summary}</p>
           </div>
 
-          <div className="mt-6">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-              <MessageCircle className="w-3.5 h-3.5" />
-              جرّب هذه الأسئلة
+          {/* الخطوات */}
+          <div>
+            <p className="text-xs font-bold text-muted-foreground mb-2.5 uppercase tracking-wide flex items-center gap-1.5">
+              <ListOrdered className="w-3.5 h-3.5" />
+              خطوات عملية
             </p>
-            <div className="space-y-2">
-              {suggestedPrompts.map((prompt, i) => {
-                const Icon = prompt.icon
-                return (
-                  <motion.button
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + i * 0.1 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      const msg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: prompt.text, timestamp: Date.now() }
-                      setMessages(prev => [...prev, msg])
-                      setIsTyping(true)
-                      sendToAI(prompt.text, [...messages, msg]).then(({ response, fallback }) => {
-                        setIsTyping(false)
-                        playSound('message')
-                        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'ai', content: response, timestamp: Date.now(), isFallback: fallback }])
-                      })
-                    }}
-                    className="flex items-center gap-3 w-full p-3 rounded-xl glass hover:bg-muted/30 transition-all text-right group"
-                  >
-                    <div className="p-1.5 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors">
-                      <Icon className={cn('w-4 h-4', prompt.color)} />
-                    </div>
-                    <span className="text-sm text-foreground">{prompt.text}</span>
-                  </motion.button>
-                )
-              })}
-            </div>
+            <ol className="space-y-2.5">
+              {entry.steps.map((step, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-lg bg-forest text-lime dark:bg-lime dark:text-ink flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 num" dir="ltr">
+                    {i + 1}
+                  </span>
+                  <p className="text-sm leading-relaxed text-foreground/90 flex-1">{step}</p>
+                </li>
+              ))}
+            </ol>
           </div>
-        </motion.div>
-      )}
 
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
-        <AnimatePresence initial={false}>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}
-            >
-              {msg.role === 'ai' ? <AIAvatar size={32} isOnline={!msg.isFallback} /> : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 bg-muted/50">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                </div>
-              )}
-
-              <div className={cn(
-                'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed backdrop-blur-sm',
-                msg.role === 'ai'
-                  ? 'bg-secondary text-foreground rounded-tr-sm shadow-sm'
-                  : 'bg-forest text-paper-soft rounded-tl-sm shadow-md shadow-violet-accent/10 dark:bg-lime dark:text-ink'
-              )}>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-                <div className={cn(
-                  'flex items-center gap-2 mt-1.5',
-                  msg.role === 'ai' ? 'text-muted-foreground/60' : 'text-paper-soft/70 dark:text-ink/60'
-                )}>
-                  <p className="text-[10px]">
-                    {new Date(msg.timestamp).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                  {msg.isFallback && msg.role === 'ai' && (
-                    <span className="flex items-center gap-0.5 text-[9px]">
-                      <AlertCircle className="w-2.5 h-2.5" />
-                      محلي
-                    </span>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {/* Typing Indicator */}
-        {isTyping && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 0 }}
-            className="flex gap-3"
-          >
-            <AIAvatar size={32} />
-            <div className="bg-secondary rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
-              <div className="flex gap-1.5">
-                {[0, 1, 2].map((i) => (
-                  <motion.div
+          {/* أزرار التطبيق داخل التطبيق */}
+          {actions.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-muted-foreground mb-2.5 uppercase tracking-wide">طبّقها الآن</p>
+              <div className="flex gap-2 flex-wrap">
+                {actions.map((action, i) => (
+                  <button
                     key={i}
-                    className="w-2 h-2 rounded-full bg-violet-accent"
-                    animate={{ opacity: [0.3, 1, 0.3], y: [0, -6, 0] }}
-                    transition={{
-                      duration: 0.8,
-                      repeat: Infinity,
-                      delay: i * 0.15,
-                      ease: 'easeInOut',
-                    }}
-                  />
+                    onClick={() => onAction(action.moduleId)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold bg-forest text-paper-soft dark:bg-lime dark:text-ink rounded-xl px-3.5 py-2 hover:opacity-90 active:scale-95 transition-all"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {action.label}
+                  </button>
                 ))}
               </div>
             </div>
-          </motion.div>
-        )}
-
-        <div ref={messagesEndRef} />
+          )}
+        </div>
       </div>
 
-      {/* Quick Actions Bar */}
-      {hasMessages && (
-        <div className="shrink-0 flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-          {quickActions.map((action) => {
-            const Icon = action.icon
+      {/* أسئلة ذات صلة — أزرار تتبع الإجابة */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-gold" />
+          أسئلة ذات صلة
+        </p>
+        <div className="space-y-2">
+          {related.map((rel) => {
+            const relTopic = COACH_TOPICS.find((t) => t.id === rel.topic)
             return (
               <button
-                key={action.id}
-                onClick={() => handleQuickAction(action.id)}
-                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap glass transition-all hover:shadow-md', action.color)}
+                key={rel.id}
+                onClick={() => onRelated(rel)}
+                className="w-full text-start px-4 py-3 rounded-xl glass hover:bg-muted/30 transition-all text-sm font-medium flex items-center justify-between gap-3 group"
               >
-                <Icon className="w-3.5 h-3.5" />
-                {action.label}
+                <span className="flex-1">{rel.title}</span>
+                <span className="text-[10px] text-muted-foreground/60 shrink-0">{relTopic?.label}</span>
               </button>
             )
           })}
         </div>
-      )}
-
-      {/* Input */}
-      <div className="shrink-0">
-        <div className="flex items-center gap-2 glass rounded-2xl p-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="اكتب رسالتك..."
-            className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/50"
-            dir="rtl"
-            disabled={isTyping}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isTyping}
-            className={cn(
-              'p-2.5 rounded-xl transition-all',
-              input.trim() && !isTyping
-                ? 'bg-violet-accent text-white hover:bg-violet-accent/90'
-                : 'bg-muted/50 text-muted-foreground/30'
-            )}
-          >
-            <Send className="w-4 h-4 rotate-180" />
-          </button>
-        </div>
       </div>
     </div>
   )
+}
+
+function defaultModuleFor(topic: TopicId): string {
+  switch (topic) {
+    case 'habits': return 'habits'
+    case 'focus': return 'deepwork'
+    case 'productivity': return 'tasks'
+    case 'goals': return 'goals'
+    case 'morning': return 'morning'
+    case 'sleep': return 'health'
+    case 'motivation': return 'dashboard'
+    case 'procrastination': return 'planner'
+    case 'time': return 'planner'
+    case 'money': return 'finance'
+    case 'learning': return 'reading'
+    case 'mindset': return 'journal'
+    default: return 'dashboard'
+  }
 }
