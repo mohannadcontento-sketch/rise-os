@@ -19,13 +19,12 @@ import {
   TrendingUp,
   TrendingDown,
   PiggyBank,
-  Landmark,
   Plus,
   Trash2,
   ArrowUpRight,
   ArrowDownRight,
   Repeat,
-  CreditCard,
+  Pencil,
   Receipt,
   ShoppingBag,
   Utensils,
@@ -82,21 +81,18 @@ interface FinanceData {
 
 /* ────────────── Constants ────────────── */
 
-// Finance identity = LIME (rule 5); expense = destructive, investment = glass, subscription = violet (rule 4 mapping)
+// Finance identity = LIME (rule 5); expense = destructive (rule 4 mapping)
+// NOTE: الاستثمار والاشتراكات أُزيلوا بطلب المستخدم — الأنواع: دخل / مصروف / ادخار
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string; borderColor: string; dotColor: string; trendValue?: number }> = {
   دخل: { label: 'الدخل', color: 'bg-lime-deep/10 text-lime-deep dark:text-lime', icon: TrendingUp, amountColor: 'text-lime-deep dark:text-lime', borderColor: 'border-s-lime-deep', dotColor: 'bg-lime-deep', trendValue: 12 },
   مصروف: { label: 'المصروفات', color: 'bg-destructive/10 text-destructive', icon: TrendingDown, amountColor: 'text-destructive', borderColor: 'border-s-destructive', dotColor: 'bg-destructive', trendValue: -5 },
   ادخار: { label: 'الادخار', color: 'bg-forest/10 text-forest', icon: PiggyBank, amountColor: 'text-forest', borderColor: 'border-s-forest', dotColor: 'bg-forest', trendValue: 8 },
-  استثمار: { label: 'الاستثمار', color: 'bg-glass/10 text-glass', icon: Landmark, amountColor: 'text-glass', borderColor: 'border-s-glass', dotColor: 'bg-glass', trendValue: 15 },
-  اشتراك: { label: 'الاشتراكات', color: 'bg-violet-accent/10 text-violet-accent', icon: CreditCard, amountColor: 'text-violet-accent', borderColor: 'border-s-violet-accent', dotColor: 'bg-violet-accent', trendValue: -3 },
 }
 
-const TYPE_CARD_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; borderColor: string; activeBg: string }> = {
-  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-lime-deep/5', borderColor: 'border-lime-deep/30', activeBg: 'bg-lime-deep/15 ring-lime-deep/40' },
-  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-destructive/5', borderColor: 'border-destructive/30', activeBg: 'bg-destructive/15 ring-destructive/40' },
-  ادخار: { label: 'الادخار', icon: PiggyBank, bg: 'bg-forest/5', borderColor: 'border-forest/30', activeBg: 'bg-forest/15 ring-forest/40' },
-  استثمار: { label: 'الاستثمار', icon: Landmark, bg: 'bg-glass/5', borderColor: 'border-glass/30', activeBg: 'bg-glass/15 ring-glass/40' },
-  اشتراك: { label: 'الاشتراكات', icon: CreditCard, bg: 'bg-violet-accent/5', borderColor: 'border-violet-accent/30', activeBg: 'bg-violet-accent/15 ring-violet-accent/40' },
+const TYPE_CARD_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; borderColor: string; activeBg: string; solid: string }> = {
+  دخل: { label: 'الدخل', icon: TrendingUp, bg: 'bg-lime-deep/5', borderColor: 'border-lime-deep/30', activeBg: 'bg-lime-deep/15 ring-lime-deep/40', solid: 'text-lime-deep dark:text-lime' },
+  مصروف: { label: 'المصروفات', icon: TrendingDown, bg: 'bg-destructive/5', borderColor: 'border-destructive/30', activeBg: 'bg-destructive/15 ring-destructive/40', solid: 'text-destructive' },
+  ادخار: { label: 'الادخار', icon: PiggyBank, bg: 'bg-forest/5', borderColor: 'border-forest/30', activeBg: 'bg-forest/15 ring-forest/40', solid: 'text-forest' },
 }
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -202,6 +198,9 @@ export default function Finance() {
       if (res.ok) {
         const json = await res.json()
         const serverBudgets: { category: string; limit: number }[] = json.budgets || []
+        if (typeof json.savingsGoal === 'number' && json.savingsGoal > 0) {
+          setSavingsGoal(json.savingsGoal)
+        }
         if (serverBudgets.length > 0) {
           const map: Record<string, number> = {}
           serverBudgets.forEach(b => { map[b.category] = b.limit })
@@ -323,9 +322,9 @@ export default function Finance() {
     const records = data?.records || []
     const income = records.filter((r) => r.type === 'دخل').reduce((sum, r) => sum + r.amount, 0)
     const expenses = records.filter((r) => r.type === 'مصروف').reduce((sum, r) => sum + r.amount, 0)
-    const savings = records.filter((r) => r.type === 'ادخار').reduce((sum, r) => sum + r.amount, 0)
-    const investment = records.filter((r) => r.type === 'استثمار').reduce((sum, r) => sum + r.amount, 0)
-    return { income, expenses, savings, investment }
+    // سجلات قديمة بنوع استثمار تُحسب ادخار (النوع أُزيل)
+    const savings = records.filter((r) => r.type === 'ادخار' || r.type === 'استثمار').reduce((sum, r) => sum + r.amount, 0)
+    return { income, expenses, savings }
   }, [data])
 
   /* ─── Budget Computation ─── */
@@ -375,8 +374,19 @@ export default function Finance() {
 
   /* ─── Savings Goal ─── */
   const [savingsGoal, setSavingsGoal] = useState(10000)
-  const totalSavings = stats.savings + stats.investment
-  const savingsProgress = Math.min(100, (totalSavings / savingsGoal) * 100)
+  const [editingGoal, setEditingGoal] = useState(false)
+  const totalSavings = stats.savings
+  const savingsProgress = savingsGoal > 0 ? Math.min(100, (totalSavings / savingsGoal) * 100) : 0
+
+  /* ─── Save savings goal (persisted server-side) ─── */
+  const saveSavingsGoal = useCallback(async (goal: number) => {
+    const safe = Math.max(0, Math.round(goal)) || 0
+    setSavingsGoal(safe)
+    try {
+      const res = await apiPut('/api/rise/budgets', { savingsGoal: safe })
+      if (res.ok) toastSaved('هدف الادخار')
+    } catch { /* silent — value stays in state */ }
+  }, [])
 
   /* ─── Cash Flow Data ─── */
   const cashFlowData = useMemo(() => {
@@ -502,7 +512,7 @@ export default function Finance() {
           <RiseIcon glyph="finance" hue="lime" size="md" lift />
           <div>
             <h2 className="text-xl font-bold text-foreground">المالية</h2>
-            <p className="text-xs text-muted-foreground">تتبع دخلك ومصروفاتك واستثماراتك</p>
+            <p className="text-xs text-muted-foreground">تتبع دخلك ومصروفاتك وادخارك</p>
           </div>
         </div>
 
@@ -526,7 +536,7 @@ export default function Finance() {
               {/* Type - Visual Cards instead of dropdown */}
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-foreground">النوع</label>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {Object.entries(TYPE_CARD_CONFIG).map(([key, cfg]) => {
                     const Icon = cfg.icon
                     const isActive = form.type === key
@@ -546,8 +556,8 @@ export default function Finance() {
                       >
                         <Icon className={cn(
                           'w-4 h-4 transition-colors',
-                          isActive ? cfg.activeBg.split(' ')[0].replace('bg-', 'text-').split('/')[0] : 'text-muted-foreground'
-                        )} style={isActive ? { color: `var(--color-${key === 'دخل' ? 'lime-deep' : key === 'مصروف' ? 'destructive' : key === 'ادخار' ? 'forest' : key === 'استثمار' ? 'glass-blue' : 'violet'})` } : undefined} />
+                          isActive ? cfg.solid : 'text-muted-foreground'
+                        )} />
                         <span className={cn(
                           'text-[10px] font-medium leading-tight text-center',
                           isActive ? 'text-foreground' : 'text-muted-foreground'
@@ -824,7 +834,7 @@ export default function Finance() {
       </motion.div>
 
       {/* Summary Cards with colored left borders and trend arrows */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 md:gap-4">
         {/* Income */}
         <div className="neo-card card-lift rounded-2xl relative overflow-hidden">
           <div className="absolute top-0 start-0 bottom-0 w-1 bg-lime-deep rounded-s-2xl" />
@@ -899,31 +909,6 @@ export default function Finance() {
             <span className="text-[11px] text-muted-foreground">الادخار</span>
           </div>
         </div>
-
-        {/* Investment */}
-        <div className="neo-card card-lift rounded-2xl relative overflow-hidden">
-          <div className="absolute top-0 start-0 bottom-0 w-1 bg-glass rounded-s-2xl" />
-          <div className="p-4 flex flex-col items-center text-center gap-1 relative">
-            <div className="w-8 h-8 rounded-lg bg-glass/10 flex items-center justify-center">
-              <Landmark className="w-4 h-4 text-glass" />
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xl font-bold text-glass count-up">
-                <span className="num" dir="ltr">{formatAmount(stats.investment)}</span>
-              </span>
-              {stats.investment > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center"
-                >
-                  <ArrowUpRight className="w-3.5 h-3.5 text-glass" />
-                </motion.div>
-              )}
-            </div>
-            <span className="text-[11px] text-muted-foreground">الاستثمار</span>
-          </div>
-        </div>
       </motion.div>
 
       {/* Savings Goal Tracker */}
@@ -936,14 +921,36 @@ export default function Finance() {
               </span>
               هدف الادخار
             </h3>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setSavingsGoal(prev => prev + 5000)}
-              className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-secondary transition-colors"
-            >
-              <DollarSign className="w-3 h-3 inline me-0.5" />
-              زيادة الهدف
-            </motion.button>
+            {editingGoal ? (
+              <input
+                type="number"
+                min={0}
+                autoFocus
+                defaultValue={savingsGoal}
+                onBlur={(e) => {
+                  setEditingGoal(false)
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v !== savingsGoal) saveSavingsGoal(v)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                  if (e.key === 'Escape') setEditingGoal(false)
+                }}
+                className="w-28 h-8 text-sm rounded-lg bg-card border border-border px-2 focus:outline-none focus:ring-2 focus:ring-lime-deep/40"
+                dir="ltr"
+              />
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setEditingGoal(true)}
+                className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-secondary transition-colors flex items-center gap-1"
+                title="اضغط لتعديل الهدف"
+              >
+                <DollarSign className="w-3 h-3" />
+                الهدف: <span className="num font-semibold" dir="ltr">{formatAmount(savingsGoal)}</span>
+                <Pencil className="w-3 h-3 opacity-60" />
+              </motion.button>
+            )}
           </div>
           <div>
             <div className="relative h-6 rounded-full bg-secondary overflow-hidden mb-2">
@@ -1125,11 +1132,9 @@ export default function Finance() {
               const monthRecords = (data?.records || []).filter((r) => r.date.startsWith(currentMonth))
               const mIncome = monthRecords.filter((r) => r.type === 'دخل').reduce((s, r) => s + r.amount, 0)
               const mExpenses = monthRecords.filter((r) => r.type === 'مصروف').reduce((s, r) => s + r.amount, 0)
-              const mSavings = monthRecords.filter((r) => r.type === 'ادخار').reduce((s, r) => s + r.amount, 0)
-              const mInvestment = monthRecords.filter((r) => r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
-              const mSubscriptions = monthRecords.filter((r) => r.type === 'اشتراك').reduce((s, r) => s + r.amount, 0)
-              const net = mIncome - mExpenses - mSavings - mInvestment - mSubscriptions
-              const savingsRate = mIncome > 0 ? Math.round(((mSavings + mInvestment) / mIncome) * 100) : 0
+              const mSavings = monthRecords.filter((r) => r.type === 'ادخار' || r.type === 'استثمار').reduce((s, r) => s + r.amount, 0)
+              const net = mIncome - mExpenses - mSavings
+              const savingsRate = mIncome > 0 ? Math.round((mSavings / mIncome) * 100) : 0
 
               return (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1147,8 +1152,8 @@ export default function Finance() {
                     </div>
                   </div>
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
-                    <p className="text-[11px] text-muted-foreground mb-1">الاشتراكات</p>
-                    <span className="text-lg font-bold text-violet-accent"><span className="num" dir="ltr">{formatAmount(mSubscriptions)}</span></span>
+                    <p className="text-[11px] text-muted-foreground mb-1">المدخرات</p>
+                    <span className="text-lg font-bold text-forest"><span className="num" dir="ltr">{formatAmount(mSavings)}</span></span>
                   </div>
                   <div className="rounded-xl bg-muted/30 p-3 text-center">
                     <p className="text-[11px] text-muted-foreground mb-1">نسبة الادخار</p>
@@ -1180,7 +1185,9 @@ export default function Finance() {
                   <p className="text-xs text-muted-foreground/60 mt-1">اضغط &quot;إضافة سجل&quot; للبدء</p>
                 </div>
               ) : (
-                Object.entries(groupedRecords).map(([type, records]) => {
+                Object.entries(groupedRecords).map(([rawType, records]) => {
+                  // سجلات قديمة بنوع محذوف تُعرض تحت النوع المكافئ
+                  const type = rawType === 'استثمار' ? 'ادخار' : rawType === 'اشتراك' ? 'مصروف' : rawType
                   const config = TYPE_CONFIG[type]
                   if (!config) return null
                   const Icon = config.icon
@@ -1254,7 +1261,7 @@ export default function Finance() {
                                   <div className="text-start">
                                     <span className={cn(
                                       'text-sm font-bold num',
-                                      isPositive ? 'text-lime-deep dark:text-lime' : isSavings ? 'text-glass' : 'text-destructive'
+                                      isPositive ? 'text-lime-deep dark:text-lime' : isSavings ? 'text-forest' : 'text-destructive'
                                     )} dir="ltr">
                                       {isPositive ? '+' : isSavings ? '+' : '-'}{formatAmount(record.amount)}
                                     </span>
@@ -1299,4 +1306,4 @@ export default function Finance() {
       </motion.div>
     </motion.div>
   )
-}// Force recompile: 1785702715
+}  

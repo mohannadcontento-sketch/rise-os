@@ -56,6 +56,7 @@ import LoginPage from '@/components/rise/login-page'
 const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.PWAInstallPrompt })))
 
 import Onboarding from '@/components/rise/onboarding'
+import SunCloudLoader from '@/components/rise/sun-cloud-loader'
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
 const ReminderEngine = lazy(() => import('@/components/rise/reminder-engine').then(m => ({ default: m.ReminderEngine })))
 
@@ -128,37 +129,13 @@ const moduleNames: Record<ModuleId, string> = {
   'weekly-review': 'مراجعة أسبوعية',
   'monthly-review': 'مراجعة شهرية',
   'analytics': 'التحليلات',
-  'ai-coach': 'المدرب الذكي',
+  'ai-coach': 'قاعدة المعارف',
   'admin-panel': 'لوحة الإدارة',
   'settings': 'الإعدادات',
 }
 
 function LoadingFallback() {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="relative flex items-center justify-center w-20 h-20">
-        {/* Outer orbiting dots */}
-        {[0, 1, 2].map((i) => (
-          <span
-            key={`outer-${i}`}
-            className="orbit-dot-outer absolute w-2 h-2 rounded-full bg-emerald-accent/70"
-            style={{ animationDelay: `${-i * 0.6}s` }}
-          />
-        ))}
-        {/* Inner orbiting dots */}
-        {[0, 1, 2].map((i) => (
-          <span
-            key={`inner-${i}`}
-            className="orbit-dot-inner absolute w-1.5 h-1.5 rounded-full bg-gold/60"
-            style={{ animationDelay: `${-i * 0.5}s` }}
-          />
-        ))}
-        {/* Center Zap icon */}
-        <Zap className="w-5 h-5 text-forest relative z-10" />
-        <p className="absolute -bottom-8 text-sm text-muted-foreground">جاري التحميل...</p>
-      </div>
-    </div>
-  )
+  return <SunCloudLoader scale={0.52} className="h-64" />
 }
 
 /* Module identity via the Neo duotone icon system */
@@ -479,9 +456,12 @@ export default function RiseOSApp() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto" style={{ containIntrinsicSize: 'auto' }}>
+            {/* NOTE: no min-height here — forcing one made short pages
+                scroll into dead empty space (user complaint). Natural
+                height + bottom padding only when content overflows. */}
             <div
               key={activeModule}
-              className="p-3 sm:p-4 md:p-6 pb-28 lg:pb-6 min-h-[calc(100vh-60px)] animate-[fadeSlideIn_0.2s_ease-out]"
+              className="p-3 sm:p-4 md:p-6 pb-28 lg:pb-6 animate-[fadeSlideIn_0.2s_ease-out]"
             >
               {/* Module title with hue gradient bar & date */}
               <div className="mb-4 sm:mb-6 flex items-stretch gap-2 sm:gap-3 module-title-animate" key={`title-${activeModule}`}>

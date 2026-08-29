@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     let budgets: { category: string; limit: number }[] = []
+    let savingsGoal: number | null = null
 
     if (isSupabaseConfigured()) {
       // Production: read from knowledge_items (type='budget-config')
@@ -25,16 +26,36 @@ export async function GET(req: NextRequest) {
         if (!error && data?.content) {
           try { budgets = JSON.parse(data.content) } catch {}
         }
+        // Savings goal — separate row (type='savings-goal', content = number)
+        const { data: goalRow } = await admin
+          .from('knowledge_items')
+          .select('content')
+          .eq('user_id', userId)
+          .eq('type', 'savings-goal')
+          .maybeSingle()
+        if (goalRow?.content) {
+          const g = parseFloat(goalRow.content)
+          if (!isNaN(g) && g > 0) savingsGoal = g
+        }
       }
     } else {
-      // Local dev: read from Prisma user_settings
+      // Local dev: read from Prisma user_settings + knowledgeItem
       const settings = await db.userSettings.findUnique({ where: { userId } })
       if (settings && (settings as any).budgets) {
         try { budgets = JSON.parse((settings as any).budgets) } catch {}
       }
+      try {
+        const goalItem = await db.knowledgeItem.findFirst({
+          where: { userId, type: 'savings-goal' },
+        })
+        if (goalItem?.content) {
+          const g = parseFloat(goalItem.content)
+          if (!isNaN(g) && g > 0) savingsGoal = g
+        }
+      } catch {}
     }
 
-    const resp = NextResponse.json({ budgets })
+    const resp = NextResponse.json({ budgets, savingsGoal })
     resp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
     return resp
   } catch (error) {
@@ -49,7 +70,56 @@ export async function PUT(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const body = await req.json()
-    const { budgets } = body as { budgets: { category: string; limit: number }[] }
+    const { budgets, savingsGoal } = body as {
+      budgets?: { category: string; limit: number }[]
+      savingsGoal?: number
+    }
+
+    // Savings-goal-only update (from the finance page's editable goal)
+    if (savingsGoal !== undefined && !Array.isArray(budgets)) {
+      const goal = Math.max(0, Math.round(Number(savingsGoal) || 0))
+      const goalJson = String(goal)
+      try {
+        if (isSupabaseConfigured()) {
+          const admin = await getSupabaseAdmin()
+          if (admin) {
+            const { data: existing } = await admin
+              .from('knowledge_items')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('type', 'savings-goal')
+              .maybeSingle()
+            if (existing?.id) {
+              await admin.from('knowledge_items').update({ content: goalJson }).eq('id', existing.id)
+            } else {
+              await admin.from('knowledge_items').insert({
+                user_id: userId,
+                type: 'savings-goal',
+                title: 'هدف الادخار',
+                content: goalJson,
+              })
+            }
+          }
+        } else {
+          const existing = await db.knowledgeItem.findFirst({
+            where: { userId, type: 'savings-goal' },
+          })
+          if (existing) {
+            await db.knowledgeItem.update({ where: { id: existing.id }, data: { content: goalJson } })
+          } else {
+            await db.knowledgeItem.create({
+              data: { userId, type: 'savings-goal', title: 'هدف الادخار', content: goalJson },
+            })
+          }
+        }
+      } catch (e) {
+        console.error('[budgets] savings-goal save error:', e)
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+      }
+      const resp = NextResponse.json({ success: true, savingsGoal: goal })
+      resp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      return resp
+    }
 
     if (!Array.isArray(budgets)) {
       return NextResponse.json({ error: 'budgets array required' }, { status: 400 })

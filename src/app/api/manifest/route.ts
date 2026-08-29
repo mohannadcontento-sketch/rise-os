@@ -56,9 +56,9 @@ export async function GET() {
         description: "كتابة يومية جديدة",
       },
       {
-        name: "المدرب الذكي",
+        name: "قاعدة المعارف",
         url: "/app",
-        description: "التحدث مع المدرب الذكي",
+        description: "تصفح قاعدة المعارف",
       },
     ],
   }

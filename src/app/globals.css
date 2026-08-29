@@ -1219,3 +1219,103 @@ html { scroll-behavior: smooth; }
   .xp-shimmer::after { animation: none; }
   .acc-body { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Sun & Cloud Loader (طلب المستخدم) — شمس مضيئة وسحابتان
+   Original design 250×250 — scaled via --scl-scale
+   ═══════════════════════════════════════════════════════════ */
+.scl-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scl {
+  --scl-scale: 0.56;
+  width: 250px;
+  height: 250px;
+  padding: 15px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(var(--scl-scale));
+  flex-shrink: 0;
+}
+.scl .scl-cloud {
+  width: 250px;
+}
+.scl .scl-front {
+  padding-top: 45px;
+  margin-left: 25px;
+  display: inline;
+  position: absolute;
+  z-index: 11;
+  animation: scl-clouds 8s infinite;
+  animation-timing-function: ease-in-out;
+}
+.scl .scl-back {
+  margin-top: -30px;
+  margin-left: 150px;
+  z-index: 12;
+  animation: scl-clouds 12s infinite;
+  animation-timing-function: ease-in-out;
+}
+.scl .scl-right-front {
+  width: 45px;
+  height: 45px;
+  border-radius: 50% 50% 50% 0%;
+  background-color: #4c9beb;
+  display: inline-block;
+  margin-left: -25px;
+  z-index: 5;
+}
+.scl .scl-left-front {
+  width: 65px;
+  height: 65px;
+  border-radius: 50% 50% 0% 50%;
+  background-color: #4c9beb;
+  display: inline-block;
+  z-index: 5;
+}
+.scl .scl-right-back {
+  width: 50px;
+  height: 50px;
+  border-radius: 50% 50% 50% 0%;
+  background-color: #4c9beb;
+  display: inline-block;
+  margin-left: -20px;
+  z-index: 5;
+}
+.scl .scl-left-back {
+  width: 30px;
+  height: 30px;
+  border-radius: 50% 50% 0% 50%;
+  background-color: #4c9beb;
+  display: inline-block;
+  z-index: 5;
+}
+.scl .scl-sun {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(to right, #fcbb04, #fffc00);
+  border-radius: 60px;
+  display: inline;
+  position: absolute;
+}
+.scl .scl-sunshine {
+  animation: scl-sunshines 2s infinite;
+}
+@keyframes scl-sunshines {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+@keyframes scl-clouds {
+  0% { transform: translateX(15px); }
+  50% { transform: translateX(0px); }
+  100% { transform: translateX(15px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scl .scl-front,
+  .scl .scl-back,
+  .scl .scl-sunshine { animation: none; }
+}

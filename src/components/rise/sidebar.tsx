@@ -83,7 +83,7 @@ const navGroups: NavGroup[] = [
       { id: 'weekly-review', label: 'مراجعة أسبوعية', ...mi('weekly-review') },
       { id: 'monthly-review', label: 'مراجعة شهرية', ...mi('monthly-review') },
       { id: 'analytics', label: 'التحليلات', ...mi('analytics') },
-      { id: 'ai-coach', label: 'المدرب الذكي', ...mi('ai-coach') },
+      { id: 'ai-coach', label: 'قاعدة المعارف', ...mi('ai-coach') },
     ],
   },
 ]

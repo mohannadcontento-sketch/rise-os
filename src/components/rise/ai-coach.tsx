@@ -1,10 +1,11 @@
 'use client'
 
 /**
- * المدرب الذكي — بلا ذكاء اصطناعي (طلب المستخدم).
+ * قاعدة المعارف — مكتبة معارف من الكتب (بلا ذكاء اصطناعي — طلب المستخدم).
  *
  * مساعد قائم على أزرار معروفة: تصنيفات → أسئلة → إجابات عملية
  * مستخرجة من قاعدة معارف محلية دقيقة مبنية على كتب حقيقية.
+ * + "شارك معرفة": المستخدم يضيف معارفه المقترحة (تُحفظ محلياً وتظهر في البحث).
  * كل شيء يعمل بلا إنترنت وبلا أي API.
  */
 
@@ -31,6 +32,9 @@ import {
   Library,
   History,
   ArrowLeft,
+  Plus,
+  Trash2,
+  Quote,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -42,9 +46,17 @@ import {
   relatedTo,
   searchKnowledge,
   coachStats,
+  normalizeArabic,
   type TopicId,
   type KnowledgeEntry,
 } from '@/lib/coach-knowledge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { toast } from 'sonner'
 
 /* ─────────────── أيقونات التصنيفات ─────────────── */
 
@@ -74,6 +86,7 @@ type View =
   | { type: 'answer'; entryId: string }
 
 const RECENT_KEY = 'rise-coach-recent'
+const CONTRIB_KEY = 'rise-kb-contributions'
 const RECENT_LIMIT = 6
 
 function loadRecent(): string[] {
@@ -83,25 +96,45 @@ function loadRecent(): string[] {
   } catch { return [] }
 }
 
+/* ─────────────── معارف المستخدم المقترحة ─────────────── */
+
+function loadContributions(): KnowledgeEntry[] {
+  try {
+    const raw = localStorage.getItem(CONTRIB_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.slice(0, 50) : []
+  } catch { return [] }
+}
+
+function saveContributions(list: KnowledgeEntry[]) {
+  try { localStorage.setItem(CONTRIB_KEY, JSON.stringify(list.slice(0, 50))) } catch { /* ignore */ }
+}
+
 /* ─────────────── الواجهة ─────────────── */
 
 export default function AICoach() {
   const [view, setView] = useState<View>({ type: 'home' })
   const [query, setQuery] = useState('')
   const [recent, setRecent] = useState<string[]>([])
+  const [contributions, setContributions] = useState<KnowledgeEntry[]>([])
+  const [contributeOpen, setContributeOpen] = useState(false)
   const stats = useMemo(() => coachStats(), [])
 
   useEffect(() => {
     setRecent(loadRecent())
+    setContributions(loadContributions())
   }, [])
 
   const openEntry = useCallback((entry: KnowledgeEntry) => {
     playSound('click')
-    setRecent((prev) => {
-      const next = [entry.id, ...prev.filter((id) => id !== entry.id)].slice(0, RECENT_LIMIT)
-      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* ignore */ }
-      return next
-    })
+    if (!entry.id.startsWith('user-')) {
+      setRecent((prev) => {
+        const next = [entry.id, ...prev.filter((id) => id !== entry.id)].slice(0, RECENT_LIMIT)
+        try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+        return next
+      })
+    }
     setView({ type: 'answer', entryId: entry.id })
   }, [])
 
@@ -117,10 +150,39 @@ export default function AICoach() {
     setView({ type: 'home' })
   }, [])
 
+  const deleteContribution = useCallback((id: string) => {
+    playSound('delete')
+    setContributions((prev) => {
+      const next = prev.filter((c) => c.id !== id)
+      saveContributions(next)
+      return next
+    })
+    if (view.type === 'answer' && view.entryId === id) setView({ type: 'home' })
+  }, [view])
+
+  const addContribution = useCallback((entry: KnowledgeEntry) => {
+    setContributions((prev) => {
+      const next = [entry, ...prev]
+      saveContributions(next)
+      return next
+    })
+  }, [])
+
+  /* البحث يشمل معارف المستخدم */
   const searchResults = useMemo(() => {
     if (query.trim().length < 2) return []
-    return searchKnowledge(query, 6)
-  }, [query])
+    const libResults = searchKnowledge(query, 6)
+    const q = normalizeArabic(query)
+    const qTokens = q.split(' ').filter((t) => t.length > 1)
+    const userMatches: KnowledgeEntry[] = []
+    for (const c of contributions) {
+      const hay = normalizeArabic([c.title, c.summary, c.book, ...c.tags, ...c.steps].join(' '))
+      if (qTokens.every((t) => hay.includes(t)) || hay.includes(q)) {
+        userMatches.push(c)
+      }
+    }
+    return [...userMatches.map((entry) => ({ entry, score: 20, user: true as const })), ...libResults.map((r) => ({ ...r, user: false as const }))].slice(0, 8)
+  }, [query, contributions])
 
   const navigateToModule = useCallback((moduleId: string) => {
     playSound('navigate')
@@ -128,7 +190,19 @@ export default function AICoach() {
   }, [])
 
   const activeTopic = view.type === 'topic' ? COACH_TOPICS.find((t) => t.id === view.topicId) : undefined
-  const activeEntry = view.type === 'answer' ? getEntry(view.entryId) : undefined
+  const activeEntry = view.type === 'answer' ? (getEntry(view.entryId) || contributions.find((c) => c.id === view.entryId)) : undefined
+
+  /* الكتب المتوفرة (فريدة بالعدّاد) */
+  const booksList = useMemo(() => {
+    const map = new Map<string, { book: string; author: string; count: number }>()
+    for (const e of COACH_TOPICS.flatMap((t) => entriesByTopic(t.id))) {
+      const key = `${e.book}|${e.author}`
+      const cur = map.get(key)
+      if (cur) cur.count++
+      else map.set(key, { book: e.book, author: e.author, count: 1 })
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count)
+  }, [])
 
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative rounded-3xl">
@@ -136,24 +210,33 @@ export default function AICoach() {
       <div className="shrink-0 flex items-start justify-between gap-3 pb-4">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-violet-accent via-[#7C3AED] to-gold shadow-lg shadow-violet-accent/20">
-              <BookOpen className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-forest via-emerald-accent to-lime shadow-lg shadow-emerald-accent/20">
+              <Library className="w-6 h-6 text-white" />
             </div>
             <span className="absolute -bottom-1 -end-1 w-4 h-4 rounded-full bg-lime border-2 border-background flex items-center justify-center">
-              <Sparkles className="w-2 h-2 text-ink" />
+              <BookOpen className="w-2.5 h-2.5 text-ink" />
             </span>
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">المدرب الذكي</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">قاعدة المعارف</h2>
             <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>اضغط زراً… وخذ خطوات عملية من الكتب</span>
+              <span>أزرار معروفة… وخلاصات عملية من الكتب</span>
             </p>
           </div>
         </div>
-        <span className="hidden sm:inline-flex pill bg-violet-accent/10 text-violet-accent text-[11px] gap-1.5 shrink-0" title="حجم قاعدة المعارف">
-          <Library className="w-3.5 h-3.5" />
-          <span className="num" dir="ltr">{stats.entries}</span> مقالة من <span className="num" dir="ltr">{stats.books}</span> كتاب
-        </span>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className="hidden sm:inline-flex pill bg-emerald-accent/10 text-emerald-accent text-[11px] gap-1.5" title="حجم قاعدة المعارف">
+            <Library className="w-3.5 h-3.5" />
+            <span className="num" dir="ltr">{stats.entries}</span> مقالة من <span className="num" dir="ltr">{stats.books}</span> كتاب
+          </span>
+          <button
+            onClick={() => { playSound('click'); setContributeOpen(true) }}
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-forest dark:text-lime hover:opacity-80 transition-opacity"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            شارك معرفة
+          </button>
+        </div>
       </div>
 
       {/* ── Search ── */}
@@ -164,8 +247,8 @@ export default function AICoach() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ابحث في المعارف… مثال: كسرت سلسلتي، تأجيل، قهوة"
-            className="w-full h-12 ps-10 pe-10 rounded-2xl glass bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 focus:ring-2 ring-violet-accent/30 transition-shadow"
+            placeholder="ابحث… مثال: كسرت سلسلتي، تأجيل، قهوة"
+            className="w-full h-12 ps-10 pe-10 rounded-2xl glass bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 focus:ring-2 ring-emerald-accent/30 transition-shadow"
             dir="rtl"
           />
           {query && (
@@ -196,12 +279,13 @@ export default function AICoach() {
                 <Search className="w-3.5 h-3.5" />
                 نتائج البحث (<span className="num" dir="ltr">{searchResults.length}</span>)
               </p>
-              {searchResults.map(({ entry, score }) => (
+              {searchResults.map(({ entry, score, user }) => (
                 <QuestionButton
                   key={entry.id}
                   entry={entry}
                   showTopic
-                  hot={score >= 12}
+                  hot={!user && score >= 12}
+                  userMade={user}
                   onClick={() => openEntry(entry)}
                 />
               ))}
@@ -222,14 +306,17 @@ export default function AICoach() {
             </motion.div>
           ) : view.type === 'home' ? (
             <motion.div key="home" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-5">
-              {/* Hero micro */}
+              {/* Hero */}
               <div className="glass rounded-2xl p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-lime/90 flex items-center justify-center shrink-0">
-                  <Zap className="w-5 h-5 text-ink" />
+                  <Quote className="w-5 h-5 text-ink" />
                 </div>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  <span className="font-bold text-foreground">بدون ذكاء اصطناعي</span> — مدرب مجرّب:
-                  اختر موضوعاً، اضغط سؤالاً، وخذ خطوات مجرّبة من <span className="font-semibold text-foreground">{stats.books}</span> كتاب في التنمية والإنتاجية.
+                  <span className="font-bold text-foreground">مكتبة بلا ذكاء اصطناعي</span> — اختر موضوعاً، اضغط سؤالاً، وخذ خطوات مجرّبة من{' '}
+                  <span className="font-semibold text-foreground">
+                    <span className="num" dir="ltr">{stats.books}</span> كتاب
+                  </span>{' '}
+                  في التنمية والإنتاجية. كل الإجابات محلية على جهازك.
                 </p>
               </div>
 
@@ -240,7 +327,7 @@ export default function AICoach() {
                     <History className="w-3.5 h-3.5" />
                     آخر ما قرأته
                   </p>
-                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 neo-scroll">
                     {recent.map((id) => {
                       const entry = getEntry(id)
                       if (!entry) return null
@@ -255,6 +342,36 @@ export default function AICoach() {
                         </button>
                       )
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* معارفك المقترحة */}
+              {contributions.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-gold" />
+                    معارفك المقترحة (<span className="num" dir="ltr">{contributions.length}</span>)
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 neo-scroll">
+                    {contributions.map((entry) => (
+                      <div key={entry.id} className="relative shrink-0 max-w-[220px] group">
+                        <button
+                          onClick={() => openEntry(entry)}
+                          className="w-full text-start px-3.5 py-2 rounded-xl bg-gold/10 border border-gold/20 hover:bg-gold/15 transition-colors"
+                        >
+                          <span className="block text-xs font-semibold truncate">{entry.title}</span>
+                          <span className="block text-[10px] text-muted-foreground/70 mt-0.5 truncate">{entry.book || 'إضافة شخصية'}</span>
+                        </button>
+                        <button
+                          onClick={() => deleteContribution(entry.id)}
+                          className="absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-destructive text-white items-center justify-center hidden group-hover:flex"
+                          aria-label="حذف"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -278,7 +395,7 @@ export default function AICoach() {
                       >
                         <div className="flex items-center justify-between mb-2.5">
                           <span className={cn('w-9 h-9 rounded-xl flex items-center justify-center', HUE_STYLES[topic.hue])}>
-                            <Icon className="w-4.5 h-4.5 w-[18px] h-[18px]" />
+                            <Icon className="w-[18px] h-[18px]" />
                           </span>
                           <span className="text-[10px] font-bold text-muted-foreground/60 bg-muted/50 rounded-full px-2 py-0.5 num" dir="ltr">
                             {count}
@@ -289,6 +406,27 @@ export default function AICoach() {
                       </motion.button>
                     )
                   })}
+                </div>
+              </div>
+
+              {/* المكتبة — الكتب المتوفرة */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                  <Library className="w-3.5 h-3.5" />
+                  المكتبة
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {booksList.map(({ book, author, count }) => (
+                    <span
+                      key={book + author}
+                      className="inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full glass hover:bg-muted/40 transition-colors"
+                      title={author}
+                    >
+                      <BookOpen className="w-3 h-3 text-emerald-accent shrink-0" />
+                      <span className="font-medium">{book}</span>
+                      <span className="text-muted-foreground/60 num" dir="ltr">({count})</span>
+                    </span>
+                  ))}
                 </div>
               </div>
             </motion.div>
@@ -316,6 +454,15 @@ export default function AICoach() {
                 onClick={() => setView({ type: 'topic', topicId: activeEntry.topic })}
                 label={COACH_TOPICS.find((t) => t.id === activeEntry.topic)?.label || 'رجوع'}
               />
+              {activeEntry.id.startsWith('user-') && (
+                <button
+                  onClick={() => deleteContribution(activeEntry.id)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:opacity-80"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  حذف هذه الإضافة
+                </button>
+              )}
               <AnswerCard entry={activeEntry} onAction={navigateToModule} onRelated={openEntry} />
             </motion.div>
           ) : null}
@@ -328,7 +475,162 @@ export default function AICoach() {
           كل الإجابات محلية من الكتب — تعمل بلا إنترنت، ولا يُرسل أي سؤال لأي خادم
         </p>
       </div>
+
+      {/* ── نافذة "شارك معرفة" ── */}
+      <ContributeDialog
+        open={contributeOpen}
+        onOpenChange={setContributeOpen}
+        onSave={addContribution}
+      />
     </div>
+  )
+}
+
+/* ─────────────── نافذة مشاركة معرفة ─────────────── */
+
+function ContributeDialog({
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onSave: (entry: KnowledgeEntry) => void
+}) {
+  const [title, setTitle] = useState('')
+  const [source, setSource] = useState('')
+  const [summary, setSummary] = useState('')
+  const [stepsText, setStepsText] = useState('')
+  const [topic, setTopic] = useState<TopicId>('productivity')
+
+  useEffect(() => {
+    if (open) {
+      setTitle(''); setSource(''); setSummary(''); setStepsText(''); setTopic('productivity')
+    }
+  }, [open])
+
+  const canSave = title.trim().length >= 3 && summary.trim().length >= 10 && stepsText.trim().length > 0
+
+  const handleSave = () => {
+    if (!canSave) return
+    const entry: KnowledgeEntry = {
+      id: `user-${Date.now()}`,
+      topic,
+      title: title.trim(),
+      book: source.trim() || 'إضافة شخصية',
+      author: 'مشاركة المستخدم',
+      summary: summary.trim(),
+      steps: stepsText.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 8),
+      tags: [title.trim(), ...normalizeArabic(title).split(' ').filter((t) => t.length > 1)],
+    }
+    onSave(entry)
+    playSound('save')
+    toast.success('تمت إضافة معرفتك إلى قاعدة المعارف', { description: 'ستراها في قسم "معارفك المقترحة" وفي البحث' })
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl" className="sm:max-w-md glass border-0 max-h-[85vh] overflow-y-auto neo-scroll">
+        <DialogHeader>
+          <DialogTitle className="text-start flex items-center gap-2">
+            <span className="icon-well iw-lime w-8 h-8">
+              <Plus className="w-4 h-4" />
+            </span>
+            شارك معرفة
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3.5 pt-1">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            أضف فائدة أو خطوات عملية من كتاب أو تجربة — تُحفظ في قاعدة معارفك وتظهر في البحث، ومع التطوير القادم ستُنشر لكل المستخدمين.
+          </p>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold">العنوان</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={120}
+              placeholder="مثال: قاعدة الخمس دقائق للبدء"
+              className="neo-input"
+              dir="rtl"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold">المصدر / الكتاب (اختياري)</label>
+            <input
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              maxLength={80}
+              placeholder="اسم الكتاب أو من تعلمت منها"
+              className="neo-input"
+              dir="rtl"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold">الفكرة</label>
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              maxLength={400}
+              rows={3}
+              placeholder="اشرح الفكرة في 2-3 أسطر…"
+              className="neo-input resize-none"
+              dir="rtl"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold">الخطوات (خطوة في كل سطر)</label>
+            <textarea
+              value={stepsText}
+              onChange={(e) => setStepsText(e.target.value)}
+              maxLength={800}
+              rows={4}
+              placeholder={'اكتب أول خطوة\nثم الخطوة الثانية\nوهكذا…'}
+              className="neo-input resize-none"
+              dir="rtl"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold">التصنيف</label>
+            <div className="flex flex-wrap gap-1.5">
+              {COACH_TOPICS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTopic(t.id)}
+                  className={cn(
+                    'text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors',
+                    topic === t.id
+                      ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={!canSave}
+            className={cn(
+              'w-full h-11 rounded-xl text-sm font-bold transition-all',
+              canSave
+                ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 active:scale-[0.98]'
+                : 'bg-muted/40 text-muted-foreground/50 cursor-not-allowed'
+            )}
+          >
+            إضافة إلى معارفي
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -351,11 +653,13 @@ function QuestionButton({
   onClick,
   showTopic,
   hot,
+  userMade,
 }: {
   entry: KnowledgeEntry
   onClick: () => void
   showTopic?: boolean
   hot?: boolean
+  userMade?: boolean
 }) {
   const topic = COACH_TOPICS.find((t) => t.id === entry.topic)
   return (
@@ -364,14 +668,20 @@ function QuestionButton({
       className="w-full text-start p-4 rounded-2xl glass hover:bg-muted/30 transition-all group relative overflow-hidden"
     >
       <div className="flex items-start gap-3">
-        <span className="w-8 h-8 rounded-lg bg-violet-accent/10 text-violet-accent flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
-          <ListOrdered className="w-4 h-4" />
+        <span className={cn(
+          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-105 transition-transform',
+          userMade ? 'bg-gold/15 text-gold' : 'bg-emerald-accent/10 text-emerald-accent'
+        )}>
+          {userMade ? <Sparkles className="w-4 h-4" /> : <ListOrdered className="w-4 h-4" />}
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold leading-snug flex items-center gap-2 flex-wrap">
             {entry.title}
             {hot && (
               <span className="text-[9px] font-bold bg-lime text-ink rounded-full px-1.5 py-0.5">تطابق قوي</span>
+            )}
+            {userMade && (
+              <span className="text-[9px] font-bold bg-gold/20 text-gold rounded-full px-1.5 py-0.5">من معارفي</span>
             )}
           </p>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -384,7 +694,7 @@ function QuestionButton({
             )}
           </div>
         </div>
-        <ChevronLeft className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1 group-hover:text-violet-accent group-hover:-translate-x-0.5 transition-all rtl:rotate-180 ltr:rotate-180" />
+        <ChevronLeft className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-1 group-hover:text-emerald-accent group-hover:-translate-x-0.5 transition-all rtl:rotate-180 ltr:rotate-180" />
       </div>
     </button>
   )
@@ -407,10 +717,10 @@ function AnswerCard({
     <div className="space-y-4">
       {/* بطاقة الإجابة */}
       <div className="glass rounded-3xl overflow-hidden">
-        <div className="bg-gradient-to-l from-violet-accent/15 via-transparent to-gold/10 p-5 pb-4">
+        <div className="bg-gradient-to-l from-emerald-accent/15 via-transparent to-lime/10 p-5 pb-4">
           <h3 className="text-lg font-bold leading-snug">{entry.title}</h3>
           <div className="flex items-center gap-2 mt-3 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-violet-accent/15 text-violet-accent rounded-full px-2.5 py-1">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-emerald-accent/15 text-emerald-accent rounded-full px-2.5 py-1">
               <Library className="w-3 h-3" />
               {entry.book}
             </span>

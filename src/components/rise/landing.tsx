@@ -403,7 +403,7 @@ const MODULE_AR: Record<string, string> = {
   "monthly-review": "المراجعة الشهرية",
   "weekly-review": "المراجعة الأسبوعية",
   notifications: "الإشعارات",
-  "ai-coach": "المدرب الذكي",
+  "ai-coach": "قاعدة المعارف",
   "admin-panel": "الإدارة",
   admin: "الإدارة",
   settings: "الإعدادات",
