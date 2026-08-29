@@ -1,10 +1,10 @@
 // RiseOS Service Worker
 // Handles push notifications, background sync, and cache for PWA
 
-const CACHE_NAME = 'rise-os-v2'
+const CACHE_NAME = 'rise-os-v3'
 const API_CACHE_NAME = 'rise-api-v1'
 const STATIC_ASSETS = [
-  '/',
+  '/app',
   '/icon-192.png',
   '/icon-512.png',
 ]
@@ -134,7 +134,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const urlToOpen = event.notification.data?.url || '/'
+  const urlToOpen = event.notification.data?.url || '/app'
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

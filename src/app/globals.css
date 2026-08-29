@@ -947,3 +947,148 @@ main {
     transition: none !important;
   }
 }
+
+/* ============================================================
+   Landing page (Neo language) — reveal, floats, marquee, faq, cta
+   ============================================================ */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.landing-reveal-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Glass nav once scrolled */
+.landing-nav-scrolled {
+  background: color-mix(in srgb, var(--background) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+/* Hero glow behind product mock */
+.landing-hero-glow {
+  position: absolute;
+  inset: -12% -18%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 45% at 70% 20%, var(--aurora-1), transparent 62%),
+    radial-gradient(ellipse 50% 45% at 20% 85%, var(--aurora-3), transparent 58%);
+  filter: blur(2px);
+}
+.dark .landing-hero-glow {
+  background:
+    radial-gradient(ellipse 55% 45% at 70% 20%, rgba(124, 108, 255, 0.28), transparent 62%),
+    radial-gradient(ellipse 50% 45% at 20% 85%, rgba(214, 255, 61, 0.10), transparent 58%);
+}
+
+/* Floating badges over the hero mock */
+@keyframes landing-float {
+  0%, 100% { transform: translateY(0) rotate(var(--float-rot, 0deg)); }
+  50% { transform: translateY(-10px) rotate(var(--float-rot, 0deg)); }
+}
+.landing-float {
+  animation: landing-float 5.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Modules marquee (track is duplicated once for a seamless loop) */
+.landing-marquee {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+.landing-marquee-track {
+  display: flex;
+  gap: 0.875rem;
+  width: max-content;
+  padding-block: 0.25rem;
+  animation: landing-marquee-move 42s linear infinite;
+}
+.landing-marquee:hover .landing-marquee-track { animation-play-state: paused; }
+@keyframes landing-marquee-move {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.landing-marquee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 0.5rem 1rem 0.5rem 1.25rem;
+  box-shadow: var(--tile-shadow);
+}
+
+/* FAQ */
+.landing-faq {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.landing-faq[open] {
+  border-color: color-mix(in srgb, var(--lime) 55%, var(--border));
+  box-shadow: var(--tile-shadow);
+}
+.landing-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 1.1rem 1.25rem;
+  user-select: none;
+}
+.landing-faq-q::-webkit-details-marker { display: none; }
+.landing-faq-chevron {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  transition: transform 0.3s ease, color 0.3s ease;
+}
+.landing-faq[open] .landing-faq-chevron {
+  transform: rotate(180deg);
+  color: var(--lime-deep);
+}
+
+/* Final CTA card */
+.landing-cta {
+  background:
+    radial-gradient(ellipse 60% 55% at 80% 0%, var(--aurora-1), transparent 60%),
+    radial-gradient(ellipse 55% 50% at 10% 100%, var(--aurora-2), transparent 55%),
+    var(--card);
+}
+.landing-cta-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.dark .landing-cta {
+  background:
+    radial-gradient(ellipse 60% 55% at 80% 0%, rgba(124, 108, 255, 0.22), transparent 60%),
+    radial-gradient(ellipse 55% 50% at 10% 100%, rgba(214, 255, 61, 0.08), transparent 55%),
+    var(--card);
+}
+.dark .landing-cta-glow {
+  background: radial-gradient(ellipse 45% 40% at 50% 115%, rgba(214, 255, 61, 0.16), transparent 65%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal { opacity: 1; transform: none; transition: none; }
+  .landing-float, .landing-marquee-track { animation: none !important; }
+}

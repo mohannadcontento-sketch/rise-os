@@ -216,9 +216,9 @@ function FeaturedProject({ project, onClick }: { project: Project; onClick: () =
       className="cursor-pointer"
       onClick={onClick}
     >
-      {/* Gradient-top-panel hero: violet→indigo strip inside a dark navy card */}
-      <div className="rounded-2xl overflow-hidden relative bg-[#141B33] border border-white/5 shadow-tile">
-        <div className="h-1.5 w-full bg-gradient-to-l from-violet-accent to-indigo-500" />
+      {/* Neo project hero card — token-based, adapts day/night */}
+      <div className="neo-card card-lift rounded-2xl overflow-hidden relative">
+        <div className="h-1.5 w-full bg-gradient-to-l from-violet-accent to-violet-accent/50" />
         <div className="absolute -top-14 -start-8 h-36 w-36 rounded-full bg-violet-accent/20 blur-3xl pointer-events-none" />
         <div className="relative p-6 flex flex-col sm:flex-row items-center gap-6">
           <div className="relative">
@@ -236,7 +236,7 @@ function FeaturedProject({ project, onClick }: { project: Project; onClick: () =
           <div className="flex-1 text-center sm:text-start">
             <div className="flex items-center gap-2 justify-center sm:justify-start mb-1">
               <RiseGlyphIcon glyph="projects" className="w-5 h-5 text-violet-accent" />
-              <h3 className="text-lg font-bold text-white">{project.name}</h3>
+              <h3 className="text-lg font-bold text-foreground">{project.name}</h3>
               <span
                 className={cn(
                   'pill',
@@ -249,10 +249,10 @@ function FeaturedProject({ project, onClick }: { project: Project; onClick: () =
               </span>
             </div>
             {project.description && (
-              <p className="text-sm text-white/60 leading-relaxed mt-1">{project.description}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed mt-1">{project.description}</p>
             )}
             <div className="flex items-center gap-4 mt-3 justify-center sm:justify-start">
-              <span className="text-xs text-white/60 flex items-center gap-1">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <ListChecks className="w-3.5 h-3.5" />
                 <span className="num" dir="ltr">{progress}%</span>
                 مكتمل
@@ -287,7 +287,7 @@ function EmptyState() {
       </div>
       <h3 className="text-lg font-bold text-foreground mb-2">لا توجد مشاريع بعد</h3>
       <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-        ابدأ بإنشاء مشروعك الأول وorganize مهامك بشكل أفضل. المشاريع تساعدك على التركيز وتتبع التقدم.
+        ابدأ بإنشاء مشروعك الأول ونظّم مهامك بشكل أفضل. المشاريع تساعدك على التركيز وتتبع التقدم.
       </p>
     </motion.div>
   )

@@ -11,11 +11,11 @@ export async function GET() {
     description: "نظام تشغيل الحياة الشامل - إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم.",
     lang: "ar",
     dir: "rtl",
-    start_url: "/",
+    start_url: "/app",
     scope: "/",
     display: "standalone",
-    background_color: "#0a1f15",
-    theme_color: "#166534",
+    background_color: "#070B14",
+    theme_color: "#0B1015",
     orientation: "any",
     categories: ["productivity", "lifestyle", "utilities"],
     icons: [
@@ -47,17 +47,17 @@ export async function GET() {
     shortcuts: [
       {
         name: "المهام",
-        url: "/?module=tasks",
+        url: "/app",
         description: "فتح المهام مباشرة",
       },
       {
         name: "اليوميات",
-        url: "/?module=journal",
+        url: "/app",
         description: "كتابة يومية جديدة",
       },
       {
         name: "المدرب الذكي",
-        url: "/?module=ai-coach",
+        url: "/app",
         description: "التحدث مع المدرب الذكي",
       },
     ],
