@@ -39,6 +39,8 @@ import {
   ArrowDownRight,
   CalendarClock,
   ChevronLeft,
+  AlarmClock,
+  CalendarArrowDown,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -46,8 +48,10 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
-import { apiFetch, isFromCache } from '@/lib/api-fetch'
+import { apiFetch, apiPut, isFromCache } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { useToday } from '@/hooks/use-today'
+import { toast } from 'sonner'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
@@ -57,7 +61,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getToday } from '@/lib/rise-utils'
+import { getToday, formatDateShort } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
@@ -80,7 +84,9 @@ interface DashboardData {
     habitsTotal: number
     focusMin: number
     morningScore: number
+    overdueCount?: number
   }
+  overdueTasks?: { id: string; title: string; dueDate?: string; priority?: string }[]
   tasks: {
     id: string
     title: string
@@ -1141,6 +1147,9 @@ export default function Dashboard() {
   // shows the latest data after any save operation.
   const fetchingRef = useRef(false)
   const pendingRefreshRef = useRef(false)
+  // Cairo-local today — refetches automatically at exactly midnight
+  // (useToday fires rise:day-changed) so the dashboard resets visually.
+  const todayDate = useToday()
   const fetchDashboard = useCallback(async () => {
     // If already fetching, queue a refresh for when the current fetch completes
     if (fetchingRef.current) {
@@ -1151,7 +1160,7 @@ export default function Dashboard() {
     try {
       setLoading(true)
       setError(null)
-      const res = await apiFetch(`/api/rise/dashboard`)
+      const res = await apiFetch(`/api/rise/dashboard?date=${todayDate}`)
       if (res.ok) {
         const json = await res.json()
         setFromCache(isFromCache(res))
@@ -1170,7 +1179,7 @@ export default function Dashboard() {
         fetchDashboard()
       }
     }
-  }, [])
+  }, [todayDate])
 
   const { refreshKey } = useDataRefresh()
 
@@ -1185,6 +1194,53 @@ export default function Dashboard() {
     window.addEventListener('rise:day-changed', handler)
     return () => window.removeEventListener('rise:day-changed', handler)
   }, [fetchDashboard])
+
+  // ═══ INSTANT KPI UPDATES (optimistic — before the refetch lands) ═══
+  // tasks.tsx / habits.tsx dispatch `rise:instant-update` right when a
+  // checkbox is tapped; the counters move in the SAME frame, then the
+  // regular refetch reconciles with the server.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail: any = (e as CustomEvent).detail || {}
+      setData((prev: DashboardData | null) => {
+        if (!prev?.today) return prev
+        const t = { ...prev.today }
+        if (detail.type === 'task') {
+          if (detail.deltaCompleted) t.tasksCompleted = Math.max(0, t.tasksCompleted + detail.deltaCompleted)
+          if (detail.deltaTotal) t.tasksTotal = Math.max(0, t.tasksTotal + detail.deltaTotal)
+          if (detail.overdueDelta) t.overdueCount = Math.max(0, (t.overdueCount || 0) + detail.overdueDelta)
+        }
+        if (detail.type === 'habit' && detail.deltaCompleted) {
+          t.habitsCompleted = Math.max(0, t.habitsCompleted + detail.deltaCompleted)
+        }
+        return { ...prev, today: t }
+      })
+    }
+    window.addEventListener('rise:instant-update', handler)
+    return () => window.removeEventListener('rise:instant-update', handler)
+  }, [])
+
+  // ═══ SMART ROLLOVER — move an overdue task to today ═══
+  const [movingId, setMovingId] = useState<string | null>(null)
+  const moveOverdueToToday = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return
+    setMovingId(ids.join(','))
+    let failed = 0
+    for (const id of ids) {
+      try {
+        const res = await apiPut('/api/rise/tasks', { id, dueDate: todayDate })
+        if (!res.ok) failed++
+      } catch { failed++ }
+    }
+    setMovingId(null)
+    if (failed === 0) {
+      toast.success(ids.length === 1 ? 'اتنقلت المهمة ليهاردة 💪' : `اتنقلت ${ids.length} مهام ليهاردة 💪`)
+      playSound('task-complete')
+    } else {
+      toast.error('فشل نقل بعض المهام — حاول تاني')
+    }
+    fetchDashboard()
+  }, [todayDate, fetchDashboard])
 
   // Play achievement sound on first load if there are achievements
   const achievementSoundPlayed = useRef(false)
@@ -1239,6 +1295,7 @@ export default function Dashboard() {
   const books = Array.isArray(data.books) ? data.books : []
   const recentFocus = Array.isArray(data.recentFocus) ? data.recentFocus : []
   const projects = Array.isArray(data.projects) ? data.projects : []
+  const overdueTasks = Array.isArray(data.overdueTasks) ? data.overdueTasks : []
   const greeting = getGreeting()
 
   // FIX: Use level from DB (authoritative), don't recalculate
@@ -1449,7 +1506,7 @@ export default function Dashboard() {
         {/* Tasks Completed — Neo VOLT tile */}
         <motion.div variants={itemVariants}>
           <KpiTile
-            label="المهام المكتملة"
+            label="مهام النهاردة المكتملة"
             icon={CheckCircle2}
             value={<AnimatedNumber value={today.tasksCompleted} />}
             unit={`/ ${toArabicNum(today.tasksTotal)}`}
@@ -1457,14 +1514,14 @@ export default function Dashboard() {
             deltaDir={trendDir(taskTrend)}
             spark={taskTrend.slice(-7)}
             sparkTone="lime"
-            footer="اتجاه آخر ٧ أيام"
+            footer="بتتصفر مع بداية يوم جديد"
           />
         </motion.div>
 
         {/* Habits — Neo VOLT tile */}
         <motion.div variants={itemVariants}>
           <KpiTile
-            label="العادات"
+            label="العادات النهاردة"
             icon={Target}
             value={<AnimatedNumber value={today.habitsCompleted} />}
             unit={`/ ${toArabicNum(today.habitsTotal)}`}
@@ -1472,7 +1529,7 @@ export default function Dashboard() {
             deltaDir={trendDir(habitTrend)}
             spark={habitTrend.slice(-7)}
             sparkTone="lime"
-            footer="اتجاه آخر ٧ أيام"
+            footer="بتتصفر مع بداية يوم جديد"
           />
         </motion.div>
 
@@ -1492,7 +1549,69 @@ export default function Dashboard() {
         </motion.div>
       </motion.div>
 
-      {/* ══════════ 3. Weekly Score — FORGE card + chart ══════════ */}
+      {/* ══════════ 2.5 Overdue strip — smart rollover (متأخرة ≠ إنجاز النهاردة) ══════════ */}
+      {overdueTasks.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="neo-card overflow-hidden border border-gold/25"
+        >
+          <div className="px-4 pt-3.5 pb-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="icon-well iw-amber w-9 h-9">
+                <AlarmClock className="w-5 h-5" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-foreground">مهام متأخرة</h3>
+                  <span
+                    className="pill"
+                    style={{ background: 'rgba(245, 158, 11, 0.14)', color: 'var(--gold)' }}
+                  >
+                    <span className="num" dir="ltr">{toArabicNum(today.overdueCount ?? overdueTasks.length)}</span>
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  مش بتتحسب في إنجاز النهاردة — انقلها ليهاردة أو خلّصها زي ما هي
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => moveOverdueToToday(overdueTasks.map((t) => t.id))}
+              disabled={movingId !== null}
+              className="shrink-0 flex items-center gap-1.5 rounded-xl h-9 px-3 text-xs font-semibold bg-gold/15 text-gold border border-gold/30 hover:bg-gold/25 transition-colors disabled:opacity-50"
+            >
+              <CalendarArrowDown className="w-3.5 h-3.5" />
+              نقل الكل ليهاردة
+            </button>
+          </div>
+          <div className="pb-3.5 pt-1 px-3 space-y-1">
+            {overdueTasks.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 px-2.5 py-2 rounded-xl bg-card/70 border border-border/60"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-gold/70 shrink-0" />
+                <span className="text-sm text-foreground flex-1 truncate">{t.title}</span>
+                {t.dueDate && (
+                  <span className="pill pill-muted shrink-0">
+                    <CalendarClock className="w-3 h-3 me-1" />
+                    <span className="num" dir="ltr">{formatDateShort(t.dueDate)}</span>
+                  </span>
+                )}
+                <button
+                  onClick={() => moveOverdueToToday([t.id])}
+                  disabled={movingId !== null}
+                  className="shrink-0 text-[11px] font-bold text-gold hover:text-gold/80 disabled:opacity-50 flex items-center gap-1"
+                >
+                  <CalendarArrowDown className="w-3.5 h-3.5" />
+                  ليهاردة
+                </button>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
       {chartData.length > 0 && (
         <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* FORGE forest metric card */}

@@ -18,6 +18,11 @@ import {
   TrendingUp,
   ListChecks,
   Star,
+  PencilLine,
+  AlignRight,
+  Flag,
+  CalendarDays,
+  FolderKanban,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +60,7 @@ import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { priorityColors, priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
 import { RainbowCheckbox } from '@/components/rise/kit-v2'
+import { NeoField } from '@/components/rise/neo'
 import { RiseIcon, RiseGlyphIcon } from '@/components/rise/icons'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
@@ -792,20 +798,20 @@ export function Projects() {
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div>
-                <Label className="text-xs font-medium mb-1.5 block">العنوان</Label>
-                <Input
-                  placeholder="ماذا تريد إنجازه؟"
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className="rounded-xl h-10 focus:ring-2 focus:ring-violet-accent/40 focus:border-violet-accent"
-                  onKeyDown={(e) => e.key === 'Enter' && addTaskToProject()}
-                />
+                <NeoField label="العنوان" icon={PencilLine} required>
+                  <Input
+                    placeholder="ماذا تريد إنجازه؟"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    className="neo-input h-11"
+                    onKeyDown={(e) => e.key === 'Enter' && addTaskToProject()}
+                  />
+                </NeoField>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
+                <NeoField label="الأولوية" icon={Flag}>
                   <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                    <SelectTrigger className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-violet-accent/40 focus:border-violet-accent">
+                    <SelectTrigger className="neo-input h-11 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -815,16 +821,15 @@ export function Projects() {
                       <SelectItem value="low">منخفض</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق</Label>
+                </NeoField>
+                <NeoField label="تاريخ الاستحقاق" icon={CalendarDays} hint="اختياري">
                   <Input
                     type="date"
                     value={newTaskDueDate}
                     onChange={(e) => setNewTaskDueDate(e.target.value)}
-                    className="rounded-xl h-10 text-sm focus:ring-2 focus:ring-violet-accent/40 focus:border-violet-accent"
+                    className="neo-input h-11 text-sm"
                   />
-                </div>
+                </NeoField>
               </div>
             </div>
             <DialogFooter className="gap-2 mt-4">
@@ -880,27 +885,24 @@ export function Projects() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
-              <div>
-                <Label className="text-xs font-medium mb-1.5 block">اسم المشروع</Label>
+              <NeoField label="اسم المشروع" icon={FolderKanban} required>
                 <Input
                   placeholder="مثال: تطوير التطبيق"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="rounded-xl h-10"
+                  className="neo-input h-11"
                   onKeyDown={(e) => e.key === 'Enter' && saveProject()}
                 />
-              </div>
-              <div>
-                <Label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</Label>
+              </NeoField>
+              <NeoField label="الوصف" icon={AlignRight} hint="اختياري — سطر واحد يوضح الهدف">
                 <Textarea
                   placeholder="وصف مختصر للمشروع..."
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
-                  className="rounded-xl min-h-[80px] text-sm"
+                  className="neo-input min-h-[80px] text-sm"
                 />
-              </div>
-              <div>
-                <Label className="text-xs font-medium mb-2 block">اللون</Label>
+              </NeoField>
+              <NeoField label="اللون">
                 <div className="flex flex-wrap gap-2">
                   {PRESET_COLORS.map((c) => (
                     <button
@@ -914,7 +916,7 @@ export function Projects() {
                     />
                   ))}
                 </div>
-              </div>
+              </NeoField>
             </div>
             <DialogFooter className="gap-2 mt-4">
               <DialogClose asChild>

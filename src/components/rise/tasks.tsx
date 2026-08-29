@@ -16,6 +16,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  ListChecks,
+  FolderKanban,
+  PencilLine,
+  AlignRight,
+  Flag,
   MoreHorizontal,
   CalendarClock,
   CheckCircle2,
@@ -27,6 +32,7 @@ import {
   GripVertical,
 } from 'lucide-react'
 import { RainbowCheckbox } from '@/components/rise/kit-v2'
+import { NeoField } from '@/components/rise/neo'
 import { RiseIcon, RiseGlyphIcon, MODULE_ICONS } from '@/components/rise/icons'
 import {
   DndContext,
@@ -79,7 +85,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
-import { priorityLabels, statusLabels, formatDateShort } from '@/lib/rise-utils'
+import { priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
 import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
@@ -203,6 +209,10 @@ const priorityPillClasses: Record<string, string> = {
   low: 'bg-glass/15 text-glass',
 }
 
+function toArabicDigits(n: number): string {
+  return String(n).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+}
+
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
@@ -229,6 +239,16 @@ export function Tasks() {
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [filterProject, setFilterProject] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+
+  // ═══ SCOPE SEPARATION ═══
+  // 'mine' = المهام الحقيقية (بدون مشروع) — 'projects' = مهام المشاريع فقط.
+  // مهام المشاريع ما بتتخلطش في القائمة الحقيقية عشان الزحمة.
+  const [scope, setScope] = useState<'mine' | 'projects'>('mine')
+  const scopedTasks = useMemo(
+    () => (scope === 'mine' ? tasks.filter((t) => !t.projectId) : tasks.filter((t) => t.projectId)),
+    [tasks, scope],
+  )
+  const projectTasksCount = useMemo(() => tasks.filter((t) => t.projectId).length, [tasks])
 
   // Add task form
   const [formTitle, setFormTitle] = useState('')
@@ -281,9 +301,9 @@ export function Tasks() {
   }, [tasks])
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
+    return scopedTasks.filter((t) => {
       if (filterPriority !== 'all' && t.priority !== filterPriority) return false
-      if (filterProject !== 'all' && t.projectId !== filterProject) return false
+      if (scope === 'projects' && filterProject !== 'all' && t.projectId !== filterProject) return false
       // 'blocked' is a virtual status — handle separately
       if (filterStatus === 'blocked') {
         return isTaskBlocked(t)
@@ -292,7 +312,7 @@ export function Tasks() {
       if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
       return true
     })
-  }, [tasks, filterPriority, filterProject, filterStatus, searchQuery, isTaskBlocked])
+  }, [scopedTasks, filterPriority, filterProject, filterStatus, searchQuery, isTaskBlocked, scope])
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
@@ -303,44 +323,73 @@ export function Tasks() {
   }, [filteredTasks])
 
   /* ── Mutations ── */
+  // Compute today-scoped dashboard deltas so the KPI counters move in the
+  // SAME frame as the checkbox (rise:instant-update), before the refetch.
+  const dispatchInstant = (task: Task, nowDone: boolean) => {
+    const detail: Record<string, number | string> = { type: 'task' }
+    if (task.dueDate === getToday()) {
+      detail.deltaCompleted = nowDone ? 1 : -1
+    } else if (!task.dueDate) {
+      // bonus completion — enters today's total AND completed
+      detail.deltaCompleted = nowDone ? 1 : -1
+      detail.deltaTotal = nowDone ? 1 : -1
+    } else if (task.dueDate < getToday()) {
+      // overdue resolved/reopened — affects the overdue strip only
+      detail.overdueDelta = nowDone ? -1 : 1
+    }
+    window.dispatchEvent(new CustomEvent('rise:instant-update', { detail }))
+  }
+
   const toggleTask = async (task: Task) => {
     const isDone = task.status === 'done'
     const newStatus = isDone ? 'todo' : 'done'
+    // OPTIMISTIC: flip locally first — instant feel, rollback on failure
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)))
+    if (!isDone) {
+      playSound('task-complete')
+      notifyTaskComplete(task.title, task.xpReward)
+      awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
+      checkUnblockedTasks(task.id)
+    }
+    dispatchInstant(task, !isDone)
     try {
       const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)))
+        window.dispatchEvent(new CustomEvent('rise:instant-update', { detail: { type: 'task', deltaCompleted: isDone ? 1 : -1, deltaTotal: !task.dueDate ? (isDone ? 1 : -1) : 0, overdueDelta: task.dueDate && task.dueDate < getToday() ? (isDone ? 1 : -1) : 0 } }))
         toastError('تحديث المهمة', errData.error || errData.details || 'حاول مرة أخرى')
-        return
+        fetchData()
       }
-      // Dynamic update: re-fetch from server (useDataRefresh handles this via rise:data-changed)
-      fetchData()
-      if (!isDone) {
-        playSound('task-complete')
-        notifyTaskComplete(task.title, task.xpReward)
-        awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
-        checkUnblockedTasks(task.id)
-      }
+      // rise:data-changed (fired by apiPut) refetches globally
     } catch {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)))
       toastError('تحديث المهمة')
     }
   }
 
   const moveTask = async (task: Task, newStatus: string) => {
+    const oldStatus = task.status
+    if (oldStatus === newStatus) return
+    // OPTIMISTIC
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)))
+    const nowDone = newStatus === 'done'
+    if (nowDone) {
+      playSound('task-complete')
+      awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
+      checkUnblockedTasks(task.id)
+    }
+    dispatchInstant(task, nowDone)
     try {
-      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: newStatus === 'done' ? new Date().toISOString() : null })
+      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: nowDone ? new Date().toISOString() : null })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: oldStatus } : t)))
         toastError('تحديث المهمة', errData.error || errData.details || 'حاول مرة أخرى')
-        return
-      }
-      fetchData()
-      if (newStatus === 'done') {
-        playSound('task-complete')
-        awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
-        checkUnblockedTasks(task.id)
+        fetchData()
       }
     } catch {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: oldStatus } : t)))
       toastError('تحديث المهمة')
     }
   }
@@ -881,6 +930,46 @@ export function Tasks() {
     <div className="space-y-5">
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {/* ═══ Scope switch: مهامي / مهام المشاريع ═══ */}
+        <div className="flex items-center bg-muted/60 rounded-xl p-1 backdrop-blur-sm shrink-0" role="tablist" aria-label="نطاق المهام">
+          <button
+            role="tab"
+            aria-selected={scope === 'mine'}
+            onClick={() => setScope('mine')}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center gap-1.5',
+              scope === 'mine'
+                ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <ListChecks className="w-3.5 h-3.5" />
+            مهامي
+          </button>
+          <button
+            role="tab"
+            aria-selected={scope === 'projects'}
+            onClick={() => setScope('projects')}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center gap-1.5',
+              scope === 'projects'
+                ? 'bg-forest text-paper-soft dark:bg-lime dark:text-ink shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <FolderKanban className="w-3.5 h-3.5" />
+            مهام المشاريع
+            {projectTasksCount > 0 && (
+              <span className={cn(
+                'num text-[10px] rounded-full px-1.5 py-px',
+                scope === 'projects' ? 'bg-ink/10 text-ink dark:bg-ink/20 dark:text-ink' : 'bg-muted text-muted-foreground'
+              )}>
+                {toArabicDigits(projectTasksCount)}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Search */}
         <div className="relative flex-1 w-full sm:max-w-xs">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -918,6 +1007,7 @@ export function Tasks() {
                     </SelectContent>
                   </Select>
                 </div>
+                {scope === 'projects' && (
                 <div>
                   <Label className="text-[11px] text-muted-foreground mb-1 block">المشروع</Label>
                   <Select value={filterProject} onValueChange={setFilterProject}>
@@ -937,6 +1027,7 @@ export function Tasks() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
                 <div>
                   <Label className="text-[11px] text-muted-foreground mb-1 block">الحالة</Label>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -989,30 +1080,27 @@ export function Tasks() {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-2">
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">العنوان</Label>
+                <NeoField label="العنوان" icon={PencilLine} required>
                   <Input
                     placeholder="ماذا تريد إنجازه؟"
                     value={formTitle}
                     onChange={(e) => setFormTitle(e.target.value)}
-                    className="rounded-xl h-10 bg-card focus-visible:ring-2 focus-visible:ring-ring"
+                    className="neo-input h-11"
                     onKeyDown={(e) => e.key === 'Enter' && createTask()}
                   />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</Label>
+                </NeoField>
+                <NeoField label="الوصف" icon={AlignRight} hint="اختياري — تفاصيل تساعدك تفتكر">
                   <Textarea
                     placeholder="أضف تفاصيل..."
                     value={formDesc}
                     onChange={(e) => setFormDesc(e.target.value)}
-                    className="rounded-xl min-h-[80px] text-sm bg-card focus-visible:ring-2 focus-visible:ring-ring"
+                    className="neo-input min-h-[80px] text-sm"
                   />
-                </div>
+                </NeoField>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs font-medium mb-1.5 block">الأولوية</Label>
+                  <NeoField label="الأولوية" icon={Flag}>
                     <Select value={formPriority} onValueChange={setFormPriority}>
-                      <SelectTrigger className="rounded-xl h-10 text-sm">
+                      <SelectTrigger className="neo-input h-11 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1042,11 +1130,10 @@ export function Tasks() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium mb-1.5 block">المشروع</Label>
+                  </NeoField>
+                  <NeoField label="المشروع" icon={FolderKanban} hint="اختياري — هتلاقيها في مهام المشاريع">
                     <Select value={formProject} onValueChange={setFormProject}>
-                      <SelectTrigger className="rounded-xl h-10 text-sm">
+                      <SelectTrigger className="neo-input h-11 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1061,38 +1148,29 @@ export function Tasks() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </NeoField>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs font-medium mb-1.5 block">تاريخ الاستحقاق (اختياري)</Label>
+                  <NeoField label="تاريخ الاستحقاق" icon={CalendarDays} hint="اختياري">
                     <Input
                       type="date"
                       value={formDueDate}
                       onChange={(e) => setFormDueDate(e.target.value)}
-                      className="rounded-xl h-10 text-sm bg-card focus-visible:ring-2 focus-visible:ring-ring"
+                      className="neo-input h-11 text-sm"
                     />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium mb-1.5 block flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      وقت الاستحقاق (اختياري)
-                    </Label>
+                  </NeoField>
+                  <NeoField label="وقت الاستحقاق" icon={Clock} hint="اختياري — يظهر في المخطط">
                     <Input
                       type="time"
                       value={formDueTime}
                       onChange={(e) => setFormDueTime(e.target.value)}
-                      className="rounded-xl h-10 text-sm bg-card focus-visible:ring-2 focus-visible:ring-ring"
+                      className="neo-input h-11 text-sm"
                     />
-                  </div>
+                  </NeoField>
                 </div>
                 {/* Dependencies */}
                 {tasks.length > 0 && (
-                  <div>
-                    <Label className="text-xs font-medium mb-1.5 block flex items-center gap-1.5">
-                      <Link2 className="w-3.5 h-3.5" />
-                      يعتمد على (اختياري)
-                    </Label>
+                  <NeoField label="يعتمد على" icon={Link2} hint="اختياري — المهمة تتقفل لحد ما اللي قبلها يخلص">
                     <div className="space-y-1.5 max-h-32 overflow-y-auto rounded-xl border border-border/60 p-2">
                       {tasks
                         .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
@@ -1116,7 +1194,7 @@ export function Tasks() {
                           </label>
                         ))}
                     </div>
-                  </div>
+                  </NeoField>
                 )}
               </div>
               <DialogFooter className="gap-2 mt-4">
@@ -1196,10 +1274,10 @@ export function Tasks() {
       {/* Stats summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'الكل', count: tasks.length, color: 'text-foreground' },
-          { label: 'للتنفيذ', count: tasks.filter((t) => t.status === 'todo').length, color: 'text-glass' },
-          { label: 'قيد التنفيذ', count: tasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
-          { label: 'مكتمل', count: tasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
+          { label: 'الكل', count: scopedTasks.length, color: 'text-foreground' },
+          { label: 'للتنفيذ', count: scopedTasks.filter((t) => t.status === 'todo').length, color: 'text-glass' },
+          { label: 'قيد التنفيذ', count: scopedTasks.filter((t) => t.status === 'in_progress').length, color: 'text-gold' },
+          { label: 'مكتمل', count: scopedTasks.filter((t) => t.status === 'done').length, color: 'text-emerald-accent' },
         ].map((s, i) => (
           <motion.div
             key={s.label}

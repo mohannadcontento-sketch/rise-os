@@ -5,7 +5,7 @@ import { withAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
 
-async function computeSummary(userId: string) {
+async function computeSummary(userId: string, date: string) {
   // PERF: profile fetch runs in the SAME Promise.all as the data queries
   // (was a second sequential round trip), so worst-case latency is one
   // Supabase hop instead of two.
@@ -28,11 +28,19 @@ async function computeSummary(userId: string) {
     })(),
   ])
 
-  const today = new Date().toISOString().split('T')[0]
-  const todayTasksDone = tasks.filter((t: any) => t.status === 'done').length
-  const todayTasksTotal = tasks.length
+  // DAY-SCOPED + Cairo-local (client sends ?date=) — matches the main
+  // dashboard route. Before: UTC date + ALL tasks ever = numbers that
+  // never reset when the day ends.
+  const personal = tasks.filter((t: any) => !t.projectId && t.status !== 'cancelled')
+  const scheduledToday = personal.filter((t: any) => t.dueDate === date)
+  const bonusDoneToday = personal.filter(
+    (t: any) => !t.dueDate && t.status === 'done' &&
+      t.completedAt && String(t.completedAt).slice(0, 10) === date,
+  )
+  const todayTasksDone = scheduledToday.filter((t: any) => t.status === 'done').length + bonusDoneToday.length
+  const todayTasksTotal = scheduledToday.length + bonusDoneToday.length
   const todayHabitsDone = habits.filter((h: any) =>
-    h.logs?.some((l: any) => l.date === today && l.completed)
+    h.logs?.some((l: any) => l.date === date && l.completed)
   ).length
   const todayHabitsTotal = habits.length
 
@@ -68,7 +76,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
     }
 
-    const summary = await withAggregateCache(`agg:${userId}:summary`, () => computeSummary(userId))
+    // Client-local date (Cairo) — same contract as /api/rise/dashboard
+    const { searchParams } = new URL(req.url)
+    const dateParam = searchParams.get('date')
+    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : new Date().toISOString().split('T')[0]
+
+    const summary = await withAggregateCache(`agg:${userId}:summary:${date}`, () => computeSummary(userId, date))
     return NextResponse.json(summary)
   } catch (error) {
     console.error('Dashboard summary error:', error)

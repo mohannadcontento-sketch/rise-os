@@ -45,8 +45,49 @@ async function fetchUserProfile(userId: string, req: NextRequest): Promise<any> 
   }
 }
 
+/**
+ * DAY-SCOPED TASK SET (the "smart day reset" solution):
+ *
+ * قبل كده الداشبورد كان يحسب كل المهام المكتملة في التاريخ (status==='done')
+ * كأنها "إنجاز النهاردة" — فبعد ما اليوم يخلص الأرقام تفضل ثابتة ومش بتتصفر.
+ *
+ * القواعد الجديدة:
+ *  1. "مهام النهاردة" = مهام شخصية (غير مملوكة لمشروع) dueDate === today.
+ *  2. أي مهمة شخصية بلا dueDate اتنهضت النهاردة (completedAt today) تعد
+ *     "إنجاز إضافي" — بتدخل الأرقام كمكافأة على المبادرة.
+ *  3. المهام المتأخرة (dueDate < today && !done) بتشوف في شريط "متأخرة"
+ *     منفصل — مش بتحسب في إنجاز النهاردة، فاليوم الجديد بيبدأ بصفر.
+ *  4. مهام المشاريع (projectId != null) منفصلة تمامًا — بتظهر في موديول
+ *     المشاريع وكروت المشاريع فقط.
+ *
+ * date comes from the CLIENT (useToday → ?date=) so Cairo-local days are
+ * respected instead of the server's UTC clock.
+ */
+function dayScopedCounts(allTasks: any[], date: string) {
+  const personal = allTasks.filter((t: any) => !t.projectId && t.status !== 'cancelled')
+
+  const scheduledToday = personal.filter((t: any) => t.dueDate === date)
+  const bonusDoneToday = personal.filter(
+    (t: any) => !t.dueDate && t.status === 'done' &&
+      t.completedAt && String(t.completedAt).slice(0, 10) === date,
+  )
+
+  const scheduledDone = scheduledToday.filter((t: any) => t.status === 'done').length
+  const tasksCompleted = scheduledDone + bonusDoneToday.length
+  const tasksTotal = scheduledToday.length + bonusDoneToday.length
+
+  const overdue = personal
+    .filter((t: any) => t.dueDate && t.dueDate < date && t.status !== 'done')
+    .sort((a: any, b: any) => String(a.dueDate).localeCompare(String(b.dueDate)))
+
+  return { scheduledToday, bonusDoneToday, tasksCompleted, tasksTotal, overdue }
+}
+
 async function computeDashboard(userId: string, req: NextRequest) {
-  const today = getToday()
+  // Client-driven local date (Cairo) — falls back to server date if absent
+  const { searchParams } = new URL(req.url)
+  const dateParam = searchParams.get('date')
+  const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : getToday()
   const last30 = getLast30Days()
   const weekDays = getWeekDays()
 
@@ -81,9 +122,11 @@ async function computeDashboard(userId: string, req: NextRequest) {
     data.journals.list(userId, 5).catch(() => []),
   ])
 
-  // FIX: Use ALL tasks for score calculation, only limit for display
   const allTasks = tasksResult as any[]
-  const tasks = [...allTasks]
+  // Upcoming list: personal (non-project) tasks only — project tasks live in
+  // their project board, they shouldn't clutter the dashboard list.
+  const tasks = allTasks
+    .filter((t: any) => !t.projectId)
     .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, 10)
 
@@ -103,11 +146,8 @@ async function computeDashboard(userId: string, req: NextRequest) {
     (h.logs || []).map((l: any) => ({ ...l, habitId: h.id })),
   )
 
-  // FIX: Count ALL done tasks (not just the 10 displayed) — user wants any
-  // task marked as "done" to count, regardless of dueDate or completedAt
-  const completedTasksToday = allTasks.filter(
-    (t: any) => t.status === 'done',
-  ).length
+  // DAY-SCOPED counting — see dayScopedCounts doc above.
+  const { tasksCompleted: completedTasksToday, tasksTotal, overdue } = dayScopedCounts(allTasks, today)
   const completedHabitsToday = todayHabitsLogs.filter((l: any) => l.completed).length
   const totalHabits = habits.length
   const todayFocusMin = focusSessions
@@ -116,23 +156,24 @@ async function computeDashboard(userId: string, req: NextRequest) {
     )
     .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
 
-  // FIX: Calculate score using ALL tasks (not just the 10 displayed)
-  const totalTasksAll = allTasks.length
-  const doneTasksAll = allTasks.filter((t: any) => t.status === 'done').length
-  const totalTasks = totalTasksAll
-  const doneTasks = doneTasksAll
-
   // Extract single records from arrays
   const healthLog = healthResult.length > 0 ? healthResult[0] : null
   const morningLog = morningResult.length > 0 ? morningResult[0] : null
 
-  const taskScore = totalTasksAll > 0 ? Math.round((doneTasksAll / totalTasksAll) * 100) : 0
+  const taskScore = tasksTotal > 0 ? Math.round((completedTasksToday / tasksTotal) * 100) : 0
   const habitScore = totalHabits > 0 ? Math.round((completedHabitsToday / totalHabits) * 100) : 0
   const morningScore = morningLog?.score || 0
   const focusScore = Math.min(100, Math.round((todayFocusMin / 50) * 100))
-  const overallScore = Math.round(
-    taskScore * 0.35 + habitScore * 0.25 + morningScore * 0.2 + focusScore * 0.2
-  )
+  // Weighted average that RENORMALIZES when a component has no data today
+  // (e.g. zero tasks scheduled) so empty components never drag the score down.
+  const scoreParts: [number, number][] = []
+  if (tasksTotal > 0) scoreParts.push([taskScore, 0.35])
+  if (totalHabits > 0) scoreParts.push([habitScore, 0.25])
+  if (morningScore > 0) scoreParts.push([morningScore, 0.2])
+  if (focusScore > 0) scoreParts.push([focusScore, 0.2])
+  const overallScore = scoreParts.length > 0
+    ? Math.round(scoreParts.reduce((s, [v, w]) => s + v * w, 0) / scoreParts.reduce((s, [, w]) => s + w, 0))
+    : 0
 
   try {
     await data.dailyScores.upsert(userId, today, {
@@ -169,12 +210,22 @@ async function computeDashboard(userId: string, req: NextRequest) {
     },
     today: {
       tasksCompleted: completedTasksToday,
-      tasksTotal: totalTasks,
+      tasksTotal,
       habitsCompleted: completedHabitsToday,
       habitsTotal: totalHabits,
       focusMin: todayFocusMin,
       morningScore: morningLog?.score || 0,
+      overdueCount: overdue.length,
     },
+    // Top 5 overdue tasks for the "don't forget" strip (smart rollover UX)
+    overdueTasks: overdue.slice(0, 5).map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      dueDate: t.dueDate,
+      priority: t.priority,
+    })),
+    date: today,
+    dayScoped: true,
     tasks: tasks.map((t: any) => ({
       ...t,
       done: t.status === 'done',
@@ -226,7 +277,14 @@ export async function GET(req: NextRequest) {
     }
     setCurrentAuthToken(req)
 
-    const payload = await withAggregateCache(`agg:${userId}:dashboard`, () =>
+    // Cache key MUST include the requested date — day-scoped payloads differ
+    // per day (yesterday's cached numbers must never leak into today).
+    const dateKey = (() => {
+      const { searchParams } = new URL(req.url)
+      const d = searchParams.get('date')
+      return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : 'server'
+    })()
+    const payload = await withAggregateCache(`agg:${userId}:dashboard:${dateKey}`, () =>
       computeDashboard(userId, req)
     )
     return NextResponse.json(payload)

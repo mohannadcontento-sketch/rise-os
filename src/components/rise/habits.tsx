@@ -15,6 +15,8 @@ import {
   CalendarDays,
   Star,
   Target,
+  PencilLine,
+  Repeat,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -47,6 +49,7 @@ import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { playSound } from '@/lib/sounds'
 import { cn } from '@/lib/utils'
+import { NeoField } from '@/components/rise/neo'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 // useDataRefresh removed — causes toggle reverts (multiple data-changed events)
@@ -264,6 +267,35 @@ export function HabitsView() {
       setFlashCard(habitId)
       setTimeout(() => setFlashCard(null), 400)
 
+      // OPTIMISTIC: update the log locally first — the checkbox flips in the
+      // same frame; rollback if the server rejects the change.
+      const revertLogs = () => {
+        setLogs((prev) => {
+          if (existingLog) {
+            return prev.map((l) =>
+              l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
+                ? { ...l, completed: existingLog.completed, count: existingLog.count }
+                : l
+            )
+          }
+          return prev.filter((l) => !(l.habitId === habitId && String(l.date).slice(0, 10) === todayStr))
+        })
+      }
+      setLogs((prev) => {
+        if (existingLog) {
+          return prev.map((l) =>
+            l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
+              ? { ...l, completed: newCompleted }
+              : l
+          )
+        }
+        return [...prev, { habitId, date: todayStr, completed: true, count: 1 }]
+      })
+      // Instant dashboard KPI bump (same frame as the checkbox)
+      window.dispatchEvent(new CustomEvent('rise:instant-update', {
+        detail: { type: 'habit', deltaCompleted: newCompleted ? 1 : -1 },
+      }))
+
       try {
         const res = await apiPut('/api/rise/habits', {
           habitId,
@@ -272,10 +304,15 @@ export function HabitsView() {
         })
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}))
+          revertLogs()
+          window.dispatchEvent(new CustomEvent('rise:instant-update', {
+            detail: { type: 'habit', deltaCompleted: newCompleted ? -1 : 1 },
+          }))
           toastError('تحديث العادة', errData.error || errData.details || 'حاول مرة أخرى')
+          fetchHabits()
           return
         }
-        fetchHabits()
+        // rise:data-changed (fired by apiPut) triggers the global refetch
         if (newCompleted) {
           playSound('habit-check')
           const habit = habits.find((h) => h.id === habitId)
@@ -291,18 +328,10 @@ export function HabitsView() {
           }
         }
       } catch {
-        // Revert
-        if (existingLog) {
-          setLogs((prev) =>
-            prev.map((l) =>
-              l.habitId === habitId && String(l.date).slice(0, 10) === todayStr
-                ? { ...l, completed: existingLog.completed, count: existingLog.count }
-                : l
-            )
-          )
-        } else {
-          setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)))
-        }
+        revertLogs()
+        window.dispatchEvent(new CustomEvent('rise:instant-update', {
+          detail: { type: 'habit', deltaCompleted: newCompleted ? -1 : 1 },
+        }))
       }
     },
     [logs, todayStr, habits]
@@ -495,27 +524,24 @@ export function HabitsView() {
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
-                  <div className="space-y-2">
-                    <Label className="text-right text-sm font-medium">الأيقونة</Label>
+                  <NeoField label="الأيقونة">
                     <Input
                       value={formIcon}
                       onChange={(e) => setFormIcon(e.target.value)}
-                      className="w-16 text-center text-2xl h-12 rounded-xl"
+                      className="w-16 text-center text-2xl h-12 neo-input"
                       maxLength={2}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-right text-sm font-medium">اسم العادة</Label>
+                  </NeoField>
+                  <NeoField label="اسم العادة" icon={PencilLine} required>
                     <Input
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
                       placeholder="مثال: قراءة 30 دقيقة"
-                      className="rounded-xl text-right"
+                      className="neo-input text-right h-11"
                     />
-                  </div>
+                  </NeoField>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-right text-sm font-medium">اللون</Label>
+                <NeoField label="اللون">
                   <div className="flex gap-2 flex-wrap">
                     {PRESET_COLORS.map((c) => (
                       <button
@@ -537,15 +563,14 @@ export function HabitsView() {
                       </button>
                     ))}
                   </div>
-                </div>
+                </NeoField>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-right text-sm font-medium">التكرار</Label>
+                  <NeoField label="التكرار" icon={Repeat}>
                     <Select
                       value={formFrequency}
                       onValueChange={(v) => setFormFrequency(v as Habit['frequency'])}
                     >
-                      <SelectTrigger className="rounded-xl text-right">
+                      <SelectTrigger className="neo-input text-right h-11">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -555,17 +580,16 @@ export function HabitsView() {
                         <SelectItem value="custom">مخصص</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-right text-sm font-medium">الهدف اليومي</Label>
+                  </NeoField>
+                  <NeoField label="الهدف اليومي" icon={Target} hint="كم مرة في اليوم؟">
                     <Input
                       type="number"
                       min="1"
                       value={formTarget}
                       onChange={(e) => setFormTarget(e.target.value)}
-                      className="rounded-xl text-right"
+                      className="neo-input text-right h-11"
                     />
-                  </div>
+                  </NeoField>
                 </div>
               </div>
               <DialogFooter className="gap-2 sm:gap-0">

@@ -27,6 +27,7 @@ import {
   Highlighter,
   StickyNote,
   Timer,
+  Inbox,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -539,8 +540,7 @@ function SectionCard({
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder={`أضف مهمة${totalCount > 0 ? ' أخرى' : ''}...`}
-                      className="h-9 text-sm ps-9 rounded-xl border-dashed bg-card border-border
-                        focus:border-glass/50 focus:ring-glass/20
+                      className="neo-input h-10 text-sm ps-9 bg-card/60
                         placeholder:text-muted-foreground/40"
                     />
                     <Plus className={cn(
@@ -556,7 +556,7 @@ function SectionCard({
                       <Button
                         onClick={handleAdd}
                         size="sm"
-                        className="h-9 px-3 rounded-xl bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:bg-forest/90 dark:hover:bg-lime/90"
+                        className="h-10 px-3 rounded-xl bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:bg-forest/90 dark:hover:bg-lime/90"
                       >
                         إضافة
                       </Button>
@@ -649,6 +649,10 @@ function TimelineView({
     return map
   }, [items])
 
+  // Items without a specific time — shown in their own bucket (no more
+  // fabricated 08:00/14:00/19:00 times colliding with real slots)
+  const untimedItems = useMemo(() => items.filter((item) => !item.time), [items])
+
   return (
     <div className="relative">
       <div className="space-y-0">
@@ -718,11 +722,39 @@ function TimelineView({
           )
         })}
       </div>
+
+      {/* ── "بدون وقت" bucket — untimed items live here ── */}
+      {untimedItems.length > 0 && (
+        <div className="mt-3 rounded-xl border border-dashed border-border/70 bg-muted/20 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="icon-well w-7 h-7 iw-cyan">
+              <Inbox className="w-3.5 h-3.5" />
+            </span>
+            <span className="text-xs font-bold text-foreground">بدون وقت محدد</span>
+            <span className="num text-[10px] text-muted-foreground">
+              {arabicNum(untimedItems.length)} عناصر — خد وقتك فيهم
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {untimedItems.map((item) => (
+              <motion.div
+                key={item.id}
+                layout
+                className={cn(
+                  'flex items-center gap-2 px-2 py-1 rounded-lg text-xs transition-all',
+                  item.completed ? 'opacity-40 line-through text-muted-foreground' : 'text-foreground'
+                )}
+              >
+                <RainbowCheckbox checked={item.completed} onChange={() => onToggleItem(item.id)} />
+                <span className="truncate">{item.title}</span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
-/* ────────────── Main Component ────────────── */
 
 export default function DailyPlanner() {
   const [items, setItems] = useState<PlannerItem[]>([])
@@ -845,13 +877,14 @@ export default function DailyPlanner() {
   const addItem = useCallback(async (sectionId: string, text: string) => {
     // Optimistic
     const tempId = generateId()
-    const timeHour = sectionId === 'morning' ? 8 : sectionId === 'noon' ? 14 : 19
-    const timeStr = `${String(timeHour).padStart(2, '0')}:00`
+    // FIX: no more fabricated times (08:00/14:00/19:00) — invented times used
+    // to collide with real scheduled tasks in the timeline. Items without an
+    // explicit time stay time-less (shown in the "بدون وقت" bucket).
     const optimistic: PlannerItem = {
       id: tempId,
       title: text,
       completed: false,
-      time: timeStr,
+      time: null,
       section: sectionId,
       order: 0,
       createdAt: new Date().toISOString(),
@@ -860,7 +893,7 @@ export default function DailyPlanner() {
     setItems((prev) => [...prev, optimistic])
 
     try {
-      const res = await apiPost('/api/rise/planner', { date: todayStr, section: sectionId, title: text, time: timeStr })
+      const res = await apiPost('/api/rise/planner', { date: todayStr, section: sectionId, title: text })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
         setItems((prev) => prev.filter((i) => i.id !== tempId))
@@ -906,6 +939,10 @@ export default function DailyPlanner() {
       setLinkedTasks((prev) =>
         prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))
       )
+      // Instant dashboard KPI bump (same frame as the checkbox)
+      window.dispatchEvent(new CustomEvent('rise:instant-update', {
+        detail: { type: 'task', deltaCompleted: newCompleted ? 1 : -1 },
+      }))
       try {
         const res = await apiPut('/api/rise/tasks', {
           id: taskId,
@@ -916,12 +953,18 @@ export default function DailyPlanner() {
           setLinkedTasks((prev) =>
             prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
           )
+          window.dispatchEvent(new CustomEvent('rise:instant-update', {
+            detail: { type: 'task', deltaCompleted: newCompleted ? -1 : 1 },
+          }))
           toast.error('فشل تحديث المهمة')
         }
       } catch {
         setLinkedTasks((prev) =>
           prev.map((i) => (i.id === id ? { ...i, completed: !newCompleted } : i))
         )
+        window.dispatchEvent(new CustomEvent('rise:instant-update', {
+          detail: { type: 'task', deltaCompleted: newCompleted ? -1 : 1 },
+        }))
       }
     } else {
       // Regular planner items
@@ -1097,14 +1140,10 @@ export default function DailyPlanner() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 relative"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-5 relative"
           >
             {SECTIONS.map((section, index) => (
               <div key={section.id} className="relative">
-                {/* Gradient divider line between sections (desktop) */}
-                {index > 0 && (
-                  <div className="hidden lg:block absolute top-6 bottom-6 start-0 w-px bg-gradient-to-b from-transparent via-glass/25 to-transparent" />
-                )}
                 <SectionCard
                   section={section}
                   items={sectionItems[section.id]}

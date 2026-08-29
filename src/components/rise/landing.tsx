@@ -122,7 +122,7 @@ function LandingNav() {
           {[
             ["#features", "المميزات"],
             ["#modules", "الوحدات"],
-            ["#modes", "النهار والليل"],
+            ["#how", "بتعمل ايه؟"],
             ["#faq", "الأسئلة"],
           ].map(([href, label]) => (
             <a
@@ -285,7 +285,7 @@ const STATS: [string, string, string][] = [
   ["٢٤+", "موديول متكامل", "كل جوانب حياتك"],
   ["١٠٠٪", "عربي و RTL", "مكتوب ليك أصلًا"],
   ["أوفلاين", "يعمل بدون نت", "PWA كاملة"],
-  ["ليل ونهار", "وضعان مختلفان", "Aurora & Dawn"],
+  ["فوري", "تحديث لحظي", "كل تشارك يظهر تواني"],
 ];
 
 function Stats() {
@@ -447,104 +447,140 @@ function ModulesMarquee() {
 }
 
 /* ============================================================
-   6) Day / Night showcase — two literal mini-worlds (fixed palettes)
+   6) What RiseOS actually does — concrete daily flow + module
+      explanations (replaces the old day/night showcase)
    ============================================================ */
-function ModeCard({ mode }: { mode: "day" | "night" }) {
-  const day = mode === "day";
+const FLOW: { glyph: RiseGlyph; hue: RiseHue; step: string; title: string; desc: string }[] = [
+  {
+    glyph: "planner",
+    hue: "cyan",
+    step: "١",
+    title: "خطّط يومك",
+    desc: "روتين صباحي ثابت + مخطط بأقسام صباح/ظهيرة/مساء، ومهامك المجدولة بتظهر في مكانها تلقائيًا.",
+  },
+  {
+    glyph: "focus",
+    hue: "violet",
+    step: "٢",
+    title: "نفّذ واركز",
+    desc: "قائمة مهام هادية ليهاردة بس، وجلسات عمل عميق بمؤقت بومودورو يحميك من التشتيت.",
+  },
+  {
+    glyph: "dashboard",
+    hue: "lime",
+    step: "٣",
+    title: "تابع أرقامك لحظيًا",
+    desc: "الداشبورد بيتحدث في نفس اللحظة مع كل مهمة أو عادة تخلصها — وبيتصفر مع بداية يوم جديد.",
+  },
+  {
+    glyph: "analytics",
+    hue: "amber",
+    step: "٤",
+    title: "طوّر نفسك",
+    desc: "مراجعات أسبوعية وشهرية، تحليلات، ومدرب ذكي يقرأ أرقامك ويقولك تعمل ايه في الأسبوع الجاي.",
+  },
+];
+
+const WHAT_CARDS: { glyph: RiseGlyph; hue: RiseHue; title: string; desc: string }[] = [
+  {
+    glyph: "dashboard",
+    hue: "lime",
+    title: "لوحة تحكم حية",
+    desc: "درجة إنتاجيتك، مهامك، عاداتك وتركيزك في شاشة واحدة — كل رقم بيتحدث فورًا وبيتصفر مع يوم جديد.",
+  },
+  {
+    glyph: "tasks",
+    hue: "blue",
+    title: "مهامك الحقيقية منفصلة عن المشاريع",
+    desc: "قائمة مهامك اليومية تفضل نضيفة، ومهام المشاريع ليها مساحتها جوه كل مشروع بعدها وتقدمها.",
+  },
+  {
+    glyph: "sunrise",
+    hue: "amber",
+    title: "روتين صباحي 20/20/20",
+    desc: "حركة وتأمل ونمو بعناصر جاهزة ومؤقتات لكل مرحلة، ونتيجة صباحك بتتحسب من تلقاء نفسها.",
+  },
+  {
+    glyph: "planner",
+    hue: "cyan",
+    title: "مخطط يومي بجدول زمني",
+    desc: "قسّم يومك صباح/ظهيرة/مساء، وشوف كل حاجة على خط زمني من ٦ الصبح لـ١٠ بالليل — من غير أوقات وهمية.",
+  },
+  {
+    glyph: "habits",
+    hue: "rose",
+    title: "عادات بسلاسل استمرارية",
+    desc: "شعلة بتوقد كل يوم بتكمّل فيه، خريطة حرارية ٣٠ يوم، وتذكيرات ما تسيبكش تنقطع.",
+  },
+  {
+    glyph: "projects",
+    hue: "violet",
+    title: "مشاريع بتقدم حقيقي",
+    desc: "كل مشروع بلونه وتاسكاته وتقدمه المحسوب تلقائي — من الفكرة لآخر إنجاز.",
+  },
+  {
+    glyph: "health",
+    hue: "rose",
+    title: "صحة ومالية في مكانهم",
+    desc: "نوم وماء وحركة وطاقة، وميزانية بالجنيه المصري بتتابع كل مصروف وحدوده.",
+  },
+  {
+    glyph: "brain",
+    hue: "cyan",
+    title: "دماغ تاني ومحتويات",
+    desc: "كتب بتقراها، ملخصات، ومعارف مترابطة — ذاكرتك الخارجية اللي ما بتنساش.",
+  },
+];
+
+function WhatItDoes() {
   return (
-    <div
-      className="relative overflow-hidden rounded-3xl border-2 p-6 transition-transform duration-500 hover:-translate-y-1.5"
-      style={{
-        background: day ? "#F4F2EA" : "#070B14",
-        borderColor: day ? "#DDD7C6" : "#1D2B47",
-      }}
-    >
-      {/* aurora blobs */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: day
-            ? "radial-gradient(ellipse 60% 45% at 85% 0%, rgba(201,154,62,0.14), transparent 60%), radial-gradient(ellipse 50% 40% at 0% 100%, rgba(27,52,43,0.10), transparent 55%)"
-            : "radial-gradient(ellipse 60% 45% at 85% 0%, rgba(124,108,255,0.25), transparent 60%), radial-gradient(ellipse 50% 40% at 0% 100%, rgba(34,211,238,0.14), transparent 55%)",
-        }}
-      />
-      <div className="relative">
-        <div className="flex items-center justify-between">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold"
-            style={{ background: "#D6FF3D", color: "#0B1015" }}
-          >
-            {day ? "☀️ النهار" : "🌙 الليل"}
-          </span>
-          <span
-            className="text-xs font-bold"
-            style={{ color: day ? "#5A6A60" : "#9AAECB" }}
-          >
-            {day ? "Dawn Paper" : "Obsidian Aurora"}
-          </span>
-        </div>
-
-        <p
-          className="font-display mt-4 text-2xl font-black"
-          style={{ color: day ? "#0B1015" : "#F2F5F7" }}
-        >
-          {day ? "ورق دافئ وغابة هادية" : "أوبسيديان متوهج وشفق بنفسجي"}
-        </p>
-
-        {/* fake ui lines */}
-        <div className="mt-5 space-y-2.5">
-          <div
-            className="h-3 w-3/4 rounded-full"
-            style={{ background: day ? "#DDD7C6" : "#1D2B47" }}
-          />
-          <div
-            className="h-3 w-1/2 rounded-full"
-            style={{ background: day ? "#E8EDF2" : "#16213A" }}
-          />
-        </div>
-
-        <div className="mt-5 flex items-center gap-2.5">
-          <span
-            className="num rounded-xl px-3 py-2 text-lg font-black"
-            style={{ background: "#D6FF3D", color: "#0B1015", boxShadow: day ? "3px 3px 0 rgba(11,16,21,0.85)" : "0 0 18px -2px rgba(214,255,61,0.5)" }}
-          >
-            ٨٤٪
-          </span>
-          <div className="flex flex-1 items-end gap-1.5" style={{ height: 40 }}>
-            {[35, 55, 42, 70, 60, 85].map((h, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-t-md"
-                style={{
-                  height: `${h}%`,
-                  background: day ? "rgba(27,52,43,0.28)" : "rgba(214,255,61,0.55)",
-                  boxShadow: day ? "none" : "0 0 8px rgba(214,255,61,0.25)",
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Modes() {
-  return (
-    <section id="modes" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
+    <section id="how" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
       <Reveal className="text-center">
-        <Pill tone="muted" className="mb-4">نهار وليل</Pill>
+        <Pill tone="lime" className="mb-4">بتعمل ايه؟</Pill>
         <h2 className="font-display text-3xl font-black text-foreground sm:text-5xl">
-          وضعان مختلفان تمامًا
+          بياخد يومك من الفوضى للنظام
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-          مش مجرد عكس ألوان — النهار ورق صباحي دافئ، والليل عالم أوبسيديان متوهج بشفق بنفسجي.
+          مش مجرد تطبيق مهام — RiseOS بيديك نظام يومي كامل: تخطط، تنفذ، تتابع أرقامك لحظيًا،
+          وتراجع تقدمك كل أسبوع. أربع خطوات بسيطة:
         </p>
       </Reveal>
 
-      <div className="mt-12 grid gap-6 md:grid-cols-2">
-        <Reveal delay={60}><ModeCard mode="day" /></Reveal>
-        <Reveal delay={140}><ModeCard mode="night" /></Reveal>
+      {/* daily flow — 4 steps */}
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {FLOW.map((f, i) => (
+          <Reveal key={f.step} delay={i * 80}>
+            <article className="neo-card card-lift relative h-full p-5">
+              <span
+                className="num absolute -top-3 left-4 grid h-7 w-7 place-items-center rounded-lg bg-lime text-sm font-black text-ink"
+                style={{ boxShadow: "2.5px 2.5px 0 rgba(11,16,21,0.85)" }}
+              >
+                {f.step}
+              </span>
+              <RiseIcon glyph={f.glyph} hue={f.hue} size="md" lift className="mt-2" />
+              <h3 className="mt-3 text-base font-extrabold text-foreground">{f.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
+            </article>
+          </Reveal>
+        ))}
+      </div>
+
+      {/* module explanations */}
+      <Reveal className="mt-16 text-center">
+        <h3 className="font-display text-2xl font-black text-foreground sm:text-3xl">
+          وداخل كل خطوة… أدوات بتشتغل فعلًا
+        </h3>
+      </Reveal>
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {WHAT_CARDS.map((c, i) => (
+          <Reveal key={c.title} delay={i * 50}>
+            <article className="h-full rounded-2xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-foreground/15">
+              <RiseIcon glyph={c.glyph} hue={c.hue} size="sm" />
+              <h4 className="mt-2.5 text-sm font-extrabold text-foreground">{c.title}</h4>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{c.desc}</p>
+            </article>
+          </Reveal>
+        ))}
       </div>
     </section>
   );
@@ -690,7 +726,7 @@ export default function LandingPage() {
       <Stats />
       <Features />
       <ModulesMarquee />
-      <Modes />
+      <WhatItDoes />
       <Steps />
       <Faq />
       <FinalCta />

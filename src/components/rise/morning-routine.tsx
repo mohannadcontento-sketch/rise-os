@@ -308,6 +308,21 @@ function SectionTimer({
 function HistoryChart({ logs }: { logs: MorningLog[] }) {
   const maxScore = 100
 
+  // Honest empty state — no fabricated history
+  if (logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+        <span className="icon-well iw-amber w-10 h-10">
+          <TrendingUp className="w-5 h-5" />
+        </span>
+        <p className="text-sm font-semibold text-foreground">لسه مفيش سجل</p>
+        <p className="text-xs text-muted-foreground max-w-xs">
+          كمّل عناصر روتينك النهاردة — هنا هتشوف نتيجة كل يوم وتقدر تقارن تقدمك
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-end gap-2 h-20 px-1">
       {logs.map((log, i) => {
@@ -667,24 +682,35 @@ export default function MorningRoutine() {
     load()
   }, [refreshKey])
 
+  // DAY ROLLOVER: when the calendar flips to a new day, reset the checklist
+  // and refetch — the routine starts fresh every morning (no stale checks).
+  useEffect(() => {
+    const handler = async () => {
+      setCompletedIds(new Set())
+      setTodayLog(null)
+      setStartedAt(null)
+      try {
+        const res = await apiFetch(`/api/rise/morning`)
+        if (res.ok) {
+          const data = await res.json()
+          setLogs(data.logs || [])
+          if (data.todayLog) {
+            setTodayLog(data.todayLog)
+            const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
+            setCompletedIds(new Set(items))
+            setStartedAt(data.todayLog.startedAt)
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('rise:day-changed', handler)
+    return () => window.removeEventListener('rise:day-changed', handler)
+  }, [])
+
   // Generate mock history for last 7 days if no logs
   const displayLogs = (() => {
     if (logs.length > 0) return logs.slice(-7)
-
-    const mockLogs: MorningLog[] = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      mockLogs.push({
-        date: toLocalDateStr(d),
-        score: i === 0 ? score : Math.floor(Math.random() * 60) + 40,
-        completedItems: '[]',
-        totalItems: totalCount,
-        startedAt: d.toISOString(),
-        completedAt: i === 0 && isAllDone ? new Date().toISOString() : null,
-      })
-    }
-    return mockLogs
+    return [] // honest empty state — no fabricated data
   })()
 
   // Save to API
@@ -773,25 +799,17 @@ export default function MorningRoutine() {
 
   return (
     <div dir="rtl" className="space-y-6">
-      {/* ── Sunrise Gradient Header ── */}
+      {/* ── Sunrise Neo Header ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl p-6 md:p-8"
+        className="relative overflow-hidden rounded-3xl border border-gold/20"
       >
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-bl from-gold/25 via-gold/10 to-forest/10"
-          animate={{
-            background: [
-              'linear-gradient(135deg, oklch(0.87 0.13 80) 0%, oklch(0.83 0.11 65) 50%, oklch(0.76 0.12 50) 100%)',
-              'linear-gradient(135deg, oklch(0.76 0.12 50) 0%, oklch(0.83 0.11 65) 50%, oklch(0.87 0.13 80) 100%)',
-            ],
-          }}
-          transition={{ duration: 8, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-          style={{ backgroundSize: '200% 200%' }}
-        />
-        <div className="absolute inset-0 noise-bg opacity-40" />
-        <div className="relative z-10">
+        <div className="absolute inset-0 bg-gradient-to-bl from-gold/20 via-gold/5 to-forest/10" />
+        <div className="absolute -top-16 -start-16 w-56 h-56 rounded-full bg-gold/15 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -end-10 w-48 h-48 rounded-full bg-forest/15 blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 noise-bg opacity-25" />
+        <div className="relative glass border-0 rounded-3xl p-6 md:p-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">

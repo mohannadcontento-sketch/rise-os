@@ -4,7 +4,7 @@ import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { playSound } from '@/lib/sounds'
 import { apiFetch } from '@/lib/api-fetch'
-import { X, ChevronLeft, ChevronDown, Pencil, Flame } from 'lucide-react'
+import { X, ChevronLeft, ChevronDown, Pencil, Flame, Sunrise, Zap, Sprout, Wallet, Settings2, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { MODULE_ICONS, RiseGlyphIcon, RiseIcon, type RiseGlyph, type RiseHue } from './icons'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { AVATARS } from '@/lib/avatars'
@@ -17,7 +17,9 @@ interface NavItem {
 }
 
 interface NavGroup {
+  id: string
   title: string
+  icon: React.ComponentType<{ className?: string }>
   items: NavItem[]
 }
 
@@ -25,20 +27,27 @@ function mi(id: string): { glyph: RiseGlyph; hue: RiseHue } {
   return MODULE_ICONS[id] ?? { glyph: 'dashboard', hue: 'lime' }
 }
 
+/**
+ * REGROUPED + COLLAPSIBLE nav — 22 module buttons used to stack in one long
+ * list; now they live in 4 tidy collapsible sections (persisted open-state).
+ * The dashboard stays pinned on top, and settings lives by the user card.
+ */
 const navGroups: NavGroup[] = [
   {
-    title: '',
-    items: [{ id: 'dashboard', label: 'لوحة التحكم', ...mi('dashboard') }],
-  },
-  {
-    title: 'الصباح',
+    id: 'today',
+    title: 'يومك',
+    icon: Sunrise,
     items: [
       { id: 'morning', label: 'الروتين الصباحي', ...mi('morning') },
       { id: 'planner', label: 'المخطط اليومي', ...mi('planner') },
+      { id: 'habits', label: 'تتبع العادات', ...mi('habits') },
+      { id: 'journal', label: 'اليوميات', ...mi('journal') },
     ],
   },
   {
+    id: 'execute',
     title: 'التنفيذ',
+    icon: Zap,
     items: [
       { id: 'tasks', label: 'المهام', ...mi('tasks') },
       { id: 'projects', label: 'المشاريع', ...mi('projects') },
@@ -49,53 +58,87 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: 'النمو',
+    id: 'growth',
+    title: 'النمو والمعرفة',
+    icon: Sprout,
     items: [
-      { id: 'habits', label: 'تتبع العادات', ...mi('habits') },
-      { id: 'journal', label: 'اليوميات', ...mi('journal') },
       { id: 'health', label: 'الصحة', ...mi('health') },
-    ],
-  },
-  {
-    title: 'المعرفة',
-    items: [
       { id: 'reading', label: 'القراءة', ...mi('reading') },
       { id: 'learning', label: 'التعلم', ...mi('learning') },
       { id: 'brain', label: 'الدماغ الثاني', ...mi('brain') },
     ],
   },
   {
-    title: 'المال',
+    id: 'life',
+    title: 'المال والمراجعة',
+    icon: Wallet,
     items: [
       { id: 'finance', label: 'المالية', ...mi('finance') },
-    ],
-  },
-  {
-    title: 'الرؤية',
-    items: [
       { id: 'weekly-review', label: 'مراجعة أسبوعية', ...mi('weekly-review') },
       { id: 'monthly-review', label: 'مراجعة شهرية', ...mi('monthly-review') },
       { id: 'analytics', label: 'التحليلات', ...mi('analytics') },
       { id: 'ai-coach', label: 'المدرب الذكي', ...mi('ai-coach') },
     ],
   },
-  {
-    title: 'الإدارة',
-    items: [
-      { id: 'admin-panel', label: 'لوحة الإدارة', ...mi('admin-panel') },
-    ],
-  },
-  {
-    title: '',
-    items: [{ id: 'settings', label: 'الإعدادات', ...mi('settings') }],
-  },
 ]
+
+const ADMIN_GROUP: NavGroup = {
+  id: 'admin',
+  title: 'الإدارة',
+  icon: Settings2,
+  items: [{ id: 'admin-panel', label: 'لوحة الإدارة', ...mi('admin-panel') }],
+}
+
+const NAV_OPEN_KEY = 'rise-nav-open-groups'
+function loadOpenGroups(): string[] {
+  try {
+    const raw = localStorage.getItem(NAV_OPEN_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore */ }
+  return ['today'] // calm default: one section open
+}
 
 function toArabicNum(n: number | null | undefined | string | object): string {
   if (n == null || n === undefined || typeof n === 'object') return '٠'
   const num = typeof n === 'string' ? parseFloat(n) : n
   if (isNaN(num)) return '٠'
   return num.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
+}
+
+/* One nav row — shared by pinned dashboard, groups and settings */
+function NavButton({
+  item,
+  active,
+  onSelect,
+}: {
+  item: NavItem
+  active: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={cn(
+        'relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium',
+        'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
+        'active:scale-[0.97]',
+        active && 'bg-sidebar-primary/10 text-sidebar-primary font-semibold shadow-sm'
+      )}
+    >
+      {active ? (
+        /* active = full hue well + glow — the module's color identity */
+        <RiseIcon glyph={item.glyph} hue={item.hue} size="sm" className="!rounded-lg" />
+      ) : (
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-sidebar-accent/50 text-sidebar-foreground/50">
+          <RiseGlyphIcon glyph={item.glyph} size={16} />
+        </div>
+      )}
+      <span className="flex-1 text-right">{item.label}</span>
+      {active && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-accent" />
+      )}
+    </button>
+  )
 }
 
 export function Sidebar() {
@@ -110,6 +153,31 @@ export function Sidebar() {
     if (typeof window === 'undefined') return ''
     try { return localStorage.getItem('rise-user-avatar') || '' } catch { return '' }
   })
+
+  // ── Collapsible nav groups (persisted) ──
+  const [openGroups, setOpenGroups] = useState<string[]>([])
+  useEffect(() => {
+    setOpenGroups(loadOpenGroups())
+  }, [])
+  const persistOpen = useCallback((next: string[]) => {
+    setOpenGroups(next)
+    try { localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  }, [])
+  const toggleGroup = useCallback((id: string) => {
+    playSound('navigate')
+    persistOpen(openGroups.includes(id) ? openGroups.filter((g) => g !== id) : [...openGroups, id])
+  }, [openGroups, persistOpen])
+  const allOpen = navGroups.every((g) => openGroups.includes(g.id))
+  const toggleAll = useCallback(() => {
+    persistOpen(allOpen ? [] : navGroups.map((g) => g.id))
+  }, [allOpen, persistOpen])
+  // Auto-open the group containing the active module (e.g. after ⌘K jump)
+  useEffect(() => {
+    const owner = navGroups.find((g) => g.items.some((i) => i.id === activeModule))
+    if (owner && !openGroups.includes(owner.id)) {
+      persistOpen([...openGroups, owner.id])
+    }
+  }, [activeModule]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for avatar changes
   useEffect(() => {
@@ -231,50 +299,78 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-2.5 pb-4">
-          {navGroups.map((group, gi) => {
-            // Hide admin section for non-admin users
-            if (group.items.some((item) => item.id === 'admin-panel') && !auth?.isAdmin) return null
+          {/* Pinned: dashboard — always visible */}
+          <div className="space-y-0.5">
+            <NavButton
+              item={{ id: 'dashboard', label: 'لوحة التحكم', ...mi('dashboard') }}
+              active={activeModule === 'dashboard'}
+              onSelect={() => { playSound('navigate'); setActiveModule('dashboard') }}
+            />
+          </div>
+
+          {/* Collapsible groups */}
+          <div className="flex items-center justify-between mt-3 mb-1 px-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35">الأقسام</span>
+            <button
+              onClick={toggleAll}
+              className="p-1 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground/80 hover:bg-sidebar-accent/50 transition-colors"
+              aria-label={allOpen ? 'طي كل الأقسام' : 'فتح كل الأقسام'}
+              title={allOpen ? 'طي كل الأقسام' : 'فتح كل الأقسام'}
+            >
+              {allOpen ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+
+          {[...navGroups, ...(auth?.isAdmin ? [ADMIN_GROUP] : [])].map((group) => {
+            const isOpen = openGroups.includes(group.id)
+            const containsActive = group.items.some((i) => i.id === activeModule)
             return (
-            <div key={gi} className={cn(group.title && 'mt-4')}>
-              {group.title && (
-                <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-accent/40 inline-block" />
-                  {group.title}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const isActive = activeModule === item.id
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => { playSound('navigate'); setActiveModule(item.id) }}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium',
-                        'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60',
-                        'active:scale-[0.97]',
-                        isActive && 'bg-sidebar-primary/10 text-sidebar-primary font-semibold shadow-sm'
-                      )}
-                    >
-                      {isActive ? (
-                        /* active = full hue well + glow — the module's color identity */
-                        <RiseIcon glyph={item.glyph} hue={item.hue} size="sm" className="!rounded-lg" />
-                      ) : (
-                        <div className="grid h-8 w-8 place-items-center rounded-lg bg-sidebar-accent/50 text-sidebar-foreground/50">
-                          <RiseGlyphIcon glyph={item.glyph} size={16} />
-                        </div>
-                      )}
-                      <span className="flex-1 text-right">{item.label}</span>
-                      {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-emerald-accent" />
-                      )}
-                    </button>
-                  )
-                })}
+              <div key={group.id} className="mt-1">
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-bold transition-colors',
+                    'text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
+                    containsActive && !isOpen && 'text-sidebar-foreground'
+                  )}
+                  aria-expanded={isOpen}
+                >
+                  <group.icon className={cn('w-3.5 h-3.5', containsActive && isOpen && 'text-emerald-accent')} />
+                  <span className="flex-1 text-right tracking-wide">{group.title}</span>
+                  <span className="num text-[9px] font-semibold text-sidebar-foreground/35">
+                    {toArabicNum(group.items.length)}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'w-3 h-3 text-sidebar-foreground/40 transition-transform duration-200',
+                      isOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+                {isOpen && (
+                  <div className="space-y-0.5 mt-0.5 animate-[fadeSlideIn_0.15s_ease-out]">
+                    {group.items.map((item) => (
+                      <NavButton
+                        key={item.id}
+                        item={item}
+                        active={activeModule === item.id}
+                        onSelect={() => { playSound('navigate'); setActiveModule(item.id) }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
             )
           })}
+
+          {/* Settings — always visible, one calm row */}
+          <div className="mt-3 pt-2 border-t border-sidebar-border/60 space-y-0.5">
+            <NavButton
+              item={{ id: 'settings', label: 'الإعدادات', ...mi('settings') }}
+              active={activeModule === 'settings'}
+              onSelect={() => { playSound('navigate'); setActiveModule('settings') }}
+            />
+          </div>
         </nav>
 
         {/* Quick Notes Section */}

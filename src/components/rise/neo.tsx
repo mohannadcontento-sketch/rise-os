@@ -410,3 +410,41 @@ export function ThemeToggle({ className }: { className?: string }) {
     </button>
   );
 }
+
+/* ============================================================
+   NeoField — labeled field wrapper for every form input.
+   Pairs with the .neo-input CSS class for the lime-focus look.
+   ============================================================ */
+export function NeoField({
+  label,
+  icon: Icon,
+  hint,
+  required,
+  children,
+  className,
+}: {
+  label: string
+  icon?: React.ComponentType<{ className?: string }>
+  hint?: string
+  required?: boolean
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      <label className="neo-field-label">
+        {Icon && (
+          <span className="neo-field-lucide">
+            <Icon className="h-3 w-3" />
+          </span>
+        )}
+        <span>
+          {label}
+          {required && <span className="text-destructive"> *</span>}
+        </span>
+      </label>
+      {children}
+      {hint && <p className="neo-field-hint">{hint}</p>}
+    </div>
+  );
+}

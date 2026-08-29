@@ -45,13 +45,26 @@ async function computeScores(userId: string, dates: string[]) {
     getUserStreak(userId),
   ])
 
-  const completedTasks = tasks.filter((t: any) => t.status === 'done').length
-  const totalTasks = tasks.length
-  const tasksScore = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
+  // DAY-SCOPED per-date task score (matches the dashboard's smart day reset):
+  // scheduled on that date (dueDate===date) + personal tasks completed that day
+  // without a dueDate ("bonus"). Before: one all-time ratio applied to every date.
+  const personal = tasks.filter((t: any) => !t.projectId && t.status !== 'cancelled')
+
+  const dayTaskScore = (date: string) => {
+    const scheduled = personal.filter((t: any) => t.dueDate === date)
+    const bonus = personal.filter(
+      (t: any) => !t.dueDate && t.status === 'done' &&
+        t.completedAt && String(t.completedAt).slice(0, 10) === date,
+    )
+    const done = scheduled.filter((t: any) => t.status === 'done').length + bonus.length
+    const total = scheduled.length + bonus.length
+    return total > 0 ? (done / total) * 100 : 0
+  }
 
   const streakScore = Math.min((streak / 30) * 100, 100)
 
   return dates.map((date) => {
+    const tasksScore = dayTaskScore(date)
     // Extract habit logs for the given date (handle DATE type returning timestamp)
     const dayHabitLogs = habitsWithLogs.flatMap((h: any) =>
       (h.logs || []).filter((l: any) => l.date && String(l.date).slice(0, 10) === date)
