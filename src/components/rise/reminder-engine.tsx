@@ -87,16 +87,36 @@ export function ReminderEngine() {
   }, [])
 
   // Initial + periodic refresh of habit reminder times
+  // PERF FIX: the interval used to fetch even when the tab was hidden —
+  // a hidden tab is the most common idle state (user switched to another
+  // app), so this poll was pure egress. Now skipped while hidden, and
+  // refetched immediately when the tab becomes visible again.
   useEffect(() => {
     fetchHabits()
-    const interval = setInterval(fetchHabits, HABITS_REFRESH_MS)
-    return () => clearInterval(interval)
+    const interval = setInterval(() => {
+      if (document.hidden) return
+      fetchHabits()
+    }, HABITS_REFRESH_MS)
+    const onVisible = () => {
+      if (!document.hidden) fetchHabits()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [fetchHabits])
 
-  // Also refresh when any data changes (habit created/reminder updated)
+  // Also refresh when habit data changes (habit created/reminder updated).
+  // PERF FIX: the event now carries detail.resource — this engine only needs
+  // to refetch when the write touched habits (or the resource is unknown,
+  // e.g. legacy dispatchers / offline flush). A finance record no longer
+  // triggers a pointless habits GET on every save.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
-    const handler = () => {
+    const handler = (e: Event) => {
+      const resource = (e as CustomEvent).detail?.resource
+      if (resource && resource !== 'habits') return
       if (timer) clearTimeout(timer)
       timer = setTimeout(fetchHabits, 800)
     }

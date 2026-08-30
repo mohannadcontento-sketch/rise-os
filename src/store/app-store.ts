@@ -86,14 +86,25 @@ export const useRiseStore = create<RiseStore>((set, get) => ({
         clearAllCache()
         localStorage.removeItem('rise-auth')
         localStorage.removeItem('rise-user-info')
-        try {
-          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-        } catch { /* ignore */ }
+        // PERF FIX: this used to POST /api/auth/logout directly AND call
+        // supabaseClient.auth.signOut() — the signOut fires SIGNED_OUT, and
+        // AuthProvider's handler POSTs /api/auth/logout again → every logout
+        // sent TWO identical requests. Now: Supabase mode relies on the
+        // SIGNED_OUT handler (single POST); only mock/dev mode (no Supabase
+        // client, no SIGNED_OUT event) posts directly.
         import('@/lib/supabase-client').then(({ supabaseClient }) => {
           if (supabaseClient) {
             supabaseClient.auth.signOut().catch(() => {})
+          } else {
+            try {
+              fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+            } catch { /* ignore */ }
           }
-        }).catch(() => {})
+        }).catch(() => {
+          try {
+            fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+          } catch { /* ignore */ }
+        })
       }
       set({ auth: null, user: null, activeModule: 'dashboard' })
     } finally {

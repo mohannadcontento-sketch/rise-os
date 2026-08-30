@@ -208,15 +208,14 @@ export function NotificationBell() {
     return () => clearInterval(poll)
   }, [open, fetchNotifications])
 
-  // Poll every 3 min globally for badge count (even when closed).
-  // PERF/EGRESS: was 45s — with the tab left open this endpoint dominated
-  // Supabase egress (most polls return zero unread). The panel-open poll
-  // above stays at 30s because the user is actively looking, and any data
-  // change still refreshes the badge instantly via useDataRefresh.
-  // Ticks are skipped entirely while the tab is hidden; coming back to the
-  // tab refetches immediately if a full interval has elapsed.
+  // Poll every 5 min globally for badge count (even when closed).
+  // PERF/EGRESS: was 45s, then 180s. With the tab left open this endpoint
+  // dominated background Supabase egress (most polls return zero unread).
+  // 300s + hidden-tab skip cuts visible-idle polling to ~12 req/hr and
+  // hidden-idle to ZERO; any data change still refreshes the badge
+  // instantly via useDataRefresh, and opening the panel fetches on demand.
   useEffect(() => {
-    const REFRESH_MS = 180000
+    const REFRESH_MS = 300000
     const poll = setInterval(() => {
       if (document.hidden || open) return
       void fetchBadgeCount()

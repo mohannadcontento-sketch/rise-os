@@ -2,7 +2,7 @@
 // Handles push notifications, background sync, and cache for PWA
 
 const CACHE_NAME = 'rise-os-v3'
-const API_CACHE_NAME = 'rise-api-v1'
+const API_CACHE_NAME = 'rise-api-v2'
 const STATIC_ASSETS = [
   '/app',
   '/icon-192.png',
@@ -33,7 +33,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Fetch — stale-while-revalidate for API, network-first for static
+// Fetch — network-first for API AND static, cache as offline fallback only
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
@@ -43,46 +43,31 @@ self.addEventListener('fetch', (event) => {
   // Skip external requests
   if (url.origin !== self.location.origin) return
 
-  // ── API calls: stale-while-revalidate ──
+  // ── API calls: NETWORK-FIRST (was stale-while-revalidate) ──
+  // The old SWR strategy served the cached (stale) response FIRST and
+  // refreshed in the background — the root cause of "data doesn't update",
+  // which forced the app to add unique _t= cache-busters to every GET.
+  // Network-first: fresh data when online (99% of the time), cached data
+  // ONLY as an offline fallback. Bumped API_CACHE_NAME to v2 to drop all
+  // legacy SWR entries.
   if (url.pathname.startsWith('/api/rise/') || url.pathname.startsWith('/api/auth/')) {
     event.respondWith(
-      caches.open(API_CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(event.request)
-
-        // Return cached immediately (stale), then update in background
-        const fetchPromise = fetch(event.request)
-          .then((response) => {
-            if (response.ok) {
-              // Clone and cache the response
-              cache.put(event.request, response.clone())
-            }
-            return response
-          })
-          .catch(() => {
-            // Network failed — return cached if available
-            return cached || new Response(JSON.stringify({ error: 'offline' }), {
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(API_CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          }
+          return response
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) =>
+            cached || new Response(JSON.stringify({ error: 'offline' }), {
               status: 503,
               headers: { 'Content-Type': 'application/json' },
             })
-          })
-
-        // If we have cached data, return it immediately while fetching in background
-        if (cached) {
-          // Update cache in background (fire-and-forget)
-          fetchPromise.catch(() => {})
-          // Add header to indicate cache
-          const headers = new Headers(cached.headers)
-          headers.set('X-From-Cache', 'true')
-          return new Response(cached.body, {
-            status: cached.status,
-            statusText: cached.statusText,
-            headers,
-          })
-        }
-
-        // No cache — wait for network
-        return fetchPromise
-      })
+          )
+        )
     )
     return
   }

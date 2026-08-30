@@ -4,6 +4,7 @@ import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { playSound } from '@/lib/sounds'
 import { apiFetch } from '@/lib/api-fetch'
+import { todayStr } from '@/hooks/use-today'
 import { X, ChevronDown, Pencil, Flame, Zap, Settings2, ChevronsDownUp, ChevronsUpDown, Sparkles } from 'lucide-react'
 import { MODULE_ICONS, RiseGlyphIcon, RiseIcon, type RiseGlyph, type RiseHue } from './icons'
 import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react'
@@ -245,7 +246,12 @@ export function Sidebar() {
   // Fetch user data for XP display
   const fetchUser = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/rise/dashboard')
+      // PERF FIX: was '/api/rise/dashboard' (no date) — a SECOND distinct
+      // dashboard URL alongside the dashboard module's '/api/rise/dashboard
+      // ?date=...'. On every page load both fired → 2 network requests for
+      // the same payload. Using the exact same URL as the module lets the
+      // api-fetch in-flight dedupe collapse them into ONE request.
+      const res = await apiFetch(`/api/rise/dashboard?date=${todayStr()}`)
       if (res.ok) {
         const data = await res.json()
         if (data.user) {

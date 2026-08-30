@@ -147,6 +147,48 @@ export function bumpDataVersionExport(): void {
   bumpDataVersion()
 }
 
+// ─── GET dedupe + micro-cache ───
+// Collapses concurrent identical GETs (module-mount races, write cascades,
+// sidebar+dashboard double-fetch) into ONE network request, and serves
+// repeat GETs to the same URL within a 5s window from memory.
+// Freshness guarantees:
+//  • every successful write clears both layers AND bumps _v (new key)
+//  • the Service Worker is network-first for API routes (no stale SW cache)
+//  • fetch uses cache:'no-store' (no browser HTTP cache)
+const MICRO_TTL_MS = 5000
+
+interface MicroEntry {
+  status: number
+  json: any
+  ts: number
+}
+
+const microCache = new Map<string, MicroEntry>()
+const inflightGets = new Map<string, Promise<Response>>()
+
+/** Clear the in-memory GET layers — called after any successful write. */
+function clearGetCaches(): void {
+  microCache.clear()
+  inflightGets.clear()
+}
+
+function synthGetResponse(entry: MicroEntry): Response {
+  return new Response(JSON.stringify(entry.json), {
+    status: entry.status,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-From-Cache': 'true',
+      'X-Rise-Dedupe': 'microcache',
+    },
+  })
+}
+
+/** Extract the resource segment from an /api/rise/{resource} URL. */
+function resourceOf(url: string): string | undefined {
+  const m = url.match(/\/api\/rise\/([^/?]+)/)
+  return m ? m[1] : undefined
+}
+
 // ─── Auth helpers ───
 
 function getAuthHeaders(): Record<string, string> {
@@ -246,7 +288,31 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     headers.set('Content-Type', 'application/json')
   }
 
-  // Create abort controller with timeout
+  // FIX: Removed the per-request _t=<timestamp> cache-buster. It made every
+  // GET URL unique, which (a) defeated in-flight dedupe, (b) grew the SW API
+  // cache unbounded. Stale data is now impossible because:
+  //  (1) the SW serves API routes network-first (only caches for offline),
+  //  (2) fetch uses cache:'no-store',
+  //  (3) every write clears the micro-cache/in-flight layers and bumps _v.
+  let fetchUrl = url
+  const isGet = !options.method || options.method === 'GET'
+  if (isGet) {
+    const separator = url.includes('?') ? '&' : '?'
+    // _v = data version — busts the SERVER-side aggregate cache after writes
+    fetchUrl = `${url}${separator}_v=${getDataVersion()}`
+
+    // Serve from micro-cache / share in-flight request
+    const micro = microCache.get(fetchUrl)
+    if (micro && Date.now() - micro.ts < MICRO_TTL_MS) {
+      return synthGetResponse(micro)
+    }
+    const pending = inflightGets.get(fetchUrl)
+    if (pending) return pending
+  }
+
+  const doFetch = async (): Promise<Response> => {
+  // Create abort controller with timeout (inside doFetch — no dangling
+  // timers when a GET is served from micro-cache / shared in-flight)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -254,20 +320,6 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   const existingSignal = options.signal
   if (existingSignal) {
     existingSignal.addEventListener('abort', () => controller.abort(), { once: true })
-  }
-
-  // Make the request — credentials: 'include' sends httpOnly cookies (P1#3)
-  // FIX: Re-added _t=<timestamp> cache-busting for GET requests.
-  // Without it, the browser returns a CACHED response (stale data) even
-  // with cache: 'no-store'. This was the root cause of "data doesn't
-  // update until you switch tabs and come back" — the cached response
-  // didn't include the newly created item.
-  let fetchUrl = url
-  if (!options.method || options.method === 'GET') {
-    const separator = url.includes('?') ? '&' : '?'
-    fetchUrl = `${url}${separator}_t=${Date.now()}`
-    // _v = data version — busts the SERVER-side aggregate cache after writes
-    fetchUrl += `&_v=${getDataVersion()}`
   }
 
   let response: Response
@@ -349,10 +401,15 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // Invalidate cache on successful POST/PUT/DELETE
   if (response.ok && options.method && options.method !== 'GET') {
     invalidateCache()
+    clearGetCaches() // micro-cache + in-flight must never outlive a write
     bumpDataVersion() // next GET carries a new _v → server cache misses → fresh data
-    // Notify all components to re-fetch their data
+    // Notify all components to re-fetch their data.
+    // detail.resource lets scoped listeners (e.g. reminder-engine only cares
+    // about habits) skip refetches that can't affect them.
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('rise:data-changed'))
+      window.dispatchEvent(new CustomEvent('rise:data-changed', {
+        detail: { resource: resourceOf(url) },
+      }))
     }
   }
 
@@ -421,6 +478,28 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 
   return response
+  }
+
+  if (isGet) {
+    const p = doFetch()
+      .then(async (res) => {
+        // Store the micro entry BEFORE the shared promise resolves — if the
+        // parse happened after resolution, a GET arriving in that gap (the
+        // +200ms refreshKey wave) would miss BOTH layers and hit the network.
+        if (res.ok) {
+          try {
+            const json = await res.clone().json()
+            microCache.set(fetchUrl, { status: res.status, json, ts: Date.now() })
+          } catch { /* non-JSON body — skip caching */ }
+        }
+        return res
+      })
+      .finally(() => { inflightGets.delete(fetchUrl) })
+    inflightGets.set(fetchUrl, p)
+    return p
+  }
+
+  return doFetch()
 }
 
 /**
@@ -566,6 +645,7 @@ async function flushQueue(): Promise<void> {
   // state stayed stale until the next poll. Notify them to re-fetch.
   if (changed) {
     invalidateCache()
+    clearGetCaches()
     bumpDataVersion() // same cross-instance bust as online writes
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rise:data-changed'))

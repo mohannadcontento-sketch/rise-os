@@ -61,11 +61,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             return
           }
           if (data.session && data.user) {
+            // PERF FIX: was POST /api/auth/login — the server re-ran a FULL
+            // Supabase signInWithPassword round-trip just to set the httpOnly
+            // cookie. We already hold a valid session from the client-side
+            // sign-in above — /api/auth/sync-token sets the same cookies with
+            // ZERO extra Supabase calls.
             try {
-              await fetch('/api/auth/login', {
+              await fetch('/api/auth/sync-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({
+                  access_token: data.session.access_token,
+                  refresh_token: data.session.refresh_token,
+                  expires_at: data.session.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
+                }),
                 credentials: 'include',
               })
             } catch { /* non-fatal */ }
@@ -104,11 +113,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             return
           }
           if (data.session && data.user) {
+            // PERF FIX: was POST /api/auth/signup — the user was ALREADY
+            // created by the client-side signUp above, so the server route
+            // always re-attempted signup and answered 409 (a wasted Supabase
+            // round-trip + a console error on every new account).
+            // /api/auth/sync-token sets the httpOnly cookies directly from
+            // the session we already have.
             try {
-              await fetch('/api/auth/signup', {
+              await fetch('/api/auth/sync-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, name }),
+                body: JSON.stringify({
+                  access_token: data.session.access_token,
+                  refresh_token: data.session.refresh_token,
+                  expires_at: data.session.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
+                }),
                 credentials: 'include',
               })
             } catch { /* non-fatal */ }
