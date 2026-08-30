@@ -6,7 +6,7 @@ import { Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RiseIcon } from './icons'
+import { RiseIcon, HabitIcon } from './icons'
 import { BellToggle } from './kit-v2'
 
 interface Habit {
@@ -94,7 +94,7 @@ export function HabitReminders({ habits, onToggleReminder }: HabitRemindersProps
                 transition={{ duration: 0.3 }}
                 className="flex items-center gap-3 px-3 py-2 rounded-xl bg-card border border-border"
               >
-                <span className="text-lg">{habit.icon}</span>
+                <HabitIcon icon={habit.icon} color={habit.color} size={30} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold truncate">{habit.name}</p>
                   <p className="text-[10px] text-muted-foreground num" dir="ltr">{habit.reminderTime}</p>

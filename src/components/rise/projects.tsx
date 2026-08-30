@@ -966,108 +966,102 @@ export function Projects() {
                   key={project.id}
                   variants={itemVariants}
                   layout
-                  whileHover={{ scale: 1.02, y: -4, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+                  whileHover={{ y: -5, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
                   className="group cursor-pointer"
                   onClick={() => setSelectedProjectId(project.id)}
                 >
-                  <div className="neo-card card-lift rounded-2xl overflow-hidden h-full flex flex-col">
-                    {/* Color accent bar with gradient overlay */}
-                    <div className="h-1.5 w-full relative overflow-hidden">
-                      <div className="absolute inset-0" style={{ background: `linear-gradient(to left, transparent, ${project.color}, ${project.color}80)` }} />
-                    </div>
+                  {/* Colored project card — solid brand color + white ink */}
+                  <div
+                    className="relative rounded-3xl p-5 h-full flex flex-col overflow-hidden text-white transition-shadow duration-300"
+                    style={{
+                      backgroundColor: project.color,
+                      boxShadow: '0 14px 30px -14px ' + project.color + 'B3',
+                    }}
+                  >
+                    {/* Decorative bubbles (like the reference card's depth) */}
+                    <div className="absolute -top-12 -start-10 w-36 h-36 rounded-full bg-white/10 pointer-events-none" />
+                    <div className="absolute -bottom-16 -end-8 w-40 h-40 rounded-full bg-black/[0.08] pointer-events-none" />
 
-                    <div className="p-5 flex-1 flex flex-col">
-                      {/* Top: Icon + Actions */}
-                      <div className="flex items-start justify-between mb-4">
-                        <div
-                          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: project.color + '15', color: project.color }}
-                        >
-                          <RiseGlyphIcon glyph="projects" className="w-5 h-5" />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {/* Progress ring */}
-                          <ProgressRing progress={calculatedProgress} size={44} strokeWidth={3} color={project.color} />
-                          {/* Actions */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <button
-                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project) }}>
-                                <Pencil className="w-4 h-4 me-2" />
-                                تعديل
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => { e.stopPropagation(); deleteProject(project.id) }}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4 me-2" />
-                                حذف
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-
-                      {/* Name & Description */}
-                      <h3 className="text-base font-bold mb-1 truncate">{project.name}</h3>
-                      {project.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-3 flex-1">
-                          {project.description}
-                        </p>
-                      )}
-                      {!project.description && <div className="flex-1" />}
-
-                      {/* Team Avatars */}
-                      <TeamAvatars />
-
-                      {/* Bottom: Task count + status */}
-                      <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                            <ListChecks className="w-3.5 h-3.5" />
-                            <span className="num" dir="ltr">{doneCount}/{taskCount}</span>
-                            مهمة
-                          </span>
-                          {doneCount > 0 && (
-                            <span className="text-[11px] text-emerald-accent flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span className="num" dir="ltr">{doneCount}</span>
-                              مكتمل
-                            </span>
-                          )}
-                        </div>
-                        <span
-                          className={cn(
-                            'pill',
-                            project.status === 'active' && 'pill-success',
-                            project.status === 'completed' && 'pill-lime',
-                            project.status === 'archived' && 'pill-muted'
-                          )}
-                        >
-                          {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'متوقف'}
+                    {/* Top row: score badge + avatar stack | menu */}
+                    <div className="relative flex items-center justify-between mb-4">
+                      <div className="flex items-center">
+                        <span className="relative z-30 w-9 h-9 rounded-full bg-black/25 border border-white/30 flex items-center justify-center text-[11px] font-bold shadow-sm">
+                          +<span className="num" dir="ltr">{doneCount}</span>
                         </span>
+                        {['س', 'م', 'ن'].map((ch, i) => (
+                          <span
+                            key={i}
+                            className="w-9 h-9 rounded-full bg-white/20 border-2 border-white/40 -me-2.5 flex items-center justify-center text-[10px] font-bold backdrop-blur-sm"
+                            style={{ zIndex: 20 - i * 5 }}
+                          >
+                            {ch}
+                          </span>
+                        ))}
                       </div>
-
-                      {/* Progress bar with micro text */}
-                      <div className="mt-3">
-                        <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                          <motion.div
-                            className="h-full rounded-full bg-gradient-to-l from-violet-accent/80 to-violet-accent"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${calculatedProgress}%` }}
-                            transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/70 mt-1 text-end">{doneCount} من {taskCount} مهام مكتملة</p>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <button
+                            aria-label="خيارات المشروع"
+                            className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/35 flex items-center justify-center transition-colors"
+                          >
+                            <MoreHorizontal className="w-4 h-4 text-white" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project) }}>
+                            <Pencil className="w-4 h-4 me-2" />
+                            تعديل
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); deleteProject(project.id) }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 me-2" />
+                            حذف
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
+
+                    {/* Title + description */}
+                    <h3 className="relative text-lg font-extrabold leading-snug break-words">
+                      {project.name}
+                    </h3>
+                    {project.description && (
+                      <p className="relative text-xs text-white/85 line-clamp-2 leading-relaxed mt-1">
+                        {project.description}
+                      </p>
+                    )}
+                    <div className="flex-1 min-h-3" />
+
+                    {/* Indicator row: task count + status pill */}
+                    <div className="relative flex items-center justify-between text-[11px] font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        <ListChecks className="w-3.5 h-3.5" />
+                        <span className="num" dir="ltr">{doneCount}/{taskCount}</span>
+                        مهمة
+                      </span>
+                      <span
+                        className="pill"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.22)', color: '#fff' }}
+                      >
+                        {project.status === 'active' ? 'نشط' : project.status === 'completed' ? 'مكتمل' : 'متوقف'}
+                      </span>
+                    </div>
+
+                    {/* Thin progress bar (reference style: light value on dark track) */}
+                    <div className="relative h-1 rounded-full bg-black/25 overflow-hidden mt-1.5">
+                      <motion.div
+                        className="h-full rounded-full bg-white"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${calculatedProgress}%` }}
+                        transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                      />
+                    </div>
+                    <p className="relative text-[10px] font-medium text-white/80 mt-1.5 text-end">
+                      <span className="num" dir="ltr">{calculatedProgress}%</span> مكتمل
+                    </p>
                   </div>
                 </motion.div>
               )

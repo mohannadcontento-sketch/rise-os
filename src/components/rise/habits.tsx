@@ -53,6 +53,7 @@ import { cn } from '@/lib/utils'
 import { NeoField } from '@/components/rise/neo'
 import { apiDelete, apiFetch, apiPost, apiPut } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { HabitIcon, HabitGlyph, HABIT_ICON_PRESETS } from '@/components/rise/icons'
 // useDataRefresh removed — causes toggle reverts (multiple data-changed events)
 import { notifyHabitComplete } from '@/lib/notifications'
 import { HabitReminders, ReminderBell } from './habit-reminders'
@@ -222,8 +223,8 @@ export function HabitsView() {
 
   // Form state
   const [formName, setFormName] = useState('')
-  const [formIcon, setFormIcon] = useState('🎯')
-  const [formColor, setFormColor] = useState('#10b981')
+  const [formIcon, setFormIcon] = useState('water')
+  const [formColor, setFormColor] = useState('#06b6d4')
   const [formFrequency, setFormFrequency] = useState<Habit['frequency']>('daily')
   const [formTarget, setFormTarget] = useState('1')
 
@@ -398,8 +399,8 @@ export function HabitsView() {
 
   function resetForm() {
     setFormName('')
-    setFormIcon('🎯')
-    setFormColor('#10b981')
+    setFormIcon('water')
+    setFormColor('#06b6d4')
     setFormFrequency('daily')
     setFormTarget('1')
   }
@@ -527,24 +528,43 @@ export function HabitsView() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-[auto_1fr] gap-3 items-end">
-                  <NeoField label="الأيقونة">
-                    <Input
-                      value={formIcon}
-                      onChange={(e) => setFormIcon(e.target.value)}
-                      className="w-16 text-center text-2xl h-12 neo-input"
-                      maxLength={2}
-                    />
-                  </NeoField>
-                  <NeoField label="اسم العادة" icon={PencilLine} required>
-                    <Input
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      placeholder="مثال: قراءة 30 دقيقة"
-                      className="neo-input text-right h-11"
-                    />
-                  </NeoField>
-                </div>
+                <NeoField label="اسم العادة" icon={PencilLine} required>
+                  <Input
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="مثال: قراءة 30 دقيقة"
+                    className="neo-input text-right h-11"
+                  />
+                </NeoField>
+                <NeoField label="الأيقونة" hint="اختر رمزاً احترافياً — يلوّن العادة تلقائياً">
+                  <div className="grid grid-cols-8 sm:grid-cols-11 gap-1.5 p-1.5 rounded-2xl bg-muted/40 max-h-36 overflow-y-auto">
+                    {HABIT_ICON_PRESETS.map((p) => {
+                      const active = formIcon === p.key
+                      return (
+                        <button
+                          key={p.key}
+                          type="button"
+                          title={p.label}
+                          aria-label={p.label}
+                          onClick={() => { setFormIcon(p.key); setFormColor(p.color) }}
+                          className={cn(
+                            'flex items-center justify-center rounded-xl transition-all duration-150',
+                            active ? 'scale-110 shadow-md' : 'hover:scale-105'
+                          )}
+                          style={{
+                            width: 34,
+                            height: 34,
+                            backgroundColor: active ? p.color : `${p.color}1A`,
+                            color: active ? '#fff' : p.color,
+                            ...(active ? { boxShadow: `0 0 0 2px ${p.color}66` } : {}),
+                          }}
+                        >
+                          <HabitGlyph icon={p.key} size={19} />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </NeoField>
                 <NeoField label="اللون">
                   <div className="flex gap-2 flex-wrap">
                     {PRESET_COLORS.map((c) => (
@@ -715,7 +735,12 @@ export function HabitsView() {
             },
             {
               icon: Crown, well: 'bg-gold-light/20', iconColor: 'text-gold',
-              value: stats.bestHabit ? <span className="truncate max-w-[90px] inline-block">{stats.bestHabit.icon} {stats.bestHabit.name}</span> : '—',
+              value: stats.bestHabit ? (
+                <span className="truncate max-w-[110px] inline-flex items-center gap-1.5 align-middle">
+                  <HabitIcon icon={stats.bestHabit.icon} color={stats.bestHabit.color} size={20} />
+                  <span className="truncate">{stats.bestHabit.name}</span>
+                </span>
+              ) : '—',
               label: 'أفضل عادة', delay: 0.18,
             },
           ] as const).map((s) => (
@@ -774,10 +799,10 @@ export function HabitsView() {
                     >
                       <Card
                         className={cn(
-                          'group rounded-2xl border-0 shadow-sm overflow-hidden transition-all duration-300',
+                          'group rounded-3xl border-0 overflow-hidden transition-all duration-300 bg-card',
                           isCompleted
-                            ? 'bg-card ring-1'
-                            : 'glass'
+                            ? 'shadow-md ring-1'
+                            : 'shadow-[0_8px_20px_-6px_rgba(23,42,33,0.12),0_2px_6px_-2px_rgba(23,42,33,0.06)]'
                         )}
                         style={
                           isCompleted
@@ -793,74 +818,95 @@ export function HabitsView() {
                               animate={{ opacity: 0 }}
                               exit={{ opacity: 0 }}
                               transition={{ duration: 0.4 }}
-                              className="absolute inset-0 z-10 pointer-events-none rounded-2xl"
+                              className="absolute inset-0 z-10 pointer-events-none rounded-3xl"
                               style={{ backgroundColor: isCompleted ? habit.color : 'transparent' }}
                             />
                           )}
                         </AnimatePresence>
 
-                        <CardContent className="p-3.5 relative">
-                          {/* Color accent strip */}
+                        {/* ── Gradient header (card style: image zone + icon tile) ── */}
+                        <div
+                          className="relative h-[74px] shrink-0"
+                          style={{
+                            background: `linear-gradient(135deg, ${habit.color}33, ${habit.color}12 55%, transparent)`,
+                          }}
+                        >
                           <div
-                            className="absolute top-0 right-0 left-0 h-1 transition-opacity duration-300"
-                            style={{
-                              backgroundColor: habit.color,
-                              opacity: isCompleted ? 1 : 0.3,
-                            }}
+                            className="absolute -bottom-7 -start-5 w-20 h-20 rounded-full pointer-events-none"
+                            style={{ backgroundColor: `${habit.color}14` }}
                           />
-
-                          {/* Header row: icon + name + reminder + delete */}
-                          <div className="flex items-center gap-2 mb-2.5">
-                            <span className="text-xl shrink-0" aria-hidden="true">{habit.icon}</span>
-                            <p className="text-xs font-semibold truncate flex-1 min-w-0">{habit.name}</p>
-                            <ReminderBell habit={habit} onToggle={handleToggleReminder} />
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    deleteHabit(habit.id)
-                                  }}
-                                  aria-label={`حذف ${habit.name}`}
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-[10px] px-2 py-1 rounded-lg">
-                                حذف العادة
-                              </TooltipContent>
-                            </Tooltip>
+                          <div className="relative h-full px-3.5 pt-3 flex items-start justify-between">
+                            <motion.span
+                              whileHover={{ rotate: isCompleted ? 0 : 8, scale: 1.06 }}
+                              transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                              className="inline-block"
+                            >
+                              <HabitIcon
+                                icon={habit.icon}
+                                color={habit.color}
+                                size={46}
+                                completed={isCompleted}
+                              />
+                            </motion.span>
+                            <div className="flex items-center gap-0.5">
+                              <ReminderBell habit={habit} onToggle={handleToggleReminder} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      deleteHabit(habit.id)
+                                    }}
+                                    aria-label={`حذف ${habit.name}`}
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-[10px] px-2 py-1 rounded-lg">
+                                  حذف العادة
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
                           </div>
+                        </div>
 
-                          {/* Streak with animated flame for streak > 3 */}
-                          <div className="h-6 flex items-center justify-center gap-1 mb-2">
-                            {streak.current > 0 ? (
-                              <>
-                                <motion.div
-                                  animate={streak.current > 3 ? { scale: [1, 1.3, 1] } : {}}
-                                  transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                                >
-                                  <Flame
-                                    className="w-4 h-4"
-                                    style={{ color: habit.color, filter: streak.current > 5 ? 'drop-shadow(0 0 4px oklch(0.55 0.18 25 / 0.4))' : 'none' }}
-                                  />
-                                </motion.div>
-                                <span
-                                  className="text-xs font-bold"
-                                  style={{ color: habit.color }}
-                                >
-                                  {streak.current}
+                        <CardContent className="p-3.5 pt-2.5 relative">
+                          {/* Name + frequency subtitle */}
+                          <p className="text-sm font-bold truncate">{habit.name}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {FREQUENCY_LABELS[habit.frequency]} · الهدف <span className="num" dir="ltr">{habit.targetCount}</span> يومياً
+                          </p>
+
+                          {/* Streak chip — tinted icon-box style */}
+                          <div className="mt-2.5 flex items-center justify-between gap-2">
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 h-7 rounded-xl transition-colors"
+                              style={{ backgroundColor: `${habit.color}14`, color: habit.color }}
+                            >
+                              <motion.span
+                                animate={streak.current > 3 ? { scale: [1, 1.25, 1] } : {}}
+                                transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                                className="inline-flex"
+                              >
+                                <Flame className="w-3.5 h-3.5" />
+                              </motion.span>
+                              {streak.current > 0 ? (
+                                <span className="text-[11px] font-bold">
+                                  <span className="num" dir="ltr">{streak.current}</span> يوم
                                 </span>
-                                <span className="text-[10px] text-muted-foreground">يوم</span>
-                              </>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground/50">ابدأ سلسلتك اليوم</span>
-                            )}
+                              ) : (
+                                <span className="text-[11px] font-semibold opacity-80">ابدأ سلسلتك</span>
+                              )}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-[10px] text-gold font-medium">
+                              <Sparkles className="w-3 h-3" />
+                              <span className="num" dir="ltr">+{habit.xpReward}</span>
+                            </span>
                           </div>
 
                           {/* Toggle button with pulsing ring when completed */}
-                          <div className="relative">
+                          <div className="relative mt-2.5">
                             {isCompleted && (
                               <motion.div
                                 className="absolute inset-0 rounded-xl pointer-events-none"
@@ -907,14 +953,6 @@ export function HabitsView() {
                               )}
                             </motion.button>
                           </div>
-
-                          {/* XP badge */}
-                          <div className="flex items-center justify-center gap-1 mt-2">
-                            <Sparkles className="w-3 h-3 text-gold" />
-                            <span className="text-[10px] text-gold font-medium">
-                              <span className="num" dir="ltr">+{habit.xpReward}</span> خبرة
-                            </span>
-                          </div>
                         </CardContent>
                       </Card>
                     </motion.div>
@@ -946,7 +984,7 @@ export function HabitsView() {
                     <CardContent className="p-4">
                       {/* Habit name */}
                       <div className="flex items-center gap-2 mb-3">
-                        <span className="text-base">{habit.icon}</span>
+                        <HabitIcon icon={habit.icon} color={habit.color} size={26} />
                         <span className="text-xs font-semibold">{habit.name}</span>
                         <div className="flex-1" />
                         <div className="flex items-center gap-1">

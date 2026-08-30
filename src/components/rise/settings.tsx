@@ -469,12 +469,12 @@ export default function Settings() {
   const storagePercent = storageSize.percent || Math.min(100, Math.round((storageSize.used / storageSize.total) * 100))
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start max-w-5xl">
+    <div className="space-y-4">
       {/* Profile — full width */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="md:col-span-2"
+        className=""
       >
         <div className="neo-card card-lift overflow-hidden relative">
           {/* subtle top accent */}
@@ -623,7 +623,14 @@ export default function Settings() {
       </motion.div>
 
       {/* Appearance */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
+      {/* Masonry: sections flow into balanced columns — no dead space on laptop */}
+      <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.04 }}
+        className="break-inside-avoid mb-4"
+      >
         <SectionCard icon={Palette} well="iw-violet" title="المظهر" desc="السمة واللغة">
           <div className="space-y-4">
             <Label className="text-sm font-medium">السمة</Label>
@@ -677,7 +684,12 @@ export default function Settings() {
       </motion.div>
 
       {/* Notifications — everything notification-related lives here */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className="break-inside-avoid mb-4"
+      >
         <SectionCard icon={Bell} well="iw-amber" title="الإشعارات والتذكيرات" desc="تذكيرات حقيقية تعمل من أي صفحة">
           {/* Browser permission */}
           <div className="p-3.5 rounded-xl bg-gold/[0.06] border border-gold/20 space-y-3">
@@ -783,7 +795,12 @@ export default function Settings() {
       </motion.div>
 
       {/* Sounds */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="break-inside-avoid mb-4"
+      >
         <SectionCard icon={Volume2} well="iw-blue" title="الأصوات" desc="مؤثرات تفاعلية للإنجازات">
           <div className="flex items-center justify-between py-1.5 px-1">
             <div>
@@ -831,7 +848,12 @@ export default function Settings() {
       </motion.div>
 
       {/* Daily goals */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.16 }}
+        className="break-inside-avoid mb-4"
+      >
         <SectionCard icon={Target} well="iw-lime" title="أهداف يومية" desc="تظهر في الصحة والروتين">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
@@ -884,7 +906,12 @@ export default function Settings() {
       </motion.div>
 
       {/* Data & Privacy */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="break-inside-avoid mb-4"
+      >
         <SectionCard icon={Shield} well="iw-forest" title="البيانات والخصوصية" desc="نسخ احتياطي ومساحة الخادم">
           {/* Storage */}
           <div className="p-4 rounded-xl bg-muted/20 space-y-3">
@@ -970,7 +997,12 @@ export default function Settings() {
       </motion.div>
 
       {/* About */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.24 }}
+        className="break-inside-avoid mb-4"
+      >
         <SectionCard icon={Info} well="iw-forest" title="عن RiseOS">
           <div className="flex items-center gap-4 mb-4">
             <motion.div whileHover={{ scale: 1.05, rotate: -3 }} className="shrink-0">
@@ -997,9 +1029,10 @@ export default function Settings() {
           </div>
         </SectionCard>
       </motion.div>
+      </div>
 
       {/* Danger Zone — full width */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="md:col-span-2">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
         <div className="rounded-2xl border-2 border-dashed border-destructive/40 overflow-hidden hover:border-destructive/60 transition-colors group relative">
           <motion.div
             className="absolute inset-0 rounded-2xl pointer-events-none"
@@ -1087,7 +1120,7 @@ export default function Settings() {
       </motion.div>
 
       {/* Version Footer */}
-      <div className="md:col-span-2 text-center pt-2 pb-2">
+      <div className="text-center pt-2 pb-2">
         <div className="h-[1px] bg-gradient-to-l from-transparent via-border to-transparent mb-4" />
         <div className="flex items-center justify-center gap-2 mb-2">
           <motion.div

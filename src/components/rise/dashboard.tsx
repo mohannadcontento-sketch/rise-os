@@ -53,6 +53,7 @@ import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { useToday } from '@/hooks/use-today'
 import { toast } from 'sonner'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
+import { HabitIcon } from '@/components/rise/icons'
 import { useRiseStore } from '@/store/app-store'
 import { playSound } from '@/lib/sounds'
 import {
@@ -1851,15 +1852,14 @@ export default function Dashboard() {
                       />
                       <div
                         className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-lg transition-shadow duration-300',
+                          'transition-shadow duration-300 rounded-xl',
                           habit.todayCompleted && 'pulse-glow'
                         )}
                         style={{
-                          backgroundColor: `${habit.color}15`,
                           boxShadow: habit.todayCompleted ? `0 0 12px ${habit.color}40` : 'none',
                         }}
                       >
-                        {habit.icon}
+                        <HabitIcon icon={habit.icon} color={habit.color} size={30} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={cn('text-sm font-medium truncate', habit.todayCompleted ? 'text-foreground/60 line-through' : 'text-foreground')}>
