@@ -1,12 +1,14 @@
 'use client'
 
 /**
- * Sun & Cloud Loader — طلب المستخدم (شمس مضيئة وسحابتان متحركتان).
- * تصميم CSS خالص بدون مكتبات — الحجم الأصلي 250×250 ويُتحكم فيه عبر scale.
+ * RiseOS Weather Loader — شمس بأشعة دوّارة وسحابتان منجرفتان.
+ * نسخة معاد بناؤها بالكامل: مشاهد بمقاسات ثابتة داخل حاوية direction:ltr
+ * (حتى لا يقلبها اتجاه الصفحة)، سحب بشكل حقيقي (قاعدة + بؤبتان)،
+ * وأشعة شمس دوارة — متوافقة مع الوضع الليلي عبر globals.css (.dark).
  */
 
 export default function SunCloudLoader({
-  scale = 0.56,
+  scale = 1,
   label = 'جاري التحميل...',
   className = '',
 }: {
@@ -15,20 +17,24 @@ export default function SunCloudLoader({
   className?: string
 }) {
   return (
-    <div className={`scl-wrap flex-col gap-1 ${className}`} aria-label={label} role="status">
-      <div className="scl" style={{ ['--scl-scale' as string]: scale }}>
-        <div className="scl-cloud scl-front">
-          <span className="scl-left-front" />
-          <span className="scl-right-front" />
+    <div className={`rl-wrap ${className}`} role="status" aria-label={label || 'جاري التحميل'}>
+      <div className="rl-scene" style={{ ['--rl-scale' as string]: scale }} aria-hidden="true">
+        {/* الشمس */}
+        <div className="rl-sun">
+          <span className="rl-rays" />
+          <span className="rl-sun-core" />
         </div>
-        <span className="scl-sun scl-sunshine" />
-        <span className="scl-sun" />
-        <div className="scl-cloud scl-back">
-          <span className="scl-left-back" />
-          <span className="scl-right-back" />
-        </div>
+        {/* السحابتان */}
+        <span className="rl-cloud rl-cloud-back" />
+        <span className="rl-cloud rl-cloud-front" />
       </div>
-      {label && <p className="text-sm text-muted-foreground">{label}</p>}
+      {/* نقاط النبض */}
+      <div className="rl-dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      {label ? <p className="text-xs text-muted-foreground mt-1.5">{label}</p> : null}
     </div>
   )
 }

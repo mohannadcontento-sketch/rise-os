@@ -6,8 +6,10 @@ import { data, setCurrentAuthToken } from '@/lib/data'
 export const dynamic = 'force-dynamic'
 
 // P1#5: Zod validation — prevents negative amounts, malicious URLs, arbitrary fields
+// 'ادخار' added: the finance page's savings records were rejected here (HTTP 400),
+// which broke الادخار entirely. DB column is TEXT — no schema change needed.
 const FinanceCreateSchema = z.object({
-  type: z.enum(['income', 'expense', 'دخل', 'مصروف'], { message: 'النوع يجب أن يكون دخلاً أو مصروفاً' }),
+  type: z.enum(['income', 'expense', 'دخل', 'مصروف', 'ادخار'], { message: 'النوع يجب أن يكون دخلاً أو مصروفاً أو ادخاراً' }),
   amount: z.number().positive('المبلغ يجب أن يكون موجباً').max(999999999, 'المبلغ كبير جداً'),
   category: z.string().max(100).optional(),
   description: z.string().max(500).optional(),

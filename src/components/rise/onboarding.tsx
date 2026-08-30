@@ -6,7 +6,7 @@
  * تدعم أسهم الكيبورد، وشريط تقدم علوي، وخلفيات متدرجة لكل خطوة.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type ComponentType } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -73,12 +73,12 @@ export function useOnboarding() {
    Step gradients + titles
    ═══════════════════════════════════════════════════════ */
 
-const stepThemes: { gradient: string; accentText: string }[] = [
-  { gradient: 'from-forest/10 via-lime/5 to-transparent', accentText: 'text-forest dark:text-lime' },
-  { gradient: 'from-gold/10 via-gold/4 to-transparent', accentText: 'text-gold' },
-  { gradient: 'from-emerald-accent/10 via-forest/4 to-transparent', accentText: 'text-emerald-accent' },
-  { gradient: 'from-violet-accent/10 via-gold/4 to-transparent', accentText: 'text-violet-accent' },
-  { gradient: 'from-rose-accent/10 via-forest/4 to-transparent', accentText: 'text-rose-accent' },
+const stepThemes: { band: string; onBand: 'text-white' | 'text-ink'; icon: ComponentType<{ className?: string }> }[] = [
+  { band: 'from-forest via-emerald-accent to-lime', onBand: 'text-white', icon: Rocket },
+  { band: 'from-gold via-amber-400 to-gold', onBand: 'text-ink', icon: Sun },
+  { band: 'from-emerald-accent via-forest to-forest', onBand: 'text-white', icon: LayersIcon },
+  { band: 'from-violet-accent via-violet-accent to-gold', onBand: 'text-white', icon: Library },
+  { band: 'from-rose-accent via-rose-accent to-gold', onBand: 'text-white', icon: Keyboard },
 ]
 
 const stepTitles = [
@@ -332,8 +332,8 @@ function KnowledgeStep() {
           <Library className="size-3 me-1" />
           الميزة المميزة
         </span>
-        <h2 className="text-xl sm:text-2xl font-bold">قاعدة المعارف — مدربك من الكتب</h2>
-        <p className="text-sm text-muted-foreground">بدون أي ذكاء اصطناعي — خلاصات عملية من أشهر كتب التنمية والإنتاجية</p>
+        <h2 className="text-xl sm:text-2xl font-bold">قاعدة المعارف — خلاصات من الكتب</h2>
+        <p className="text-sm text-muted-foreground">خلاصات عملية من أشهر كتب التنمية والإنتاجية — تضغط وتطبّق فوراً</p>
       </div>
 
       {/* KB feature card */}
@@ -548,11 +548,8 @@ export default function Onboarding() {
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleDismiss() }}>
       <DialogContent
         showCloseButton={false}
-        className={cn(
-          'sm:max-w-2xl max-h-[92vh] overflow-y-auto neo-scroll p-0 border border-border bg-card shadow-lift',
-          'bg-gradient-to-b',
-          theme.gradient
-        )}
+        overlayClassName="bg-ink/85 backdrop-blur-md"
+        className="sm:max-w-2xl max-h-[92vh] overflow-y-auto neo-scroll p-0 border-2 border-border/70 bg-card rounded-3xl shadow-2xl"
         dir="rtl"
       >
         {/* Accessibility */}
@@ -564,28 +561,46 @@ export default function Onboarding() {
         </DialogDescription>
 
         {/* Top progress bar */}
-        <div className="h-1.5 bg-muted/60 rounded-t-2xl overflow-hidden" aria-hidden>
+        <div className="h-1.5 bg-muted/60 rounded-t-3xl overflow-hidden" aria-hidden>
           <div
             className="h-full bg-gradient-to-l from-forest via-emerald-accent to-lime transition-all duration-500 ease-out"
             style={{ width: `${((currentStep + 1) / TOTAL_STEPS) * 100}%` }}
           />
         </div>
 
-        {/* Header row: step pill + skip */}
-        <div className="px-6 pt-4 flex items-center justify-between">
-          <span className="pill pill-muted text-[10px] gap-1.5">
-            <span className="num" dir="ltr">{currentStep + 1}</span> / <span className="num" dir="ltr">{TOTAL_STEPS}</span>
-            <span className="text-muted-foreground/60">—</span>
-            {stepTitles[currentStep]}
-          </span>
-          <button
-            onClick={handleSkip}
-            className="rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors flex items-center gap-1 text-xs"
-            aria-label="تخطي التعريف"
-          >
-            تخطي
-            <X className="size-3.5" />
-          </button>
+        {/* Band متدرج صلب — يعزل العنوان بصرياً ويقويه، خلفية مخصصة لكل خطوة */}
+        <div className={cn('relative overflow-hidden bg-gradient-to-bl px-6 py-5 border-b border-border/40', theme.band)}>
+          <div className="absolute -top-10 -start-10 w-36 h-36 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <div className="absolute -bottom-14 -end-8 w-32 h-32 rounded-full bg-ink/15 blur-xl" aria-hidden />
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className={cn(
+                'w-11 h-11 rounded-2xl flex items-center justify-center backdrop-blur-sm shrink-0 border',
+                theme.onBand === 'text-ink' ? 'bg-ink/10 border-ink/15' : 'bg-white/15 border-white/25'
+              )}>
+                <theme.icon className={cn('w-5 h-5', theme.onBand)} />
+              </span>
+              <div>
+                <p className={cn('text-[10px] font-bold flex items-center gap-1 opacity-80', theme.onBand)}>
+                  الخطوة <span className="num" dir="ltr">{currentStep + 1}</span> من <span className="num" dir="ltr">{TOTAL_STEPS}</span>
+                </p>
+                <h2 className={cn('text-lg font-extrabold leading-tight mt-0.5', theme.onBand)}>{stepTitles[currentStep]}</h2>
+              </div>
+            </div>
+            <button
+              onClick={handleSkip}
+              className={cn(
+                'rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors flex items-center gap-1',
+                theme.onBand === 'text-ink'
+                  ? 'bg-ink/10 text-ink border-ink/15 hover:bg-ink/20'
+                  : 'bg-white/10 text-white/85 border-white/20 hover:bg-white/20 hover:text-white'
+              )}
+              aria-label="تخطي التعريف"
+            >
+              تخطي
+              <X className="size-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Step content with animation */}

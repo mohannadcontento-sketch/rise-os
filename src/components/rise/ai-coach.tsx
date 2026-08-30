@@ -1,7 +1,8 @@
 'use client'
 
 /**
- * قاعدة المعارف — مكتبة معارف من الكتب (بلا ذكاء اصطناعي — طلب المستخدم).
+ * قاعدة المعارف — مكتبة معارف من الكتب. الواجهة v3: Hero بلون العلامة
+ * + "فكرة اليوم" + التصنيفات في المقدمة.
  *
  * مساعد قائم على أزرار معروفة: تصنيفات → أسئلة → إجابات عملية
  * مستخرجة من قاعدة معارف محلية دقيقة مبنية على كتب حقيقية.
@@ -204,6 +205,14 @@ export default function AICoach() {
     return [...map.values()].sort((a, b) => b.count - a.count)
   }, [])
 
+  /* فكرة اليوم — مقالة ثابتة طوال اليوم تتغير يومياً */
+  const dailyEntry = useMemo(() => {
+    const all = COACH_TOPICS.flatMap((t) => entriesByTopic(t.id))
+    if (!all.length) return undefined
+    const day = Math.floor(Date.now() / 86_400_000)
+    return all[day % all.length]
+  }, [])
+
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-10rem)] relative rounded-3xl">
       {/* ── Header ── */}
@@ -220,7 +229,7 @@ export default function AICoach() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-gradient-forest">قاعدة المعارف</h2>
             <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>أزرار معروفة… وخلاصات عملية من الكتب</span>
+              <span>خلاصات عملية من أشهر الكتب — اختر موضوعاً وابدأ</span>
             </p>
           </div>
         </div>
@@ -306,18 +315,92 @@ export default function AICoach() {
             </motion.div>
           ) : view.type === 'home' ? (
             <motion.div key="home" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-5">
-              {/* Hero */}
-              <div className="glass rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-lime/90 flex items-center justify-center shrink-0">
-                  <Quote className="w-5 h-5 text-ink" />
+              {/* Hero — لحظة العلامة */}
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-bl from-forest via-emerald-accent to-lime p-5 shadow-lg shadow-emerald-accent/20">
+                <div className="absolute -top-10 -start-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" aria-hidden />
+                <div className="absolute -bottom-12 -end-6 w-32 h-32 rounded-full bg-ink/10 blur-xl" aria-hidden />
+                <div className="relative flex items-center gap-3">
+                  <span className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/25 shrink-0">
+                    <Library className="w-6 h-6 text-white" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-extrabold text-white leading-snug">معارف تُطبَّق، لا تُقرأ فقط</h3>
+                    <p className="text-xs text-white/85 mt-0.5">خلاصات عملية من أشهر كتب الإنتاجية والتنمية البشرية</p>
+                  </div>
                 </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  <span className="font-bold text-foreground">مكتبة بلا ذكاء اصطناعي</span> — اختر موضوعاً، اضغط سؤالاً، وخذ خطوات مجرّبة من{' '}
-                  <span className="font-semibold text-foreground">
+                <div className="relative flex flex-wrap gap-1.5 mt-4">
+                  <span className="pill bg-white/15 text-white border-0 text-[10px] gap-1">
+                    <BookOpen className="w-3 h-3" />
+                    <span className="num" dir="ltr">{stats.entries}</span> مقالة
+                  </span>
+                  <span className="pill bg-white/15 text-white border-0 text-[10px] gap-1">
+                    <Library className="w-3 h-3" />
                     <span className="num" dir="ltr">{stats.books}</span> كتاب
-                  </span>{' '}
-                  في التنمية والإنتاجية. كل الإجابات محلية على جهازك.
+                  </span>
+                  <span className="pill bg-white/15 text-white border-0 text-[10px] gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    <span className="num" dir="ltr">{COACH_TOPICS.length}</span> موضوع
+                  </span>
+                </div>
+              </div>
+
+              {/* فكرة اليوم — تتغير كل يوم */}
+              {dailyEntry && (
+                <button onClick={() => openEntry(dailyEntry)} className="w-full text-start group" aria-label="اقرأ فكرة اليوم">
+                  <div className="glass rounded-2xl p-4 card-lift relative overflow-hidden">
+                    <div className="flex items-center gap-3">
+                      <span className="w-10 h-10 rounded-xl bg-gold/15 flex items-center justify-center shrink-0">
+                        <Quote className="w-5 h-5 text-gold" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-gold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          فكرة اليوم
+                        </p>
+                        <p className="text-sm font-bold truncate mt-0.5">{dailyEntry.title}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{dailyEntry.book} — {dailyEntry.author}</p>
+                      </div>
+                      <ChevronLeft className="w-4 h-4 text-muted-foreground/40 group-hover:text-foreground group-hover:-translate-x-0.5 transition-all shrink-0" />
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed mt-3 line-clamp-2">{dailyEntry.summary}</p>
+                  </div>
+                </button>
+              )}
+
+              {/* التصنيفات — أول ما تشوفه */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" />
+                  اختر موضوعاً وابدأ
                 </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {COACH_TOPICS.map((topic, i) => {
+                    const Icon = TOPIC_ICONS[topic.icon] || BookOpen
+                    const count = entriesByTopic(topic.id).length
+                    return (
+                      <motion.button
+                        key={topic.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => openTopic(topic.id)}
+                        className="group relative p-4 rounded-2xl glass text-start hover:shadow-md transition-all overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between mb-2.5">
+                          <span className={cn('w-9 h-9 rounded-xl flex items-center justify-center', HUE_STYLES[topic.hue])}>
+                            <Icon className="w-[18px] h-[18px]" />
+                          </span>
+                          <span className="text-[10px] font-bold text-muted-foreground/60 bg-muted/50 rounded-full px-2 py-0.5 num" dir="ltr">
+                            {count}
+                          </span>
+                        </div>
+                        <p className="font-bold text-sm">{topic.label}</p>
+                        <p className="text-[11px] text-muted-foreground/80 mt-0.5 leading-snug">{topic.desc}</p>
+                      </motion.button>
+                    )
+                  })}
+                </div>
               </div>
 
               {/* آخر ما فتحته */}
@@ -375,39 +458,6 @@ export default function AICoach() {
                   </div>
                 </div>
               )}
-
-              {/* التصنيفات */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-2.5">اختر موضوعاً</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {COACH_TOPICS.map((topic, i) => {
-                    const Icon = TOPIC_ICONS[topic.icon] || BookOpen
-                    const count = entriesByTopic(topic.id).length
-                    return (
-                      <motion.button
-                        key={topic.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.04 }}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => openTopic(topic.id)}
-                        className="group relative p-4 rounded-2xl glass text-start hover:shadow-md transition-all overflow-hidden"
-                      >
-                        <div className="flex items-center justify-between mb-2.5">
-                          <span className={cn('w-9 h-9 rounded-xl flex items-center justify-center', HUE_STYLES[topic.hue])}>
-                            <Icon className="w-[18px] h-[18px]" />
-                          </span>
-                          <span className="text-[10px] font-bold text-muted-foreground/60 bg-muted/50 rounded-full px-2 py-0.5 num" dir="ltr">
-                            {count}
-                          </span>
-                        </div>
-                        <p className="font-bold text-sm">{topic.label}</p>
-                        <p className="text-[11px] text-muted-foreground/80 mt-0.5 leading-snug">{topic.desc}</p>
-                      </motion.button>
-                    )
-                  })}
-                </div>
-              </div>
 
               {/* المكتبة — الكتب المتوفرة */}
               <div>
@@ -467,13 +517,6 @@ export default function AICoach() {
             </motion.div>
           ) : null}
         </AnimatePresence>
-      </div>
-
-      {/* ── Footer note ── */}
-      <div className="shrink-0 pt-3 text-center">
-        <p className="text-[10px] text-muted-foreground/50">
-          كل الإجابات محلية من الكتب — تعمل بلا إنترنت، ولا يُرسل أي سؤال لأي خادم
-        </p>
       </div>
 
       {/* ── نافذة "شارك معرفة" ── */}

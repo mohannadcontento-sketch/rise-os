@@ -135,7 +135,7 @@ const moduleNames: Record<ModuleId, string> = {
 }
 
 function LoadingFallback() {
-  return <SunCloudLoader scale={0.52} className="h-64" />
+  return <SunCloudLoader className="h-64" />
 }
 
 /* Module identity via the Neo duotone icon system */
@@ -191,6 +191,10 @@ export default function RiseOSApp() {
   // Here we only need to handle the INITIAL state — if the user has a
   // stored session in localStorage, set it immediately (offline-first,
   // zero delay) so the UI doesn't flash the login page.
+  // SECURITY: only restore sessions whose expires_at is still in the
+  // future. Previously an expired/revoked token was restored blindly,
+  // letting users "enter" the app with a dead session (empty account,
+  // 401/403 storm) until the AuthProvider cleaned it up — sometimes never.
   useEffect(() => {
     try {
       const stored = localStorage.getItem('rise-auth')
@@ -198,6 +202,14 @@ export default function RiseOSApp() {
       if (stored && userInfo) {
         const session = JSON.parse(stored)
         const info = JSON.parse(userInfo)
+        const expiresAt = typeof session.expires_at === 'number' ? session.expires_at : null
+        const expired = expiresAt !== null && expiresAt * 1000 < Date.now() + 30_000 // 30s skew
+        if (expired) {
+          // Stale token — clear it so the AuthProvider gives a clean login
+          localStorage.removeItem('rise-auth')
+          localStorage.removeItem('rise-user-info')
+          return
+        }
         if (session.access_token && !useRiseStore.getState().auth) {
           setAuth({
             isAuthenticated: true,

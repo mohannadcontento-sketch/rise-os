@@ -33,6 +33,16 @@ function clearStaleSession() {
     localStorage.removeItem('rise-auth')
     localStorage.removeItem('rise-user-info')
     localStorage.removeItem('rise-user-avatar')
+    // Also purge Supabase's own cached session (sb-<ref>-auth-token) so a
+    // dead session cannot be resurrected by supabase.auth.getSession() on
+    // the next page load — this is what caused "enters the app without
+    // login, but with no account".
+    const doomed: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('sb-') && k.includes('auth-token')) doomed.push(k)
+    }
+    doomed.forEach((k) => localStorage.removeItem(k))
   } catch { /* ignore */ }
   try {
     document.cookie.split(';').forEach(c => {
@@ -76,6 +86,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let name = user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم'
     try {
       const res = await fetch('/api/auth/session', { credentials: 'include' })
+      if (res.status === 401 || res.status === 403) {
+        // The server rejected the token (revoked/expired session) — treat
+        // the whole session as stale. Without this, users with a dead
+        // Supabase session still "enter" the app with an empty account.
+        return 'stale' as const
+      }
       if (res.ok) {
         const data = await res.json()
         if (data.user) {
@@ -83,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name = data.user.name || name
         }
       }
-    } catch { /* ignore */ }
+    } catch { /* network error — keep lenient behavior */ }
 
     return {
       isAuthenticated: true,
@@ -111,6 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           await syncSessionToCookie(session)
           const auth = await buildAuthFromSupabase(session.user, session)
+          if (auth === 'stale') {
+            // Dead session — sign out everywhere so the user gets a clean login
+            supabaseClient?.auth.signOut().catch(() => {})
+            clearStaleSession()
+            logout()
+            return
+          }
           if (mounted && auth) {
             localStorage.setItem('rise-user-info', JSON.stringify({
               id: session.user.id,
@@ -133,6 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (session?.user) {
               await syncSessionToCookie(session)
               const auth = await buildAuthFromSupabase(session.user, session)
+              if (auth === 'stale') {
+                supabaseClient?.auth.signOut().catch(() => {})
+                clearStaleSession()
+                logout()
+                return
+              }
               if (mounted && auth) {
                 localStorage.setItem('rise-user-info', JSON.stringify({
                   id: session.user.id,
@@ -160,9 +189,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       )
 
+      // IMPORTANT: also honor 'rise:session-expired' in production mode.
+      // This event is dispatched by api-fetch when a 401 survives the
+      // refresh attempt. Previously it was only handled in mock/dev mode,
+      // so a stale token could keep the user inside a ghost session
+      // (empty account, 401/403 console errors) with no forced logout.
+      const handleExpired = () => {
+        clearStaleSession()
+        logout()
+      }
+      window.addEventListener('rise:session-expired', handleExpired)
+
       return () => {
         mounted = false
         subscription.unsubscribe()
+        window.removeEventListener('rise:session-expired', handleExpired)
       }
     }
 
