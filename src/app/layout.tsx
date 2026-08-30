@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -92,6 +93,8 @@ export default function RootLayout({
               {children}
               <Toaster />
               <SonnerToaster position="top-center" richColors closeButton={false} />
+              {/* Vercel Analytics — privacy-friendly pageview/web-vitals tracking */}
+              <Analytics />
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
