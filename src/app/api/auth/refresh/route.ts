@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +34,7 @@ async function doRefresh(
                 .eq('id', data.user.id)
                 .single()
               const p = profile as { role?: string } | null
-              if (p?.role === 'admin') isAdmin = true
+              if (isAdminRole(p?.role)) isAdmin = true
             }
           } catch { /* ignore */ }
           return {

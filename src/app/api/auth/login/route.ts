@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, ADMIN_EMAIL } from '@/lib/supabase'
+import { getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, ADMIN_EMAIL, isAdminRole } from '@/lib/supabase'
 import { setAuthCookies } from '@/lib/cookie-auth'
 
 export const dynamic = 'force-dynamic'
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
           .eq('id', user.id)
           .single()
         const p = profile as { role?: string; avatar?: string } | null
-        if (p?.role === 'admin') isAdmin = true
+        if (isAdminRole(p?.role)) isAdmin = true
         avatar = p?.avatar || null
       }
     } catch { /* ignore */ }

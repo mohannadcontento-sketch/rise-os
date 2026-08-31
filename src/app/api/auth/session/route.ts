@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
 import { verifySupabaseToken } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +29,7 @@ async function checkAdminRole(userId: string, email: string | undefined): Promis
           .eq('id', userId)
           .single()
         const d = data as { role?: string } | null
-        if (d?.role === 'admin') return true
+        if (isAdminRole(d?.role)) return true
       }
     } catch { /* ignore */ }
   }

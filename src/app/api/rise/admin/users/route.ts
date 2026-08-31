@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, ADMIN_EMAIL } from '@/lib/supabase'
+import { getSupabaseAdmin, ADMIN_EMAIL, isAdminRole } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       name: p.name || 'مستخدم',
       avatar: p.avatar || null,
       createdAt: p.created_at,
-      isAdmin: p.role === 'admin' || p.email === ADMIN_EMAIL,
+      isAdmin: isAdminRole(p.role) || p.email === ADMIN_EMAIL,
       role: p.role || 'user',
     }))
 
@@ -67,11 +67,12 @@ export async function POST(request: NextRequest) {
 
     const sb = admin as any
 
-    // Update role in profiles table
+    // Update role in profiles table (normalize: 'Admin'/' admin' → 'admin')
     if (role) {
+      const normalizedRole = String(role).trim().toLowerCase()
       const { error } = await sb
         .from('profiles')
-        .update({ role })
+        .update({ role: normalizedRole })
         .eq('id', targetUserId)
       if (error) console.error('[admin/users] update role error:', error)
     }

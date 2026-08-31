@@ -20,6 +20,15 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 // Admin email
 export const ADMIN_EMAIL: string = process.env.ADMIN_EMAIL || ''
 
+/**
+ * ADMIN ROLE MATCH — تطبيع قيمة الدور قبل المقارنة.
+ * كان الفحص `role === 'admin'` حرفياً: "Admin" أو " admin" أو "ادمن"
+ * (عربي) لا يعتبر أدمن — فبدا المالك غير مرقّى رغم ضبط العمود.
+ */
+export function isAdminRole(role: unknown): boolean {
+  return String(role ?? '').trim().toLowerCase() === 'admin'
+}
+
 /** Check if Supabase is configured (real mode) */
 export function isSupabaseConfigured(): boolean {
   return !!(SUPABASE_URL && SUPABASE_ANON_KEY)

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isAdminRole } from '@/lib/supabase'
 
 // ============================================================
 // P3#3: Audit Logging — tracks admin actions for security
@@ -77,12 +78,12 @@ export async function isAdmin(userId: string): Promise<boolean> {
         .select('role')
         .eq('id', userId)
         .maybeSingle()
-      return (profile as any)?.role === 'admin'
+      return isAdminRole((profile as any)?.role)
     }
     // Mock mode
     const { db } = await import('@/lib/db')
     const user = await (db as any).user.findUnique({ where: { id: userId }, select: { role: true } })
-    return user?.role === 'admin'
+    return isAdminRole(user?.role)
   } catch {
     return false
   }
