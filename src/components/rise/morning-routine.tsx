@@ -644,21 +644,47 @@ export default function MorningRoutine() {
 
   const { refreshKey } = useDataRefresh()
 
+  // SEQUENCING GUARD: only the LATEST fetch may touch state. Without this,
+  // a slower GET fired before a save could resolve AFTER it and overwrite
+  // the user's fresh checks with older server data — items "did them and
+  // they reverted".
+  const loadSeqRef = useRef(0)
+  // Mirror of `saving` — fetchMorning checks the ref (state is stale inside
+  // async callbacks): while a save is in flight, a GET must NOT overwrite
+  // completedIds with older server data (rapid-toggle revert).
+  const savingRef = useRef(false)
+
+  const fetchMorning = useCallback(async () => {
+    const seq = ++loadSeqRef.current
+    try {
+      // TZ FIX: send the CLIENT's local date — the server used to pick
+      // "today" from its UTC clock, which is YESTERDAY for any request
+      // between 00:00–02:00 Cairo (checks looked "reverted").
+      const res = await apiFetch(`/api/rise/morning?date=${getTodayStr()}`)
+      if (!res.ok || seq !== loadSeqRef.current) return
+      const data = await res.json()
+      setLogs(data.logs || [])
+      // A save just fired / is firing — its own payload is fresher than
+      // anything this GET read. Don't clobber the user's checks.
+      if (savingRef.current) return
+      if (data.todayLog) {
+        setTodayLog(data.todayLog)
+        const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
+        setCompletedIds(new Set(items))
+        setStartedAt(data.todayLog.startedAt)
+      } else {
+        setTodayLog(null)
+        setCompletedIds(new Set())
+        setStartedAt(null)
+      }
+    } catch { /* ignore */ }
+  }, [])
+
   // Load data from API + scheduled tasks
   useEffect(() => {
     async function load() {
       try {
-        const res = await apiFetch(`/api/rise/morning`)
-        if (res.ok) {
-          const data = await res.json()
-          setLogs(data.logs || [])
-          if (data.todayLog) {
-            setTodayLog(data.todayLog)
-            const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
-            setCompletedIds(new Set(items))
-            setStartedAt(data.todayLog.startedAt)
-          }
-        }
+        fetchMorning()
 
         // Fetch today's scheduled tasks (tasks with dueDate = today and dueTime set)
         try {
@@ -685,27 +711,15 @@ export default function MorningRoutine() {
   // DAY ROLLOVER: when the calendar flips to a new day, reset the checklist
   // and refetch — the routine starts fresh every morning (no stale checks).
   useEffect(() => {
-    const handler = async () => {
+    const handler = () => {
       setCompletedIds(new Set())
       setTodayLog(null)
       setStartedAt(null)
-      try {
-        const res = await apiFetch(`/api/rise/morning`)
-        if (res.ok) {
-          const data = await res.json()
-          setLogs(data.logs || [])
-          if (data.todayLog) {
-            setTodayLog(data.todayLog)
-            const items: string[] = JSON.parse(data.todayLog.completedItems || '[]')
-            setCompletedIds(new Set(items))
-            setStartedAt(data.todayLog.startedAt)
-          }
-        }
-      } catch { /* ignore */ }
+      fetchMorning()
     }
     window.addEventListener('rise:day-changed', handler)
     return () => window.removeEventListener('rise:day-changed', handler)
-  }, [])
+  }, [fetchMorning])
 
   // Generate mock history for last 7 days if no logs
   const displayLogs = (() => {
@@ -717,6 +731,7 @@ export default function MorningRoutine() {
   const saveToAPI = useCallback(
     async (ids: Set<string>) => {
       setSaving(true)
+      savingRef.current = true
       const now = new Date().toISOString()
       const dateStr = getTodayStr()
 
@@ -752,6 +767,7 @@ export default function MorningRoutine() {
         toast.error('فشل الاتصال بالخادم')
       } finally {
         setSaving(false)
+        savingRef.current = false
       }
     },
     [startedAt, totalCount]

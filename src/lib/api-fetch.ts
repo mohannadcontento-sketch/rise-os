@@ -159,7 +159,7 @@ const MICRO_TTL_MS = 5000
 
 interface MicroEntry {
   status: number
-  json: any
+  body: string
   ts: number
 }
 
@@ -172,15 +172,13 @@ function clearGetCaches(): void {
   inflightGets.clear()
 }
 
-function synthGetResponse(entry: MicroEntry): Response {
-  return new Response(JSON.stringify(entry.json), {
-    status: entry.status,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-From-Cache': 'true',
-      'X-Rise-Dedupe': 'microcache',
-    },
-  })
+function synthGetResponse(entry: MicroEntry, fromCache: boolean, contentType = 'application/json'): Response {
+  const headers: Record<string, string> = { 'Content-Type': contentType }
+  if (fromCache) {
+    headers['X-From-Cache'] = 'true'
+    headers['X-Rise-Dedupe'] = 'microcache'
+  }
+  return new Response(entry.body, { status: entry.status, headers })
 }
 
 /** Extract the resource segment from an /api/rise/{resource} URL. */
@@ -304,7 +302,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     // Serve from micro-cache / share in-flight request
     const micro = microCache.get(fetchUrl)
     if (micro && Date.now() - micro.ts < MICRO_TTL_MS) {
-      return synthGetResponse(micro)
+      return synthGetResponse(micro, true)
     }
     const pending = inflightGets.get(fetchUrl)
     if (pending) return pending
@@ -393,7 +391,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   clearTimeout(timeoutId)
 
   // Cache successful GET responses
-  if (response.ok && (options.method === 'GET' || !options.method)) {
+  if (response.ok && CACHE_TTL_MS > 0 && (options.method === 'GET' || !options.method)) {
     const clone = response.clone()
     clone.json().then(data => setCache(url, data)).catch(() => {})
   }
@@ -483,16 +481,22 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   if (isGet) {
     const p = doFetch()
       .then(async (res) => {
-        // Store the micro entry BEFORE the shared promise resolves — if the
-        // parse happened after resolution, a GET arriving in that gap (the
-        // +200ms refreshKey wave) would miss BOTH layers and hit the network.
+        // BODY-ONCE FIX: read the body EXACTLY ONCE here and hand EVERY
+        // caller (single or N shared callers) a FRESH Response. Previously
+        // the raw Response was shared between concurrent callers — the 2nd
+        // .json() threw "Failed to execute 'json' on 'Response': body
+        // stream already read" (the phantom "إعادة المحاولة" screen that
+        // vanished on the first retry).
+        let body = ''
+        try { body = await res.text() } catch { return res }
         if (res.ok) {
-          try {
-            const json = await res.clone().json()
-            microCache.set(fetchUrl, { status: res.status, json, ts: Date.now() })
-          } catch { /* non-JSON body — skip caching */ }
+          microCache.set(fetchUrl, { status: res.status, body, ts: Date.now() })
         }
-        return res
+        return new Response(body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+        })
       })
       .finally(() => { inflightGets.delete(fetchUrl) })
     inflightGets.set(fetchUrl, p)

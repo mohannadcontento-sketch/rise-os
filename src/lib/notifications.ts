@@ -10,8 +10,19 @@ import { isNotificationEnabled, showBrowserNotification } from '@/lib/notificati
 // ============================================================
 
 // Push notification to server (for persistence)
+const CELEBRATION_PUSH_GAP_MS = 10 * 60 * 1000 // one stored celebration per type per 10 min
+let lastCelebrationPushAt = 0
+
 export async function pushNotification(data: { title: string; body?: string; type?: string; icon?: string; actionUrl?: string }) {
   try {
+    // ANTI-SPAM FIX: الجرس كان بيتملي بصف لكل إنجاز (10 مهام = 10 إشعارات).
+    // الاحتفالات الروتينية بتتخزن كحد أقصى مرة كل 10 دقايق — أما التذكيرات
+    // المجدولة (type: 'reminder') فهي مفيدة وبتعدي دايماً.
+    if ((data.type || 'success') === 'success') {
+      const now = Date.now()
+      if (now - lastCelebrationPushAt < CELEBRATION_PUSH_GAP_MS) return
+      lastCelebrationPushAt = now
+    }
     await apiPost('/api/rise/notifications', data)
   } catch { /* silent */ }
 }
@@ -27,6 +38,12 @@ function celebrate(opts: {
 }) {
   try {
     if (!isNotificationEnabled(opts.prefKey)) return
+    // ANTI-SPAM FIX: الازدواج السريع (إنهاء 5 مهام ورا بعض) كان ينتج 5
+    // toasts + 5 إشعارات متصفح + 5 صفوف في الجرس — بيتحول لمزعج.
+    // من نفس النوع: toast واحد كل 10 ثواني كافية كتغذية راجعة.
+    const now = Date.now()
+    if (now - (lastCelebrateAt[opts.prefKey] || 0) < CELEBRATE_MIN_GAP_MS) return
+    lastCelebrateAt[opts.prefKey] = now
     toast.success(opts.message, {
       description: opts.detail,
       duration: 4000,
@@ -43,6 +60,10 @@ function celebrate(opts: {
     // never break the UI
   }
 }
+
+// Throttle state for celebrate() — one celebration per type per 10s
+const CELEBRATE_MIN_GAP_MS = 10_000
+const lastCelebrateAt: Record<string, number> = {}
 
 // ─── Motivational message pools (50+ messages for variety) ───
 

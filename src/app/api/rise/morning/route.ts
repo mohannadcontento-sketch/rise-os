@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
-import { getToday, getLast30Days } from '@/lib/rise-utils'
+import { getTodayCairo, getLast30Days } from '@/lib/rise-utils'
 import { pickAllowed } from '@/lib/sanitize'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 
@@ -13,7 +13,13 @@ export async function GET(req: NextRequest) {
     setCurrentAuthToken(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
-    const today = getToday()
+    // TZ FIX: the client's Cairo-local date is authoritative when present —
+    // the server clock is UTC on Vercel, so a pure server-side "today" was
+    // YESTERDAY for any request between 00:00–02:00 Cairo. The checklist
+    // then loaded yesterday's log and the user's fresh checks "reverted".
+    const { searchParams } = new URL(req.url)
+    const dateParam = searchParams.get('date')
+    const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : getTodayCairo()
     const last30 = getLast30Days()
 
     const logs = await data.morningLogs.list(userId, last30)
@@ -39,8 +45,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const today = getToday()
-    const date = body.date || today
+    // Fallback when the client sends no date — Cairo-safe (server clock is UTC).
+    const date = body.date || getTodayCairo()
 
     // Remove date and userId from body — upsert handles them via parameters.
     // FIX: whitelist columns — legacy client fields (e.g. sleep_quality that

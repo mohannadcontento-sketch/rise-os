@@ -44,7 +44,10 @@ export async function POST(req: NextRequest) {
         if (user) {
           let newXp = (user.xp || 0) + xpGain
           let newLevel = user.level || 1
-          let newXpToNext = user.xpToNextLevel || calculateXpForLevel(1)
+          // BALANCE FIX: re-anchor to the NEW curve on every award so
+          // existing users migrate to it without a migration (old stored
+          // xp_to_next_level values were computed with the old 1.15 factor).
+          let newXpToNext = calculateXpForLevel(newLevel)
           let leveled = false
           while (newXp >= newXpToNext) {
             newXp -= newXpToNext
@@ -133,19 +136,17 @@ export async function POST(req: NextRequest) {
     // Fetch current user XP data
     let currentXp = 0
     let currentLevel = 1
-    let currentXpToNext = calculateXpForLevel(1)
 
     try {
       const { data: profile, error } = await client
         .from('profiles')
-        .select('xp, level, xp_to_next_level')
+        .select('xp, level')
         .eq('id', userId)
         .single()
 
       if (!error && profile) {
         currentXp = profile.xp || 0
         currentLevel = profile.level || 1
-        currentXpToNext = profile.xp_to_next_level || calculateXpForLevel(currentLevel)
       }
     } catch {
       // Profile not found — use defaults
@@ -153,9 +154,12 @@ export async function POST(req: NextRequest) {
 
     let newXp = currentXp + xpGain
     let newLevel = currentLevel
-    let newXpToNext = currentXpToNext
     let leveled = false
 
+    // BALANCE FIX: always re-anchor the requirement to the CURRENT curve
+    // (old profiles stored xp_to_next_level computed with the old 1.15
+    // factor) — no migration needed, self-corrects on the next award.
+    let newXpToNext = calculateXpForLevel(newLevel)
     while (newXp >= newXpToNext) {
       newXp -= newXpToNext
       newLevel += 1

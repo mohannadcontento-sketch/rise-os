@@ -80,8 +80,14 @@ export function getGreeting(): string {
   return 'طاب مساؤك'
 }
 
+/**
+ * XP required to advance FROM `level` to level+1.
+ * BALANCE FIX: 1.15 → 1.35 — الطلب كان "خليها أصعب شوية".
+ * بالمعامل القديم المستخدم النشط (~300 XP/يوم) كان بيوصل مستوى 10 في أسبوع،
+ * دلوقتي ~أسبوعين، والمستويات المتقدمة بتتطلب استمرارية مش يوم واحد مجنون.
+ */
 export function calculateXpForLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.15, level - 1))
+  return Math.floor(100 * Math.pow(1.35, level - 1))
 }
 
 /* ══════════════════════════════════════════════════════════════════════

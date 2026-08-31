@@ -224,10 +224,12 @@ export default function Reading() {
     }
   }
 
-  const handleLogReading = (bookId: string) => {
+  const handleLogReading = (bookId: string, pages = 1) => {
     const book = books.find((b) => b.id === bookId)
     if (!book || !book.totalPages) return
-    const newPage = Math.min(book.currentPage + 1, book.totalPages)
+    // UX FIX: كانت +1 لكل ضغطة — غير عملية لكتاب 300 صفحة. الأزرار السريعة
+    // دلوقتي بتقبل عدد صفحات (+10 / +25) والإدخال المباشر للصفحة الحالية موجود.
+    const newPage = Math.min(book.currentPage + Math.max(1, pages), book.totalPages)
     const progress = Math.min(100, Math.round((newPage / book.totalPages) * 100))
     const status = progress >= 100 ? 'completed' : 'reading'
     handleUpdateBook(bookId, {
@@ -238,13 +240,15 @@ export default function Reading() {
     })
     if (progress >= 100) playSound('complete')
     else playSound('save')
-    toast.success(progress >= 100 ? '🎉 أنهيت الكتاب!' : `صفحة ${arabicNum(newPage)}`)
+    toast.success(progress >= 100 ? '🎉 أنهيت الكتاب!' : `+${arabicNum(newPage - book.currentPage)} صفحة — أنت في صفحة ${arabicNum(newPage)}`)
   }
 
   const handleUpdateProgress = (bookId: string) => {
-    const page = parseInt(editPage[bookId] || '0')
+    const raw = parseInt(editPage[bookId] || '0', 10)
     const book = books.find((b) => b.id === bookId)
-    if (!book || !book.totalPages) return
+    if (!book || !book.totalPages || isNaN(raw)) return
+    // CLAMP: قيمة خارج [1, totalPages] كانت تبوظ شريط التقدم
+    const page = Math.min(Math.max(1, raw), book.totalPages)
     const progress = Math.min(100, Math.round((page / book.totalPages) * 100))
     const status = progress >= 100 ? 'completed' : 'reading'
     handleUpdateBook(bookId, {
@@ -466,14 +470,22 @@ export default function Reading() {
                         </div>
                         {featured.author && <p className="text-sm text-muted-foreground">{featured.author}</p>}
                       </div>
-                      <motion.div whileTap={{ scale: 0.95 }}>
+                      <motion.div whileTap={{ scale: 0.95 }} className="shrink-0 flex items-center gap-1.5">
                         <Button
-                          onClick={() => handleLogReading(featured.id)}
-                          className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink shrink-0"
+                          onClick={() => handleLogReading(featured.id, 10)}
+                          className="gap-2 bg-forest text-paper-soft dark:bg-lime dark:text-ink"
                           size="sm"
                         >
                           <Plus className="w-4 h-4" />
-                          تسجيل قراءة
+                          +١٠ صفحة
+                        </Button>
+                        <Button
+                          onClick={() => handleLogReading(featured.id, 25)}
+                          variant="outline"
+                          size="sm"
+                          className="border-gold/40 text-gold hover:bg-gold/10"
+                        >
+                          +٢٥
                         </Button>
                       </motion.div>
                     </div>
@@ -494,6 +506,29 @@ export default function Reading() {
                           transition={{ duration: 0.8, ease: 'easeOut' }}
                         />
                       </div>
+                    </div>
+
+                    {/* EXACT PAGE INPUT: إدخال مباشر — "وصلت لصفحة كام" — بدل
+                        الضغط صفحة صفحة (كان غير عملي مع الكتب الكبيرة) */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={featured.totalPages || undefined}
+                        placeholder={`وصلت لصفحة… (الحالي ${featured.currentPage})`}
+                        value={editPage[featured.id] ?? ''}
+                        onChange={(e) => setEditPage((prev) => ({ ...prev, [featured.id]: e.target.value }))}
+                        className="h-9 text-sm num flex-1 bg-background"
+                        dir="ltr"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUpdateProgress(featured.id)}
+                        className="h-9 border-gold/40 text-gold hover:bg-gold/10 shrink-0"
+                      >
+                        حدّث
+                      </Button>
                     </div>
 
                     {/* Meta info */}
@@ -536,11 +571,11 @@ export default function Reading() {
                           </div>
                           <motion.button
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => handleLogReading(book.id)}
-                            className="shrink-0 p-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold/20 transition-colors"
-                            title="تسجيل صفحة"
+                            onClick={() => handleLogReading(book.id, 10)}
+                            className="shrink-0 px-2 py-1.5 rounded-lg bg-gold/10 text-gold hover:bg-gold/20 transition-colors text-xs font-bold num"
+                            title="تسجيل ١٠ صفحات"
                           >
-                            <Plus className="w-3.5 h-3.5" />
+                            +١٠
                           </motion.button>
                         </div>
                         <div className="space-y-1">

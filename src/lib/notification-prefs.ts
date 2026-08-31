@@ -79,6 +79,10 @@ export async function requestBrowserPermission(): Promise<BrowserPermissionState
  * Fire a browser notification. Shows even when the tab IS focused when
  * `force` is true (used by the Settings test button); otherwise only when
  * the tab is hidden/unfocused so the user isn't notified twice.
+ *
+ * QUIET HOURS: 23:00–07:00 local — celebrations are suppressed (the user
+ * called them "ممكن تتحول لمزعج"). Explicitly user-scheduled reminders
+ * (force: true) still pass — the user chose those times themselves.
  */
 export function showBrowserNotification(
   title: string,
@@ -88,6 +92,7 @@ export function showBrowserNotification(
     if (typeof window === 'undefined' || !('Notification' in window)) return false
     if (Notification.permission !== 'granted') return false
     if (!options?.force && document.hasFocus()) return false
+    if (!options?.force && isQuietHours()) return false
     const { force: _force, ...opts } = options || {}
     new Notification(title, {
       icon: '/icon-192.png',
@@ -99,4 +104,10 @@ export function showBrowserNotification(
   } catch {
     return false
   }
+}
+
+/** 23:00–07:00 local — no celebration browser notifications. */
+export function isQuietHours(): boolean {
+  const h = new Date().getHours()
+  return h >= 23 || h < 7
 }

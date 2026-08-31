@@ -22,7 +22,8 @@ export function calculateLevel(xp: number): {
 }
 
 function xpForLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.15, level - 1))  // FIX: Match rise-utils.ts formula
+  // BALANCE FIX: 1.35 — must match rise-utils.calculateXpForLevel exactly
+  return Math.floor(100 * Math.pow(1.35, level - 1))
 }
 
 /* ────────────── Badges ────────────── */
