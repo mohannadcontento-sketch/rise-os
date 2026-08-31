@@ -26,7 +26,9 @@ export const ADMIN_EMAIL: string = process.env.ADMIN_EMAIL || ''
  * (عربي) لا يعتبر أدمن — فبدا المالك غير مرقّى رغم ضبط العمود.
  */
 export function isAdminRole(role: unknown): boolean {
-  return String(role ?? '').trim().toLowerCase() === 'admin'
+  const v = String(role ?? '').trim().toLowerCase()
+  // 'admin' + الصيغة العربية الشائعة "ادمن" (لو كُتبت يدوياً في جدول profiles)
+  return v === 'admin' || v === 'ادمن'
 }
 
 /** Check if Supabase is configured (real mode) */
