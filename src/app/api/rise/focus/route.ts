@@ -16,7 +16,11 @@ const FocusCreateSchema = z.object({
   startedAt: z.string().optional().nullable(),
   completedAt: z.string().optional().nullable(),
   completed: z.boolean().optional(),
+  date: z.string().optional(),
 }).strict()
+
+// DB requires started_at NOT NULL — default it server-side so minimal API
+// payloads no longer answer 500 (Task 24 robustness fix; UI always sends it)
 
 const FocusUpdateSchema = z.object({
   id: z.string(),
@@ -59,7 +63,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const session = await data.focusSessions.create(userId, parsed.data)
+    const session = await data.focusSessions.create(userId, {
+      ...parsed.data,
+      startedAt: parsed.data.startedAt || new Date().toISOString(),
+    })
     bustAggregateCache(userId)
     return NextResponse.json(session)
   } catch (error) {

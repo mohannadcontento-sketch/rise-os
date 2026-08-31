@@ -52,11 +52,15 @@ export async function POST(req: NextRequest) {
     // FIX: whitelist columns — legacy client fields (e.g. sleep_quality that
     // no migration defines) used to break the upsert with PGRST204.
     const { date: _d, userId: _u, ...upsertData } = body
-    const result = await data.morningLogs.upsert(
-      userId,
-      date,
-      pickAllowed(upsertData, ['score', 'completedItems', 'totalItems', 'startedAt', 'completedAt'])
-    )
+    const allowed = pickAllowed(upsertData, ['score', 'completedItems', 'totalItems', 'startedAt', 'completedAt'])
+    // Task 24: empty payload (everything filtered) → clear 400 instead of 500
+    if (!allowed || Object.keys(allowed).length === 0) {
+      return NextResponse.json(
+        { error: 'لا توجد حقول صالحة للحفظ — المسموح: score, completedItems, totalItems, startedAt, completedAt' },
+        { status: 400 },
+      )
+    }
+    const result = await data.morningLogs.upsert(userId, date, allowed)
     bustAggregateCache(userId)
 
     return NextResponse.json(result)
