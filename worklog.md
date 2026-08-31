@@ -97,3 +97,18 @@ Work Log:
 
 Stage Summary:
 - Owner checklist: (1) open /api/auth/session — if isAdmin:false run `update profiles set role='admin' where email='mohannadcontento@gmail.com';` (2) refresh app → 'لوحة الإدارة' appears at sidebar bottom (3) error_logs migration 011 still pending if health tab shows notice
+
+---
+Task ID: 22
+Agent: Super Z (main)
+Task: Owner diagnostic /api/auth/session returned {"user":null} — admin panel still hidden
+
+Work Log:
+- Diagnosis: session route reads ONLY the httpOnly cookie (or Authorization header). The owner's session predates the cookie system — app works via apiFetch Bearer header, but the session route saw no cookie → user:null → isAdmin false forever regardless of profiles.role
+- Fix: auth-provider buildAuthFromSupabase now sends Authorization: Bearer explicitly (session.access_token → localStorage rise-auth fallback) — session identity works cookie-less
+- Settings: inline "الصلاحية: أدمن/مستخدم عادي" row for in-app self-diagnosis
+- Verified on prod: WITH Bearer header → user identified; without → null (old path). tsc/build clean
+- Commit 2a2d0bb pushed
+
+Stage Summary:
+- Owner next step: plain refresh of the app → auth-provider rebuild → panel appears (assuming profiles.role value matches after Task 21 normalization). Fallback re-login also refreshes cookie+role
