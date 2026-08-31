@@ -81,3 +81,19 @@ Stage Summary:
 - PRODUCTION VERIFIED (scripts/verify-prod-20.js): 25/25 checks — signup→habit/task/journal CRUD→dashboard sanity (tasks=1, habits=1, counters=1, scoreBreakdown regression guard)→delete-all no-body=400 / wrong-pw=403 / wrong-email=403 / correct-credentials=200 deleted=5→wipe verified empty→error-log ok→admin routes (health/errors/users) all 403 for regular users
 - Note: first E2E run hit 404 on new admin routes (deploy still rolling); re-probe after settle → 403 as designed, then clean 25/25 full run
 - Commits: 281c5f6 (Task 20) pushed to origin/main
+
+---
+Task ID: 21
+Agent: Super Z (main)
+Task: Owner set profiles.role manually but admin panel never appears on the site
+
+Work Log:
+- Server chain verified healthy: /api/auth/session → checkAdminRole reads profiles.role; auth-provider rebuilds auth from it on every load
+- ROOT CAUSE: literal comparison `role === 'admin'` — variants ('Admin', ' admin', Arabic 'ادمن') rejected → owner never recognized
+- Fix: shared isAdminRole() in supabase.ts (trim + lowercase + Arabic 'ادمن') applied in session/login/refresh/audit.isAdmin/admin-users GET; role writes normalized in admin-users POST
+- Diagnostic given to owner: open /api/auth/session while logged in → isAdmin true/false; if false run exact SQL update; then plain app refresh shows the panel
+- Verified: tsc clean, build OK, prod probe: session route returns isAdmin=false for regular user (correct)
+- Commits: 794fe86 + 10d9339 pushed
+
+Stage Summary:
+- Owner checklist: (1) open /api/auth/session — if isAdmin:false run `update profiles set role='admin' where email='mohannadcontento@gmail.com';` (2) refresh app → 'لوحة الإدارة' appears at sidebar bottom (3) error_logs migration 011 still pending if health tab shows notice
