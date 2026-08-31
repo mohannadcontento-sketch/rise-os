@@ -112,3 +112,21 @@ Work Log:
 
 Stage Summary:
 - Owner next step: plain refresh of the app → auth-provider rebuild → panel appears (assuming profiles.role value matches after Task 21 normalization). Fallback re-login also refreshes cookie+role
+
+---
+Task ID: 23
+Agent: Super Z (main)
+Task: Upgrade admin system to "Admin Pro" — bigger, stronger, professional
+
+Work Log:
+- Overview tab (default): KPIs (total/active-today/weekly-engagement%/new-7d), content volume, 7-day error bars, recent signups, latest admin actions; auto-refresh 90s; /api/rise/admin/overview
+- Account suspension: migration 012 (profiles.suspended + suspended_at + notifications type index); requireAuth enforces with 5-min per-instance cache (fail-open when migration pending); login → 423 Arabic message; session flag → client force-logout; suspension cache bust on action; admin/self protection on suspend+delete
+- Broadcast: POST /admin/broadcast → 📣 notifications to ALL users (chunks of 500) + audit; per-user direct messages via users POST action=notify
+- User 360: GET /admin/users?userId= → profile + 10 content counters + last activity; users POST now action-based (set-role | suspend | unsuspend | notify) with audit on every op
+- Audit trail: dedicated tab + /admin/audit (reads notifications type=audit, resolves admin names); logAudit wired into every admin operation
+- Verified: tsc clean, eslint clean, build OK; prod probe after deploy: overview/broadcast/audit + users?detail all 403 for regular users (routes live + guarded)
+- Commits: 66f3312 pushed
+
+Stage Summary:
+- Owner still needs migrations: 011_error_logs.sql + 012_admin_pro.sql in Supabase SQL editor (suspension/broadcast fail-open or error-toast until then)
+- Suspension worst-case lag: ≤5 min on stale serverless instances; instant on the instance that performed the action
