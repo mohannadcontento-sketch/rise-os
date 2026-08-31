@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
-import { getToday, getLast30Days, getWeekDays, isoToCairoDate, taskCompletedDay, computeStreakFromActivity, getTodayCairo } from '@/lib/rise-utils'
+import { getToday, getLast30Days, getWeekDays, isoToCairoDate, taskCompletedDay, computeStreakFromActivity, getTodayCairo, calculateXpForLevel } from '@/lib/rise-utils'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 
 export const dynamic = 'force-dynamic'
@@ -258,7 +258,11 @@ async function computeDashboard(userId: string, req: NextRequest) {
       longestStreak: Math.max(userProfile?.longestStreak || 0, liveStreak),
       totalFocusMin: liveTotalFocusMin,
       totalTasksDone: liveTotalTasksDone,
-      xpToNextLevel: userProfile?.xpToNextLevel || 100,
+      // SNAKE_CASE FIX + CURVE ANCHOR: profiles rows come back with
+      // snake_case keys, so userProfile.xpToNextLevel was ALWAYS undefined
+      // in Supabase mode → the XP progress bar denominator was stuck at 100
+      // for every level. Recompute from the authoritative curve instead.
+      xpToNextLevel: calculateXpForLevel(userProfile?.level || 1),
       avatar: userProfile?.avatar || null,
     },
     today: {

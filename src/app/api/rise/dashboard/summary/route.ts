@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { data, setCurrentAuthToken } from '@/lib/data'
 import { withAggregateCache } from '@/lib/aggregate-cache'
-import { taskCompletedDay, getTodayCairo } from '@/lib/rise-utils'
+import { taskCompletedDay, getTodayCairo, calculateXpForLevel } from '@/lib/rise-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,7 +50,9 @@ async function computeSummary(userId: string, date: string) {
       name: userProfile.name,
       level: userProfile.level,
       xp: userProfile.xp,
-      xpToNextLevel: userProfile.xpToNextLevel,
+      // SNAKE_CASE FIX: same bug as the main dashboard — the camelCase read
+      // was always undefined in Supabase mode. Curve-anchored instead.
+      xpToNextLevel: calculateXpForLevel(userProfile.level || 1),
       streak: userProfile.streak,
       totalFocusMin: userProfile.totalFocusMin,
       totalTasksDone: userProfile.totalTasksDone,
