@@ -66,6 +66,25 @@ export async function POST(request: NextRequest) {
         }
 
         if (data.session) {
+          // ADMIN BOOTSTRAP FIX: isAdmin كانت علامة واجهة فقط — profiles.role
+          // ما كانش بيتكتب أبداً، فـ requireAdmin() (اللي بيفحص profiles.role)
+          // كان بيرجّع 403 دائماً حتى لو الإيميل مطابق لـ ADMIN_EMAIL.
+          // دلوقتي الترقية بتحصل على السيرفر بعميل الأدمن لحظة التسجيل.
+          if (email === ADMIN_EMAIL) {
+            try {
+              const { getSupabaseAdmin } = await import('@/lib/supabase')
+              const adminClient = await getSupabaseAdmin()
+              if (adminClient) {
+                await (adminClient as any)
+                  .from('profiles')
+                  .update({ role: 'admin' })
+                  .eq('id', user.id)
+              }
+            } catch (e) {
+              console.error('[auth/signup] admin bootstrap failed:', e)
+            }
+          }
+
           const userInfo = {
             id: user.id,
             email: user.email || email,

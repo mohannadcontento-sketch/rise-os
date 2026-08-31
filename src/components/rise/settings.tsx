@@ -61,7 +61,7 @@ import {
 import { useTheme } from 'next-themes'
 import { useRiseStore } from '@/store/app-store'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
+import { apiFetch, apiPost } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { playSound } from '@/lib/sounds'
 import { AVATARS, type AvatarItem } from '@/lib/avatars'
@@ -330,22 +330,47 @@ export default function Settings() {
   }
 
   const [deletingAll, setDeletingAll] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
+  /** بريد المستخدم الحالي من localStorage (نفس مصدر getAuthHeaders) */
+  function getUserEmail(): string {
+    try {
+      const info = localStorage.getItem('rise-user-info')
+      if (info) return JSON.parse(info).email || ''
+    } catch { /* ignore */ }
+    return ''
+  }
+
+  // DELETE-ALL FIX: كان بينادي apiDelete بدون جسم إطلاقاً بينما السيرفر يطلب
+  // إعادة إثبات الهوية {email, password, confirmDelete} → 400 دائماً
+  // ("الحذف مش شغال"). دلوقتي بنبعت بيانات إعادة التأكيد + رسالة خطأ السيرفر.
   const handleResetData = async () => {
+    setDeleteError('')
+    const email = getUserEmail()
+    if (!email || !deletePassword) {
+      setDeleteError('اكتب كلمة المرور للمتابعة')
+      return
+    }
     setDeletingAll(true)
     try {
-      const res = await apiDelete('/api/rise/delete-all')
+      const res = await apiFetch('/api/rise/delete-all', {
+        method: 'DELETE',
+        body: JSON.stringify({ email, password: deletePassword, confirmDelete: true }),
+      })
+      const result = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error('فشل حذف البيانات من الخادم')
+        setDeleteError(result?.error || 'فشل حذف البيانات من الخادم')
+        toast.error(result?.error || 'فشل حذف البيانات من الخادم')
         return
       }
-      const result = await res.json().catch(() => ({}))
 
       const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-') && k !== 'rise-auth' && k !== 'rise-user-info')
       allKeys.forEach((key) => localStorage.removeItem(key))
       setSettings(defaultSettings)
       setResetDialogOpen(false)
       setConfirmText('')
+      setDeletePassword('')
       setStorageSize({ used: 0, total: 10 * 1024 * 1024, percent: 0, counts: {} })
 
       const msg = result.deleted >= 0
@@ -353,6 +378,7 @@ export default function Settings() {
         : 'تم حذف جميع البيانات من قاعدة البيانات'
       toast.success(msg)
     } catch {
+      setDeleteError('فشل الاتصال بالخادم')
       toast.error('فشل حذف البيانات')
     } finally {
       setDeletingAll(false)
@@ -1059,7 +1085,7 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground mt-0.5">سيتم حذف جميع بياناتك من قاعدة البيانات نهائياً</p>
                 </div>
               </div>
-              <Dialog open={resetDialogOpen} onOpenChange={(open) => { setResetDialogOpen(open); if (!open) setConfirmText('') }}>
+              <Dialog open={resetDialogOpen} onOpenChange={(open) => { setResetDialogOpen(open); if (!open) { setConfirmText(''); setDeletePassword(''); setDeleteError('') } }}>
                 <DialogTrigger asChild>
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button variant="outline" size="sm" className="text-xs border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 shrink-0">
@@ -1089,6 +1115,24 @@ export default function Settings() {
                       dir="ltr"
                       autoFocus
                     />
+                    {/* إعادة إثبات الهوية — السيرفر يرفض الحذف بدون كلمة المرور */}
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-muted-foreground">
+                        اكتب كلمة مرور حسابك (<span dir="ltr" className="font-medium text-foreground">{getUserEmail() || '—'}</span>) للمتابعة:
+                      </p>
+                      <Input
+                        type="password"
+                        placeholder="كلمة المرور"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        className="h-12 rounded-xl neo-input"
+                        dir="ltr"
+                        autoComplete="current-password"
+                      />
+                      {deleteError && (
+                        <p className="text-xs text-destructive font-medium">{deleteError}</p>
+                      )}
+                    </div>
                     <DialogFooter className="gap-2 mt-2">
                       <DialogClose asChild>
                         <Button variant="outline" className="text-sm">إلغاء</Button>
@@ -1096,7 +1140,7 @@ export default function Settings() {
                       <Button
                         onClick={handleResetData}
                         className="bg-destructive hover:bg-destructive/90 text-white text-sm"
-                        disabled={confirmText !== 'تأكيد' || deletingAll}
+                        disabled={confirmText !== 'تأكيد' || !deletePassword || deletingAll}
                       >
                         {deletingAll ? (
                           <>

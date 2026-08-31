@@ -7,6 +7,7 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { PWAInit } from "@/components/pwa-init";
 import { QueryProvider } from "@/components/query-provider";
 import { PerformanceMonitor } from "@/components/performance-monitor";
+import { ErrorCapture } from "@/components/error-capture";
 import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
@@ -90,6 +91,7 @@ export default function RootLayout({
             <AuthProvider>
               <PWAInit />
               <PerformanceMonitor />
+              <ErrorCapture />
               {children}
               <Toaster />
               <SonnerToaster position="top-center" richColors closeButton={false} />

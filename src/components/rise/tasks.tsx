@@ -30,6 +30,8 @@ import {
   Lock,
   Link2,
   GripVertical,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
 import { RainbowCheckbox } from '@/components/rise/kit-v2'
 import { NeoField } from '@/components/rise/neo'
@@ -263,6 +265,9 @@ export function Tasks() {
   // Calendar state
   const [calendarMonth, setCalendarMonth] = useState(new Date())
 
+  // TASK 20: فشل جلب صامت كان يخلي المستخدم يظن المهام "اختفيت" — لافتة ظاهرة مع زر إعادة
+  const [fetchFailed, setFetchFailed] = useState(false)
+
   const fetchData = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/rise/tasks`)
@@ -271,14 +276,19 @@ export function Tasks() {
         // Just set loading to false and keep showing whatever we already have.
         // Previously, a 503/network error would silently set tasks=[] causing
         // the "tasks disappear" bug.
+        // TASK 20: also surface a visible retry banner — silent staleness made
+        // users think tasks " vanished" with no way to recover except re-opening.
+        setFetchFailed(true)
         setLoading(false)
         return
       }
       const data = await res.json()
+      setFetchFailed(false)
       setTasks(data.tasks || [])
       setProjects(data.projects || [])
     } catch {
       // Network/parse error — preserve existing state, don't wipe it
+      setFetchFailed(true)
     } finally {
       setLoading(false)
     }
@@ -928,6 +938,20 @@ export function Tasks() {
   /* ────────────── Render: Main ────────────── */
   return (
     <div className="space-y-5">
+      {/* TASK 20: لافتة فشل الجلب — بدل الصمت الذي جعل المستخدم يظن المهام اختفت */}
+      {fetchFailed && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-gold shrink-0" />
+            <p className="text-xs text-foreground">تعذر تحميل أحدث بيانات المهام — المعلومات المعروضة قد لا تكون محدثة.</p>
+          </div>
+          <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs border-gold/50 hover:bg-gold/10" onClick={fetchData}>
+            <RefreshCw className="w-3.5 h-3.5 me-1" />
+            إعادة المحاولة
+          </Button>
+        </div>
+      )}
+
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         {/* ═══ Scope switch: مهامي / مهام المشاريع ═══ */}
