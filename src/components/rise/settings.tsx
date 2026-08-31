@@ -627,6 +627,15 @@ export default function Settings() {
                   <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">البريد</Label>
                   <p className="text-sm text-muted-foreground" dir="ltr">{auth?.userEmail || 'user@riseos.app'}</p>
                 </div>
+                {/* صلاحية الأدمن — تشخيص ذاتي للمالك بلا روابط خارجية */}
+                <div>
+                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">الصلاحية</Label>
+                  <p className="text-sm">
+                    {auth?.isAdmin
+                      ? <span className="text-emerald-accent font-semibold">أدمن — لوحة الإدارة في القائمة الجانبية</span>
+                      : <span className="text-muted-foreground">مستخدم عادي</span>}
+                  </p>
+                </div>
                 {/* Stats Row */}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="pill pill-success">

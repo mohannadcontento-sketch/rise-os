@@ -85,7 +85,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let isAdmin = false
     let name = user.user_metadata?.name || user.email?.split('@')[0] || 'مستخدم'
     try {
-      const res = await fetch('/api/auth/session', { credentials: 'include' })
+      // COOKIE-LESS FIX: /api/auth/session used to rely on the httpOnly cookie
+      // only. Sessions established BEFORE the cookie system (or where cookie
+      // sync failed) worked fine via the Authorization header in apiFetch —
+      // but this route returned {user:null} → isAdmin stayed false forever,
+      // so the owner never saw the admin panel despite profiles.role='admin'.
+      // Now we pass the token explicitly (session → localStorage fallback).
+      const token = session?.access_token
+        || (() => { try { return JSON.parse(localStorage.getItem('rise-auth') || 'null')?.access_token } catch { return null } })()
+      const res = await fetch('/api/auth/session', {
+        credentials: 'include',
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      })
       if (res.status === 401 || res.status === 403) {
         // The server rejected the token (revoked/expired session) — treat
         // the whole session as stale. Without this, users with a dead
