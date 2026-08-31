@@ -1,0 +1,302 @@
+[
+  {
+    "name": "A1. signup account A",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A2. signup account B (for IDOR tests)",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A3. task create",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A4. task list",
+    "ok": true,
+    "detail": "status=200 n=1"
+  },
+  {
+    "name": "A5. task update+complete",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A6. task delete (query param)",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A7. habit create",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A8. habit list",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A9. habit update",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A10. journal create",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A10b. journal mood:string → 400 (was 500)",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "A11. journal list",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A12. morning routine save",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A12b. morning unknown-fields → 400 (was 500)",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "A13. focus session log",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A13b. focus minimal payload → 200 (was 500)",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A14. goal create",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A15. project create",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A16. finance expense create",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A17. budget upsert (PUT array)",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A18. dashboard aggregate",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A19. dashboard scoreBreakdown present",
+    "ok": true,
+    "detail": "score=28"
+  },
+  {
+    "name": "A20. weekly chart",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A21. dashboard summary",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A22. dashboard recent",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A23. productivity-score parity",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A24. user name update",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A25. notifications list",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A26. data export",
+    "ok": true,
+    "detail": "status=200 bytes=2012"
+  },
+  {
+    "name": "A27. rise health",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "A28. earn-xp",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "B1. malformed JSON → 400, not 500",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "B2. empty body → 4xx",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "B3. wrong types rejected (Zod)",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "B4. negative amount rejected",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "B5. XSS payload accepted-or-rejected sanely (no 500)",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "B6. SQLi payload no 500 + table alive",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "B7. tasks table still functional after SQLi",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "B8. unicode/emoji/RTL roundtrip",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "B9. 10KB title handled (accepted or 4xx, no 5xx)",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "B10. delete non-existent id → sane code",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "B11. unknown route → 404",
+    "ok": true,
+    "detail": "status=404"
+  },
+  {
+    "name": "B12. wrong method on GET route → 405 or 400",
+    "ok": true,
+    "detail": "status=405"
+  },
+  {
+    "name": "C1. all 20 protected routes deny anonymous",
+    "ok": true,
+    "detail": "all 401/403"
+  },
+  {
+    "name": "C2. forged JWT rejected",
+    "ok": true,
+    "detail": "status=401"
+  },
+  {
+    "name": "C3. garbage token rejected",
+    "ok": true,
+    "detail": "status=401"
+  },
+  {
+    "name": "C4. admin routes 403 for regular user (6/6)",
+    "ok": true,
+    "detail": "all 403"
+  },
+  {
+    "name": "C4b. POST broadcast as regular user → 403",
+    "ok": true,
+    "detail": "status=403"
+  },
+  {
+    "name": "C5. IDOR: B cannot see A tasks in list",
+    "ok": true,
+    "detail": "B list n=0"
+  },
+  {
+    "name": "C6. IDOR: B cannot delete A task",
+    "ok": true,
+    "detail": "B attempt status=200"
+  },
+  {
+    "name": "C7. owner can still delete own task after IDOR attempt",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "C8. session cookie HttpOnly+Secure+SameSite",
+    "ok": true,
+    "detail": "rise-access=eyJhbGciOiJFUzI1NiIsImtpZCI6ImQ2ZGE2NTY1LWYzNmItNGU3MS05N2Q3LWQ4MDg5NTkxMWU2OSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ"
+  },
+  {
+    "name": "C9a. HSTS present",
+    "ok": true,
+    "detail": "max-age=31536000; includeSubDomains; preload"
+  },
+  {
+    "name": "C9b. X-Content-Type-Options nosniff",
+    "ok": true,
+    "detail": "nosniff"
+  },
+  {
+    "name": "C9c. clickjacking protection (XFO/CSP frame)",
+    "ok": true,
+    "detail": "DENY"
+  },
+  {
+    "name": "C10. brute-force: zero successes + rate-limit engaged (429)",
+    "ok": true,
+    "detail": "statuses=[401,401,401,401,401,401,401,401,429,401,429,429,429,429,429]"
+  },
+  {
+    "name": "C11. weak password rejected",
+    "ok": true,
+    "detail": "status=400"
+  },
+  {
+    "name": "C12. duplicate signup rejected (409/4xx)",
+    "ok": true,
+    "detail": "status=409"
+  },
+  {
+    "name": "Z1. cleanup account A (delete-all re-auth)",
+    "ok": true,
+    "detail": "status=200"
+  },
+  {
+    "name": "Z2. cleanup account B (delete-all re-auth)",
+    "ok": true,
+    "detail": "status=200"
+  }
+]

@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://grafana.com/load-testing/types-of-load-testing",
+    "name": "Types of load testing",
+    "snippet": "Load testing types: best practices · 1. Start with a smoke test · 2. The specifics depend on your use case · 3. Aim for simple designs and reproducible results.",
+    "host_name": "grafana.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://k6.io",
+    "name": "Grafana k6: Load testing for engineering teams",
+    "snippet": "Verify that applications can handle the expected traffic. Different goals require different tests: stress tests, spike tests, soak tests , smoke tests, etc.",
+    "host_name": "k6.io",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/QualityAssurance/comments/wmnyjm/load_testing_types_load_stress_soak_spike",
+    "name": "load, stress, soak, spike. Examples in k6 load testing tool",
+    "snippet": "Load testing is a well-known technique of software testing . Load testing types: load , stress , soak , spike . Examples in k6 load testing tool. I' ...",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.heizen.work/blogs/designing-reliable-load-tests-with-k6",
+    "name": "Designing Reliable Load Tests with k6",
+    "snippet": "This guide explores load testing and K6 , a powerful tool that simplifies the process of performance testing. We will cover the fundamentals of load testing and ...",
+    "host_name": "www.heizen.work",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.palantir.com/t/how-can-we-perform-automated-performance-testing-smoke-load-stress-spike-soak-for-a-palantir-foundry-application/7143",
+    "name": "How can we perform automated performance testing",
+    "snippet": "7 days ago — Spike testing – simulate a sudden increase/decrease in traffic . Soak/Endurance testing – maintain a sustained load for an extended period to ...",
+    "host_name": "community.palantir.com",
+    "rank": 4,
+    "date": "Aug 24, 2026",
+    "favicon": ""
+  }
+]

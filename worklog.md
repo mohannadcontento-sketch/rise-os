@@ -130,3 +130,23 @@ Work Log:
 Stage Summary:
 - Owner still needs migrations: 011_error_logs.sql + 012_admin_pro.sql in Supabase SQL editor (suspension/broadcast fail-open or error-toast until then)
 - Suspension worst-case lag: ≤5 min on stale serverless instances; instant on the instance that performed the action
+
+---
+Task ID: 24
+Agent: Super Z (main)
+Task: Final comprehensive pre-launch testing — real-user E2E, request counting, OWASP-lite security, load/stress/spike/soak concurrency testing
+
+Work Log:
+- Browser E2E (scripts/e2e-24-browser.js, Playwright chromium): REAL user journey — landing → signup → 20 modules → create+complete task → create habit → journal save → hard reload → re-login. 32/32 PASS, 0 console errors, screenshots in scripts/shots/
+- Request counting (real browser): signup 7 req, each module nav 1-4 req (dedupe working), writes 4 req, hard reload 7, re-login 8 → full first-visit journey ≈ 60 API calls total
+- API suite (scripts/verify-prod-24-api.js): 60/60 PASS after fixes — functional CRUD A(31) + edge cases B(12) + security C(19)
+- FOUND + FIXED 3 API robustness gaps (commit 619df7b): journal POST had no Zod (mood:string → 500, now 400); focus POST minimal payload → 500 (startedAt NOT NULL — now server-defaulted); morning POST all-unknown-fields → 500 (now 400)
+- Security verified: 20/20 routes deny anonymous, forged/garbage JWT 401, admin 6/6 + broadcast POST 403, IDOR blocked (RLS+userId-scoped delete no-op), cookie HttpOnly+Secure+SameSite, HSTS+CSP+nosniff+XFO:DENY, login brute-force → 429 after ~11 attempts, weak password + duplicate signup rejected
+- LOAD (k6 methodology, scripts/load-24.js, 8 dedicated accounts): SMOKE 1VU ✅ 0% | LOAD 25VU×90s ✅ 1,638 req 100% p95=1.07s | STRESS ramp 25→50→100: 50VU=95.1%, 100VU 78% (guard halted) | SPIKE 150VU: 87%, dashboard p95 7s under burst, recovered instantly | SOAK 15VU×150s ✅ 1,620 req 100% stable
+- KEY: ~9,700 total requests across ALL phases → ZERO 5xx, zero crashes; every failure = deliberate 429 rate-limit protection (middleware per-IP 300/min per pathname bucket; evidence = in-memory fallback, no Upstash in prod)
+- Cleanup: all 8 load accounts wiped via delete-all (200×8)
+
+Stage Summary:
+- VERDICT: GO for launch. Latency p50≈0.72s p95≈1.0s (healthy, stable over time); degradation under extreme burst is protective 429s not crashes
+- Recommendation: rate limiter is per-IP in-memory — add Upstash env vars for distributed correctness and/or per-user limits (NAT/classroom edge: many users on one WiFi share the 300/min budget)
+- Owner note: browser E2E ran pre-fix deploy (fixes are API-payload-only, zero UI impact); API suite re-ran post-deploy 60/60

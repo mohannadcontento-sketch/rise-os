@@ -1,0 +1,406 @@
+{
+  "steps": [
+    {
+      "name": "01-landing",
+      "ok": true,
+      "ms": 2974
+    },
+    {
+      "name": "02-open-signup",
+      "ok": true,
+      "ms": 2223
+    },
+    {
+      "name": "03-signup-submit",
+      "ok": true,
+      "ms": 5444
+    },
+    {
+      "name": "04-onboarding-skip",
+      "ok": true,
+      "ms": 35
+    },
+    {
+      "name": "05-expand-groups",
+      "ok": true,
+      "ms": 1617
+    },
+    {
+      "name": "05-nav-الروتين الصباحي",
+      "ok": true,
+      "ms": 2270
+    },
+    {
+      "name": "05-nav-المخطط اليومي",
+      "ok": true,
+      "ms": 2294
+    },
+    {
+      "name": "05-nav-تتبع العادات",
+      "ok": true,
+      "ms": 2274
+    },
+    {
+      "name": "05-nav-اليوميات",
+      "ok": true,
+      "ms": 2255
+    },
+    {
+      "name": "05-nav-المهام",
+      "ok": true,
+      "ms": 2289
+    },
+    {
+      "name": "05-nav-المشاريع",
+      "ok": true,
+      "ms": 2287
+    },
+    {
+      "name": "05-nav-الأهداف",
+      "ok": true,
+      "ms": 2289
+    },
+    {
+      "name": "05-nav-العمل العميق",
+      "ok": true,
+      "ms": 2266
+    },
+    {
+      "name": "05-nav-الشغل",
+      "ok": true,
+      "ms": 2302
+    },
+    {
+      "name": "05-nav-التقويم",
+      "ok": true,
+      "ms": 2290
+    },
+    {
+      "name": "05-nav-الصحة",
+      "ok": true,
+      "ms": 2322
+    },
+    {
+      "name": "05-nav-القراءة",
+      "ok": true,
+      "ms": 2274
+    },
+    {
+      "name": "05-nav-التعلم",
+      "ok": true,
+      "ms": 2252
+    },
+    {
+      "name": "05-nav-الدماغ الثاني",
+      "ok": true,
+      "ms": 2264
+    },
+    {
+      "name": "05-nav-المالية",
+      "ok": true,
+      "ms": 2270
+    },
+    {
+      "name": "05-nav-مراجعة أسبوعية",
+      "ok": true,
+      "ms": 2270
+    },
+    {
+      "name": "05-nav-مراجعة شهرية",
+      "ok": true,
+      "ms": 2255
+    },
+    {
+      "name": "05-nav-التحليلات",
+      "ok": true,
+      "ms": 2276
+    },
+    {
+      "name": "05-nav-قاعدة المعارف",
+      "ok": true,
+      "ms": 2280
+    },
+    {
+      "name": "05-nav-الإعدادات",
+      "ok": true,
+      "ms": 2270
+    },
+    {
+      "name": "06-create-task-ui",
+      "ok": true,
+      "ms": 5086
+    },
+    {
+      "name": "07-complete-task-ui",
+      "ok": true,
+      "ms": 2566
+    },
+    {
+      "name": "08-create-habit-ui",
+      "ok": true,
+      "ms": 5031
+    },
+    {
+      "name": "09-journal-ui",
+      "ok": true,
+      "ms": 4135
+    },
+    {
+      "name": "10-dashboard-return",
+      "ok": true,
+      "ms": 3079
+    },
+    {
+      "name": "11-hard-reload",
+      "ok": true,
+      "ms": 3045
+    },
+    {
+      "name": "12-relogin",
+      "ok": true,
+      "ms": 8690
+    }
+  ],
+  "byPhase": {
+    "01-landing": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/auth/session": 1
+      }
+    },
+    "03-signup-submit": {
+      "total": 7,
+      "ok": 7,
+      "err": 0,
+      "urls": {
+        "/api/auth/sync-token": 2,
+        "/api/auth/session": 1,
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/rise/productivity-score": 1
+      }
+    },
+    "05-nav-الروتين الصباحي": {
+      "total": 2,
+      "ok": 2,
+      "err": 0,
+      "urls": {
+        "/api/rise/morning": 1,
+        "/api/rise/tasks": 1
+      }
+    },
+    "05-nav-المخطط اليومي": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/planner": 1
+      }
+    },
+    "05-nav-تتبع العادات": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/habits": 1
+      }
+    },
+    "05-nav-اليوميات": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/journal": 1
+      }
+    },
+    "05-nav-المهام": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/tasks": 1
+      }
+    },
+    "05-nav-المشاريع": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/projects": 1
+      }
+    },
+    "05-nav-الأهداف": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/goals": 1
+      }
+    },
+    "05-nav-العمل العميق": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/focus": 1
+      }
+    },
+    "05-nav-الشغل": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/work": 1
+      }
+    },
+    "05-nav-التقويم": {
+      "total": 3,
+      "ok": 3,
+      "err": 0,
+      "urls": {
+        "/api/rise/tasks": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/journal": 1
+      }
+    },
+    "05-nav-الصحة": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/health": 1
+      }
+    },
+    "05-nav-القراءة": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/books": 1
+      }
+    },
+    "05-nav-التعلم": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/knowledge": 1
+      }
+    },
+    "05-nav-الدماغ الثاني": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/knowledge": 1
+      }
+    },
+    "05-nav-المالية": {
+      "total": 2,
+      "ok": 2,
+      "err": 0,
+      "urls": {
+        "/api/rise/budgets": 1,
+        "/api/rise/finance": 1
+      }
+    },
+    "05-nav-التحليلات": {
+      "total": 4,
+      "ok": 4,
+      "err": 0,
+      "urls": {
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/focus": 1,
+        "/api/rise/health": 1
+      }
+    },
+    "05-nav-الإعدادات": {
+      "total": 2,
+      "ok": 2,
+      "err": 0,
+      "urls": {
+        "/api/auth/session": 1,
+        "/api/rise/storage": 1
+      }
+    },
+    "06-create-task-ui": {
+      "total": 4,
+      "ok": 4,
+      "err": 0,
+      "urls": {
+        "/api/rise/tasks": 3,
+        "/api/rise/notifications": 1
+      }
+    },
+    "08-create-habit-ui": {
+      "total": 4,
+      "ok": 4,
+      "err": 0,
+      "urls": {
+        "/api/rise/habits": 3,
+        "/api/rise/notifications": 1
+      }
+    },
+    "09-journal-ui": {
+      "total": 4,
+      "ok": 4,
+      "err": 0,
+      "urls": {
+        "/api/rise/journal": 3,
+        "/api/rise/notifications": 1
+      }
+    },
+    "10-dashboard-return": {
+      "total": 2,
+      "ok": 2,
+      "err": 0,
+      "urls": {
+        "/api/rise/dashboard": 1,
+        "/api/rise/productivity-score": 1
+      }
+    },
+    "11-hard-reload": {
+      "total": 7,
+      "ok": 7,
+      "err": 0,
+      "urls": {
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/auth/sync-token": 1,
+        "/api/auth/session": 2,
+        "/api/rise/productivity-score": 1
+      }
+    },
+    "12-relogin": {
+      "total": 8,
+      "ok": 7,
+      "err": 0,
+      "urls": {
+        "/api/auth/session": 2,
+        "/api/auth/sync-token": 2,
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/rise/productivity-score": 1
+      }
+    }
+  },
+  "consoleErrors": [],
+  "screenshots": [
+    "/home/z/my-project/scripts/shots/24-01-landing.png",
+    "/home/z/my-project/scripts/shots/24-02-signup-form.png",
+    "/home/z/my-project/scripts/shots/24-03-after-signup.png",
+    "/home/z/my-project/scripts/shots/24-05-all-modules-visited.png",
+    "/home/z/my-project/scripts/shots/24-06-task-created.png",
+    "/home/z/my-project/scripts/shots/24-07-task-toggled.png",
+    "/home/z/my-project/scripts/shots/24-08-habit-created.png",
+    "/home/z/my-project/scripts/shots/24-09-journal-saved.png",
+    "/home/z/my-project/scripts/shots/24-10-dashboard-final.png",
+    "/home/z/my-project/scripts/shots/24-12-relogin-ok.png"
+  ]
+}

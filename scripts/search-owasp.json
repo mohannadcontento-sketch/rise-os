@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://owasp.org",
+    "name": "WSTG - Latest | Testing for Session Management Schema",
+    "snippet": "Web Security Testing Guide , In this test , the tester wants to check that cookies and other session tokens are created in a secure and unpredictable way.",
+    "host_name": "owasp.org",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com",
+    "name": "OWASP Web Application Security Testing Checklist",
+    "snippet": "Check SSL Version, Algorithms, Key length ; Check for Digital Certificate Validity (Duration, Signature and CN); Check credentials only delivered over HTTPS Read more",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://worknest.com",
+    "name": "The Web Application Penetration Testing Checklist: Secure",
+    "snippet": "1. Information Gathering . Use tools like Burp Suite and OWASP ZAP. · 2. Input Validation and Data Exposure. Test for SQL Injection and cross-site scripting. · 3. Read more",
+    "host_name": "worknest.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://hackerdna.com",
+    "name": "OWASP Web Security Testing Guide: How to Use WSTG",
+    "snippet": "8 days ago — The OWASP Web Security Testing Guide (WSTG) explained: all five testing phases, WSTG test case IDs, and how to apply the checklist",
+    "host_name": "hackerdna.com",
+    "rank": 3,
+    "date": "Aug 23, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://com-sec.io",
+    "name": "Web Application Penetration Testing Checklist [2026 Edition]",
+    "snippet": "Use this checklist to validate your web application security thoroughly , from reconnaissance and authentication testing to APIs, session handling, business ... Read more",
+    "host_name": "com-sec.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]
