@@ -4,6 +4,7 @@ import { data, setCurrentAuthToken } from '@/lib/data'
 import { getTodayCairo, isoToCairoDate, taskCompletedDay, computeStreakFromActivity } from '@/lib/rise-utils'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { withAggregateCache } from '@/lib/aggregate-cache'
+import { computeDailyScore, habitDueOn } from '@/lib/daily-score'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,17 +53,6 @@ async function computeScores(userId: string, dates: string[]) {
   // without a dueDate ("bonus"). Before: one all-time ratio applied to every date.
   const personal = tasks.filter((t: any) => !t.projectId && t.status !== 'cancelled')
 
-  const dayTaskScore = (date: string) => {
-    const scheduled = personal.filter((t: any) => t.dueDate === date)
-    // TZ FIX: bucket completions into the Cairo day (was raw UTC slice).
-    const bonus = personal.filter(
-      (t: any) => !t.dueDate && t.status === 'done' && taskCompletedDay(t) === date,
-    )
-    const done = scheduled.filter((t: any) => t.status === 'done').length + bonus.length
-    const total = scheduled.length + bonus.length
-    return total > 0 ? (done / total) * 100 : 0
-  }
-
   // LIVE STREAK (same rule as the dashboard route): the stored profiles.streak
   // never updates in Supabase mode — derive it from real activity instead.
   const streakActiveDays = new Set<string>()
@@ -91,45 +81,52 @@ async function computeScores(userId: string, dates: string[]) {
     streak || 0,
   )
 
-  const streakScore = Math.min((liveStreak / 30) * 100, 100)
-
   return dates.map((date) => {
-    const tasksScore = dayTaskScore(date)
-    // Extract habit logs for the given date (handle DATE type returning timestamp)
-    const dayHabitLogs = habitsWithLogs.flatMap((h: any) =>
-      (h.logs || []).filter((l: any) => l.date && String(l.date).slice(0, 10) === date)
+    // DAY-SCOPED per-date task score (matches the dashboard's smart day reset):
+    // scheduled on that date (dueDate===date) + personal tasks completed that day
+    // without a dueDate ("bonus"). Before: one all-time ratio applied to every date.
+    const scheduled = personal.filter((t: any) => t.dueDate === date)
+    // TZ FIX: bucket completions into the Cairo day (was raw UTC slice).
+    const bonus = personal.filter(
+      (t: any) => !t.dueDate && t.status === 'done' && taskCompletedDay(t) === date,
     )
+    const done = scheduled.filter((t: any) => t.status === 'done').length + bonus.length
+    const tasksTotal = scheduled.length + bonus.length
 
-    const totalHabits = habitsWithLogs.length
-    const completedHabits = dayHabitLogs.filter((l: any) => l.completed).length
-    const habitsScore = totalHabits > 0 ? (completedHabits / totalHabits) * 100 : 0
+    // HABITS: المستحقة في هذا التاريخ فقط (weekdays/weekends لا تجرّ يوم غيرها)
+    // — كانت المقارنة على كل العادات مهما كانت مستحقة.
+    const dueHabits = (habitsWithLogs as any[]).filter((h: any) => habitDueOn(h, date))
+    const completedDue = dueHabits.reduce(
+      (n: number, h: any) => n + ((h.logs || []) as any[]).filter(
+        (l: any) => l.completed && l.date && String(l.date).slice(0, 10) === date,
+      ).length,
+      0,
+    )
 
     const dayFocusSessions = focusSessions.filter(
       (s: any) => isoToCairoDate(s.startedAt) === date
     )
-    const todayFocusMin = dayFocusSessions.filter((s: any) => s.completed).reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
-    const focusScore = Math.min((todayFocusMin / 120) * 100, 100)
+    const dayFocusMin = dayFocusSessions
+      .filter((s: any) => s.completed)
+      .reduce((sum: number, s: any) => sum + (s.actualMin || 0), 0)
 
-    const morningLog = morningLogs.find(
+    const morningLog = (morningLogs as any[]).find(
       (m: any) => m.date && String(m.date).slice(0, 10) === date
     ) || null
-    const morningScore = morningLog?.score || 0
 
-    const score = Math.min(Math.round(
-      tasksScore * 0.25 + habitsScore * 0.25 + focusScore * 0.20 + morningScore * 0.20 + streakScore * 0.10
-    ), 100)
+    // UNIFIED DAILY SCORE — نفس معادلة dashboard API حرفياً (كانت معادلتان
+    // مختلفتان بأوزان مختلفة فكانت أرقام الداشبورد لا تطابق المراجعات).
+    const { score, breakdown } = computeDailyScore({
+      tasksCompleted: done,
+      tasksTotal,
+      habitsCompleted: completedDue,
+      habitsTotal: dueHabits.length,
+      focusMin: dayFocusMin,
+      morningScore: morningLog?.score || 0,
+      streak: liveStreak,
+    })
 
-    return {
-      date,
-      score,
-      breakdown: {
-        tasks: Math.round(tasksScore),
-        habits: Math.round(habitsScore),
-        focus: Math.round(focusScore),
-        morning: Math.round(morningScore),
-        streak: Math.round(streakScore),
-      },
-    }
+    return { date, score, breakdown }
   })
 }
 

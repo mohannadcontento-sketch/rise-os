@@ -4,6 +4,7 @@ import { data, setCurrentAuthToken } from '@/lib/data'
 import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
 import { getToday, getLast30Days, getWeekDays, isoToCairoDate, taskCompletedDay, computeStreakFromActivity, getTodayCairo, calculateXpForLevel } from '@/lib/rise-utils'
 import { withAggregateCache } from '@/lib/aggregate-cache'
+import { computeDailyScore, habitDueOn, DAILY_FOCUS_TARGET_MIN } from '@/lib/daily-score'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,10 +153,17 @@ async function computeDashboard(userId: string, req: NextRequest) {
     (h.logs || []).map((l: any) => ({ ...l, habitId: h.id })),
   )
 
+  // SCORE FAIRNESS FIX: العدّاد على العادات المستحقة اليوم فقط — عادة
+  // "نهاية الأسبوع" لم تعد تجرّ درجة الاثنين (كانت تُحسب في المقام
+  // وكأنها عادة فائتة رغم أنها ليست due أصلاً).
+  const dueHabits = habits.filter((h: any) => habitDueOn(h, today))
+  const dueHabitIds = new Set(dueHabits.map((h: any) => h.id))
+  const dueTodayLogs = todayHabitsLogs.filter((l: any) => dueHabitIds.has(l.habitId))
+
   // DAY-SCOPED counting — see dayScopedCounts doc above.
   const { tasksCompleted: completedTasksToday, tasksTotal, overdue } = dayScopedCounts(allTasks, today)
-  const completedHabitsToday = todayHabitsLogs.filter((l: any) => l.completed).length
-  const totalHabits = habits.length
+  const completedHabitsToday = dueTodayLogs.filter((l: any) => l.completed).length
+  const totalHabits = dueHabits.length
   // TZ FIX: bucket each session's UTC start time into its Cairo day.
   const todayFocusMin = focusSessions
     .filter(
@@ -214,17 +222,20 @@ async function computeDashboard(userId: string, req: NextRequest) {
   const taskScore = tasksTotal > 0 ? Math.round((completedTasksToday / tasksTotal) * 100) : 0
   const habitScore = totalHabits > 0 ? Math.round((completedHabitsToday / totalHabits) * 100) : 0
   const morningScore = morningLog?.score || 0
-  const focusScore = Math.min(100, Math.round((todayFocusMin / 50) * 100))
-  // Weighted average that RENORMALIZES when a component has no data today
-  // (e.g. zero tasks scheduled) so empty components never drag the score down.
-  const scoreParts: [number, number][] = []
-  if (tasksTotal > 0) scoreParts.push([taskScore, 0.35])
-  if (totalHabits > 0) scoreParts.push([habitScore, 0.25])
-  if (morningScore > 0) scoreParts.push([morningScore, 0.2])
-  if (focusScore > 0) scoreParts.push([focusScore, 0.2])
-  const overallScore = scoreParts.length > 0
-    ? Math.round(scoreParts.reduce((s, [v, w]) => s + v * w, 0) / scoreParts.reduce((s, [, w]) => s + w, 0))
-    : 0
+  const focusScore = Math.min(100, Math.round((todayFocusMin / DAILY_FOCUS_TARGET_MIN) * 100))
+  // UNIFIED DAILY SCORE — نفس المعادلة في productivity-score API والهيدر
+  // والمراجعات (كانت هناك 3 معادلات متضاربة فكانت الأرقام لا تتطابق).
+  // النشاط (مهام .35/عادات .25/صباح .20/تركيز .20) مرجّح معاد التسوية على
+  // الأجزاء الموجودة × 0.9 + السلسلة × 0.1 (30 يوم = سقف).
+  const { score: overallScore, breakdown: scoreBreakdown } = computeDailyScore({
+    tasksCompleted: completedTasksToday,
+    tasksTotal,
+    habitsCompleted: completedHabitsToday,
+    habitsTotal: totalHabits,
+    focusMin: todayFocusMin,
+    morningScore,
+    streak: liveStreak,
+  })
 
   try {
     await data.dailyScores.upsert(userId, today, {
@@ -274,6 +285,9 @@ async function computeDashboard(userId: string, req: NextRequest) {
       morningScore: morningLog?.score || 0,
       overdueCount: overdue.length,
     },
+    // الدرجة الموحدة + تفصيلها — الكارت الكبير والهيدر يستهلكان هذا بدل
+    // إعادة الحساب المحلي بمعادلة مختلفة.
+    scoreBreakdown: scoreBreakdown,
     // Top 5 overdue tasks for the "don't forget" strip (smart rollover UX)
     overdueTasks: overdue.slice(0, 5).map((t: any) => ({
       id: t.id,

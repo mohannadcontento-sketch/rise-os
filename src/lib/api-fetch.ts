@@ -164,7 +164,24 @@ interface MicroEntry {
 }
 
 const microCache = new Map<string, MicroEntry>()
-const inflightGets = new Map<string, Promise<Response>>()
+
+/** ما يُخزن في خريطة الطلبات الجارية — بيانات خام تُبنى منها Response مستقلة لكل متصل */
+interface GetEntry {
+  status: number
+  statusText: string
+  contentType: string
+  body: string
+}
+const inflightGets = new Map<string, Promise<GetEntry>>()
+
+/** ابنِ Response مستقلة (قابلة للقراءة مرة لكل متصل) من بيانات الطلب الجاري */
+function entryToResponse(entry: GetEntry): Response {
+  return new Response(entry.body, {
+    status: entry.status,
+    statusText: entry.statusText,
+    headers: { 'Content-Type': entry.contentType },
+  })
+}
 
 /** Clear the in-memory GET layers — called after any successful write. */
 function clearGetCaches(): void {
@@ -305,7 +322,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       return synthGetResponse(micro, true)
     }
     const pending = inflightGets.get(fetchUrl)
-    if (pending) return pending
+    if (pending) return pending.then(entryToResponse)
   }
 
   const doFetch = async (): Promise<Response> => {
@@ -479,28 +496,30 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 
   if (isGet) {
+    // BODY-ONCE FIX (v2): the shared promise resolves to PLAIN METADATA
+    // {status, statusText, contentType, body} — and EVERY caller (single or
+    // N shared callers) builds its OWN fresh Response from it.
+    // v1 read the network body once but still resolved the shared promise to
+    // ONE rebuilt Response object — caller #2's .json() still threw
+    // "Failed to execute 'json' on 'Response': body stream already read"
+    // (the phantom "إعادة المحاولة" screen on first app load, gone on retry).
     const p = doFetch()
       .then(async (res) => {
-        // BODY-ONCE FIX: read the body EXACTLY ONCE here and hand EVERY
-        // caller (single or N shared callers) a FRESH Response. Previously
-        // the raw Response was shared between concurrent callers — the 2nd
-        // .json() threw "Failed to execute 'json' on 'Response': body
-        // stream already read" (the phantom "إعادة المحاولة" screen that
-        // vanished on the first retry).
         let body = ''
-        try { body = await res.text() } catch { return res }
+        try { body = await res.text() } catch { body = '' }
         if (res.ok) {
           microCache.set(fetchUrl, { status: res.status, body, ts: Date.now() })
         }
-        return new Response(body, {
+        return {
           status: res.status,
           statusText: res.statusText,
-          headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
-        })
+          contentType: res.headers.get('Content-Type') || 'application/json',
+          body,
+        }
       })
       .finally(() => { inflightGets.delete(fetchUrl) })
     inflightGets.set(fetchUrl, p)
-    return p
+    return p.then(entryToResponse)
   }
 
   return doFetch()

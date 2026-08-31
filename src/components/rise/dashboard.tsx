@@ -69,6 +69,15 @@ import { getToday, formatDateShort } from '@/lib/rise-utils'
 interface DashboardData {
   productivityScore?: number
   journalStreak?: number
+  // الدرجة الموحدة من السيرفر — الكارت يستهلكها مباشرة بدل إعادة الحساب
+  // بمعادلة محلية مختلفة (كانت مصدر تعارض الأرقام)
+  scoreBreakdown?: {
+    tasks: number
+    habits: number
+    focus: number
+    morning: number
+    streak: number
+  }
   user: {
     name: string
     level: number
@@ -591,17 +600,31 @@ interface ProductivityScoreData {
   grade: string
 }
 
-function ProductivityScoreCard({ fallbackScore, todayData, streak = 0 }: { fallbackScore?: number; streak?: number; todayData?: { tasksCompleted: number; tasksTotal: number; habitsCompleted: number; habitsTotal: number; focusMin: number; morningScore: number } }) {
+function ProductivityScoreCard({ fallbackScore, breakdown: serverBreakdown, todayData, streak = 0 }: { fallbackScore?: number; breakdown?: { tasks: number; habits: number; focus: number; morning: number; streak: number }; streak?: number; todayData?: { tasksCompleted: number; tasksTotal: number; habitsCompleted: number; habitsTotal: number; focusMin: number; morningScore: number } }) {
   // FIX: Use useMemo instead of useEffect+setState (lint: set-state-in-effect)
+  // SINGLE SOURCE OF TRUTH: لو السيرفر بعت scoreBreakdown نستهلكه كما هو —
+  // نفس أرقام productivity-score API والهيدر بالظبط. الحساب المحلي أدناه
+  // fallback فقط (بيانات قديمة قبل نشر التحديث) وتم توحيد هدف التركيز 60د.
   const prodData = useMemo<ProductivityScoreData>(() => {
     const score = typeof fallbackScore === 'number' ? fallbackScore : 0
+    if (serverBreakdown) {
+      return {
+        score,
+        breakdown: {
+          tasks: safeNum(serverBreakdown.tasks),
+          habits: safeNum(serverBreakdown.habits),
+          focus: safeNum(serverBreakdown.focus),
+          morning: safeNum(serverBreakdown.morning),
+          streak: safeNum(serverBreakdown.streak),
+        },
+        grade: score >= 90 ? 'متميز' : score >= 70 ? 'جيد جداً' : score >= 50 ? 'جيد' : score >= 30 ? 'مقبول' : 'يحتاج تحسين',
+      }
+    }
     const tasksPct = todayData && todayData.tasksTotal > 0 ? Math.round((todayData.tasksCompleted / todayData.tasksTotal) * 100) : 0
     const habitsPct = todayData && todayData.habitsTotal > 0 ? Math.round((todayData.habitsCompleted / todayData.habitsTotal) * 100) : 0
-    const focusPct = todayData ? Math.min(100, Math.round((todayData.focusMin / 50) * 100)) : 0
+    const focusPct = todayData ? Math.min(100, Math.round((todayData.focusMin / 60) * 100)) : 0
     const morningPct = todayData ? todayData.morningScore || 0 : 0
-    // STREAK BAR FIX: كانت hardcoded بصفر — الشريط ما كان بيتحرك أبداً
-    // حتى مع سلسلة نشطة. نفس معادلة /api/rise/productivity-score:
-    // سلسلة 30 يوم = 100% (بسقف).
+    // سلسلة 30 يوم = 100% (بسقف) — نفس معادلة السيرفر
     const streakPct = Math.min(Math.round((streak / 30) * 100), 100)
 
     const grade = score >= 90 ? 'متميز' : score >= 70 ? 'جيد جداً' : score >= 50 ? 'جيد' : score >= 30 ? 'مقبول' : 'يحتاج تحسين'
@@ -617,7 +640,7 @@ function ProductivityScoreCard({ fallbackScore, todayData, streak = 0 }: { fallb
       },
       grade,
     }
-  }, [fallbackScore, todayData, streak])
+  }, [fallbackScore, serverBreakdown, todayData, streak])
 
   if (!prodData) {
     return (
@@ -667,11 +690,11 @@ function ProductivityScoreCard({ fallbackScore, todayData, streak = 0 }: { fallb
   }
 
   const breakdownItems = [
-    { label: 'المهام', value: safeNum(breakdown.tasks), color: 'bg-emerald-accent' },
-    { label: 'العادات', value: safeNum(breakdown.habits), color: 'bg-forest' },
-    { label: 'التركيز', value: safeNum(breakdown.focus), color: 'bg-gold' },
-    { label: 'الصباح', value: safeNum(breakdown.morning), color: 'bg-gold' },
-    { label: 'السلسلة', value: safeNum(breakdown.streak), color: 'bg-gold' },
+    { label: 'المهام', weight: '٣٥٪', value: safeNum(breakdown.tasks), color: 'bg-emerald-accent' },
+    { label: 'العادات', weight: '٢٥٪', value: safeNum(breakdown.habits), color: 'bg-forest' },
+    { label: 'الصباح', weight: '٢٠٪', value: safeNum(breakdown.morning), color: 'bg-gold' },
+    { label: 'التركيز', weight: '٢٠٪', value: safeNum(breakdown.focus), color: 'bg-gold' },
+    { label: 'السلسلة', weight: '١٠٪', value: safeNum(breakdown.streak), color: 'bg-gold' },
   ]
 
   return (
@@ -742,11 +765,12 @@ function ProductivityScoreCard({ fallbackScore, todayData, streak = 0 }: { fallb
             </motion.span>
           </div>
 
-          {/* Mini breakdown bars */}
+          {/* Mini breakdown bars — الأوزان ظاهرة حتى يفهم المستخدم كيف بتتركب الدرجة */}
           <div className="space-y-2.5">
             {breakdownItems.map((item, i) => (
               <div key={item.label} className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground w-14 text-right shrink-0">{item.label}</span>
+                <span className="text-xs text-muted-foreground w-16 text-right shrink-0">{item.label}</span>
+                <span className="text-[9px] text-muted-foreground/70 w-6 shrink-0 text-left">{item.weight}</span>
                 <div
                   className="flex-1 h-2 rounded-full bg-primary/10 overflow-hidden"
                   role="progressbar"
@@ -1410,15 +1434,13 @@ export default function Dashboard() {
                 <TooltipTrigger asChild>
                   <div className="glass rounded-xl px-3 py-1.5 flex items-center border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] cursor-default">
                     <HorizonDial
-                      completion={
-                        today.tasksTotal + today.habitsTotal > 0
-                          ? ((today.tasksCompleted + today.habitsCompleted + Math.min(today.focusMin, 60)) / (today.tasksTotal + today.habitsTotal + 60)) * 100
-                          : 0
-                      }
+                      // SINGLE NUMBER: نفس الدرجة الموحدة للكارت الكبير —
+                      // كانت معادلة ثالثة مختلفة فكان الرقمين لا يتطابقان
+                      completion={typeof data?.productivityScore === 'number' ? data.productivityScore : 0}
                     />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">تقدمك اليوم الإجمالي — مهام + عادات + تركيز</TooltipContent>
+                <TooltipContent side="bottom" className="text-xs">درجة إنتاجية النهاردة — نفس درجة الكارت بالأسفل بالظبط</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
@@ -1485,6 +1507,7 @@ export default function Dashboard() {
       <motion.div variants={itemVariants}>
         <ProductivityScoreCard
           fallbackScore={typeof data?.productivityScore === 'number' ? data.productivityScore : undefined}
+          breakdown={data?.scoreBreakdown}
           todayData={data?.today}
           streak={user.streak}
         />
