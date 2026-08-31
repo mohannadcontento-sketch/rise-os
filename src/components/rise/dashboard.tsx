@@ -68,6 +68,7 @@ import { getToday, formatDateShort } from '@/lib/rise-utils'
 
 interface DashboardData {
   productivityScore?: number
+  journalStreak?: number
   user: {
     name: string
     level: number
@@ -590,7 +591,7 @@ interface ProductivityScoreData {
   grade: string
 }
 
-function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: number; todayData?: { tasksCompleted: number; tasksTotal: number; habitsCompleted: number; habitsTotal: number; focusMin: number; morningScore: number } }) {
+function ProductivityScoreCard({ fallbackScore, todayData, streak = 0 }: { fallbackScore?: number; streak?: number; todayData?: { tasksCompleted: number; tasksTotal: number; habitsCompleted: number; habitsTotal: number; focusMin: number; morningScore: number } }) {
   // FIX: Use useMemo instead of useEffect+setState (lint: set-state-in-effect)
   const prodData = useMemo<ProductivityScoreData>(() => {
     const score = typeof fallbackScore === 'number' ? fallbackScore : 0
@@ -598,6 +599,10 @@ function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: n
     const habitsPct = todayData && todayData.habitsTotal > 0 ? Math.round((todayData.habitsCompleted / todayData.habitsTotal) * 100) : 0
     const focusPct = todayData ? Math.min(100, Math.round((todayData.focusMin / 50) * 100)) : 0
     const morningPct = todayData ? todayData.morningScore || 0 : 0
+    // STREAK BAR FIX: كانت hardcoded بصفر — الشريط ما كان بيتحرك أبداً
+    // حتى مع سلسلة نشطة. نفس معادلة /api/rise/productivity-score:
+    // سلسلة 30 يوم = 100% (بسقف).
+    const streakPct = Math.min(Math.round((streak / 30) * 100), 100)
 
     const grade = score >= 90 ? 'متميز' : score >= 70 ? 'جيد جداً' : score >= 50 ? 'جيد' : score >= 30 ? 'مقبول' : 'يحتاج تحسين'
 
@@ -608,11 +613,11 @@ function ProductivityScoreCard({ fallbackScore, todayData }: { fallbackScore?: n
         habits: habitsPct,
         focus: focusPct,
         morning: morningPct,
-        streak: 0,
+        streak: streakPct,
       },
       grade,
     }
-  }, [fallbackScore, todayData])
+  }, [fallbackScore, todayData, streak])
 
   if (!prodData) {
     return (
@@ -1306,13 +1311,15 @@ export default function Dashboard() {
     xpToNext: user.xpToNextLevel || 100,
     progress: (user.xpToNextLevel && user.xpToNextLevel > 0) ? Math.min(100, Math.round(((user.xp || 0) / user.xpToNextLevel) * 100)) : 0,
   }
+  // BADGE FIX: booksCompleted و journalStreak كانوا hardcoded أصفار —
+  // شارات "قارئ 📖" و"كاتب ✍️" كانت مستحيلة التفعيل للأبد.
   const badgeStats: BadgeStats = {
     totalTasks: user.totalTasksDone,
     streak: user.streak,
     totalFocusMin: user.totalFocusMin,
-    booksCompleted: 0,
+    booksCompleted: books.filter((b: any) => b.status === 'completed').length,
     totalHabits: habits.length,
-    journalStreak: 0,
+    journalStreak: data.journalStreak || 0,
   }
 
   const upcomingTasks = (tasks || []).filter((t: any) => !t.done).slice(0, 5)
@@ -1479,6 +1486,7 @@ export default function Dashboard() {
         <ProductivityScoreCard
           fallbackScore={typeof data?.productivityScore === 'number' ? data.productivityScore : undefined}
           todayData={data?.today}
+          streak={user.streak}
         />
       </motion.div>
 

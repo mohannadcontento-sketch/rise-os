@@ -138,42 +138,51 @@ function calcStreak(logs: HabitLog[], habitId: string): { current: number; longe
   if (habitLogs.length === 0) return { current: 0, longest: 0 }
 
   const today = getTodayStr()
-  const todayLog = habitLogs.includes(today)
-  let current = 0
+
+  // GRACE FIX (نفس قاعدة السلسلة الحية في الداشبورد): قبل كده لو المستخدم
+  // عمل العادة إمبارح ولسه ضغطهاش النهاردة، السلسلة الحالية كانت بتظهر صفر
+  // — رغم إن اليوم لسه ما خلصش. دلوقتي بنمشي من إمبارح لحد ما اليوم يخلص.
+  const [ty, tm, td] = today.split('-').map(Number)
+  const yDate = new Date(ty, (tm || 1) - 1, td || 1, 12, 0, 0, 0) // noon → DST-safe
+  yDate.setDate(yDate.getDate() - 1)
+  const yesterday = `${yDate.getFullYear()}-${String(yDate.getMonth() + 1).padStart(2, '0')}-${String(yDate.getDate()).padStart(2, '0')}`
+
+  // Calculate longest streak
   let longest = 0
-  let streak = 1
-
-  if (todayLog) {
-    current = 1
-  }
-
-  // Calculate all streaks
+  let longestRun = 1
   for (let i = 1; i < habitLogs.length; i++) {
     const prev = new Date(habitLogs[i - 1])
     const curr = new Date(habitLogs[i])
-    const diffMs = curr.getTime() - prev.getTime()
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
-
+    const diffDays = Math.round(
+      (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24),
+    )
+    if (diffDays === 0) continue // duplicate same-day entries — keep the run
     if (diffDays === 1) {
-      streak++
+      longestRun++
     } else {
-      longest = Math.max(longest, streak)
-      streak = 1
+      longest = Math.max(longest, longestRun)
+      longestRun = 1
     }
   }
-  longest = Math.max(longest, streak)
+  longest = Math.max(longest, longestRun)
 
-  // Calculate current streak
-  if (todayLog && habitLogs.length > 1) {
-    const sorted = [...habitLogs].reverse()
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = new Date(sorted[i - 1])
-      const curr = new Date(sorted[i])
-      const diffMs = prev.getTime() - curr.getTime()
-      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
-      if (diffDays === 1) {
+  // Calculate current streak — anchored on today, or yesterday while the day
+  // is still young (grace). Walks backwards day-by-day through the sorted logs.
+  let current = 0
+  const anchor = habitLogs.includes(today) ? today : habitLogs.includes(yesterday) ? yesterday : null
+  if (anchor) {
+    current = 1
+    let prevDay = anchor
+    for (let i = habitLogs.length - 1; i >= 0; i--) {
+      const day = habitLogs[i]
+      if (day >= prevDay) continue // anchor itself / future duplicates
+      const diff = Math.round(
+        (new Date(prevDay).getTime() - new Date(day).getTime()) / (1000 * 60 * 60 * 24),
+      )
+      if (diff === 1) {
         current++
-      } else {
+        prevDay = day
+      } else if (diff > 1) {
         break
       }
     }

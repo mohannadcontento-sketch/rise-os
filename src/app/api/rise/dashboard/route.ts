@@ -123,7 +123,9 @@ async function computeDashboard(userId: string, req: NextRequest) {
     data.projects.list(userId).catch(() => []),
     data.goals.list(userId).catch(() => []),
     data.books.list(userId).catch(() => []),
-    data.journals.list(userId, 5).catch(() => []),
+    // 30 rows: feeds the journal-streak calc (badge "كاتب" = 7 أيام) —
+    // the response still returns only the last 5 (same payload size).
+    data.journals.list(userId, 30).catch(() => []),
   ])
 
   const allTasks = tasksResult as any[]
@@ -195,6 +197,16 @@ async function computeDashboard(userId: string, req: NextRequest) {
   }
   const liveStreak = Math.max(computeStreakFromActivity(activeDays, today), userProfile?.streak || 0)
 
+  // JOURNAL STREAK — consecutive journal days ending today/yesterday (grace).
+  // شارة "كاتب ✍️" (7 أياميات) كانت مستحيلة — journalStreak كان hardcoded
+  // صفر في badgeStats بالداشبورد. نفس قاعدة computeStreakFromActivity.
+  const journalDays = new Set<string>()
+  for (const j of (journals as any[]) || []) {
+    const day = isoToCairoDate(j?.date) || (j?.date ? String(j.date).slice(0, 10) : null)
+    if (day) journalDays.add(day)
+  }
+  const journalStreak = computeStreakFromActivity(journalDays, today)
+
   // Extract single records from arrays
   const healthLog = healthResult.length > 0 ? healthResult[0] : null
   const morningLog = morningResult.length > 0 ? morningResult[0] : null
@@ -236,6 +248,7 @@ async function computeDashboard(userId: string, req: NextRequest) {
 
   return {
     productivityScore: overallScore,
+    journalStreak,
     user: {
       name: userProfile?.name || 'مستخدم RiseOS',
       level: userProfile?.level || 1,
@@ -301,7 +314,9 @@ async function computeDashboard(userId: string, req: NextRequest) {
     })),
     goals,
     books,
-    journals,
+    // Payload discipline: keep the response at 5 rows even though we fetch 30
+    // server-side for the streak calc (no wire-size regression).
+    journals: journals.slice(0, 5),
     weekDays,
   }
 }
