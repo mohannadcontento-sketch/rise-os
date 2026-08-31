@@ -81,7 +81,14 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 }
 
 export async function requireAuth(req: NextRequest): Promise<string | null> {
-  return await getUserId(req)
+  const userId = await getUserId(req)
+  if (!userId) return null
+  // ADMIN PRO: حساب موقوف = ممنوع من كل مسارات الـ API (كاش 5 دقائق)
+  try {
+    const { isUserSuspended } = await import('@/lib/suspension')
+    if (await isUserSuspended(userId)) return null
+  } catch { /* fail open */ }
+  return userId
 }
 
 export function withAuth<T = any>(

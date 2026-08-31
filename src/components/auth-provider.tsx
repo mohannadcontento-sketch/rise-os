@@ -106,6 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json()
         if (data.user) {
+          // ADMIN PRO: حساب موقوف → خروج فوري نظيف (رسالة السبب تظهر عند محاولة الدخول)
+          if (data.user.suspended === true) {
+            return 'stale' as const
+          }
           isAdmin = !!data.user.isAdmin
           name = data.user.name || name
         }

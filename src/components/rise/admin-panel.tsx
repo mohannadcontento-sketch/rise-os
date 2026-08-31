@@ -30,6 +30,8 @@ import {
   TrendingUp,
   Zap,
   CheckSquare,
+  Megaphone,
+  UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1552,10 +1554,318 @@ function HealthErrorsTab() {
   )
 }
 
+/* ═══════════════ Overview Tab (ADMIN PRO) ═══════════════ */
+
+interface OverviewData {
+  kpis: {
+    usersTotal: number
+    usersActiveToday: number
+    usersActive7d: number
+    usersNew7d: number
+    usersSuspended: number
+    usersAdmins: number
+    errors24h: number
+    tasksTotal: number
+    habitsTotal: number
+    journalsTotal: number
+    focusTotal: number
+  }
+  errors7d: { date: string; count: number }[]
+  recentSignups: { id: string; name: string; email: string; createdAt: string; role: string; suspended: boolean }[]
+  recentAudit: { id: string; adminId: string; action: string; detail: string; createdAt: string }[]
+  dbLatencyMs: number
+}
+
+function KpiCard({ label, value, hint, tone = 'default', icon: Icon }: { label: string; value: number; hint?: string; tone?: 'default' | 'good' | 'warn' | 'bad'; icon: any }) {
+  const toneCls = tone === 'good' ? 'text-emerald-accent' : tone === 'warn' ? 'text-gold' : tone === 'bad' ? 'text-destructive' : 'text-foreground'
+  return (
+    <div className="neo-card p-4">
+      <Icon className={cn('w-4.5 h-4.5 mb-2', tone === 'good' ? 'text-emerald-accent' : tone === 'warn' ? 'text-gold' : tone === 'bad' ? 'text-destructive' : 'text-muted-foreground')} />
+      <p className={cn('text-2xl font-black tabular-nums', toneCls)}>{toArabicNum(value)}</p>
+      <p className="text-xs font-medium text-foreground mt-0.5">{label}</p>
+      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
+    </div>
+  )
+}
+
+function OverviewTab({ onBroadcast }: { onBroadcast: () => void }) {
+  const [data, setData] = useState<OverviewData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await apiFetch('/api/rise/admin/overview')
+      if (res.ok) setData(await res.json())
+    } catch { /* silent */ }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 90_000)
+    return () => clearInterval(t)
+  }, [load])
+
+  if (loading && !data) return <StatsSkeleton />
+  if (!data) {
+    return <div className="neo-card p-6 text-center text-sm text-muted-foreground">فشل تحميل النظرة العامة</div>
+  }
+
+  const k = data.kpis
+  const maxErr = Math.max(1, ...data.errors7d.map(e => e.count))
+  const engagement7d = k.usersTotal > 0 ? Math.round((k.usersActive7d / k.usersTotal) * 100) : 0
+
+  return (
+    <div className="space-y-4">
+      {/* ── Quick actions ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" className="h-8 gap-1.5 text-xs bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink" onClick={onBroadcast}>
+          <Megaphone className="w-3.5 h-3.5" />
+          إعلان لكل المستخدمين
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={load} disabled={loading}>
+          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          تحديث
+        </Button>
+        <span className="text-[10px] text-muted-foreground ms-auto">
+          قاعدة البيانات {toArabicNum(data.dbLatencyMs)} م.ث · تحديث تلقائي كل ٩٠ ث
+        </span>
+      </div>
+
+      {/* ── KPI grid ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard icon={Users} label="إجمالي المستخدمين" value={k.usersTotal} hint={`${toArabicNum(k.usersAdmins)} أدمن · ${toArabicNum(k.usersSuspended)} موقوف`} />
+        <KpiCard icon={Activity} label="نشِط اليوم" value={k.usersActiveToday} tone={k.usersActiveToday > 0 ? 'good' : 'default'} hint={`${toArabicNum(k.usersActive7d)} خلال ٧ أيام`} />
+        <KpiCard icon={TrendingUp} label="تفاعل أسبوعي" value={engagement7d} hint="٪ من المستخدمين نشِطوا هذا الأسبوع" tone={engagement7d >= 40 ? 'good' : engagement7d >= 15 ? 'warn' : 'bad'} />
+        <KpiCard icon={UserPlus} label="جديد هذا الأسبوع" value={k.usersNew7d} tone={k.usersNew7d > 0 ? 'good' : 'default'} />
+      </div>
+
+      {/* ── Content volume + errors ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="neo-card p-4">
+          <p className="text-sm font-semibold mb-3 flex items-center gap-2"><BarChart3 className="w-4 h-4 text-forest" />حجم المحتوى</p>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {[
+              { label: 'مهام', v: k.tasksTotal }, { label: 'عادات', v: k.habitsTotal },
+              { label: 'يوميات', v: k.journalsTotal }, { label: 'جلسات تركيز', v: k.focusTotal },
+            ].map(x => (
+              <div key={x.label}>
+                <p className="text-lg font-bold tabular-nums">{toArabicNum(x.v)}</p>
+                <p className="text-[10px] text-muted-foreground">{x.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="neo-card p-4">
+          <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <AlertTriangle className={cn('w-4 h-4', k.errors24h > 0 ? 'text-gold' : 'text-emerald-accent')} />
+            أخطاء آخر ٧ أيام
+            <span className="pill pill-muted text-[10px] ms-auto" dir="ltr">{toArabicNum(k.errors24h)} / اليوم</span>
+          </p>
+          <div className="flex items-end gap-1.5 h-16" dir="ltr">
+            {data.errors7d.map(e => (
+              <div key={e.date} className="flex-1 flex flex-col items-center gap-1" title={`${e.date}: ${e.count}`}>
+                <div
+                  className={cn('w-full rounded-t-md transition-all', e.count > 0 ? 'bg-gold/70' : 'bg-primary/10')}
+                  style={{ height: `${Math.max(6, (e.count / maxErr) * 100)}%` }}
+                />
+                <span className="text-[8px] text-muted-foreground">{e.date.slice(8)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent signups + audit ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="neo-card p-4">
+          <p className="text-sm font-semibold mb-2 flex items-center gap-2"><UserPlus className="w-4 h-4 text-forest" />أحدث الانضمامات</p>
+          {data.recentSignups.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-3">لا انضمامات جديدة هذا الأسبوع</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.recentSignups.map(s => (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium">{s.name}</span>
+                  <span className="text-muted-foreground truncate max-w-[140px]" dir="ltr">{s.email}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(s.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="neo-card p-4">
+          <p className="text-sm font-semibold mb-2 flex items-center gap-2"><Shield className="w-4 h-4 text-rose-accent" />آخر عمليات الإدارة</p>
+          {data.recentAudit.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-3">لا عمليات مسجلة بعد</p>
+          ) : (
+            <div className="space-y-1.5">
+              {data.recentAudit.map(a => (
+                <div key={a.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium">{a.action.replace('Admin: ', '')}</span>
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[160px]" dir="ltr">{a.detail}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(a.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════ Broadcast Dialog (ADMIN PRO) ═══════════════ */
+
+function BroadcastDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const send = async () => {
+    if (!title.trim() || !body.trim()) return
+    setSending(true)
+    try {
+      const res = await apiFetch('/api/rise/admin/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ title: title.trim(), body: body.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        toast.success(`تم إرسال الإعلان إلى ${toArabicNum(data.sent || 0)} مستخدم`)
+        setTitle('')
+        setBody('')
+        onOpenChange(false)
+      } else {
+        toast.error(data?.error || 'فشل الإرسال')
+      }
+    } catch {
+      toast.error('فشل الاتصال')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Megaphone className="w-4 h-4 text-forest" />
+            إعلان لكل المستخدمين
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-xs text-muted-foreground">سيصل كإشعار 📣 في جرس الإشعارات عند فتح كل مستخدم للتطبيق.</p>
+          <Input placeholder="العنوان (مثال: صيانة مجدولة الليلة)" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} className="text-sm" dir="rtl" />
+          <textarea
+            placeholder="نص الإعلان..."
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            maxLength={1000}
+            rows={4}
+            className="w-full rounded-xl neo-input text-sm p-3 min-h-[90px] resize-none bg-transparent"
+            dir="rtl"
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button
+            onClick={send}
+            disabled={sending || !title.trim() || !body.trim()}
+            className="gap-1.5 bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink"
+          >
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Megaphone className="w-4 h-4" />}
+            إرسال
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/* ═══════════════ Audit Tab (ADMIN PRO) ═══════════════ */
+
+interface AuditEntryItem {
+  id: string
+  adminId: string
+  adminName: string
+  action: string
+  detail: string
+  createdAt: string
+}
+
+function AuditTab() {
+  const [entries, setEntries] = useState<AuditEntryItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await apiFetch('/api/rise/admin/audit')
+      if (res.ok) {
+        const data = await res.json()
+        setEntries(data.entries || [])
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div className="neo-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <Shield className="w-4 h-4 text-rose-accent" />
+          سجل عمليات الإدارة
+          {entries.length > 0 && <span className="pill pill-muted text-[10px]" dir="ltr">{toArabicNum(entries.length)}</span>}
+        </p>
+        <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={load} disabled={loading}>
+          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          تحديث
+        </Button>
+      </div>
+      {loading && entries.length === 0 ? (
+        <TableSkeleton />
+      ) : entries.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-10">لا عمليات إدارة مسجلة بعد — كل إجراء (ترقية، إيقاف، حذف، إعلان) سيُسجل هنا تلقائياً.</p>
+      ) : (
+        <div className="max-h-96 overflow-y-auto rounded-xl border border-border">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+              <TableRow>
+                <TableHead className="text-start ps-3 w-[100px]">الوقت</TableHead>
+                <TableHead className="text-start">العملية</TableHead>
+                <TableHead className="text-start hidden md:table-cell">التفاصيل</TableHead>
+                <TableHead className="text-start hidden lg:table-cell w-[110px]">بواسطة</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {entries.map(e => (
+                <TableRow key={e.id}>
+                  <TableCell className="ps-3 text-[11px] text-muted-foreground whitespace-nowrap">{timeAgo(e.createdAt)}</TableCell>
+                  <TableCell>
+                    <span className="pill pill-muted text-[10px]">{e.action.replace('Admin: ', '')}</span>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-[11px] text-muted-foreground truncate max-w-[220px]" dir="ltr">{e.detail || '—'}</TableCell>
+                  <TableCell className="hidden lg:table-cell text-[11px] text-muted-foreground">{e.adminName}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ═══════════════ Main Admin Panel Component ═══════════════ */
 
 export default function AdminPanel() {
   const { auth } = useRiseStore()
+  const [broadcastOpen, setBroadcastOpen] = useState(false)
 
   // Non-admin users should never see this, but just in case
   if (!auth?.isAdmin) {
@@ -1579,30 +1889,41 @@ export default function AdminPanel() {
         <div className="flex-1">
           <h3 className="text-base font-bold flex items-center gap-2">
             لوحة الإدارة
-            <span className="pill bg-rose-accent/15 text-rose-accent text-[10px]">Admin</span>
+            <span className="pill bg-rose-accent/15 text-rose-accent text-[10px]">Admin Pro</span>
           </h3>
-          <p className="text-xs text-muted-foreground">إدارة النظام والمستخدمين والبيانات</p>
+          <p className="text-xs text-muted-foreground">قيادة الموقع: المستخدمين، الصحة، الأخطاء، الإعلانات والتدقيق</p>
         </div>
       </div>
 
+      {/* Broadcast Dialog */}
+      <BroadcastDialog open={broadcastOpen} onOpenChange={setBroadcastOpen} />
+
       {/* Tabs */}
-      <Tabs defaultValue="users" className="w-full" dir="rtl">
+      <Tabs defaultValue="overview" className="w-full" dir="rtl">
         <TabsList className="w-full justify-start bg-muted/50 h-10 p-1 rounded-xl overflow-x-auto">
+          <TabsTrigger value="overview" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>نظرة عامة</span>
+          </TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
             <Users className="w-3.5 h-3.5" />
             <span>المستخدمين</span>
           </TabsTrigger>
+          <TabsTrigger value="health" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Activity className="w-3.5 h-3.5" />
+            <span>الصحة والأخطاء</span>
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Shield className="w-3.5 h-3.5" />
+            <span>سجل العمليات</span>
+          </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
-            <BarChart3 className="w-3.5 h-3.5" />
+            <TrendingUp className="w-3.5 h-3.5" />
             <span>الإحصائيات</span>
           </TabsTrigger>
           <TabsTrigger value="database" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
             <Database className="w-3.5 h-3.5" />
             <span>قاعدة البيانات</span>
-          </TabsTrigger>
-          <TabsTrigger value="health" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
-            <Activity className="w-3.5 h-3.5" />
-            <span>الصحة والأخطاء</span>
           </TabsTrigger>
           <TabsTrigger value="api-keys" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
             <Key className="w-3.5 h-3.5" />
@@ -1610,17 +1931,23 @@ export default function AdminPanel() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="overview">
+          <OverviewTab onBroadcast={() => setBroadcastOpen(true)} />
+        </TabsContent>
         <TabsContent value="users">
           <UserManagementTab />
         </TabsContent>
         <TabsContent value="stats">
           <SystemStatsTab />
         </TabsContent>
-        <TabsContent value="database">
-          <DatabaseTab />
-        </TabsContent>
         <TabsContent value="health">
           <HealthErrorsTab />
+        </TabsContent>
+        <TabsContent value="audit">
+          <AuditTab />
+        </TabsContent>
+        <TabsContent value="database">
+          <DatabaseTab />
         </TabsContent>
         <TabsContent value="api-keys">
           <ApiKeysTab />

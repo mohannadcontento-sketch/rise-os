@@ -16,8 +16,10 @@ export const dynamic = 'force-dynamic'
 // Now, if the JWT is expired, this route returns {user: null}.
 // ============================================================
 
-async function checkAdminRole(userId: string, email: string | undefined): Promise<boolean> {
-  if (email && email === ADMIN_EMAIL) return true
+async function getProfileFlags(userId: string, email: string | undefined): Promise<{ isAdmin: boolean; avatar: string | null; suspended: boolean }> {
+  if (email && email === ADMIN_EMAIL) {
+    return { isAdmin: true, avatar: await getAvatar(userId), suspended: false } // admin email never suspended
+  }
   if (isSupabaseConfigured()) {
     try {
       const admin = await getSupabaseAdmin()
@@ -25,15 +27,19 @@ async function checkAdminRole(userId: string, email: string | undefined): Promis
         const sb = admin as any
         const { data } = await sb
           .from('profiles')
-          .select('role')
+          .select('role, avatar, suspended')
           .eq('id', userId)
-          .single()
-        const d = data as { role?: string } | null
-        if (isAdminRole(d?.role)) return true
+          .maybeSingle()
+        const d = data as { role?: string; avatar?: string; suspended?: boolean } | null
+        return {
+          isAdmin: isAdminRole(d?.role),
+          avatar: d?.avatar || null,
+          suspended: d?.suspended === true,
+        }
       }
     } catch { /* ignore */ }
   }
-  return false
+  return { isAdmin: false, avatar: null, suspended: false }
 }
 
 async function getAvatar(userId: string): Promise<string | null> {
@@ -75,8 +81,7 @@ export async function GET(request: NextRequest) {
         try {
           const { data: { user }, error } = await supabase.auth.getUser(token)
           if (!error && user) {
-            const isAdmin = await checkAdminRole(user.id, user.email)
-            const avatar = await getAvatar(user.id)
+            const { isAdmin, avatar, suspended } = await getProfileFlags(user.id, user.email)
             return NextResponse.json({
               user: {
                 id: user.id,
@@ -84,6 +89,7 @@ export async function GET(request: NextRequest) {
                 name: (user as any).user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
                 isAdmin,
                 avatar,
+                suspended,
               },
               expires: new Date(((user as any).exp || 0) * 1000).toISOString() || null,
             })
@@ -99,9 +105,9 @@ export async function GET(request: NextRequest) {
 
     if (!user) return NextResponse.json({ user: null, expires: null })
 
-    const isAdmin = await checkAdminRole(user.id, user.email)
+    const { isAdmin, suspended } = await getProfileFlags(user.id, user.email || undefined)
     return NextResponse.json({
-      user: { id: user.id, email: user.email, name: user.name, isAdmin },
+      user: { id: user.id, email: user.email, name: user.name, isAdmin, suspended },
     })
   } catch {
     return NextResponse.json({ user: null, expires: null })

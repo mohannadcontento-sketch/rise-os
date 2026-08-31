@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
     // Check admin role and avatar from Supabase profiles table
     let isAdmin = email === ADMIN_EMAIL
     let avatar: string | null = null
+    let suspended = false
     try {
       const admin = await getSupabaseAdmin()
       if (admin) {
@@ -108,11 +109,20 @@ export async function POST(request: NextRequest) {
           .select('role, avatar')
           .eq('id', user.id)
           .single()
-        const p = profile as { role?: string; avatar?: string } | null
+        const p = profile as { role?: string; avatar?: string; suspended?: boolean } | null
         if (isAdminRole(p?.role)) isAdmin = true
         avatar = p?.avatar || null
+        suspended = p?.suspended === true
       }
     } catch { /* ignore */ }
+
+    // ADMIN PRO: حساب موقوف — منع الدخول برسالة واضحة (423 Locked)
+    if (suspended) {
+      return NextResponse.json(
+        { error: 'تم إيقاف هذا الحساب. تواصل مع إدارة الموقع.', code: 'SUSPENDED' },
+        { status: 423 }
+      )
+    }
 
     const userInfo = {
       id: user.id,
