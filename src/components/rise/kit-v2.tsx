@@ -35,6 +35,14 @@ export function RainbowCheckbox({
 }) {
   return (
     <label
+      // TASK 25 ROOT-CAUSE FIX — "بعمل شيك بس بيرجع علطول":
+      // clicking the checkbox inside a clickable parent (morning routine row,
+      // planner card, …) fired BOTH the input's onChange AND the parent's
+      // onClick → the item toggled TWICE (add → remove) → the check appeared
+      // then instantly vanished, and the final save stored an EMPTY set.
+      // Stopping propagation at the label makes every checkbox click toggle
+      // EXACTLY ONCE regardless of where it is embedded.
+      onClick={(e) => e.stopPropagation()}
       className={cn("group inline-flex cursor-pointer items-center gap-2", disabled && "cursor-not-allowed opacity-50", className)}
     >
       <input
