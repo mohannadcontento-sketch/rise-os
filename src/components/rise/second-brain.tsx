@@ -153,7 +153,11 @@ export default function SecondBrain() {
       const res = await apiFetch(`/api/rise/knowledge`)
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
-      setItems(data.items || [])
+      // TASK 25 FIX — "الدماغ بياخد اللي بكتبه من التعلم والدورات ويحطه عنده":
+      // the Learning module stores its goals/courses/skills/logs in the SAME
+      // knowledge table (types learning-*), so they leaked into the Second
+      // Brain list. The Second Brain shows ONLY its own items now.
+      setItems((data.items || []).filter((i: any) => !String(i.type || '').startsWith('learning')))
     } catch {
       toast.error('فشل في تحميل البيانات')
     } finally {

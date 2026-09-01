@@ -141,6 +141,16 @@ export default function Health() {
 
   const today = getToday()
 
+  // TASK 25 FIX — "الصحة مبيحصلش حفظ او اي تغير":
+  // The checklist (water drops / stars / exercise) only touched local form
+  // state. If the user didn't find (or notice) the small manual "حفظ" button
+  // at the top, NOTHING persisted — and any background refetch could even
+  // roll the form back. Now the form AUTO-SAVES (debounced) after any edit,
+  // and background refetches never clobber a form the user is editing.
+  const formDirtyRef = useRef(false)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const formRef = useRef(form)
+  formRef.current = form
   /* ─── Fetch ─── */
   const { refreshKey } = useDataRefresh()
 
@@ -150,7 +160,10 @@ export default function Health() {
       if (res.ok) {
         const json = await res.json()
         setData(json)
-        if (json.todayLog) {
+        // CLOBBER GUARD: the user may be mid-edit (or the tab may hold
+        // unsaved edits awaiting auto-save). Only sync the form from the
+        // server when the user is NOT editing.
+        if (json.todayLog && !formDirtyRef.current) {
           const t = json.todayLog
           setForm({
             sleepHours: t.sleepHours || 0,
@@ -179,17 +192,11 @@ export default function Health() {
   }, [fetchHealth, refreshKey])
 
   /* ─── Save ─── */
-  const handleSave = async () => {
-    setSaving(true)
+  const persistForm = useCallback(async (payload: Record<string, unknown>) => {
     try {
-      const res = await apiPost('/api/rise/health', {
-        ...form,
-        date: today,
-        exerciseNotes,
-      })
+      const res = await apiPost('/api/rise/health', payload)
       if (res.ok) {
         toastSaved('بيانات الصحة')
-        // (fetchData removed — useDataRefresh handles background sync)
       } else {
         toastError('حفظ البيانات')
       }
@@ -198,10 +205,34 @@ export default function Health() {
     } finally {
       setSaving(false)
     }
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    // Manual save: clear the dirty flag FIRST so the refetch (fired by the
+    // write's data-changed event) may sync the form from the server.
+    formDirtyRef.current = false
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    await persistForm({ ...form, date: today, exerciseNotes })
   }
+
+  // AUTO-SAVE (debounced 900ms): any user edit persists automatically.
+  // The manual button still works and skips the debounce.
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => {
+      formDirtyRef.current = false
+      // fire-and-forget; toast spam avoided by toastSaved throttle
+      persistForm({ ...formRef.current, date: today, exerciseNotes })
+    }, 900)
+  }, [today, exerciseNotes, persistForm])
 
   const updateForm = (field: string, value: number | string | null) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+    // Mark dirty BEFORE the next render so a racing refetch can't clobber
+    // the edit, and schedule the debounced auto-save.
+    formDirtyRef.current = true
+    scheduleAutoSave()
   }
 
   /* ─── Chart Data ─── */
@@ -389,7 +420,7 @@ export default function Health() {
       variants={containerVariants}
       initial="hidden"
       animate="show"
-      className="space-y-6 p-4 md:p-6"
+      className="space-y-6"
     >
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
@@ -888,7 +919,14 @@ export default function Health() {
                 <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
                 <Input
                   value={exerciseNotes}
-                  onChange={(e) => setExerciseNotes(e.target.value)}
+                  onChange={(e) => {
+                    setExerciseNotes(e.target.value)
+                    // TASK 25: notes participate in auto-save too (they were
+                    // the fields silently dropped by the server field-name
+                    // mismatch — now mapped AND persisted automatically).
+                    formDirtyRef.current = true
+                    scheduleAutoSave()
+                  }}
                   className="rounded-xl border-0 bg-muted/50 focus:bg-muted text-sm"
                   placeholder="ملاحظات إضافية..."
                   dir="rtl"
@@ -968,6 +1006,17 @@ export default function Health() {
             <h3 className="text-sm font-bold text-foreground">الرسوم البيانية (آخر ١٤ يوم)</h3>
           </div>
           <div>
+            {(data?.logs || []).length === 0 ? (
+              /* TASK 25: honest empty state instead of zero-filled empty
+                 charts (read as "مساحة فاضية تحت الصفحة") */
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                <span className="icon-well iw-rose w-10 h-10">
+                  <Activity className="w-5 h-5" />
+                </span>
+                <p className="text-sm font-semibold text-foreground">الرسوم البيانية هتظهر أول ما تسجل بيانات</p>
+                <p className="text-xs text-muted-foreground max-w-xs">سجّل نومك ومائك وتمارينك النهاردة — وهتلاقي هنا تحليل آخر ١٤ يوم</p>
+              </div>
+            ) : (
             <Tabs defaultValue="sleep" className="w-full">
               <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50 rounded-xl">
                 <TabsTrigger
@@ -1065,9 +1114,10 @@ export default function Health() {
                 </div>
               </TabsContent>
             </Tabs>
+            )}
           </div>
         </div>
       </motion.div>
     </motion.div>
   )
-}// Force recompile: 1785702715
+}

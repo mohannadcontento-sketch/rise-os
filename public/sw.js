@@ -2,7 +2,9 @@
 // Handles push notifications, background sync, and cache for PWA
 
 const CACHE_NAME = 'rise-os-v3'
-const API_CACHE_NAME = 'rise-api-v2'
+// TASK 25: bumped to v3 — drops ALL legacy API cache entries (they carry no
+// freshness timestamp and must never be served as offline fallback).
+const API_CACHE_NAME = 'rise-api-v3'
 const STATIC_ASSETS = [
   '/app',
   '/icon-192.png',
@@ -50,23 +52,57 @@ self.addEventListener('fetch', (event) => {
   // Network-first: fresh data when online (99% of the time), cached data
   // ONLY as an offline fallback. Bumped API_CACHE_NAME to v2 to drop all
   // legacy SWR entries.
+  //
+  // TASK 25 — FRESHNESS GUARD on the fallback:
+  // The bare catch() used to serve a cached copy of ANY age. On a flaky
+  // mobile connection a GET that failed right after a successful write was
+  // answered from the PRE-WRITE cache → components overwrote their fresh
+  // optimistic state with old server data → "الشيك بيرجععلطول / الصحة مش
+  // بتتسجل" (checks/health revert) while the dashboard (fetched later over
+  // a healthy connection) showed the saved change. Now the cached fallback
+  // is served ONLY if it is <30s old; anything older returns 503 so
+  // components KEEP their current state (apiFetch treats non-ok as
+  // "keep state").
   if (url.pathname.startsWith('/api/rise/') || url.pathname.startsWith('/api/auth/')) {
+    const CACHE_TTL_MS = 30_000
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           if (response.ok) {
+            // Store the ORIGINAL response untouched + a tiny side-entry that
+            // carries the cache time. Re-wrapping the body would risk
+            // content-encoding mismatches; a side-entry cannot corrupt data.
             const clone = response.clone()
-            caches.open(API_CACHE_NAME).then((cache) => cache.put(event.request, clone))
+            caches.open(API_CACHE_NAME).then((cache) =>
+              Promise.all([
+                cache.put(event.request, clone),
+                cache.put(event.request.url + ':ts', new Response(String(Date.now()))),
+              ])
+            )
           }
           return response
         })
         .catch(() =>
-          caches.match(event.request).then((cached) =>
-            cached || new Response(JSON.stringify({ error: 'offline' }), {
-              status: 503,
-              headers: { 'Content-Type': 'application/json' },
+          caches.match(event.request).then((cached) => {
+            if (!cached) {
+              return new Response(JSON.stringify({ error: 'offline' }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+              })
+            }
+            // Serve from cache ONLY if it is younger than the TTL — an older
+            // snapshot would roll the UI back to pre-write data.
+            return caches.match(event.request.url + ':ts').then((tsRes) =>
+              tsRes ? tsRes.text() : Promise.resolve('')
+            ).then((tsRaw) => {
+              const cachedAt = Number(tsRaw || 0)
+              if (cachedAt && Date.now() - cachedAt < CACHE_TTL_MS) return cached
+              return new Response(JSON.stringify({ error: 'offline', stale: true }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+              })
             })
-          )
+          })
         )
     )
     return

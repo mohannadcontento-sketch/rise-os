@@ -20,6 +20,8 @@ import {
   TrendingUp,
   Flame,
   Calendar,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -148,6 +150,9 @@ export default function Reading() {
   const [expandedBook, setExpandedBook] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  // TASK 25: visible retry banner on load failure (silent failure made users
+  // think their newly added book "disappeared" until re-entering the tab)
+  const [fetchFailed, setFetchFailed] = useState(false)
 
   // Add book form
   const [newTitle, setNewTitle] = useState('')
@@ -169,8 +174,10 @@ export default function Reading() {
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
       setBooks(data.books || [])
+      setFetchFailed(false)
     } catch {
-      toast.error('فشل في تحميل الكتب')
+      // Keep existing list — only surface the retry banner
+      setFetchFailed(true)
     } finally {
       setLoading(false)
     }
@@ -182,12 +189,16 @@ export default function Reading() {
 
   const handleAddBook = async () => {
     if (!newTitle.trim()) return
+    const title = newTitle.trim()
+    const author = newAuthor.trim() || null
+    const type = newType
+    const totalPages = newTotalPages ? parseInt(newTotalPages) : null
     try {
       const res = await apiPost('/api/rise/books', {
-        title: newTitle,
-        author: newAuthor || null,
-        type: newType,
-        totalPages: newTotalPages ? parseInt(newTotalPages) : null,
+        title,
+        author,
+        type,
+        totalPages,
         status: 'reading',
       })
       if (!res.ok) {
@@ -195,8 +206,36 @@ export default function Reading() {
         toastError('إضافة الكتاب', errData.error || errData.details || 'حاول مرة أخرى')
         return
       }
-      toastCreated('الكتاب')
-      fetchBooks()
+      // TASK 25 FIX — "اشعار خطأ + الكتاب يظهر بعد الخروج والدخول":
+      // we used to rely on fetchBooks() (a GET that could fail on flaky
+      // networks) to reveal the new book. The POST response already carries
+      // the created record — insert it optimistically so the book appears
+      // INSTANTLY, then sync in the background.
+      const created = await res.json().catch(() => null)
+      if (created && created.id) {
+        setBooks((prev) => [{
+          id: created.id,
+          title: created.title ?? title,
+          author: created.author ?? author,
+          type: created.type ?? type,
+          status: created.status ?? 'reading',
+          currentPage: created.currentPage ?? 0,
+          totalPages: created.totalPages ?? totalPages,
+          progress: created.progress ?? 0,
+          rating: created.rating ?? null,
+          favoriteQuote: created.favoriteQuote ?? null,
+          highlights: created.highlights ?? null,
+          startDate: created.startDate ?? getToday(),
+          endDate: created.endDate ?? null,
+          notes: created.notes ?? null,
+        }, ...prev])
+      }
+      // Offline-queued writes land later — tell the user honestly
+      if (res.headers.get('X-Offline-Queued') === 'true') {
+        toast.success('اتحفظ مؤقتًا على جهازك — هيتبعت للسيرفر أول ما يرجع الاتصال')
+      } else {
+        toastCreated('الكتاب')
+      }
       setNewTitle('')
       setNewAuthor('')
       setNewType('book')
@@ -332,6 +371,20 @@ export default function Reading() {
 
   return (
     <div dir="rtl" className="space-y-6">
+      {/* TASK 25: retry banner when the books list could not be refreshed */}
+      {fetchFailed && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-gold shrink-0" />
+            <p className="text-xs text-foreground">تعذر تحميل أحدث بيانات الكتب — المعلومات المعروضة قد لا تكون محدثة.</p>
+          </div>
+          <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs border-gold/50 hover:bg-gold/10" onClick={fetchBooks}>
+            <RefreshCw className="w-3.5 h-3.5 me-1" />
+            إعادة المحاولة
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

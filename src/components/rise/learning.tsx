@@ -198,6 +198,7 @@ export default function Learning() {
   // Editing
   const [editingLog, setEditingLog] = useState<string | null>(null)
   const [editLogContent, setEditLogContent] = useState('')
+  const [editLogMinutes, setEditLogMinutes] = useState('')
 
   // Edit skill
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
@@ -562,12 +563,25 @@ export default function Learning() {
   }
 
   const saveLogEdit = (id: string) => {
+    const minutes = parseInt(editLogMinutes, 10)
     setData((prev) => ({
       ...prev,
-      logs: prev.logs.map((l) => (l.id === id ? { ...l, content: editLogContent } : l)),
+      logs: prev.logs.map((l) => (
+        l.id === id
+          ? { ...l, content: editLogContent, minutesSpent: isNaN(minutes) ? l.minutesSpent : minutes }
+          : l
+      )),
     }))
     if (!id.startsWith('temp-')) {
-      apiPut('/api/rise/knowledge', { id, content: editLogContent }).catch(() => {})
+      // TASK 25: persist BOTH content and minutes (was content-only — edits
+      // to the log's time were impossible "وكذلك في سجل التعلم")
+      const log = data.logs.find((l) => l.id === id)
+      const nextMinutes = isNaN(minutes) ? (log?.minutesSpent ?? 0) : minutes
+      apiPut('/api/rise/knowledge', {
+        id,
+        content: editLogContent,
+        tags: JSON.stringify({ minutes: nextMinutes, date: log?.date || getToday() }),
+      }).catch(() => {})
     }
     setEditingLog(null)
     toastSaved('السجل')
@@ -1050,6 +1064,24 @@ export default function Learning() {
                             onKeyDown={(e) => e.key === 'Enter' && saveSkillEdit()}
                             autoFocus
                           />
+                          {/* TASK 25: level editor right inside edit mode */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => updateSkillLevel(skill.id, skill.level - 1)}
+                              className="w-6 h-6 rounded-md bg-muted text-muted-foreground hover:bg-muted/70 text-sm font-bold leading-none"
+                              title="تقليل المستوى"
+                            >
+                              −
+                            </button>
+                            <span className="num text-xs font-semibold w-6 text-center" dir="ltr">{skill.level}/5</span>
+                            <button
+                              onClick={() => updateSkillLevel(skill.id, skill.level + 1)}
+                              className="w-6 h-6 rounded-md bg-muted text-muted-foreground hover:bg-muted/70 text-sm font-bold leading-none"
+                              title="رفع المستوى"
+                            >
+                              +
+                            </button>
+                          </div>
                           <button onClick={saveSkillEdit} className="p-1 rounded-md bg-glass/10 text-glass hover:bg-glass/20">
                             <Check className="w-3 h-3" />
                           </button>
@@ -1058,23 +1090,47 @@ export default function Learning() {
                           </button>
                         </div>
                       ) : (
-                        <div className={cn('bg-card border border-border rounded-2xl overflow-hidden bg-gradient-to-l', skill.color)}>
+                        <div className={cn('bg-card border border-border rounded-2xl bg-gradient-to-l', skill.color)}>
                           <div className="p-3">
                             <div className="flex items-center gap-2.5">
                               <ProgressRing level={skill.level} color={skillDotColors[i % skillDotColors.length]} size={36} strokeWidth={2.5} />
                               <span className="text-sm font-medium">{skill.name}</span>
-                              <span className="text-[10px] text-muted-foreground/60">({skill.level}/٥)</span>
+                              <span className="text-[10px] text-muted-foreground/60 num" dir="ltr">({skill.level}/٥)</span>
+                              {/* TASK 25 — "أقدر أعدل مستوى المهارة بعدين": inline
+                                  level stepper. The old edit/delete buttons were
+                                  hover-only (opacity-0 group-hover) = INVISIBLE
+                                  on touch screens — now always visible. */}
+                              <div className="flex items-center gap-1 ms-auto">
+                                <button
+                                  onClick={() => updateSkillLevel(skill.id, skill.level - 1)}
+                                  disabled={skill.level <= 1}
+                                  className="w-6 h-6 rounded-md bg-background/60 border border-border text-muted-foreground hover:text-foreground hover:bg-background text-sm font-bold leading-none disabled:opacity-30"
+                                  title="تقليل المستوى"
+                                >
+                                  −
+                                </button>
+                                <button
+                                  onClick={() => updateSkillLevel(skill.id, skill.level + 1)}
+                                  disabled={skill.level >= 5}
+                                  className="w-6 h-6 rounded-md bg-background/60 border border-border text-muted-foreground hover:text-foreground hover:bg-background text-sm font-bold leading-none disabled:opacity-30"
+                                  title="رفع المستوى"
+                                >
+                                  +
+                                </button>
+                              </div>
                               <button
                                 onClick={() => { setEditingSkill(skill.id); setEditSkillName(skill.name) }}
-                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all"
+                                className="p-1 rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-all"
+                                title="تعديل الاسم"
                               >
-                                <Edit3 className="w-3 h-3" />
+                                <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => deleteSkill(skill.id)}
-                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                                className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                                title="حذف"
                               >
-                                <X className="w-3 h-3" />
+                                <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
@@ -1173,15 +1229,28 @@ export default function Learning() {
                               )}
                             </div>
                             {editingLog === log.id ? (
-                              <div className="flex gap-2">
+                              <div className="space-y-2">
                                 <Textarea value={editLogContent} onChange={(e) => setEditLogContent(e.target.value)} rows={2} className="text-sm" />
-                                <div className="flex flex-col gap-1">
-                                  <button onClick={() => saveLogEdit(log.id)} className="p-1.5 rounded-lg bg-glass/10 text-glass hover:bg-glass/20">
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button onClick={() => setEditingLog(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
+                                {/* TASK 25: minutes editable too */}
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={editLogMinutes}
+                                    onChange={(e) => setEditLogMinutes(e.target.value)}
+                                    className="h-8 text-sm num w-24"
+                                    dir="ltr"
+                                    placeholder="دقائق"
+                                  />
+                                  <span className="text-xs text-muted-foreground">دقيقة</span>
+                                  <div className="flex gap-1 ms-auto">
+                                    <button onClick={() => saveLogEdit(log.id)} className="p-1.5 rounded-lg bg-glass/10 text-glass hover:bg-glass/20">
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => setEditingLog(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ) : (
@@ -1190,7 +1259,7 @@ export default function Learning() {
                           </div>
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => { setEditingLog(log.id); setEditLogContent(log.content) }}
+                              onClick={() => { setEditingLog(log.id); setEditLogContent(log.content); setEditLogMinutes(String(log.minutesSpent || '')) }}
                               className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                             >
                               <Edit3 className="w-3.5 h-3.5" />

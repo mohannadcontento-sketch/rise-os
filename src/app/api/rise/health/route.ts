@@ -17,6 +17,11 @@ const ALLOWED_FIELDS = [
 const FIELD_MAP: Record<string, string> = {
   water: 'waterGlasses',
   exercise: 'exerciseType',
+  // TASK 25 FIX: the client form field is "exerciseNotes" (plural) but the DB
+  // column is exercise_note — the name mismatch meant exercise notes were
+  // SILENTLY DROPPED on every save ("الصحة مبيحصلش حفظ"). Accept both spellings.
+  exerciseNotes: 'exerciseNote',
+  exerciseNote: 'exerciseNote',
 }
 
 export async function GET(req: NextRequest) {
