@@ -151,6 +151,11 @@ export default function Health() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const formRef = useRef(form)
   formRef.current = form
+  // TASK 25: ref mirror of exerciseNotes — the debounced timer must read the
+  // LATEST notes, not the value captured when scheduleAutoSave was created
+  // (stale closure sent notes as '' — the exact "no save" symptom).
+  const notesRef = useRef(exerciseNotes)
+  notesRef.current = exerciseNotes
   /* ─── Fetch ─── */
   const { refreshKey } = useDataRefresh()
 
@@ -222,10 +227,9 @@ export default function Health() {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     autoSaveTimerRef.current = setTimeout(() => {
       formDirtyRef.current = false
-      // fire-and-forget; toast spam avoided by toastSaved throttle
-      persistForm({ ...formRef.current, date: today, exerciseNotes })
+      persistForm({ ...formRef.current, date: today, exerciseNotes: notesRef.current })
     }, 900)
-  }, [today, exerciseNotes, persistForm])
+  }, [today, persistForm])
 
   const updateForm = (field: string, value: number | string | null) => {
     setForm((prev) => ({ ...prev, [field]: value }))
