@@ -150,3 +150,25 @@ Stage Summary:
 - VERDICT: GO for launch. Latency p50≈0.72s p95≈1.0s (healthy, stable over time); degradation under extreme burst is protective 429s not crashes
 - Recommendation: rate limiter is per-IP in-memory — add Upstash env vars for distributed correctness and/or per-user limits (NAT/classroom edge: many users on one WiFi share the 300/min budget)
 - Owner note: browser E2E ran pre-fix deploy (fixes are API-payload-only, zero UI impact); API suite re-ran post-deploy 60/60
+
+---
+Task ID: 25
+Agent: Super Z (main)
+Task: Owner bug batch — morning check reverts / health never saves / empty space / books save-error + instant-appear / skill level editing / second-brain leaks learning content — then FINAL pre-launch test round
+
+Work Log:
+- REPRO FIRST (scripts/repro-25.js on prod): server persistence 100% correct for morning/health/books → bugs are CLIENT-side; found exerciseNotes(exerciseNote field mismatch + books garbage 500
+- ROOT CAUSE #1 "الشيك بيرجع علطول": RainbowCheckbox is <label>+<input> inside clickable rows — one click fired input onChange AND row onClick → toggle twice (add→remove) → check vanished instantly, final save stored EMPTY set. Fix: stopPropagation at the label (kit-v2.tsx) — single point, app-wide (commit aff68ce)
+- ROOT CAUSE #2 stale rollbacks on flaky networks: sw.js served API cache of ANY age on network hiccup (pre-write snapshot overwrote fresh state). Fix: 30s freshness TTL + timestamp side-entries, cache bumped v3 (commit e832763)
+- ROOT CAUSE #3 health "مبيحصلش حفظ": (a) client exerciseNotes vs DB exerciseNote — notes silently dropped → FIELD_MAP fix; (b) checklist had NO auto-save at all → debounced 900ms auto-save + dirty-guard against refetch clobber; (c) auto-save stale closure sent notes as '' → notesRef fix (commit b0b3263)
+- BOOKS: "error toast but book appears after re-entry" = optimistic add now uses POST response (instant display), offline-queue honest toast, retry banner on load failure, Zod on POST (garbage → 400 Arabic, was 500)
+- SKILLS: hover-only edit/delete (invisible on touch) → always visible; inline level stepper (−/+ 1..5) persisted via updateSkillLevel; learning-log edit now covers minutes too
+- SECOND BRAIN: learning-* knowledge items (goals/courses/skills/logs) filtered out — "مش عاوز كدا خالص"
+- HEALTH empty space: removed double padding (component self-padded on top of page padding); charts honest empty-state instead of zero-filled frames
+- FINAL ROUND ON PROD: e2e-25-browser 13/13 REAL-USER (morning persists after reload, health water+notes auto-save, book instant+persists, skill level stepper persists, second-brain excludes learning) — 0 console errors, 0 non-2xx; verify-prod-24-api 60/60 (functional+edge+security+cleanup); load: smoke 0% + load 25VU×90s 1,620 req 0% p95=1.07s (healthy = Task 24 baseline); cleanup 7 QA accounts wiped
+- Commits: e832763 + aff68ce + b0b3263 pushed; scripts committed (repro-25, e2e-25-browser, cleanup-25)
+
+Stage Summary:
+- VERDICT: GO for launch — all owner-reported bugs fixed AND regression-verified on production as a real user
+- Owner UX note: health + morning + planner checklists now auto-save; manual حفظ still there
+- Deferred: 011/012 migrations if health tab shows notice; Upstash env for distributed rate-limit (Task 24 recommendation stands)

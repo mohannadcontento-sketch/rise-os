@@ -1,0 +1,218 @@
+{
+  "steps": [
+    {
+      "name": "01-signup",
+      "ok": true,
+      "ms": 10281
+    },
+    {
+      "name": "02-onboarding-skip",
+      "ok": true,
+      "ms": 3633
+    },
+    {
+      "name": "10-morning-check",
+      "ok": true,
+      "ms": 6899
+    },
+    {
+      "name": "11-morning-persists-after-reload",
+      "ok": true,
+      "ms": 4802
+    },
+    {
+      "name": "20-health-water-autosave",
+      "ok": true,
+      "ms": 12120
+    },
+    {
+      "name": "21-health-notes-autosave",
+      "ok": true,
+      "ms": 2607
+    },
+    {
+      "name": "22-health-persists-after-reload",
+      "ok": true,
+      "ms": 4480
+    },
+    {
+      "name": "30-book-appears-instantly",
+      "ok": true,
+      "ms": 5064
+    },
+    {
+      "name": "31-book-persists-after-reload",
+      "ok": true,
+      "ms": 3738
+    },
+    {
+      "name": "40-skill-add-and-level-up",
+      "ok": true,
+      "ms": 9265
+    },
+    {
+      "name": "50-course-add",
+      "ok": true,
+      "ms": 6285
+    },
+    {
+      "name": "51-second-brain-excludes-learning",
+      "ok": true,
+      "ms": 3089
+    },
+    {
+      "name": "60-final-dashboard-reload",
+      "ok": true,
+      "ms": 5372
+    }
+  ],
+  "byPhase": {
+    "01-signup": {
+      "total": 7,
+      "ok": 7,
+      "err": 0,
+      "urls": {
+        "/api/auth/session": 2,
+        "/api/auth/sync-token": 2,
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1
+      }
+    },
+    "02-onboarding-skip": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/productivity-score": 1
+      }
+    },
+    "10-morning-check": {
+      "total": 6,
+      "ok": 6,
+      "err": 0,
+      "urls": {
+        "/api/rise/morning": 3,
+        "/api/rise/tasks": 2,
+        "/api/rise/notifications": 1
+      }
+    },
+    "11-morning-persists-after-reload": {
+      "total": 9,
+      "ok": 9,
+      "err": 0,
+      "urls": {
+        "/api/auth/sync-token": 1,
+        "/api/auth/session": 2,
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/rise/morning": 2,
+        "/api/rise/tasks": 1
+      }
+    },
+    "20-health-water-autosave": {
+      "total": 5,
+      "ok": 5,
+      "err": 0,
+      "urls": {
+        "/api/rise/health": 4,
+        "/api/rise/notifications": 1
+      }
+    },
+    "21-health-notes-autosave": {
+      "total": 4,
+      "ok": 2,
+      "err": 0,
+      "urls": {
+        "/api/rise/health": 3,
+        "/api/rise/notifications": 1
+      }
+    },
+    "22-health-persists-after-reload": {
+      "total": 7,
+      "ok": 7,
+      "err": 0,
+      "urls": {
+        "/api/auth/sync-token": 1,
+        "/api/auth/session": 1,
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/rise/health": 2
+      }
+    },
+    "30-book-appears-instantly": {
+      "total": 4,
+      "ok": 3,
+      "err": 0,
+      "urls": {
+        "/api/rise/books": 3,
+        "/api/rise/notifications": 1
+      }
+    },
+    "31-book-persists-after-reload": {
+      "total": 6,
+      "ok": 6,
+      "err": 0,
+      "urls": {
+        "/api/auth/sync-token": 1,
+        "/api/auth/session": 1,
+        "/api/rise/dashboard": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/rise/books": 1
+      }
+    },
+    "40-skill-add-and-level-up": {
+      "total": 6,
+      "ok": 6,
+      "err": 0,
+      "urls": {
+        "/api/rise/knowledge": 4,
+        "/api/rise/notifications": 2
+      }
+    },
+    "50-course-add": {
+      "total": 2,
+      "ok": 2,
+      "err": 0,
+      "urls": {
+        "/api/rise/knowledge": 1,
+        "/api/rise/notifications": 1
+      }
+    },
+    "51-second-brain-excludes-learning": {
+      "total": 1,
+      "ok": 1,
+      "err": 0,
+      "urls": {
+        "/api/rise/knowledge": 1
+      }
+    },
+    "60-final-dashboard-reload": {
+      "total": 8,
+      "ok": 8,
+      "err": 0,
+      "urls": {
+        "/api/rise/dashboard": 2,
+        "/api/rise/productivity-score": 2,
+        "/api/auth/sync-token": 1,
+        "/api/rise/habits": 1,
+        "/api/rise/notifications": 1,
+        "/api/auth/session": 1
+      }
+    }
+  },
+  "consoleErrors": [],
+  "screenshots": [
+    "/home/z/my-project/scripts/shots/25-01-signed-in.png",
+    "/home/z/my-project/scripts/shots/25-10-morning-checked.png",
+    "/home/z/my-project/scripts/shots/25-20-health-water.png",
+    "/home/z/my-project/scripts/shots/25-22-health-reloaded.png",
+    "/home/z/my-project/scripts/shots/25-30-book-instant.png",
+    "/home/z/my-project/scripts/shots/25-40-skill-level.png",
+    "/home/z/my-project/scripts/shots/25-51-brain-clean.png",
+    "/home/z/my-project/scripts/shots/25-60-final.png"
+  ]
+}
