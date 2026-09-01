@@ -11,11 +11,20 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const items = await data.knowledgeItems.list(userId)
-    // Support optional type filter: ?type=learning
+    // TASK 26 — "الدماغ متخليهوش ياخد بيانات من أي حتة": the knowledge_items
+    // table is SHARED infrastructure — the Learning module stores learning-*
+    // rows and Finance stores budget-config / savings-goal rows HERE too, so
+    // they used to leak into the Second Brain list and global search.
+    // FIX: whitelist the Brain's OWN types; everything else stays owned by
+    // its module. (?type=learning still returns learning rows for that module.)
+    const BRAIN_TYPES = new Set([
+      'note', 'project', 'knowledge', 'idea', 'resource',
+      'bookmark', 'inspiration', 'research', 'design_ref',
+    ])
     const typeFilter = req.nextUrl.searchParams.get('type')
     const filtered = typeFilter
       ? items.filter((i: any) => String(i.type || '').startsWith(typeFilter))
-      : items
+      : items.filter((i: any) => BRAIN_TYPES.has(String(i.type || '')))
     return NextResponse.json({ items: filtered })
   } catch (error) {
     console.error('Knowledge GET error:', error)

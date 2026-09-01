@@ -109,6 +109,14 @@ const tagBorderColors = [
   'border-rose-accent/25',
 ]
 
+// TASK 26 — the ONLY types the Second Brain owns/renders. Anything else in
+// the shared knowledge_items table (learning-*, budget-config, savings-goal,
+// …) belongs to other modules and must never appear here.
+const BRAIN_TYPES = new Set([
+  'note', 'project', 'knowledge', 'idea', 'resource',
+  'bookmark', 'inspiration', 'research', 'design_ref',
+])
+
 const folders = [
   { id: 'all', label: 'الكل', icon: Archive },
   { id: 'general', label: 'عام', icon: FolderOpen },
@@ -133,8 +141,9 @@ export default function SecondBrain() {
   const [quickCapture, setQuickCapture] = useState('')
   const [isCapturing, setIsCapturing] = useState(false)
 
-  // Add form
-  const [newType, setNewType] = useState('note')
+  // Add form — 'idea' is the first option in the type Select ('note' isn't in
+  // typeConfig, so it rendered an EMPTY dropdown value before choosing)
+  const [newType, setNewType] = useState('idea')
   const [newTitle, setNewTitle] = useState('')
   const [newContent, setNewContent] = useState('')
   const [newFolder, setNewFolder] = useState('general')
@@ -153,11 +162,11 @@ export default function SecondBrain() {
       const res = await apiFetch(`/api/rise/knowledge`)
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
-      // TASK 25 FIX — "الدماغ بياخد اللي بكتبه من التعلم والدورات ويحطه عنده":
-      // the Learning module stores its goals/courses/skills/logs in the SAME
-      // knowledge table (types learning-*), so they leaked into the Second
-      // Brain list. The Second Brain shows ONLY its own items now.
-      setItems((data.items || []).filter((i: any) => !String(i.type || '').startsWith('learning')))
+      // TASK 26 — "الدماغ متخليهوش ياخد بيانات من أي حتة": server now
+      // whitelists brain-owned types (budget-config / savings-goal /
+      // learning-* live in the SAME table). This client filter is the
+      // second line of defense if the server list ever changes.
+      setItems((data.items || []).filter((i: any) => BRAIN_TYPES.has(String(i.type || ''))))
     } catch {
       toast.error('فشل في تحميل البيانات')
     } finally {

@@ -1056,11 +1056,11 @@ export default function Learning() {
                       className="group relative"
                     >
                       {editingSkill === skill.id ? (
-                        <div className={cn('flex items-center gap-2 p-2 rounded-xl border border-border bg-card bg-gradient-to-l shadow-sm', skill.color)}>
+                        <div className={cn('flex flex-wrap items-center gap-2 p-2 rounded-xl border border-border bg-card bg-gradient-to-l shadow-sm', skill.color)}>
                           <Input
                             value={editSkillName}
                             onChange={(e) => setEditSkillName(e.target.value)}
-                            className="h-7 text-sm w-28"
+                            className="h-7 text-sm flex-1 min-w-24"
                             onKeyDown={(e) => e.key === 'Enter' && saveSkillEdit()}
                             autoFocus
                           />
@@ -1091,46 +1091,63 @@ export default function Learning() {
                         </div>
                       ) : (
                         <div className={cn('bg-card border border-border rounded-2xl bg-gradient-to-l', skill.color)}>
-                          <div className="p-3">
+                          {/* TASK 26 REDESIGN — "الشريط الأبيض شكله بايظ ومش مظبوط":
+                              the old card crammed ring+name+level+stepper+edit+delete
+                              into ONE row that wrapped horribly on phones (stepper
+                              floated mid-row like a broken white strip). Now:
+                              row 1 = identity + actions, row 2 = a dedicated clean
+                              level strip (− dots level/5 +). */}
+                          <div className="p-3 space-y-2.5">
                             <div className="flex items-center gap-2.5">
-                              <ProgressRing level={skill.level} color={skillDotColors[i % skillDotColors.length]} size={36} strokeWidth={2.5} />
-                              <span className="text-sm font-medium">{skill.name}</span>
-                              <span className="text-[10px] text-muted-foreground/60 num" dir="ltr">({skill.level}/٥)</span>
-                              {/* TASK 25 — "أقدر أعدل مستوى المهارة بعدين": inline
-                                  level stepper. The old edit/delete buttons were
-                                  hover-only (opacity-0 group-hover) = INVISIBLE
-                                  on touch screens — now always visible. */}
-                              <div className="flex items-center gap-1 ms-auto">
-                                <button
-                                  onClick={() => updateSkillLevel(skill.id, skill.level - 1)}
-                                  disabled={skill.level <= 1}
-                                  className="w-6 h-6 rounded-md bg-background/60 border border-border text-muted-foreground hover:text-foreground hover:bg-background text-sm font-bold leading-none disabled:opacity-30"
-                                  title="تقليل المستوى"
-                                >
-                                  −
-                                </button>
-                                <button
-                                  onClick={() => updateSkillLevel(skill.id, skill.level + 1)}
-                                  disabled={skill.level >= 5}
-                                  className="w-6 h-6 rounded-md bg-background/60 border border-border text-muted-foreground hover:text-foreground hover:bg-background text-sm font-bold leading-none disabled:opacity-30"
-                                  title="رفع المستوى"
-                                >
-                                  +
-                                </button>
+                              <ProgressRing level={skill.level} color={skillDotColors[i % skillDotColors.length]} size={38} strokeWidth={2.5} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{skill.name}</p>
+                                <p className="text-[10px] text-muted-foreground/70">المستوى <span className="num" dir="ltr">{skill.level}/5</span></p>
                               </div>
                               <button
                                 onClick={() => { setEditingSkill(skill.id); setEditSkillName(skill.name) }}
-                                className="p-1 rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-all"
+                                className="p-1.5 rounded-lg hover:bg-background/60 text-muted-foreground hover:text-foreground transition-all shrink-0"
                                 title="تعديل الاسم"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => deleteSkill(skill.id)}
-                                className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all shrink-0"
                                 title="حذف"
                               >
                                 <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div
+                              className="flex items-center gap-1.5 h-9 rounded-xl bg-background/70 border border-border/60 px-1.5"
+                              dir="ltr"
+                            >
+                              <button
+                                onClick={() => updateSkillLevel(skill.id, skill.level - 1)}
+                                disabled={skill.level <= 1}
+                                className="w-7 h-7 shrink-0 rounded-lg bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground hover:bg-secondary text-sm font-bold leading-none disabled:opacity-30 transition-colors"
+                                title="تقليل المستوى"
+                              >
+                                −
+                              </button>
+                              <div className="flex-1 flex items-center justify-center gap-1.5">
+                                {[1, 2, 3, 4, 5].map((d) => (
+                                  <span
+                                    key={d}
+                                    className={cn('w-2 h-2 rounded-full transition-colors', d <= skill.level ? '' : 'bg-muted-foreground/20')}
+                                    style={d <= skill.level ? { backgroundColor: skillDotColors[i % skillDotColors.length] } : undefined}
+                                  />
+                                ))}
+                              </div>
+                              <span className="num text-[11px] font-semibold text-muted-foreground w-8 text-center" dir="ltr">{skill.level}/5</span>
+                              <button
+                                onClick={() => updateSkillLevel(skill.id, skill.level + 1)}
+                                disabled={skill.level >= 5}
+                                className="w-7 h-7 shrink-0 rounded-lg bg-background border border-border shadow-sm text-muted-foreground hover:text-foreground hover:bg-secondary text-sm font-bold leading-none disabled:opacity-30 transition-colors"
+                                title="رفع المستوى"
+                              >
+                                +
                               </button>
                             </div>
                           </div>

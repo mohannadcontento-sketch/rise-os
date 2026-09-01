@@ -159,6 +159,7 @@ export default function Reading() {
   const [newAuthor, setNewAuthor] = useState('')
   const [newType, setNewType] = useState('book')
   const [newTotalPages, setNewTotalPages] = useState('')
+  const [newStatus, setNewStatus] = useState('reading') // 'reading' | 'want_to_read'
 
   // Update book
   const [editNotes, setEditNotes] = useState<Record<string, string>>({})
@@ -173,7 +174,8 @@ export default function Reading() {
       const res = await apiFetch(`/api/rise/books`)
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
-      setBooks(data.books || [])
+      // Normalize legacy spellings so the tab filter always matches
+      setBooks((data.books || []).map((b: any) => ({ ...b, status: b.status === 'want-to-read' ? 'want_to_read' : b.status })))
       setFetchFailed(false)
     } catch {
       // Keep existing list — only surface the retry banner
@@ -199,7 +201,7 @@ export default function Reading() {
         author,
         type,
         totalPages,
-        status: 'reading',
+        status: newStatus,
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
@@ -218,7 +220,7 @@ export default function Reading() {
           title: created.title ?? title,
           author: created.author ?? author,
           type: created.type ?? type,
-          status: created.status ?? 'reading',
+          status: created.status ?? newStatus,
           currentPage: created.currentPage ?? 0,
           totalPages: created.totalPages ?? totalPages,
           progress: created.progress ?? 0,
@@ -240,6 +242,7 @@ export default function Reading() {
       setNewAuthor('')
       setNewType('book')
       setNewTotalPages('')
+      setNewStatus('reading')
       setAddDialogOpen(false)
       fetchBooks()
     } catch {
@@ -433,6 +436,19 @@ export default function Reading() {
                     <SelectItem value="article">مقال</SelectItem>
                     <SelectItem value="course">دورة</SelectItem>
                     <SelectItem value="video">فيديو</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">القائمة</label>
+                {/* TASK 26: without this the قائمة القراءة tab could never fill */}
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="reading">أقرأه الآن</SelectItem>
+                    <SelectItem value="want_to_read">قائمة القراءة (سأقرأه لاحقاً)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -743,6 +759,16 @@ export default function Reading() {
                         </span>
                       </div>
 
+                      {/* TASK 26: one-tap move from قائمة القراءة → أقرأ الآن */}
+                      {book.status === 'want_to_read' && (
+                        <button
+                          onClick={() => handleUpdateBook(book.id, { status: 'reading', startDate: getToday() })}
+                          className="mb-3 w-full h-8 rounded-lg bg-gold/10 text-gold hover:bg-gold/20 text-xs font-bold transition-colors"
+                        >
+                          ابدأ القراءة الآن
+                        </button>
+                      )}
+
                       {/* Progress */}
                       {book.totalPages && (
                         <div className="space-y-1.5 mb-3">
@@ -800,6 +826,41 @@ export default function Reading() {
                             className="overflow-hidden"
                           >
                             <div className="pt-4 space-y-4 border-t border-border/50 mt-3">
+                              {/* TASK 26: move the book between lists — قائمة القراءة
+                                  was a dead-end before (no way in OR out) */}
+                              <div className="space-y-2">
+                                <label className="text-xs font-semibold flex items-center gap-1.5">
+                                  <Library className="w-3 h-3 text-gold" />
+                                  القائمة
+                                </label>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  {([
+                                    ['want_to_read', 'قائمة القراءة'],
+                                    ['reading', 'أقرأه الآن'],
+                                    ['paused', 'متوقف'],
+                                    ['completed', 'مكتمل'],
+                                  ] as const).map(([v, label]) => (
+                                    <button
+                                      key={v}
+                                      onClick={() => handleUpdateBook(book.id, {
+                                        status: v,
+                                        ...(v === 'reading' && !book.startDate ? { startDate: getToday() } : {}),
+                                        ...(v === 'completed' && book.status !== 'completed' ? { endDate: getToday() } : {}),
+                                        ...(v !== 'completed' && book.status === 'completed' ? { endDate: null } : {}),
+                                      })}
+                                      className={cn(
+                                        'h-8 rounded-lg text-[11px] font-semibold transition-colors border',
+                                        book.status === v
+                                          ? 'bg-gold text-paper-soft dark:bg-lime dark:text-ink border-transparent'
+                                          : 'border-border bg-card text-muted-foreground hover:bg-secondary'
+                                      )}
+                                    >
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
                               {/* Update Progress */}
                               {book.status === 'reading' && book.totalPages && (
                                 <div className="space-y-2">

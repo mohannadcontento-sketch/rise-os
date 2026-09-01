@@ -8,11 +8,13 @@ export const dynamic = 'force-dynamic'
 
 // TASK 24 follow-up: garbage payloads hit the DB raw and came back as 500.
 // A strict schema turns misuse into a clear 400 instead.
+// TASK 26 — accept BOTH spellings of want-to-read; the canonical stored value
+// is 'want_to_read' (what the UI tab, the seed and the DB already use).
 const BookCreateSchema = z.object({
   title: z.string().trim().min(1).max(300),
   author: z.string().trim().max(200).nullable().optional(),
   type: z.enum(['book', 'article', 'course', 'video']).optional(),
-  status: z.enum(['reading', 'completed', 'want-to-read', 'paused']).optional(),
+  status: z.enum(['reading', 'completed', 'want_to_read', 'want-to-read', 'paused']).optional(),
   currentPage: z.number().int().min(0).max(1_000_000).optional(),
   totalPages: z.number().int().min(1).max(1_000_000).nullable().optional(),
   progress: z.number().min(0).max(100).optional(),
@@ -23,6 +25,13 @@ const BookCreateSchema = z.object({
   startDate: z.string().max(10).nullable().optional(),
   endDate: z.string().max(10).nullable().optional(),
 })
+
+function normalizeStatus<T extends { status?: string | null }>(payload: T): T {
+  if (payload.status === 'want-to-read') {
+    return { ...payload, status: 'want_to_read' }
+  }
+  return payload
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -54,11 +63,11 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
-    const record = await data.books.create(userId, {
+    const record = await data.books.create(userId, normalizeStatus({
       ...parsed.data,
       type: parsed.data.type || 'book',
       status: parsed.data.status || 'reading',
-    })
+    }))
     bustAggregateCache(userId)
     return NextResponse.json(record)
   } catch (error) {
@@ -76,7 +85,7 @@ export async function PUT(req: NextRequest) {
     const { id, createdAt, updatedAt, userId: _uid, ...body } = await req.json()
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
-    const record = await data.books.update(id, userId, body)
+    const record = await data.books.update(id, userId, normalizeStatus(body))
     bustAggregateCache(userId)
     return NextResponse.json(record)
   } catch (error) {
