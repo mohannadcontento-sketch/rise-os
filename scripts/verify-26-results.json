@@ -1,0 +1,114 @@
+{
+  "pass": 26,
+  "fail": 0,
+  "results": [
+    {
+      "name": "S1. signup",
+      "ok": true
+    },
+    {
+      "name": "B1. brain idea create",
+      "ok": true
+    },
+    {
+      "name": "B2. budgets save (writes budget-config row)",
+      "ok": true
+    },
+    {
+      "name": "B3. savings-goal save (writes savings-goal row)",
+      "ok": true
+    },
+    {
+      "name": "B4. learning-goal create (via knowledge)",
+      "ok": true
+    },
+    {
+      "name": "B5. learning-skill create",
+      "ok": true
+    },
+    {
+      "name": "B6. brain GET contains ONLY brain-owned types",
+      "ok": true
+    },
+    {
+      "name": "B7. brain GET excludes budget-config",
+      "ok": true
+    },
+    {
+      "name": "B8. brain GET excludes savings-goal",
+      "ok": true
+    },
+    {
+      "name": "B9. brain GET excludes learning-*",
+      "ok": true
+    },
+    {
+      "name": "B10. brain GET includes own idea",
+      "ok": true
+    },
+    {
+      "name": "B11. ?type=learning still serves Learning module",
+      "ok": true
+    },
+    {
+      "name": "R1. book create with want_to_read (underscore)",
+      "ok": true
+    },
+    {
+      "name": "R2. book create with want-to-read (hyphen) accepted",
+      "ok": true
+    },
+    {
+      "name": "R3. book create default status=reading",
+      "ok": true
+    },
+    {
+      "name": "R4. want_to_read book listed with want_to_read",
+      "ok": true
+    },
+    {
+      "name": "R5. hyphen spelling NORMALIZED to want_to_read",
+      "ok": true
+    },
+    {
+      "name": "R6. move book: want_to_read → reading",
+      "ok": true
+    },
+    {
+      "name": "R7. move book: reading → want-to-read normalized",
+      "ok": true
+    },
+    {
+      "name": "R8. garbage book payload → 400 (not 500)",
+      "ok": true
+    },
+    {
+      "name": "K1. skill level PUT 3→5",
+      "ok": true
+    },
+    {
+      "name": "K2. level=5 persisted on server",
+      "ok": true
+    },
+    {
+      "name": "G1. budgets GET returns saved config",
+      "ok": true
+    },
+    {
+      "name": "G2. brain item favorite toggle",
+      "ok": true
+    },
+    {
+      "name": "G3. brain item delete",
+      "ok": true
+    },
+    {
+      "name": "G4. idea gone after delete",
+      "ok": true
+    },
+    {
+      "name": "C1. delete-all wipes QA account",
+      "ok": true
+    }
+  ]
+}

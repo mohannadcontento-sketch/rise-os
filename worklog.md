@@ -172,3 +172,21 @@ Stage Summary:
 - VERDICT: GO for launch — all owner-reported bugs fixed AND regression-verified on production as a real user
 - Owner UX note: health + morning + planner checklists now auto-save; manual حفظ still there
 - Deferred: 011/012 migrations if health tab shows notice; Upstash env for distributed rate-limit (Task 24 recommendation stands)
+
+---
+Task ID: 26
+Agent: Super Z (main)
+Task: Owner report — brain takes data from Budget / reading list always empty / skill +/− strip looks broken — fix + verify on prod
+
+Work Log:
+- ROOT CAUSE #1 (brain leak): Finance budgets route stores budget-config + savings-goal rows in the SAME knowledge_items table; Task 25 filter only excluded learning-* → budget rows leaked into the Second Brain (and global search). FIX: server-side WHITELIST of brain-owned types in knowledge GET (note/project/knowledge/idea/resource/bookmark/inspiration/research/design_ref) + client whitelist defense; ?type=learning still serves the Learning module. Bonus: add-dialog type default 'note' → 'idea' ('note' isn't in typeConfig → empty dropdown value)
+- ROOT CAUSE #2 (قائمة القراءة always empty): UI tab filters status='want_to_read', seed writes 'want_to_read', but the books API Zod schema only allowed 'want-to-read' (hyphen) AND the add dialog hardcoded status='reading' with no list picker → the tab could NEVER fill. FIX: schema accepts both spellings + normalizeStatus() → canonical 'want_to_read' on POST/PUT; add dialog now has القائمة picker (أقرأه الآن / قائمة القراءة); one-tap 'ابدأ القراءة الآن' on want_to_read cards; 4-way list switcher (قائمة القراءة/أقرأه الآن/متوقف/مكتمل) in card details; legacy hyphen statuses normalized on fetch
+- ROOT CAUSE #3 (skill strip "شكله بايظ"): ring+name+level+stepper+edit+delete crammed into ONE row that wrapped horribly on phones. FIX: card redesigned into two clean rows — row 1 identity+actions, row 2 dedicated level strip (− • dots • level/5 +) dir=ltr, 7×7 touch targets, disabled at bounds; edit-mode row now flex-wrap with flexible input
+- tsc clean, eslint clean, build OK
+- PROD VERIFIED: verify-prod-26-api.js 26/26 (brain whitelist incl. budget+savings+learning exclusion, ?type=learning intact, want_to_read create both spellings + normalization, list moves both ways, garbage→400, skill level persist, budgets GET regression, brain CRUD, delete-all cleanup) + e2e-26-browser.js 10/10 REAL USER (brain clean BEFORE and AFTER saving budget via finance UI-flow, book→قائمة القراءة tab fills→ابدأ القراءة→للقراءة, skill strip renders/level 1→2 persists, mobile 390px: ZERO horizontal overflow in skills+reading) — 0 console errors, 0 non-2xx
+- Commits: ddd994a pushed; scripts committed (verify-prod-26-api, e2e-26-browser) + screenshots
+
+Stage Summary:
+- All three owner-reported bugs fixed and regression-verified on production as a real user
+- Convention locked: book status canonical value = 'want_to_read' (underscore) everywhere (UI, seed, API normalization)
+- knowledge GET is now whitelist-based: any FUTURE module that parks rows in knowledge_items with a custom type will NOT leak into the brain or global search

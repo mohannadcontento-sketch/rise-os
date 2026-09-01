@@ -1,0 +1,56 @@
+{
+  "steps": [
+    {
+      "name": "signup",
+      "ok": true,
+      "ms": 8786
+    },
+    {
+      "name": "onboarding-skip",
+      "ok": true,
+      "ms": 939
+    },
+    {
+      "name": "brain: clean before budget save",
+      "ok": true,
+      "ms": 7633
+    },
+    {
+      "name": "finance: save budget + savings goal",
+      "ok": true,
+      "ms": 3513
+    },
+    {
+      "name": "brain: still clean AFTER budget save",
+      "ok": true,
+      "ms": 2878
+    },
+    {
+      "name": "reading: add book to قائمة القراءة",
+      "ok": true,
+      "ms": 5013
+    },
+    {
+      "name": "reading: قائمة القراءة tab FILLS + ابدأ القراءة works",
+      "ok": true,
+      "ms": 5048
+    },
+    {
+      "name": "skills: add skill",
+      "ok": true,
+      "ms": 7624
+    },
+    {
+      "name": "skills: level strip renders + increases + persists",
+      "ok": true,
+      "ms": 4371
+    },
+    {
+      "name": "mobile visual: reading section",
+      "ok": true,
+      "ms": 3358
+    }
+  ],
+  "consoleErrors": [],
+  "apiBad": []
+}
