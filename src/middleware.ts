@@ -198,7 +198,7 @@ export async function middleware(req: NextRequest) {
 
   // CSRF defense for cookie-authenticated browser mutations.
   // API clients without Origin are still handled by endpoint auth / API keys.
-  // Every RiseOS data/admin mutation must carry a client-generated stable idempotency key.
+  // Every Awj data/admin mutation must carry a client-generated stable idempotency key.
   // api-fetch.ts supplies it automatically, and the server-side store prevents replay/double-submit.
   if (pathname.startsWith('/api/rise') && isStateChangingMethod(req.method) && pathname !== '/api/rise/mcp/call') {
     const idempotencyKey = req.headers.get('Idempotency-Key')?.trim() || ''

@@ -10,13 +10,15 @@ import { useRiseStore } from "@/store/app-store";
 import type { ModuleId } from "@/store/app-store";
 import { cn } from "@/lib/utils";
 import { MODULE_ICONS, RiseGlyphIcon, type RiseGlyph } from "./icons";
+import { MODULE_LABELS } from "@/lib/module-labels";
 
+// Unified labels come from MODULE_LABELS (same names as desktop sidebar + page title)
 const NAV_ITEMS: { id: ModuleId; label: string; glyph: RiseGlyph }[] = [
-  { id: "dashboard", label: "الرئيسية", glyph: MODULE_ICONS.dashboard.glyph },
-  { id: "tasks", label: "المهام", glyph: MODULE_ICONS.tasks.glyph },
-  { id: "habits", label: "العادات", glyph: MODULE_ICONS.habits.glyph },
-  { id: "planner", label: "المخطط", glyph: MODULE_ICONS.planner.glyph },
-  { id: "finance", label: "المالية", glyph: MODULE_ICONS.finance.glyph },
+  { id: "dashboard", label: MODULE_LABELS.dashboard, glyph: MODULE_ICONS.dashboard.glyph },
+  { id: "tasks", label: MODULE_LABELS.tasks, glyph: MODULE_ICONS.tasks.glyph },
+  { id: "habits", label: MODULE_LABELS.habits, glyph: MODULE_ICONS.habits.glyph },
+  { id: "planner", label: MODULE_LABELS.planner, glyph: MODULE_ICONS.planner.glyph },
+  { id: "finance", label: MODULE_LABELS.finance, glyph: MODULE_ICONS.finance.glyph },
 ];
 
 export function GlassNav() {

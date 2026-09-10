@@ -95,8 +95,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <div className="press w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-lime flex items-center justify-center shadow-lg shadow-lime/25 mb-3 sm:mb-4">
               <Zap className="w-7 h-7 sm:w-8 sm:h-8 text-ink" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">RiseOS</h1>
-            <p className="eyebrow mt-1.5">Life Operating System</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">أوج</h1>
+            <p className="eyebrow mt-1.5" dir="ltr">awj.life</p>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">امتلك صباحك. امتلك حياتك.</p>
           </div>
 
@@ -248,7 +248,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground mt-5 sm:mt-6">
-          RiseOS v1.0 — صُنع بـ ❤️
+          أوج v1.0 — صُنع بـ ❤️
         </p>
       </div>
     </div>

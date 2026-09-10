@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RiseOS — Landing Page (Neo design language)
+ * أوج (Awj) — Landing Page (Neo design language)
  * ------------------------------------------------------------
  * Same token world as the app: Day "Dawn Paper" / Night "Obsidian Aurora".
  * Built entirely from the app's own components (KpiTile, ActivityRing,
@@ -86,7 +86,7 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
         </svg>
       </span>
       {!compact && (
-        <span className="text-xl font-black tracking-tight text-foreground">RiseOS</span>
+        <span className="text-xl font-black tracking-tight text-foreground">أوج</span>
       )}
     </span>
   );
@@ -114,7 +114,7 @@ function LandingNav() {
       )}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <a href="#top" aria-label="RiseOS — الرئيسية">
+        <a href="#top" aria-label="أوج — الرئيسية">
           <BrandMark />
         </a>
 
@@ -446,7 +446,7 @@ function ModulesMarquee() {
 }
 
 /* ============================================================
-   6) What RiseOS actually does — concrete daily flow + module
+   6) What Awj actually does — concrete daily flow + module
       explanations (replaces the old day/night showcase)
    ============================================================ */
 const FLOW: { glyph: RiseGlyph; hue: RiseHue; step: string; title: string; desc: string }[] = [
@@ -540,7 +540,7 @@ function WhatItDoes() {
           بياخد يومك من الفوضى للنظام
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-          مش مجرد تطبيق مهام — RiseOS بيديك نظام يومي كامل: تخطط، تنفذ، تتابع أرقامك لحظيًا،
+          مش مجرد تطبيق مهام — أوج بيديك نظام يومي كامل: تخطط، تنفذ، تتابع أرقامك لحظيًا،
           وتراجع تقدمك كل أسبوع. أربع خطوات بسيطة:
         </p>
       </Reveal>
@@ -626,9 +626,9 @@ function Steps() {
    8) FAQ — native details/summary, styled
    ============================================================ */
 const FAQS: [string, string][] = [
-  ["هل RiseOS مجاني؟", "تقدر تبدأ وتجرب كل الموديولات مجانًا. خطط مدفوعة اختيارية لو حبيت تدعم التطوير وتحصل على مزايا إضافية."],
+  ["هل أوج مجاني؟", "تقدر تبدأ وتجرب كل الموديولات مجانًا. خطط مدفوعة اختيارية لو حبيت تدعم التطوير وتحصل على مزايا إضافية."],
   ["هل بياناتي آمنة؟", "بياناتك مشفّرة ومحمية بمصادقة Supabase، وخصوصيتك أولوية — بياناتك ملكك وحدك ولا تُشارك مع أي طرف ثالث."],
-  ["هل يعمل بدون إنترنت؟", "أيوة — RiseOS تطبيق PWA كامل: ثبّته على موبايلك واشتغل براحتك، وبياناتك بتتزامن تلقائيًا لما يرجع النت."],
+  ["هل يعمل بدون إنترنت؟", "أيوة — أوج تطبيق PWA كامل: ثبّته على موبايلك واشتغل براحتك، وبياناتك بتتزامن تلقائيًا لما يرجع النت."],
   ["هل التطبيق عربي بالكامل؟", "مكتوب ومصمم عربي من أول سطر — واجهة RTL أصلية، أرقام عربية، وخطوط مختارة بعناية للعربي."],
 ];
 
@@ -678,7 +678,7 @@ function FinalCta() {
               جاهز تمتلك صباحك؟
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
-              انضم لرحلة RiseOS ودوّر حياتك صفحة جديدة — تبدأ في أقل من دقيقة.
+              انضم لرحلة أوج ودوّر حياتك صفحة جديدة — تبدأ في أقل من دقيقة.
             </p>
             <div className="mt-8 flex justify-center">
               <ComicButton tone="lime" onClick={() => router.push("/app")} className="!px-8 !py-3.5 !text-lg">
@@ -708,7 +708,7 @@ function Footer() {
         </nav>
       </div>
       <p className="mt-8 text-center text-xs text-muted-foreground">
-        RiseOS © {new Date().getFullYear()} — صُنع بشغف للمستخدم العربي
+        أوج © {new Date().getFullYear()} — صُنع بشغف للمستخدم العربي
       </p>
     </footer>
   );

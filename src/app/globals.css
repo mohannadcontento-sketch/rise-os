@@ -54,6 +54,13 @@
   --color-emerald-accent: var(--emerald-accent);
   --color-gold: var(--gold);
   --color-gold-light: var(--gold-light);
+  /* Semantic status tokens — unified success/warning/error/info language */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -101,6 +108,13 @@
   --emerald-accent: #2A4A3E;
   --gold: #C99A3E;
   --gold-light: #DBB876;
+  /* Semantic status tokens (WCAG-AA on paper background) */
+  --success: #15803D;
+  --success-foreground: #FFFFFF;
+  --warning: #B45309;
+  --warning-foreground: #FFFFFF;
+  --info: #1D4ED8;
+  --info-foreground: #FFFFFF;
   /* Neo extension tokens */
   --ink: #0B1015;
   --lime: #D6FF3D;
@@ -163,6 +177,13 @@
   --emerald-accent: #2A5244;
   --gold: #D9A441;
   --gold-light: #E8C077;
+  /* Semantic status tokens (luminous on obsidian, AA verified) */
+  --success: #4ADE80;
+  --success-foreground: #052E16;
+  --warning: #FBBF24;
+  --warning-foreground: #422006;
+  --info: #7FB8FF;
+  --info-foreground: #0A1B3D;
   /* Neo extension tokens */
   --ink: #0B1015;
   --lime: #D6FF3D;
@@ -919,12 +940,12 @@ main {
     font-weight: 700;
     line-height: 1.6;
   }
-  .pill-success { background: #DCFCE7; color: #166534; }
-  .pill-info    { background: #DBEAFE; color: #1D4ED8; }
+  .pill-success { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+  .pill-warning { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+  .pill-info    { background: color-mix(in srgb, var(--info) 14%, transparent); color: var(--info); }
+  .pill-error   { background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--destructive); }
   .pill-muted   { background: var(--secondary); color: var(--muted-foreground); }
   .pill-lime    { background: var(--lime); color: #1A2A22; }
-  .dark .pill-success { background: rgba(34, 197, 94, 0.15); color: #86EFAC; }
-  .dark .pill-info    { background: rgba(59, 130, 246, 0.15); color: #93C5FD; }
   .dark .pill-muted   { background: rgba(255, 255, 255, 0.08); color: var(--muted-foreground); }
 
   /* ── Neo field system — a calmer, more tactile input language ── */

@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
     // --- Knowledge Items ---
     const knowledgeData = [
       { type: 'idea', title: 'فكرة تطبيق جديد', content: 'تطبيق لتتبع العادات مع gamification', tags: '["أفكار","تطبيقات"]' },
-      { type: 'resource', title: 'أفضل أدوات الإنتاجية', content: 'Notion, Todoist, RiseOS...', tags: '["أدوات","إنتاجية"]' },
+      { type: 'resource', title: 'أفضل أدوات الإنتاجية', content: 'Notion, Todoist, أوج...', tags: '["أدوات","إنتاجية"]' },
       { type: 'knowledge', title: 'مبادئ التصميم', content: 'التسلسل الهرمي البصري، التباين، المحاذاة...', tags: '["تصميم","UI"]' },
       { type: 'bookmark', title: 'مقال عن العمل العميق', content: 'https://example.com/deep-work', tags: '["قراءة","إنتاجية"]' },
     ]

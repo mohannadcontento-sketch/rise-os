@@ -24,6 +24,11 @@ import {
   LogOut, Zap, Circle, CheckCircle2,
 } from 'lucide-react'
 import { RiseIcon, RiseGlyphIcon, MODULE_ICONS, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
+import { MODULE_LABELS } from '@/lib/module-labels'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -107,29 +112,8 @@ const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.Compone
   'settings': Settings,
 }
 
-const moduleNames: Record<ModuleId, string> = {
-  'dashboard': 'لوحة التحكم',
-  'morning': 'الروتين الصباحي',
-  'planner': 'المخطط اليومي',
-  'tasks': 'المهام',
-  'projects': 'المشاريع',
-  'goals': 'الأهداف',
-  'habits': 'تتبع العادات',
-  'journal': 'اليوميات',
-  'deepwork': 'العمل العميق',
-  'work': 'الشغل',
-  'reading': 'القراءة',
-  'learning': 'التعلم',
-  'health': 'الصحة',
-  'finance': 'المالية',
-  'calendar': 'التقويم',
-  'brain': 'الدماغ الثاني',
-  'weekly-review': 'مراجعة أسبوعية',
-  'monthly-review': 'مراجعة شهرية',
-  'analytics': 'التحليلات',
-  'admin-panel': 'لوحة الإدارة',
-  'settings': 'الإعدادات',
-}
+// Unified module labels — single source of truth (lib/module-labels)
+const moduleNames = MODULE_LABELS
 
 function LoadingFallback() {
   return <SunCloudLoader className="h-64" />
@@ -155,11 +139,12 @@ interface SearchJournal { id: string; date: string; content: string; mood: numbe
 interface SearchBook { id: string; title: string; author: string | null; status: string }
 interface SearchKnowledge { id: string; title: string; type: string; folder: string | null }
 
-export default function RiseOSApp() {
+export default function AwjApp() {
   const { activeModule, setActiveModule, toggleSidebar, auth, setAuth, logout } = useRiseStore()
   const { theme, setTheme } = useTheme()
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [searchResults, setSearchResults] = useState<{
     tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[]
     journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
@@ -434,13 +419,14 @@ export default function RiseOSApp() {
           {/* Animated day/night theme toggle (Neo) */}
           {mounted && <ThemeToggle />}
 
-          {/* User avatar / logout */}
+          {/* User avatar / logout — confirmation dialog guards accidental
+              instant logout (data is server-safe, but session loss is disruptive) */}
           {mounted && auth && (
             <Button
               variant="ghost"
               size="sm"
               className="h-9 gap-2 text-xs text-muted-foreground hover:text-destructive"
-              onClick={logout}
+              onClick={() => setLogoutConfirmOpen(true)}
               title={auth.userEmail}
             >
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-accent to-forest flex items-center justify-center">
@@ -698,6 +684,27 @@ export default function RiseOSApp() {
           <Onboarding />
         </ModuleErrorBoundary>
       </Suspense>
+
+      {/* Logout confirmation — no more accidental instant logout */}
+      <AlertDialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تسجيل الخروج من أوج؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              بياناتك محفوظة على السحابة وستتزامن تلقائيًا عند تسجيل الدخول مرة أخرى.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>البقاء في أوج</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => logout()}
+            >
+              خروج
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   )

@@ -17,7 +17,7 @@ export function reportError(error: Error | string, context: ErrorContext = {}) {
   const errorObj = typeof error === 'string' ? new Error(error) : error
 
   // Always log to console (development + fallback)
-  console.error('[RiseOS Error]', errorObj.message, context)
+  console.error('[أوج Error]', errorObj.message, context)
 
   // If Sentry DSN configured, send to Sentry
   if (SENTRY_DSN && typeof window !== 'undefined') {
@@ -30,7 +30,7 @@ export function reportError(error: Error | string, context: ErrorContext = {}) {
         timestamp: Date.now() / 1000,
         environment: process.env.NODE_ENV,
         extra: context,
-        tags: { source: 'riseos-client' },
+        tags: { source: 'awj-client' },
       }
       // Fire-and-forget — don't block UI
       fetch(SENTRY_DSN, {
@@ -63,7 +63,7 @@ export function reportError(error: Error | string, context: ErrorContext = {}) {
 
 /** Report a warning (non-blocking). */
 export function reportWarning(message: string, context: ErrorContext = {}) {
-  console.warn('[RiseOS Warning]', message, context)
+  console.warn('[أوج Warning]', message, context)
 }
 
 /** Wrap an async function with error reporting. */

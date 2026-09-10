@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 // ============================================================
-// RiseOS — Supabase client with security fixes (Phase 1)
+// أوج (Awj) — Supabase client with security fixes (Phase 1)
 // ------------------------------------------------------------
 // Dual-mode: uses real Supabase when env vars present, else
 // falls back to local Prisma+SQLite mock for development.

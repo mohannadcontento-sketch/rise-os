@@ -45,10 +45,10 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
 
     const exportData = {
       metadata: {
-        application: 'RiseOS',
+        application: 'أوج',
         version: '1.0.0',
         exportDate: new Date().toISOString(),
-        description: 'نسخة احتياطية شاملة من بيانات RiseOS',
+        description: 'نسخة احتياطية شاملة من بيانات أوج',
       },
       المستخدم: profileData
         ? {
@@ -187,7 +187,7 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="riseos-export-${dateStr}.json"`,
+        'Content-Disposition': `attachment; filename="awj-export-${dateStr}.json"`,
       },
     })
   } catch (error) {
@@ -195,13 +195,13 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     // Return a minimal valid export file as fallback
     const fallbackData = {
       metadata: {
-        application: 'RiseOS',
+        application: 'أوج',
         version: '1.0.0',
         exportDate: new Date().toISOString(),
-        description: 'نسخة احتياطية شاملة من بيانات RiseOS',
+        description: 'نسخة احتياطية شاملة من بيانات أوج',
         note: 'وضع العرض التوضيحي - لا توجد بيانات حقيقية',
       },
-      المستخدم: { الاسم: 'مستخدم RiseOS', المستوى: 1, الخبرة: 0, السلسلة: 0, أطول_سلسلة: 0, إجمالي_تركيز_دقائق: 0, إجمالي_مهام_مكتملة: 0 },
+      المستخدم: { الاسم: 'مستخدم أوج', المستوى: 1, الخبرة: 0, السلسلة: 0, أطول_سلسلة: 0, إجمالي_تركيز_دقائق: 0, إجمالي_مهام_مكتملة: 0 },
       المهام: [],
       المشاريع: [],
       الأهداف: [],
@@ -223,7 +223,7 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="riseos-export-${dateStr}.json"`,
+        'Content-Disposition': `attachment; filename="awj-export-${dateStr}.json"`,
       },
     })
   }

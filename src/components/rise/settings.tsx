@@ -403,7 +403,7 @@ export default function Settings() {
     setPermission(result)
     if (result === 'granted') {
       toast.success('تم تفعيل إشعارات المتصفح')
-      showBrowserNotification('إشعارات RiseOS مفعّلة 🎉', {
+      showBrowserNotification('إشعارات أوج مفعّلة 🎉', {
         body: 'هكذا ستوصلك التنبيهات والتذكيرات حتى لو كان المتصفح بالخلفية',
         force: true,
         tag: 'rise-welcome',
@@ -417,7 +417,7 @@ export default function Settings() {
 
   const handleTestNotification = () => {
     playSound('notification')
-    const ok = showBrowserNotification('🔔 إشعار تجريبي من RiseOS', {
+    const ok = showBrowserNotification('🔔 إشعار تجريبي من أوج', {
       body: 'ممتاز! الإشعارات تعمل بشكل كامل الآن',
       force: true,
       tag: 'rise-test',
@@ -1050,21 +1050,21 @@ export default function Settings() {
         transition={{ delay: 0.24 }}
         className="break-inside-avoid mb-4"
       >
-        <SectionCard icon={Info} well="iw-forest" title="عن RiseOS">
+        <SectionCard icon={Info} well="iw-forest" title="عن أوج">
           <div className="flex items-center gap-4 mb-4">
             <motion.div whileHover={{ scale: 1.05, rotate: -3 }} className="shrink-0">
               <RiseIcon glyph="bolt" hue="forest" size="lg" lift />
             </motion.div>
             <div className="flex-1">
-              <h3 className="font-bold text-lg">RiseOS</h3>
-              <p className="text-xs text-muted-foreground">نظام تشغيل الحياة</p>
+              <h3 className="font-bold text-lg">أوج</h3>
+              <p className="text-xs text-muted-foreground">نظام حياتك الشخصي</p>
             </div>
             <span className="pill pill-success">
               <span className="num" dir="ltr">v1.0.0</span>
             </span>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            RiseOS هو نظام تشغيل حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
+            أوج هو نظام حياتك الشخصية. صُمم لمساعدتك على بناء عادات إيجابية،
             تحقيق أهدافك، وعيش حياة أكثر وعياً وإنتاجية.
           </p>
           <div className="h-px bg-border/60" />
@@ -1194,9 +1194,9 @@ export default function Settings() {
           >
             <Zap className="w-4 h-4 text-forest dark:text-lime" />
           </motion.div>
-          <span className="text-gradient-forest font-bold text-sm">RiseOS</span>
+          <span className="text-gradient-forest font-bold text-sm">أوج</span>
         </div>
-        <p className="text-[10px] text-muted-foreground">نظام تشغيل الحياة — الإصدار ١.٠.٠</p>
+        <p className="text-[10px] text-muted-foreground">awj.life — الإصدار ١.٠.٠</p>
       </div>
     </div>
   )

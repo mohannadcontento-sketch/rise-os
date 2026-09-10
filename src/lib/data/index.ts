@@ -1,4 +1,4 @@
-// RiseOS Data Access Layer
+// أوج (Awj) Data Access Layer
 // Stable facade over domain-specific repositories.
 import { profiles } from './profiles'
 import { userSettings } from './userSettings'

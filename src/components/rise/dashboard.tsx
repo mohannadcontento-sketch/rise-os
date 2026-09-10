@@ -1212,7 +1212,7 @@ export default function Dashboard() {
 
   // Use localStorage settings name as fallback if server name is generic
   let displayName = typeof user.name === 'string' ? user.name : 'مستخدم'
-  if (displayName === 'مستخدم' || displayName === 'مستخدم RiseOS' || displayName === 'مستخدم تجريبي') {
+  if (displayName === 'مستخدم' || displayName === 'مستخدم RiseOS' || displayName === 'مستخدم أوج' || displayName === 'مستخدم تجريبي') {
     try {
       const stored = getUserStorage('rise-settings')
       if (stored) {

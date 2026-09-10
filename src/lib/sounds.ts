@@ -1,6 +1,6 @@
 import { getUserStorage } from '@/lib/user-storage'
 /**
- * RiseOS Sound Effects System
+ * أوج (Awj) Sound Effects System
  * All sounds generated programmatically using Web Audio API — no external files.
  */
 

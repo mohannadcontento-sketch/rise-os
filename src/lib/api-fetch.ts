@@ -1,6 +1,6 @@
 import { loadOfflineQueue, saveOfflineQueue, clearOfflineQueueStore } from '@/lib/secure-offline-db'
 /**
- * apiFetch — centralized fetch utility for RiseOS API calls.
+ * apiFetch — centralized fetch utility for Awj API calls.
  * Uses httpOnly cookie authentication in production; legacy token fallback is limited to mock/dev mode.
  * Includes automatic token refresh on 401 responses.
  * Includes request timeout (8s) to fail fast when offline.

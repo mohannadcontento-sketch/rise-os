@@ -3,7 +3,7 @@ import { apiPost } from '@/lib/api-fetch'
 import { isNotificationEnabled, showBrowserNotification } from '@/lib/notification-prefs'
 
 // ============================================================
-// RiseOS Notifications — with varied motivational messages
+// أوج (Awj) Notifications — with varied motivational messages
 // Every celebration is gated by the user's Settings toggles
 // (rise-settings.notifications) and also fires a browser
 // notification when the tab is not focused.

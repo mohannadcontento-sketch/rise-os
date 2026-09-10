@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RiseOS — Neo Duotone Icon System
+ * أوج (Awj) — Neo Duotone Icon System
  * ------------------------------------------------------------
  * Distinctive hand-drawn glyphs (24×24 grid, bold rounded strokes)
  * living inside hue-tinted "wells" (.icon-well + .iw-* in globals.css).

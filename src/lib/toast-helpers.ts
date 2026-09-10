@@ -1,5 +1,5 @@
 /**
- * RiseOS Toast Helpers — consistent save/delete notifications
+ * أوج (Awj) Toast Helpers — consistent save/delete notifications
  * 
  * Shows a brief, non-intrusive toast at top-center that auto-dismisses.
  * Works like an alert but doesn't block the UI.

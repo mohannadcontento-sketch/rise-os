@@ -99,7 +99,7 @@ export function PWAInstallPrompt() {
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold text-foreground">ثبّت RiseOS على جهازك</h3>
+            <h3 className="text-sm font-bold text-foreground">ثبّت أوج على جهازك</h3>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               ثبّت التطبيق عشان يشتغل بدون إنترنت ويتزامن مع السحابة
             </p>

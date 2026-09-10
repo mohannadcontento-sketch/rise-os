@@ -240,7 +240,7 @@ async function computeDashboard(userId: string, req: NextRequest) {
     productivityScore: overallScore,
     journalStreak,
     user: {
-      name: userProfile?.name || 'مستخدم RiseOS',
+      name: userProfile?.name || 'مستخدم أوج',
       level: userProfile?.level || 1,
       xp: userProfile?.xp || 0,
       // LIVE-COMPUTED — the stored columns never update in Supabase mode.

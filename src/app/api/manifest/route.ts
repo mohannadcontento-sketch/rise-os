@@ -6,8 +6,8 @@ import { NextResponse } from 'next/server'
  */
 export async function GET() {
   const manifest = {
-    name: "RiseOS — نظام حياتك التشغيلي",
-    short_name: "RiseOS",
+    name: "أوج | awj.life — نظام حياتك الشخصي",
+    short_name: "أوج",
     description: "نظام تشغيل الحياة الشامل - إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم.",
     lang: "ar",
     dir: "rtl",

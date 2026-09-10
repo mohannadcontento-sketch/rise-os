@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RiseOS — Kit v2: components ported from the user's latest reference batch
+ * أوج (Awj) — Kit v2: components ported from the user's latest reference batch
  * ---------------------------------------------------------------- them all re-skinned to the Neo token system:
  *  1. RainbowCheckbox — glow-spread checkbox (ref: instagram-glow checkbox)
  *  2. BellToggle       — bell regular ↔ solid morph (ref: bell checkbox)
@@ -106,7 +106,7 @@ export function BellToggle({
       className={cn(
         "press relative grid h-10 w-10 place-items-center rounded-xl border transition-all duration-300",
         enabled
-          ? "border-transparent bg-amber-500/15 text-amber-600 dark:bg-amber-400/10 dark:text-amber-300 dark:shadow-glow"
+          ? "border-transparent bg-warning/15 text-warning dark:shadow-glow"
           : "border-border bg-card text-muted-foreground",
         className
       )}

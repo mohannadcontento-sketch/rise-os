@@ -79,7 +79,7 @@ const stepThemes: { band: string; onBand: 'text-white' | 'text-ink'; icon: Compo
 
 const stepTitles = [
   'أهلاً بك',
-  'يومك مع Rise OS',
+  'يومك مع أوج',
   'استكشف الوحدات',
   'نصائح سريعة',
 ]
@@ -145,7 +145,7 @@ function WelcomeStep({ userName }: { userName?: string }) {
 
       <div className="text-center space-y-3">
         <h2 className="text-2xl sm:text-3xl font-bold text-gradient-forest">
-          {userName ? `أهلاً ${userName} 👋` : 'مرحباً بك في Rise OS'}
+          {userName ? `أهلاً ${userName} 👋` : 'مرحباً بك في أوج'}
         </h2>
         <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
           مش مجرد تطبيق مهام —{' '}
@@ -228,7 +228,7 @@ function DayJourneyStep() {
           <Sun className="size-3 me-1" />
           الرحلة اليومية
         </span>
-        <h2 className="text-xl sm:text-2xl font-bold">يومك مع Rise OS — أربع محطات</h2>
+        <h2 className="text-xl sm:text-2xl font-bold">يومك مع أوج — أربع محطات</h2>
         <p className="text-sm text-muted-foreground">ده الإيقاع اللي التطبيق بيمشي بيه معاك كل يوم</p>
       </div>
 
@@ -369,7 +369,7 @@ function QuickTipsStep() {
             على موبايلك
           </h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            ثبّت Rise OS كتطبيق من قائمة المتصفح (&quot;تثبيت التطبيق&quot;) — وتشتغل حتى بلا إنترنت، والإشعارات توصلك في وقتها.
+            ثبّت أوج كتطبيق من قائمة المتصفح (&quot;تثبيت التطبيق&quot;) — وتشتغل حتى بلا إنترنت، والإشعارات توصلك في وقتها.
           </p>
         </div>
       </div>
@@ -433,7 +433,7 @@ export default function Onboarding() {
   const handleDismiss = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, '1')
     setOpen(false)
-    toast.success('مرحباً بك! ابدأ استكشاف Rise OS 🚀')
+    toast.success('مرحباً بك! ابدأ استكشاف أوج 🚀')
   }, [])
 
   const handleNext = useCallback(() => {
@@ -477,10 +477,10 @@ export default function Onboarding() {
       >
         {/* Accessibility */}
         <DialogTitle className="sr-only">
-          مرحباً بك في Rise OS — الخطوة {currentStep + 1} من {TOTAL_STEPS}: {stepTitles[currentStep]}
+          مرحباً بك في أوج — الخطوة {currentStep + 1} من {TOTAL_STEPS}: {stepTitles[currentStep]}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          جولة تعريفية سريعة بوحدات وميزات Rise OS
+          جولة تعريفية سريعة بوحدات وميزات أوج
         </DialogDescription>
 
         {/* Top progress bar */}

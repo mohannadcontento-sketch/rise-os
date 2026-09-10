@@ -1,10 +1,10 @@
-// RiseOS Service Worker
+// أوج (Awj) Service Worker
 // Handles push notifications, background sync, and cache for PWA
 
-const CACHE_NAME = 'rise-os-v3'
+const CACHE_NAME = 'awj-v4'
 // TASK 25: bumped to v3 — drops ALL legacy API cache entries (they carry no
 // freshness timestamp and must never be served as offline fallback).
-const API_CACHE_NAME = 'rise-api-v3'
+const API_CACHE_NAME = 'awj-api-v4'
 const STATIC_ASSETS = [
   '/app',
   '/icon-192.png',
@@ -125,7 +125,7 @@ self.addEventListener('fetch', (event) => {
 
 // Push event — show notification
 self.addEventListener('push', (event) => {
-  let data = { title: 'RiseOS', body: '', icon: '/icon-192.png', badge: '/icon-192.png', tag: '', url: '' }
+  let data = { title: 'أوج', body: '', icon: '/icon-192.png', badge: '/icon-192.png', tag: '', url: '' }
 
   try {
     data = { ...data, ...event.data?.json() }
@@ -137,7 +137,7 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: data.icon,
     badge: data.badge,
-    tag: data.tag || `rise-${Date.now()}`,
+    tag: data.tag || `awj-${Date.now()}`,
     data: { url: data.url || '' },
     vibrate: [100, 50, 100],
     dir: 'rtl',
@@ -180,11 +180,11 @@ self.addEventListener('message', (event) => {
 
   if (event.data?.type === 'SHOW_NOTIFICATION') {
     const { title, body, tag, icon, badge } = event.data
-    self.registration.showNotification(title || 'RiseOS', {
+    self.registration.showNotification(title || 'أوج', {
       body: body || '',
       icon: icon || '/icon-192.png',
       badge: badge || '/icon-192.png',
-      tag: tag || `rise-${Date.now()}`,
+      tag: tag || `awj-${Date.now()}`,
       vibrate: [100, 50, 100],
       dir: 'rtl',
       lang: 'ar',

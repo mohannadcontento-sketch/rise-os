@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RiseOS — Neo component library
+ * أوج (Awj) — Neo component library
  * Design language ported from the approved reference components:
  *  - VOLT KPI tiles (mono eyebrow, tabular value, delta pill, spark bars)
  *  - FORGE metric cards (forest/paper variants, chunky bars, hover lift)

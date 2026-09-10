@@ -12,7 +12,7 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error('RiseOS Error Boundary:', error)
+    console.error('أوج (Awj) Error Boundary:', error)
   }, [error])
 
   return (

@@ -10,6 +10,7 @@ import { apiFetch } from '@/lib/api-fetch'
 import { todayStr } from '@/hooks/use-today'
 import { X, ChevronDown, Pencil, Flame, Zap, Settings2, ChevronsDownUp, ChevronsUpDown, Sparkles } from 'lucide-react'
 import { MODULE_ICONS, RiseGlyphIcon, RiseIcon, type RiseGlyph, type RiseHue } from './icons'
+import { MODULE_LABELS } from '@/lib/module-labels'
 import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react'
 import { AVATARS } from '@/lib/avatars'
 
@@ -28,8 +29,12 @@ interface NavGroup {
   items: NavItem[]
 }
 
-function mi(id: string): { glyph: RiseGlyph; hue: RiseHue } {
-  return MODULE_ICONS[id] ?? { glyph: 'dashboard', hue: 'lime' }
+function mi(id: string): { glyph: RiseGlyph; hue: RiseHue; label: string } {
+  // label comes from the shared MODULE_LABELS (single source of truth)
+  return {
+    ...(MODULE_ICONS[id] ?? { glyph: 'dashboard', hue: 'lime' }),
+    label: MODULE_LABELS[id as ModuleId] ?? id,
+  }
 }
 
 /**
@@ -45,10 +50,10 @@ const navGroups: NavGroup[] = [
     hint: 'روتين · مخطط · عادات · يوميات',
     dot: 'bg-gold',
     items: [
-      { id: 'morning', label: 'الروتين الصباحي', ...mi('morning') },
-      { id: 'planner', label: 'المخطط اليومي', ...mi('planner') },
-      { id: 'habits', label: 'تتبع العادات', ...mi('habits') },
-      { id: 'journal', label: 'اليوميات', ...mi('journal') },
+      { id: 'morning', ...mi('morning') },
+      { id: 'planner', ...mi('planner') },
+      { id: 'habits', ...mi('habits') },
+      { id: 'journal', ...mi('journal') },
     ],
   },
   {
@@ -57,12 +62,12 @@ const navGroups: NavGroup[] = [
     hint: 'مهام · مشاريع · أهداف · تركيز',
     dot: 'bg-emerald-accent',
     items: [
-      { id: 'tasks', label: 'المهام', ...mi('tasks') },
-      { id: 'projects', label: 'المشاريع', ...mi('projects') },
-      { id: 'goals', label: 'الأهداف', ...mi('goals') },
-      { id: 'deepwork', label: 'العمل العميق', ...mi('deepwork') },
-      { id: 'work', label: 'الشغل', ...mi('work') },
-      { id: 'calendar', label: 'التقويم', ...mi('calendar') },
+      { id: 'tasks', ...mi('tasks') },
+      { id: 'projects', ...mi('projects') },
+      { id: 'goals', ...mi('goals') },
+      { id: 'deepwork', ...mi('deepwork') },
+      { id: 'work', ...mi('work') },
+      { id: 'calendar', ...mi('calendar') },
     ],
   },
   {
@@ -71,10 +76,10 @@ const navGroups: NavGroup[] = [
     hint: 'صحة · قراءة · تعلم · معرفة',
     dot: 'bg-violet-accent',
     items: [
-      { id: 'health', label: 'الصحة', ...mi('health') },
-      { id: 'reading', label: 'القراءة', ...mi('reading') },
-      { id: 'learning', label: 'التعلم', ...mi('learning') },
-      { id: 'brain', label: 'الدماغ الثاني', ...mi('brain') },
+      { id: 'health', ...mi('health') },
+      { id: 'reading', ...mi('reading') },
+      { id: 'learning', ...mi('learning') },
+      { id: 'brain', ...mi('brain') },
     ],
   },
   {
@@ -83,10 +88,10 @@ const navGroups: NavGroup[] = [
     hint: 'مالية · مراجعات · تحليلات',
     dot: 'bg-glass',
     items: [
-      { id: 'finance', label: 'المالية', ...mi('finance') },
-      { id: 'weekly-review', label: 'مراجعة أسبوعية', ...mi('weekly-review') },
-      { id: 'monthly-review', label: 'مراجعة شهرية', ...mi('monthly-review') },
-      { id: 'analytics', label: 'التحليلات', ...mi('analytics') },
+      { id: 'finance', ...mi('finance') },
+      { id: 'weekly-review', ...mi('weekly-review') },
+      { id: 'monthly-review', ...mi('monthly-review') },
+      { id: 'analytics', ...mi('analytics') },
     ],
   },
 ]
@@ -96,7 +101,7 @@ const ADMIN_GROUP: NavGroup = {
   title: 'الإدارة',
   hint: 'أدوات الأدمن',
   dot: 'bg-rose-accent',
-  items: [{ id: 'admin-panel', label: 'لوحة الإدارة', ...mi('admin-panel') }],
+  items: [{ id: 'admin-panel', ...mi('admin-panel') }],
 }
 
 const NAV_OPEN_KEY = 'rise-nav-open-groups'
@@ -318,11 +323,11 @@ export function Sidebar() {
         <div className="flex items-center justify-between p-4 pb-3 relative shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-md ring-1 ring-black/5">
-              <img src="/icon-192.png" alt="RiseOS" className="w-full h-full object-cover" />
+              <img src="/icon-192.png" alt="أوج" className="w-full h-full object-cover" />
             </div>
             <div>
               <h1 className="text-base font-bold tracking-tight text-sidebar-foreground font-display">
-                RiseOS
+                أوج
               </h1>
               <p className="text-[9px] text-sidebar-foreground/50 -mt-0.5 font-medium hidden sm:block">
                 امتلك صباحك. امتلك حياتك.
@@ -343,7 +348,7 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto sidebar-scroll px-3 pb-4 pt-1 space-y-1.5">
           {/* Pinned: dashboard — always visible */}
           <NavButton
-            item={{ id: 'dashboard', label: 'لوحة التحكم', ...mi('dashboard') }}
+            item={{ id: 'dashboard', ...mi('dashboard') }}
             active={activeModule === 'dashboard'}
             onSelect={() => go('dashboard')}
           />
@@ -419,7 +424,7 @@ export function Sidebar() {
           {/* Settings — always visible, calm row at the bottom */}
           <div className="pt-2">
             <NavButton
-              item={{ id: 'settings', label: 'الإعدادات', ...mi('settings') }}
+              item={{ id: 'settings', ...mi('settings') }}
               active={activeModule === 'settings'}
               onSelect={() => go('settings')}
             />

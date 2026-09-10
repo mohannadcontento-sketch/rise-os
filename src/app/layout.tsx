@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { PWAInit } from "@/components/pwa-init";
 import { QueryProvider } from "@/components/query-provider";
@@ -12,8 +11,9 @@ import { ErrorCapture } from "@/components/error-capture";
 import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
-  title: "RiseOS — امتلك صباحك. امتلك حياتك.",
-  description: "نظام تشغيل الحياة الشامل - إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم. يعمل بدون إنترنت!",
+  title: "أوج | awj.life — امتلك صباحك. امتلك حياتك.",
+  description: "أوج — نظام حياتك الشخصي المتكامل: إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم. يعمل بدون إنترنت!",
+  metadataBase: new URL("https://awj.life"),
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -23,10 +23,11 @@ export const metadata: Metadata = {
     apple: "/icon-192.png",
   },
   manifest: "/api/manifest",
+  applicationName: "أوج",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "RiseOS",
+    title: "أوج",
   },
   // P3#7: Additional meta tags in <head> below
   other: {},
@@ -84,8 +85,8 @@ export default async function RootLayout({
         <meta name="theme-color" content="#0a1628" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="RiseOS" />
-        <meta name="description" content="نظام تشغيل الحياة الشامل - يعمل بدون إنترنت" />
+        <meta name="apple-mobile-web-app-title" content="أوج" />
+        <meta name="description" content="أوج — نظام حياتك الشخصي المتكامل، يعمل بدون إنترنت" />
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider
@@ -101,7 +102,7 @@ export default async function RootLayout({
               <PerformanceMonitor />
               <ErrorCapture />
               {children}
-              <Toaster />
+              {/* Unified toast system — sonner only (single system, Phase-2 design decision) */}
               <SonnerToaster position="top-center" richColors closeButton={false} />
               {/* Vercel Analytics — privacy-friendly pageview/web-vitals tracking */}
               <Analytics />
