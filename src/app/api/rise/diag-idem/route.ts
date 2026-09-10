@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await admin!
       .from('request_idempotency')
       .insert({
-        user_id: userId, idempotency_key: `v8-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        user_id: userId!, idempotency_key: `v8-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         request_hash: 'v8', route: '/v8', method: 'POST', status: 'processing',
         response_status: null, response_body: null, response_headers: {},
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
   if (variant === 'sb-select') {
     const userId = await requireUser(req)
     steps.push(`userId=${userId ? 'ok' : 'null'}`)
+    if (!userId) return NextResponse.json({ steps, err: 'no user' }, { status: 200 })
     const listed = await data.tasks.list(userId)
     steps.push('sb select: ok')
     return NextResponse.json({ steps, count: (listed as any)?.tasks?.length ?? 0 }, { status: 200 })
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
   if (variant === 'sb-write') {
     const userId = await requireUser(req)
     steps.push(`userId=${userId ? 'ok' : 'null'}`)
+    if (!userId) return NextResponse.json({ steps, err: 'no user' }, { status: 200 })
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
     const result = await data.morningLogs.upsert(userId, today, { score: 55, totalItems: 1, completedItems: 0 })
     steps.push(`sb write: ok ${JSON.stringify(result).slice(0, 80)}`)
