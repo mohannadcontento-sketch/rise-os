@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -43,11 +44,15 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // CSP nonce is generated per-request in middleware (x-nonce) and applied to
+  // Next's own scripts automatically; next-themes needs it explicitly so its
+  // blocking theme-init inline script is not blocked by 'strict-dynamic'.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
@@ -88,6 +93,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange={false}
+          nonce={nonce}
         >
           <QueryProvider>
             <AuthProvider>
