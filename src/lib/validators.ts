@@ -62,6 +62,39 @@ export const avatarIdSchema = z.object({
   avatar: z.string().min(1, 'الصورة الرمزية مطلوبة').max(64),
 })
 
+// ─── المرحلة 03 — Auth والحساب والملف الشخصي ───
+
+/** POST /api/auth/reset-password — طلب بريد استعادة كلمة المرور */
+export const requestPasswordResetSchema = z.object({ email: emailSchema })
+
+/**
+ * POST /api/auth/update-password — تغيير كلمة المرور.
+ * flow "settings": currentPassword + newPassword (إعادة إثبات هوية).
+ * flow "recovery": newPassword فقط + marker cookie من رابط الاستعادة.
+ */
+export const updatePasswordSchema = z
+  .object({
+    currentPassword: passwordSchema.optional(),
+    newPassword: passwordSchema,
+  })
+  .refine(
+    (v) => !!v.currentPassword || v.newPassword,
+    { message: 'بيانات غير صالحة' }
+  )
+  .refine(
+    (v) => !v.currentPassword || v.currentPassword !== v.newPassword,
+    { message: 'كلمة المرور الجديدة مطابقة للحالية' }
+  )
+
+/** DELETE /api/auth/delete-account — حذف الحساب نهائيًا: أقصى صرامة */
+export const deleteAccountSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  confirmDelete: z.literal(true, {
+    message: 'يجب تأكيد حذف الحساب صراحةً',
+  }),
+})
+
 // ─── مساعد موحد لتحليل جسم الطلب ───
 
 export interface ParsedBody<T> {

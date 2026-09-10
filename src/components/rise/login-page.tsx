@@ -14,9 +14,10 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -26,10 +27,35 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setNotice('')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('بريد إلكتروني غير صالح')
       return
     }
+
+    // وضع «نسيت كلمة المرور»: إرسال بريد الاستعادة فقط.
+    if (mode === 'forgot') {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setError(data.error || 'تعذر إرسال رسالة الاستعادة')
+          return
+        }
+        setNotice(data.message || 'إذا كان هذا البريد مسجلًا لدى أوج، ستصلك رسالة تحتوي رابط إعادة تعيين كلمة المرور.')
+      } catch {
+        setError('تعذر الاتصال بالخادم')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     if (password.length < 8) {
       setError('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
       return
@@ -100,7 +126,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">امتلك صباحك. امتلك حياتك.</p>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs (تُخفى في وضع استعادة كلمة المرور) */}
+          {mode !== 'forgot' && (
           <div className="flex gap-1 p-1 rounded-xl bg-muted border border-border mb-5 sm:mb-6" role="tablist">
             {[
               { id: 'login' as const, label: 'تسجيل الدخول' },
@@ -110,7 +137,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 key={tab.id}
                 role="tab"
                 aria-selected={mode === tab.id}
-                onClick={() => { setMode(tab.id); setError('') }}
+                onClick={() => { setMode(tab.id); setError(''); setNotice('') }}
                 className={cn(
                   'flex-1 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all press',
                   mode === tab.id
@@ -122,6 +149,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               </button>
             ))}
           </div>
+          )}
+
+          {mode === 'forgot' && (
+            <div className="mb-5 sm:mb-6 text-center">
+              <h2 className="text-base sm:text-lg font-bold text-foreground">استعادة كلمة المرور</h2>
+              <p className="text-xs text-muted-foreground mt-1">أدخل بريدك وسنرسل لك رابط إعادة التعيين</p>
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setError(''); setNotice('') }}
+                className="mt-3 text-xs text-violet-accent hover:underline"
+              >
+                ← العودة لتسجيل الدخول
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Name (signup only) */}
@@ -161,7 +203,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               </div>
             </div>
 
-            {/* Password */}
+            {/* Password (ليست مطلوبة في وضع الاستعادة) */}
+            {mode !== 'forgot' && (
             <div>
               <Label htmlFor="password" className="text-sm font-medium mb-1.5 block text-foreground">كلمة المرور</Label>
               <div className="relative">
@@ -186,7 +229,26 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {mode === 'login' && (
+                <div className="flex justify-end mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('forgot'); setError(''); setNotice('') }}
+                    className="text-xs text-violet-accent hover:underline"
+                  >
+                    نسيت كلمة المرور؟
+                  </button>
+                </div>
+              )}
             </div>
+            )}
+
+            {/* Notice (نجاح استعادة) */}
+            {notice && mode === 'forgot' && (
+              <div className="text-sm text-success bg-success/10 border border-success/20 rounded-xl px-4 py-3 text-center" role="status">
+                <p>{notice}</p>
+              </div>
+            )}
 
             {/* Error */}
             {error && (
@@ -222,7 +284,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             {/* Submit — violet, ink text (AA verified) */}
             <Button
               type="submit"
-              disabled={loading || !email || !password || (mode === 'signup' && !name)}
+              disabled={loading || !email || (mode !== 'forgot' && !password) || (mode === 'signup' && !name)}
               className={cn(
                 'w-full h-11 rounded-xl bg-violet-accent text-ink font-bold transition-all press',
                 'hover:shadow-lg hover:shadow-violet-accent/25 hover:bg-[#B8A2FB] dark:hover:bg-[#C4B5FD]',
@@ -235,6 +297,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 <span className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
                   دخول
+                </span>
+              ) : mode === 'forgot' ? (
+                <span className="flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  إرسال رابط الاستعادة
                 </span>
               ) : (
                 <span className="flex items-center gap-2">

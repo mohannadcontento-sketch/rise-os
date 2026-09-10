@@ -39,6 +39,9 @@ import {
   CheckCircle2,
   BellRing,
   MessageSquare,
+  KeyRound,
+  LogOut,
+  UserX,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -337,6 +340,20 @@ export default function Settings() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteError, setDeleteError] = useState('')
 
+  // ── المرحلة 03: الحساب والأمان ──
+  const [pwCurrent, setPwCurrent] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
+  const [pwError, setPwError] = useState('')
+  const [pwOk, setPwOk] = useState(false)
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false)
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('')
+  const [deleteAccountConfirm, setDeleteAccountConfirm] = useState('')
+  const [deleteAccountError, setDeleteAccountError] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
   /** بريد المستخدم الحالي من localStorage (نفس مصدر getAuthHeaders) */
   function getUserEmail(): string {
     try {
@@ -394,6 +411,97 @@ export default function Settings() {
       toast.error('فشل حذف البيانات')
     } finally {
       setDeletingAll(false)
+    }
+  }
+
+  /* ── المرحلة 03: تغيير كلمة المرور (مع إعادة إثبات الهوية) ── */
+  const handleChangePassword = async () => {
+    setPwError('')
+    setPwOk(false)
+    if (pwNew.length < 8) {
+      setPwError('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل')
+      return
+    }
+    if (pwNew !== pwConfirm) {
+      setPwError('كلمتا المرور الجديدتان غير متطابقتين')
+      return
+    }
+    if (!pwCurrent) {
+      setPwError('اكتب كلمة المرور الحالية للمتابعة')
+      return
+    }
+    setPwLoading(true)
+    try {
+      const res = await apiFetch('/api/auth/update-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPwError(result?.error || 'فشل تغيير كلمة المرور')
+        return
+      }
+      // نجاح: السيرفر أبطل كل الجلسات → إعادة تسجيل الدخول إلزامية.
+      setPwOk(true)
+      setPwCurrent('')
+      setPwNew('')
+      setPwConfirm('')
+      toast.success('تم تغيير كلمة المرور — سجّل الدخول من جديد')
+      setTimeout(() => { window.location.href = '/app' }, 1800)
+    } catch {
+      setPwError('فشل الاتصال بالخادم')
+    } finally {
+      setPwLoading(false)
+    }
+  }
+
+  /* ── المرحلة 03: تسجيل الخروج من جميع الأجهزة ── */
+  const handleLogoutAll = async () => {
+    setLogoutAllLoading(true)
+    try {
+      const res = await apiFetch('/api/auth/logout-all', { method: 'POST' })
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}))
+        toast.error(result?.error || 'تعذر تسجيل الخروج من الأجهزة')
+        return
+      }
+      toast.success('تم تسجيل الخروج من جميع الأجهزة')
+      setTimeout(() => { window.location.href = '/app' }, 900)
+    } catch {
+      toast.error('فشل الاتصال بالخادم')
+    } finally {
+      setLogoutAllLoading(false)
+    }
+  }
+
+  /* ── المرحلة 03: حذف الحساب نهائيًا (الحساب نفسه لا البيانات فقط) ── */
+  const handleDeleteAccount = async () => {
+    setDeleteAccountError('')
+    const email = getUserEmail()
+    if (!email || !deleteAccountPassword) {
+      setDeleteAccountError('اكتب كلمة المرور للمتابعة')
+      return
+    }
+    setDeletingAccount(true)
+    try {
+      const res = await apiFetch('/api/auth/delete-account', {
+        method: 'DELETE',
+        body: JSON.stringify({ email, password: deleteAccountPassword, confirmDelete: true }),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setDeleteAccountError(result?.error || 'فشل حذف الحساب')
+        return
+      }
+      // الحساب حُذف: نظّف أي أثر محلي ثم عُد للصفحة الرئيسية.
+      try { localStorage.removeItem('rise-user-info') } catch { /* ignore */ }
+      try { localStorage.removeItem('rise-user-avatar') } catch { /* ignore */ }
+      toast.success('تم حذف حسابك نهائيًا. نتمنى رؤيتك مرة أخرى.')
+      setTimeout(() => { window.location.href = '/' }, 1200)
+    } catch {
+      setDeleteAccountError('فشل الاتصال بالخادم')
+    } finally {
+      setDeletingAccount(false)
     }
   }
 
@@ -672,6 +780,191 @@ export default function Settings() {
       {/* Appearance */}
       {/* Masonry: sections flow into balanced columns — no dead space on laptop */}
       <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
+      {/* الحساب والأمان — المرحلة 03 */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="break-inside-avoid mb-4"
+      >
+        <SectionCard icon={Shield} well="iw-forest" title="الحساب والأمان" desc="كلمة المرور والجلسات وحذف الحساب">
+          <div className="space-y-4">
+            {/* تغيير كلمة المرور */}
+            <div className="space-y-2.5">
+              <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5" />
+                تغيير كلمة المرور
+              </Label>
+              {pwOk ? (
+                <div className="rounded-xl bg-success/10 border border-success/25 px-4 py-3 text-sm text-success flex items-start gap-2" role="status">
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>تم التغيير. جارٍ تحويلك لتسجيل الدخول من جديد…</span>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    type="password"
+                    placeholder="كلمة المرور الحالية"
+                    value={pwCurrent}
+                    onChange={(e) => setPwCurrent(e.target.value)}
+                    className="h-11 rounded-xl neo-input"
+                    dir="ltr"
+                    autoComplete="current-password"
+                  />
+                  <Input
+                    type="password"
+                    placeholder="كلمة المرور الجديدة (8 أحرف على الأقل)"
+                    value={pwNew}
+                    onChange={(e) => setPwNew(e.target.value)}
+                    className="h-11 rounded-xl neo-input"
+                    dir="ltr"
+                    autoComplete="new-password"
+                    minLength={8}
+                  />
+                  <Input
+                    type="password"
+                    placeholder="تأكيد كلمة المرور الجديدة"
+                    value={pwConfirm}
+                    onChange={(e) => setPwConfirm(e.target.value)}
+                    className="h-11 rounded-xl neo-input"
+                    dir="ltr"
+                    autoComplete="new-password"
+                    minLength={8}
+                  />
+                  {pwError && <p className="text-xs text-destructive font-medium">{pwError}</p>}
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={pwLoading || !pwCurrent || pwNew.length < 8 || pwNew !== pwConfirm}
+                    className="w-full h-10 rounded-xl bg-forest hover:bg-forest/90 text-white dark:bg-lime dark:text-ink dark:hover:bg-lime/90 text-sm font-bold press"
+                  >
+                    {pwLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4 me-1.5" />}
+                    {pwLoading ? 'جاري التغيير…' : 'تغيير كلمة المرور'}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    بعد التغيير تُبطل جميع جلساتك على كل الأجهزة حفاظًا على أمان حسابك.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="h-[1px] bg-border/60" />
+
+            {/* تسجيل الخروج من جميع الأجهزة */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-violet-accent/10">
+                  <LogOut className="w-4 h-4 text-violet-accent" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">الخروج من كل الأجهزة</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">إنهاء جلساتك على جميع المتصفحات والأجهزة</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogoutAll}
+                disabled={logoutAllLoading}
+                className="text-xs shrink-0 border-violet-accent/30 text-violet-accent hover:bg-violet-accent/10 hover:border-violet-accent/50"
+              >
+                {logoutAllLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'خروج شامل'}
+              </Button>
+            </div>
+
+            <div className="h-[1px] bg-border/60" />
+
+            {/* حذف الحساب نهائيًا */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-destructive/10">
+                  <UserX className="w-4 h-4 text-destructive" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-destructive">حذف الحساب نهائيًا</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">الحساب نفسه مع جميع البيانات — لا رجعة</p>
+                </div>
+              </div>
+              <Dialog
+                open={deleteAccountOpen}
+                onOpenChange={(open) => {
+                  setDeleteAccountOpen(open)
+                  if (!open) { setDeleteAccountPassword(''); setDeleteAccountConfirm(''); setDeleteAccountError('') }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50"
+                  >
+                    حذف الحساب
+                  </Button>
+                </DialogTrigger>
+                <DialogContent dir="rtl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="w-5 h-5" />
+                      حذف الحساب نهائيًا
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4">
+                    <p className="text-sm text-muted-foreground">
+                      سيُحذف حسابك بالكامل: البيانات والمهام والعادات والأهداف وسجل XP والملف الشخصي
+                      ومستخدم المصادقة نفسه. لا يمكن التراجع عن هذا الإجراء إطلاقًا.
+                      إن أردت البدء من جديد مع الاحتفاظ بالحساب، استخدم «حذف جميع البيانات» في منطقة الخطر بدلًا من هذا.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      اكتب <span className="font-bold text-destructive">حذف</span> ثم كلمة مرور حسابك
+                      (<span dir="ltr" className="font-medium text-foreground">{getUserEmail() || '—'}</span>) للمتابعة:
+                    </p>
+                    <Input
+                      placeholder="اكتب حذف هنا..."
+                      value={deleteAccountConfirm}
+                      onChange={(e) => setDeleteAccountConfirm(e.target.value)}
+                      className="h-12 text-center text-lg font-mono rounded-xl neo-input"
+                      dir="ltr"
+                      autoFocus
+                    />
+                    <Input
+                      type="password"
+                      placeholder="كلمة المرور"
+                      value={deleteAccountPassword}
+                      onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                      className="h-12 rounded-xl neo-input"
+                      dir="ltr"
+                      autoComplete="current-password"
+                    />
+                    {deleteAccountError && (
+                      <p className="text-xs text-destructive font-medium">{deleteAccountError}</p>
+                    )}
+                    <DialogFooter className="gap-2 mt-2">
+                      <DialogClose asChild>
+                        <Button variant="outline" className="text-sm">إلغاء</Button>
+                      </DialogClose>
+                      <Button
+                        onClick={handleDeleteAccount}
+                        className="bg-destructive hover:bg-destructive/90 text-white text-sm"
+                        disabled={deleteAccountConfirm !== 'حذف' || !deleteAccountPassword || deletingAccount}
+                      >
+                        {deletingAccount ? (
+                          <>
+                            <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            جاري حذف الحساب...
+                          </>
+                        ) : (
+                          <>
+                            <UserX className="w-4 h-4 me-2" />
+                            حذف الحساب نهائيًا
+                          </>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </SectionCard>
+      </motion.div>
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

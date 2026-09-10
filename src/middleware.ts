@@ -77,6 +77,11 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/auth/login': { limit: 5, window: '1 m' },
   '/api/auth/signup': { limit: 3, window: '1 m' },
   '/api/auth/refresh': { limit: 10, window: '1 m' },
+  // المرحلة 03 — مسارات الحساب الحساسة (إغراق البريد / تخمين كلمة المرور)
+  '/api/auth/reset-password': { limit: 3, window: '1 m' },
+  '/api/auth/update-password': { limit: 5, window: '1 m' },
+  '/api/auth/delete-account': { limit: 2, window: '1 m' },
+  '/api/auth/logout-all': { limit: 10, window: '1 m' },
   '/api/error-log': { limit: 30, window: '1 m' },
   '/api/rise/export': { limit: 5, window: '1 m' },
   '/api/rise/delete-all': { limit: 2, window: '1 m' },
