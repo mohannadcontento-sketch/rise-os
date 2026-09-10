@@ -41,12 +41,34 @@ export async function POST(req: NextRequest) {
 
   if (variant === 'sb-write') {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
+    // what does the data layer actually see?
+    const { getRequestAuthToken } = await import('@/lib/request-context')
+    const seen = getRequestAuthToken()
+    steps.push(`sb-token: ${seen ? 'len=' + seen.length + ' head=' + seen.slice(0, 6) : 'NONE'}`)
     try {
       const result = await data.morningLogs.upsert(userId, today, { score: 55, totalItems: 1, completedItems: 0 })
       steps.push(`write ok: ${JSON.stringify(result).slice(0, 100)}`)
     } catch (e: any) {
-      steps.push(`write CAUGHT: ${(e?.stack || e?.message || String(e)).slice(0, 800)}`)
+      steps.push(`write CAUGHT: ${(e?.message || String(e)).slice(0, 200)}`)
     }
+
+    // (b) manual client WITH auth options (persistSession:false)
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const tk2 = seen || ''
+      const c2 = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
+        global: { headers: { Authorization: `Bearer ${tk2}` } },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      })
+      const { error } = await c2.from('morning_logs').upsert(
+        { user_id: userId, date: today, score: 45, total_items: 1, completed_items: 0 },
+        { onConflict: 'user_id,date' },
+      )
+      steps.push(`manual+authOpts write: ${error ? 'ERR ' + error.message : 'ok'}`)
+    } catch (e: any) {
+      steps.push(`manual+authOpts THROW: ${e?.message}`)
+    }
+
     steps.push(`errors-so-far: ${JSON.stringify((g.__diagErrors || []).slice(-3))}`)
     return NextResponse.json({ steps }, { status: 200 })
   }
