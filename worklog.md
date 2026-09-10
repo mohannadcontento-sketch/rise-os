@@ -208,3 +208,20 @@ Work Log:
 Stage Summary:
 - Commit this = full hardening pass5 content, compiled and build-verified, zero semantic changes
 - PENDING: owner runs SQL 013→022 on Supabase, then post-deploy E2E on prod; mutations will 500 until 014 applied
+
+---
+Task ID: 27-b (post-deploy verification)
+Agent: Super Z (main)
+Task: Verify hardening pass5 on production + smoke test
+
+Work Log:
+- Push required rebase: remote had duplicate Task-26 commit (50f26b8 vs local b1088d4, env re-init artifact) → rebase --skip on duplicate, hardening commit landed as 6d5fed0, pushed 50f26b8..6d5fed0
+- Vercel deployed in ~2 min; NEW-version marker confirmed: CSP nonce + strict-dynamic live
+- ARCHITECTURE CHANGE DISCOVERED: auth moved to httpOnly cookies (rise-access/rise-refresh, Secure, SameSite=Lax) + requireAuth reads cookie first then Bearer + suspension fail-closed; middleware requires Idempotency-Key on ALL mutations (missing→428, invalid-format→400)
+- scripts/smoke-27.js on PROD: 11/12 PASS — homepage/CSP, signup, login+cookies, session, GET tasks/books/knowledge/habits/dashboard, 428 guard, 401 unauth
+- 1 FAIL = EXPECTED: mutations 500 because request_idempotency table (migration 014) NOT YET on Supabase — owner must run migrations 013→022 in order (combined file: download/riseos-supabase-migrations-013-to-022.sql); until then every POST/PUT/PATCH/DELETE returns 500
+- Also: same-key idempotent replay check skipped (depends on table existing)
+
+Stage Summary:
+- Code live and healthy on reads+auth; writes blocked ONLY on SQL migration step
+- NEXT: owner runs SQL → re-run node scripts/smoke-27.js → expect 12/12
