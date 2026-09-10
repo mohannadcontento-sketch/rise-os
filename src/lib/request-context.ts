@@ -17,7 +17,20 @@ interface RequestContext {
   authToken?: string
 }
 
-const storage = new AsyncLocalStorage<RequestContext>()
+// CRITICAL FIX (Task 27): the server bundle can contain MULTIPLE instances of
+// this module (Turbopack chunk duplication across import graphs). Each copy
+// would otherwise own a SEPARATE AsyncLocalStorage, so the token bound by
+// requireUser() was invisible to the data layer's sb() — every request then
+// ran as role `anon` (RLS denied all writes, lists came back empty).
+// Sharing ONE storage instance via globalThis makes the context identical
+// for every module copy. Same pattern as the Prisma global singleton.
+const globalForRequestContext = globalThis as typeof globalThis & {
+  __riseRequestContextStorage?: AsyncLocalStorage<RequestContext>
+}
+
+const storage: AsyncLocalStorage<RequestContext> =
+  globalForRequestContext.__riseRequestContextStorage ??
+  (globalForRequestContext.__riseRequestContextStorage = new AsyncLocalStorage<RequestContext>())
 
 export function extractRequestToken(
   tokenOrReq: string | undefined | NextRequest
