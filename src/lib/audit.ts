@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server'
 import { isAdminRole } from '@/lib/supabase'
+import { setCurrentAuthToken } from '@/lib/data'
+import { requireAuth } from '@/lib/auth'
 
 // ============================================================
 // P3#3: Audit Logging — tracks admin actions for security
@@ -103,9 +105,12 @@ export async function isAdmin(userId: string): Promise<boolean> {
  * is not enough (several routes imported it without ever calling it).
  */
 export async function requireAdmin(req: NextRequest): Promise<string | null> {
-  const { requireAuth } = await import('@/lib/auth')
+  // CRITICAL (Task 27): bind synchronously before the first await so the
+  // route's continuation keeps the token context (see api-auth.ts).
+  setCurrentAuthToken(req)
   const userId = await requireAuth(req)
   if (!userId) return null
+  setCurrentAuthToken(req)
   if (!(await isAdmin(userId))) return null
   return userId
 }

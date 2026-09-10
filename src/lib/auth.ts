@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAnon, isSupabaseConfigured, resolveUserId } from '@/lib/supabase'
 import { isMockAuthEnabled, verifyMockAccessToken } from '@/lib/mock-auth'
+import { setCurrentAuthToken } from '@/lib/data'
 
 // ============================================================
 // P1#4 FIX: Authentication enforcement
@@ -95,6 +96,9 @@ export function withAuth<T = any>(
 ) {
   return async (req: NextRequest): Promise<T | NextResponse> => {
     try {
+      // CRITICAL (Task 27): bind BEFORE the first await — enterWith after an
+      // await does not propagate to the route's continuation (see api-auth.ts).
+      setCurrentAuthToken(req)
       const userId = await requireAuth(req)
       if (!userId) {
         return NextResponse.json(
@@ -102,8 +106,6 @@ export function withAuth<T = any>(
           { status: 401 }
         )
       }
-      const { setCurrentAuthToken } = await import('@/lib/data')
-      // Bind cookie auth for browser requests and Authorization for API-key clients.
       setCurrentAuthToken(req)
 
       return await handler(req, userId)
