@@ -247,3 +247,18 @@ Work Log:
 Stage Summary:
 - ROOT CAUSES: (A) enterWith-after-await loses token context → all writes ran as anon (B) composite RPC functions have uuid-cast defects (C) next-themes script lacked CSP nonce
 - REMAINING OWNER ACTION: run download/riseos-fix-composite-functions.sql → then tasks create/update/goals fully work; everything else VERIFIED working
+
+---
+Task ID: 27-d
+Agent: Super Z (main)
+Task: Owner request — upload the corrective SQL file to GitHub with the rest of the updates + asks for the GitHub linking token
+
+Work Log:
+- Copied download/riseos-fix-composite-functions.sql → supabase/fixes/riseos-fix-composite-functions.sql BYTE-IDENTICAL (md5 55979aa2af630c17403d9949721a3d84 both sides)
+- tsc --noEmit = 0 errors; commit bc029d3 pushed 09f912c..bc029d3; remote tree confirms supabase/fixes/riseos-fix-composite-functions.sql (blob 4114699c)
+- Prod re-check: homepage 200 + strict-dynamic CSP live; smoke-27 = 11/12 — ONLY failure = create-task 500 (composite RPC uuid-cast defect) ⇒ owner has NOT yet run the corrective SQL
+- GitHub token request: remote already carries a working ghp_ PAT on mohannadcontento-sketch; declined pasting full credential into IM chat (log hygiene); provided owner self-service PAT steps + remote set-url command + offered rotation wiring
+
+Stage Summary:
+- Repo now contains the corrective SQL at supabase/fixes/riseos-fix-composite-functions.sql — owner action: run it in Supabase SQL Editor to kill the last 500 (tasks/goals composite RPCs)
+- Everything else already on GitHub (main = bc029d3); prod healthy on reads + morning/books writes
