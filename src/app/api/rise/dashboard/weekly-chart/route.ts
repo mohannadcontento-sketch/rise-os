@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { isoToCairoDate } from '@/lib/rise-utils'
 
 export const dynamic = 'force-dynamic'
@@ -12,8 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     // TZ FIX: the 7-day window used to be built with toISOString() (UTC) —
@@ -26,7 +25,7 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
       weekDays.push(isoToCairoDate(d) || d.toISOString().split('T')[0])
     }
 
-    const scores = await data.dailyScores.list(userId, weekDays).catch(() => [])
+    const scores = await data.dailyScores.list(userId, weekDays)
 
     // Fill missing days with zero scores
     const chartData = weekDays.map((date) => {
@@ -44,6 +43,6 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     return NextResponse.json({ scores: chartData })
   } catch (error) {
     console.error('Weekly chart error:', error)
-    return NextResponse.json({ scores: [] })
+    return NextResponse.json({ error: 'تعذر تحميل الرسم الأسبوعي' }, { status: 500 })
   }
 }

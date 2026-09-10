@@ -197,38 +197,27 @@ export default function RiseOSApp() {
   // 401/403 storm) until the AuthProvider cleaned it up — sometimes never.
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('rise-auth')
       const userInfo = localStorage.getItem('rise-user-info')
-      if (stored && userInfo) {
-        const session = JSON.parse(stored)
+      if (userInfo) {
         const info = JSON.parse(userInfo)
-        const expiresAt = typeof session.expires_at === 'number' ? session.expires_at : null
-        const expired = expiresAt !== null && expiresAt * 1000 < Date.now() + 30_000 // 30s skew
-        if (expired) {
-          // Stale token — clear it so the AuthProvider gives a clean login
-          localStorage.removeItem('rise-auth')
-          localStorage.removeItem('rise-user-info')
-          return
-        }
-        if (session.access_token && !useRiseStore.getState().auth) {
+        if (info.id && !useRiseStore.getState().auth) {
           setAuth({
             isAuthenticated: true,
             userId: info.id || '',
             userEmail: info.email || '',
             userName: info.name || '',
             isAdmin: info.isAdmin || false,
-            accessToken: session.access_token,
+            accessToken: '',
           })
         }
       }
     } catch { /* ignore */ }
   }, [setAuth])
 
-  const handleLogin = useCallback((data: { user: { id: string; email: string; name: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => {
+  const handleLogin = useCallback((data: { user: { id: string; email: string; name: string; isAdmin: boolean };  }) => {
     // Clear any leftover cache from previous user to prevent cross-user data leaks
     clearAllCache()
-    // Store full session (including refresh_token for Supabase)
-    localStorage.setItem('rise-auth', JSON.stringify(data.session))
+    // Durable auth is held by the server's httpOnly cookies. Keep only non-secret UI info locally.
     localStorage.setItem('rise-user-info', JSON.stringify(data.user))
     setAuth({
       isAuthenticated: true,
@@ -236,8 +225,9 @@ export default function RiseOSApp() {
       userEmail: data.user.email,
       userName: data.user.name || data.user.email?.split('@')[0] || '',
       isAdmin: data.user.isAdmin,
-      accessToken: data.session.access_token,
+      accessToken: '',
     })
+    window.dispatchEvent(new CustomEvent('rise:user-authenticated'))
   }, [setAuth])
 
   // Keyboard shortcuts (must be before conditional return)
@@ -296,15 +286,15 @@ export default function RiseOSApp() {
   // which calls logout() — no need for a duplicate listener here.
   useEffect(() => {
     const handleRefresh = (e: CustomEvent) => {
-      const { user, session } = e.detail || {}
-      if (user && session) {
+      const { user } = e.detail || {}
+      if (user) {
         setAuth({
           isAuthenticated: true,
           userId: user.id,
           userEmail: user.email || '',
           userName: user.name || '',
           isAdmin: user.isAdmin,
-          accessToken: session.access_token,
+          accessToken: '',
         })
       }
     }

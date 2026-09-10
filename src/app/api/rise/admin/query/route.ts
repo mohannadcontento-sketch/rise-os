@@ -1,72 +1,44 @@
-import { requireAdmin } from "@/lib/audit";
+import { requireAdmin } from '@/lib/audit'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { withIdempotency } from '@/lib/idempotency'
+import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
+const QuerySchema = z.object({
+  queryId: z.enum(['table_counts', 'recent_users', 'recent_audit', 'recent_errors', 'storage_summary']),
+  limit: z.number().int().min(1).max(500).default(100),
+})
+
 export async function POST(request: NextRequest) {
   try {
-    // SECURITY: authenticate AND authorize — this route executes raw SQL
-    // with a service-role client, so it must be admin-only.
     const adminId = await requireAdmin(request)
-    if (!adminId) {
-      return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
-    }
+    if (!adminId) return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
 
-    const { sql } = await request.json()
+    return withIdempotency(request, adminId, async () => {
+      const parsed = QuerySchema.safeParse(await request.json().catch(() => null))
+      if (!parsed.success) {
+        return NextResponse.json({ error: 'استعلام إداري غير مسموح' }, { status: 400 })
+      }
 
-    if (!sql || typeof sql !== 'string') {
-      return NextResponse.json({ error: 'يجب توفير استعلام SQL' }, { status: 400 })
-    }
+      const supabase = await getSupabaseAdmin()
+      if (!supabase) return NextResponse.json({ error: 'قاعدة البيانات غير متاحة' }, { status: 503 })
 
-    let trimmedSql = sql.trim().slice(0, 10000)
+      const { data, error } = await (supabase as any).rpc('admin_read', {
+        p_query_id: parsed.data.queryId,
+        p_limit: parsed.data.limit,
+        p_admin_user_id: adminId,
+      })
+      if (error) {
+        console.error('[admin/query] allowlisted RPC failed:', error)
+        return NextResponse.json({ error: 'فشل تنفيذ القراءة الإدارية' }, { status: 500 })
+      }
 
-    // SECURITY: single read-only statement only.
-    // - Must start with SELECT (blocks WITH/CTE-wrapped writes, EXPLAIN, etc.)
-    // - Any embedded semicolon means multiple statements → reject
-    //   (the old start-anchored regex let "SELECT 1; DROP TABLE x" through).
-    if (!/^SELECT\s/i.test(trimmedSql)) {
-      return NextResponse.json(
-        { error: 'يُسمح فقط باستعلامات SELECT مفردة' },
-        { status: 400 }
-      )
-    }
-    if (trimmedSql.endsWith(';')) trimmedSql = trimmedSql.slice(0, -1).trimEnd()
-    if (trimmedSql.includes(';')) {
-      return NextResponse.json(
-        { error: 'لا يُسمح إلا بعبارة واحدة (بدون فواصل منقوطة)' },
-        { status: 400 }
-      )
-    }
-
-    const supabase = await getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not available. Raw SQL queries require a configured database.' },
-        { status: 503 },
-      )
-    }
-
-    // Execute raw SQL via Supabase RPC
-    const { data, error } = await (supabase as any).rpc('exec_sql', { query: trimmedSql })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message || 'فشل تنفيذ الاستعلام' },
-        { status: 500 },
-      )
-    }
-
-    // Handle both array and single object results
-    const rows = Array.isArray(data) ? data : (data ? [data] : [])
-    const columns = rows.length > 0 ? Object.keys(rows[0]) : []
-
-    return NextResponse.json({ columns, rows })
+      return NextResponse.json(data || { columns: [], rows: [] })
+    })
   } catch (error) {
-    console.error('Admin query error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'فشل تنفيذ الاستعلام' },
-      { status: 500 },
-    )
+    console.error('[admin/query] error:', error)
+    return NextResponse.json({ error: 'فشل تنفيذ الاستعلام الإداري' }, { status: 500 })
   }
 }

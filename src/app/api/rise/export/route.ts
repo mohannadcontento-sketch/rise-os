@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
-
-    const supabase = await getSupabaseAdmin()
 
     const [
       tasksResult,
@@ -41,59 +37,10 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
       data.books.list(userId),
       data.knowledgeItems.list(userId),
       data.morningLogs.list(userId, []),
-      // Daily scores — direct supabase (no list method)
-      (async () => {
-        if (!supabase) return []
-        const sb = supabase as any
-        try {
-          const { data: rows } = await sb
-            .from('daily_scores')
-            .select('*')
-            .eq('user_id', userId)
-          return (rows ?? []).map((d: any) => ({
-            date: d.date,
-            score: d.score,
-            morningScore: d.morning_score,
-            taskScore: d.task_score,
-            habitScore: d.habit_score,
-            focusScore: d.focus_score,
-            healthScore: d.health_score,
-            journalScore: d.journal_score,
-          }))
-        } catch { return [] }
-      })(),
+      data.dailyScores.list(userId, []),
       data.userAchievements.list(userId),
-      // User profile from Supabase instead of Prisma
-      (async () => {
-        if (!supabase) return null
-        const sb = supabase as any
-        try {
-          const { data: profile } = await sb
-            .from('profiles')
-            .select('name, level, xp, streak, longest_streak, total_focus_min, total_tasks_done')
-            .eq('id', userId)
-            .single()
-          return profile
-        } catch { return null }
-      })(),
-      // All habit logs — direct supabase for completeness
-      (async () => {
-        if (!supabase) return []
-        const sb = supabase as any
-        try {
-          const { data: rows } = await sb
-            .from('habit_logs')
-            .select('*, habits!inner(user_id)')
-            .eq('habits.user_id', userId)
-          return (rows ?? []).map((r: any) => ({
-            id: r.id,
-            habitId: r.habit_id,
-            date: r.date,
-            completed: r.completed,
-            count: r.count,
-          }))
-        } catch { return [] }
-      })(),
+      data.profiles.get(userId),
+      data.habitLogs.list(userId),
     ])
 
     const exportData = {

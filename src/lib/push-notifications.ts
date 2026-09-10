@@ -91,20 +91,10 @@ export function useBrowserNotifications() {
 
       await subscription.unsubscribe()
 
-      // Remove from server
+      // Remove from server using the httpOnly auth cookie.
       try {
-        const stored = localStorage.getItem('rise-auth')
-        if (stored) {
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-          const session = JSON.parse(stored)
-          if (session.access_token) {
-            headers['Authorization'] = `Bearer ${session.access_token}`
-          }
-          await fetch('/api/rise/notifications/push', {
-            method: 'DELETE',
-            headers,
-          })
-        }
+        const { apiDelete } = await import('@/lib/api-fetch')
+        await apiDelete('/api/rise/notifications/push')
       } catch { /* silent */ }
 
       return true
@@ -124,19 +114,8 @@ export function useBrowserNotifications() {
 
 async function saveSubscription(subscription: PushSubscription) {
   try {
-    const stored = localStorage.getItem('rise-auth')
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (stored) {
-      const session = JSON.parse(stored)
-      if (session.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
-    }
-    await fetch('/api/rise/notifications/push', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ subscription }),
-    })
+    const { apiPost } = await import('@/lib/api-fetch')
+    await apiPost('/api/rise/notifications/push', { subscription })
   } catch {
     // Silent — push subscription save failed
   }

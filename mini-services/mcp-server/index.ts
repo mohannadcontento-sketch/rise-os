@@ -29,20 +29,12 @@ const TRANSPORT_MODE = process.env.TRANSPORT || "stdio"; // "stdio" | "http"
 const PORT = parseInt(process.env.PORT || "3003", 10);
 
 // ─── Auth State ──────────────────────────────────────────────────
-let authToken: string | null = RISE_API_KEY;
-let authMethod: "api_key" | "jwt" | null = RISE_API_KEY?.startsWith("rise_") ? "api_key" : RISE_API_KEY ? "jwt" : null;
-
-function getAuthHeaders(): Record<string, string> {
-  if (!authToken) {
-    const hint = authMethod === null
-      ? "\n\nاستخدم rise_auth (للمصادقة بالبريد) أو rise_set_api_key (لمفتاح API)."
-      : "";
-    throw new MCPAuthError(`لم تتم المصادقة بعد.${hint}`);
-  }
-  return {
-    "Authorization": `Bearer ${authToken}`,
-    "Content-Type": "application/json",
-  };
+// SECURITY: authentication belongs to an MCP server/session, never to module-global state.
+// HTTP sessions create separate server instances, so credentials cannot bleed across users.
+interface MCPAuthState {
+  authToken: string | null;
+  authMethod: "api_key" | "jwt" | null;
+  refreshToken: string | null;
 }
 
 class MCPAuthError extends Error {
@@ -50,6 +42,19 @@ class MCPAuthError extends Error {
     super(message);
     this.name = "MCPAuthError";
   }
+}
+
+function getAuthHeaders(state: MCPAuthState): Record<string, string> {
+  if (!state.authToken) {
+    const hint = state.authMethod === null
+      ? "\n\nاستخدم rise_auth (للمصادقة بالبريد) أو rise_set_api_key (لمفتاح API)."
+      : "";
+    throw new MCPAuthError(`لم تتم المصادقة بعد.${hint}`);
+  }
+  return {
+    "Authorization": `Bearer ${state.authToken}`,
+    "Content-Type": "application/json",
+  };
 }
 
 // ─── Tool-name mapping (path-based names → backend MCP tool names) ──
@@ -87,9 +92,10 @@ function resolveToolName(
 // ─── API Helper ──────────────────────────────────────────────────
 async function apiFetch(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  state: MCPAuthState
 ): Promise<{ data: unknown; error?: string }> {
-  if (authToken?.startsWith("rise_")) {
+  if (state.authToken?.startsWith("rise_")) {
     try {
       const bodyObj = options.body ? JSON.parse(options.body as string) : {};
       const [cleanPath, queryString] = path.split("?");
@@ -105,7 +111,7 @@ async function apiFetch(
       const response = await fetch(`${RISE_API_URL}/api/rise/mcp/call`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${authToken}`,
+          "Authorization": `Bearer ${state.authToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ tool: toolName, args: bodyObj }),
@@ -125,8 +131,8 @@ async function apiFetch(
 
   const url = `${RISE_API_URL}${path}`;
   const headers = options.headers
-    ? { ...getAuthHeaders(), ...(options.headers as Record<string, string>) }
-    : getAuthHeaders();
+    ? { ...getAuthHeaders(state), ...(options.headers as Record<string, string>) }
+    : getAuthHeaders(state);
 
   let response: Response;
   try {
@@ -139,7 +145,30 @@ async function apiFetch(
   }
 
   if (response.status === 401) {
-    authToken = null;
+    if (state.authMethod === "jwt" && state.refreshToken) {
+      try {
+        const refreshResponse = await fetch(`${RISE_API_URL}/api/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: state.refreshToken }),
+        });
+        const refreshJson = await refreshResponse.json().catch(() => null);
+        if (refreshResponse.ok && refreshJson?.session?.access_token) {
+          state.authToken = refreshJson.session.access_token;
+          state.refreshToken = refreshJson.session.refresh_token || state.refreshToken;
+          const retryHeaders = new Headers(options.headers || {});
+          retryHeaders.set("Authorization", `Bearer ${state.authToken}`);
+          if (options.body && !retryHeaders.has("Content-Type")) retryHeaders.set("Content-Type", "application/json");
+          const retry = await fetch(url, { ...options, headers: retryHeaders });
+          const retryJson = await retry.json().catch(() => null);
+          if (retry.ok) return { data: retryJson };
+          return { data: retryJson, error: retryJson?.error || `HTTP ${retry.status}` };
+        }
+      } catch {
+        // Fall through to auth-expired response.
+      }
+    }
+    state.authToken = null;
     return {
       data: null,
       error: "انتهت صلاحية الجلسة. استخدم rise_auth لإعادة المصادقة.",
@@ -166,7 +195,15 @@ function getToday(): string {
 // SERVER FACTORY - Creates a new McpServer with all tools registered
 // ═══════════════════════════════════════════════════════════════════
 
-function createRiseOsServer(): McpServer {
+function createRiseOsServer(initialAuth?: Partial<MCPAuthState>): McpServer {
+  const state: MCPAuthState = {
+    authToken: initialAuth?.authToken ?? RISE_API_KEY,
+    authMethod: initialAuth?.authMethod ?? (RISE_API_KEY?.startsWith("rise_") ? "api_key" : RISE_API_KEY ? "jwt" : null),
+    refreshToken: initialAuth?.refreshToken ?? null,
+  };
+
+  const api = (path: string, options: RequestInit = {}) => apiFetch(path, options, state);
+
   const server = new McpServer({
     name: "riseos",
     version: "2.0.0",
@@ -203,8 +240,9 @@ function createRiseOsServer(): McpServer {
       const json = await response.json().catch(() => null);
 
       if (!response.ok) {
-        authToken = null;
-        authMethod = null;
+        state.authToken = null;
+        state.refreshToken = null;
+        state.authMethod = null;
         const msg = json?.error || `فشل تسجيل الدخول (HTTP ${response.status})`;
         return {
           content: [{ type: "text" as const, text: `❌ فشل المصادقة: ${msg}` }],
@@ -212,8 +250,9 @@ function createRiseOsServer(): McpServer {
         };
       }
 
-      authToken = json.session?.access_token;
-      authMethod = "jwt";
+      state.authToken = json.session?.access_token || null;
+      state.refreshToken = json.session?.refresh_token || null;
+      state.authMethod = "jwt";
       const userName = json.user?.email || email;
 
       return {
@@ -260,8 +299,9 @@ function createRiseOsServer(): McpServer {
           };
         }
 
-        authToken = api_key;
-        authMethod = "api_key";
+        state.authToken = api_key;
+        state.refreshToken = null;
+        state.authMethod = "api_key";
 
         return {
           content: [{
@@ -291,7 +331,7 @@ function createRiseOsServer(): McpServer {
     "الحصول على نظرة عامة شاملة على لوحة التحكم: المهام والعادات والتركيز والإنجازات والنتيجة اليومية والمالية والمشاريع والأهداف",
     {},
     async () => {
-      const { data, error } = await apiFetch("/api/rise/dashboard");
+      const { data, error } = await api("/api/rise/dashboard");
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as Record<string, unknown>;
@@ -337,7 +377,7 @@ function createRiseOsServer(): McpServer {
       const serverStatus = status ? statusMap[status] : undefined;
       const queryPath = serverStatus ? `/api/rise/tasks?status=${serverStatus}` : "/api/rise/tasks";
 
-      const { data, error } = await apiFetch(queryPath);
+      const { data, error } = await api(queryPath);
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { tasks?: Array<Record<string, unknown>> };
@@ -365,7 +405,7 @@ function createRiseOsServer(): McpServer {
     "الحصول على جميع العادات مع حالة الإكمال لليوم",
     {},
     async () => {
-      const { data, error } = await apiFetch("/api/rise/habits");
+      const { data, error } = await api("/api/rise/habits");
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { habits?: Array<Record<string, unknown>>; logs?: Array<Record<string, unknown>> };
@@ -405,7 +445,7 @@ function createRiseOsServer(): McpServer {
     "الحصول على جميع الأهداف مع التقدم والمعالم",
     {},
     async () => {
-      const { data, error } = await apiFetch("/api/rise/goals");
+      const { data, error } = await api("/api/rise/goals");
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { goals?: Array<Record<string, unknown>> };
@@ -441,7 +481,7 @@ function createRiseOsServer(): McpServer {
     },
     async ({ month }) => {
       const queryPath = month ? `/api/rise/finance?month=${month}` : "/api/rise/finance";
-      const { data, error } = await apiFetch(queryPath);
+      const { data, error } = await api(queryPath);
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { records?: Array<Record<string, unknown>> };
@@ -496,7 +536,7 @@ function createRiseOsServer(): McpServer {
     },
     async ({ date }) => {
       const journalDate = date || getToday();
-      const { data, error } = await apiFetch("/api/rise/journal");
+      const { data, error } = await api("/api/rise/journal");
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { journal?: Record<string, unknown> | null; recentJournals?: Array<Record<string, unknown>> };
@@ -529,7 +569,7 @@ function createRiseOsServer(): McpServer {
     },
     async ({ days }) => {
       const n = days || 7;
-      const { data, error } = await apiFetch(`/api/rise/focus?days=${n}`);
+      const { data, error } = await api(`/api/rise/focus?days=${n}`);
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { sessions?: Array<Record<string, unknown>> };
@@ -573,7 +613,7 @@ function createRiseOsServer(): McpServer {
       days: z.number().optional().describe("عدد الأيام الأخيرة (الافتراضي: 7)"),
     },
     async ({ days }) => {
-      const { data, error } = await apiFetch("/api/rise/health");
+      const { data, error } = await api("/api/rise/health");
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { logs?: Array<Record<string, unknown>>; todayLog?: Record<string, unknown> | null };
@@ -624,7 +664,7 @@ function createRiseOsServer(): McpServer {
     "الحصول على جميع المشاريع",
     {},
     async () => {
-      const { data, error } = await apiFetch("/api/rise/projects");
+      const { data, error } = await api("/api/rise/projects");
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
       const d = data as { projects?: Array<Record<string, unknown>> };
@@ -656,10 +696,10 @@ function createRiseOsServer(): McpServer {
     },
     async ({ date }) => {
       const dateStr = date || getToday();
-      const { data, error } = await apiFetch(`/api/rise/productivity-score?dates=${dateStr}`);
+      const { data, error } = await api(`/api/rise/productivity-score?dates=${dateStr}`);
       if (error) return { content: [{ type: "text" as const, text: `❌ ${error}` }], isError: true };
 
-      const { data: detailData } = await apiFetch("/api/rise/productivity-score");
+      const { data: detailData } = await api("/api/rise/productivity-score");
       const detail = detailData as Record<string, unknown> | null;
 
       const d = data as { scores?: Array<{ date: string; score: number }> };
@@ -717,7 +757,7 @@ function createRiseOsServer(): McpServer {
       if (dueDate) body.dueDate = dueDate;
       if (projectId) body.projectId = projectId;
 
-      const { data, error } = await apiFetch("/api/rise/tasks", {
+      const { data, error } = await api("/api/rise/tasks", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -744,7 +784,7 @@ function createRiseOsServer(): McpServer {
     async ({ habitId, completed }) => {
       const today = getToday();
 
-      const { data, error } = await apiFetch("/api/rise/habits", {
+      const { data, error } = await api("/api/rise/habits", {
         method: "PUT",
         body: JSON.stringify({ habitId, date: today, completed }),
       });
@@ -775,7 +815,7 @@ function createRiseOsServer(): McpServer {
         date: getToday(),
       };
 
-      const { data, error } = await apiFetch("/api/rise/finance", {
+      const { data, error } = await api("/api/rise/finance", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -815,7 +855,7 @@ function createRiseOsServer(): McpServer {
         return { content: [{ type: "text" as const, text: "⚠️ لم يتم تحديد أي بيانات لكتابتها في اليومية" }], isError: true };
       }
 
-      const { data, error } = await apiFetch("/api/rise/journal", {
+      const { data, error } = await api("/api/rise/journal", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -845,7 +885,7 @@ function createRiseOsServer(): McpServer {
       if (category) body.category = category;
       if (targetDate) body.targetDate = targetDate;
 
-      const { data, error } = await apiFetch("/api/rise/goals", {
+      const { data, error } = await api("/api/rise/goals", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -869,7 +909,7 @@ function createRiseOsServer(): McpServer {
     "analytics-overview",
     "rise://analytics/overview",
     async (uri) => {
-      const { data, error } = await apiFetch("/api/rise/dashboard");
+      const { data, error } = await api("/api/rise/dashboard");
       if (error) {
         return {
           contents: [{ uri: "rise://analytics/overview", mimeType: "application/json", text: JSON.stringify({ error }) }],
@@ -885,7 +925,7 @@ function createRiseOsServer(): McpServer {
     "finance-report",
     "rise://finance/report",
     async (uri) => {
-      const { data, error } = await apiFetch("/api/rise/finance");
+      const { data, error } = await api("/api/rise/finance");
       if (error) {
         return {
           contents: [{ uri: "rise://finance/report", mimeType: "application/json", text: JSON.stringify({ error }) }],
@@ -928,7 +968,9 @@ async function startStdioTransport() {
 }
 
 async function startHttpTransport() {
-  const transports: Record<string, WebStandardStreamableHTTPServerTransport> = {};
+  const transports: Record<string, { transport: WebStandardStreamableHTTPServerTransport; server: McpServer; createdAt: number; lastSeen: number }> = {};
+  const MAX_SESSIONS = 100;
+  const SESSION_TTL_MS = 60 * 60 * 1000;
 
   const httpServer = Bun.serve({
     port: PORT,
@@ -958,8 +1000,9 @@ async function startHttpTransport() {
           // Existing session — reuse transport
           if (sessionId && transports[sessionId]) {
             console.log(`[MCP] Reusing session: ${sessionId}`);
+            transports[sessionId].lastSeen = Date.now();
             try {
-              return await transports[sessionId].handleRequest(req);
+              return await transports[sessionId].transport.handleRequest(req);
             } catch (err) {
               console.error(`[MCP] Error handling request for session ${sessionId}:`, err);
               return Response.json({
@@ -972,6 +1015,9 @@ async function startHttpTransport() {
 
           // New session — only on POST with initialize request
           if (method === "POST" && !sessionId) {
+            if (Object.keys(transports).length >= MAX_SESSIONS) {
+              return Response.json({ jsonrpc: "2.0", error: { code: -32000, message: "Too many active MCP sessions" }, id: null }, { status: 429 });
+            }
             // Read body ourselves since Bun's clone() can be unreliable
             let bodyText: string;
             try {
@@ -1003,7 +1049,7 @@ async function startHttpTransport() {
                 enableJsonResponse: false,
                 onsessioninitialized: (sid: string) => {
                   console.log(`[MCP] Session initialized: ${sid}`);
-                  transports[sid] = transport;
+                  transports[sid] = { transport, server: mcpServer, createdAt: Date.now(), lastSeen: Date.now() };
                 },
                 onsessionclosed: (sid: string) => {
                   console.log(`[MCP] Session closed: ${sid}`);
@@ -1063,6 +1109,16 @@ async function startHttpTransport() {
       return new Response("Not Found", { status: 404 });
     },
   });
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [sid, entry] of Object.entries(transports)) {
+      if (now - entry.lastSeen > SESSION_TTL_MS) {
+        try { entry.transport.close(); } catch { /* ignore */ }
+        delete transports[sid];
+      }
+    }
+  }, 5 * 60 * 1000);
 
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  RiseOS MCP Server v2.0.0 — HTTP Mode (Bun native)`);

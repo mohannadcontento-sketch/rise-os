@@ -1,46 +1,51 @@
 'use client'
 
 import { persistQueryClient } from '@tanstack/react-query-persist-client'
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { QueryClient } from '@tanstack/react-query'
+import { loadQueryCache, saveQueryCache, clearQueryCacheStore } from '@/lib/secure-offline-db'
 
-// ============================================================
-// P2#11: Offline strategy — React Query + localStorage persistence
-// ------------------------------------------------------------
-// Persists query cache to localStorage so data is available offline.
-// When connection restores, React Query refetches in background.
-// ============================================================
-
-let _persister: ReturnType<typeof createSyncStoragePersister> | null = null
-
-/** Get or create the localStorage persister. */
-export function getPersister() {
-  if (typeof window === 'undefined') return null
-  if (!_persister) {
-    _persister = createSyncStoragePersister({
-      storage: window.localStorage,
-      key: 'riseos-query-cache',
-      // Only persist GET queries (no mutations)
-      serialize: (data) => JSON.stringify(data),
-      deserialize: (str) => JSON.parse(str),
-    })
-  }
-  return _persister
+interface PersistedClientStorage {
+  persistClient: (client: any) => Promise<void>
+  restoreClient: () => Promise<any | undefined>
+  removeClient: () => Promise<void>
 }
 
-/** Setup offline persistence for a QueryClient. */
+function getCurrentUserId(): string {
+  if (typeof window === 'undefined') return ''
+  try { return JSON.parse(localStorage.getItem('rise-user-info') || '{}').id || '' } catch { return '' }
+}
+
+/**
+ * User-bound encrypted React Query persistence.
+ * No application data is stored in localStorage anymore.
+ */
+export function getPersister(): PersistedClientStorage | null {
+  if (typeof window === 'undefined') return null
+  const userId = getCurrentUserId()
+  if (!userId) return null
+
+  return {
+    persistClient: async (client) => {
+      await saveQueryCache(userId, client)
+    },
+    restoreClient: async () => {
+      return await loadQueryCache<any>(userId) ?? undefined
+    },
+    removeClient: async () => {
+      await clearQueryCacheStore(userId)
+    },
+  }
+}
+
+/** Setup encrypted, user-scoped offline persistence for a QueryClient. */
 export function setupOfflinePersistence(queryClient: QueryClient) {
   const persister = getPersister()
   if (!persister) return
 
-  persistQueryClient({
+  return persistQueryClient({
     queryClient,
     persister,
-    // FIX: Increased from 24 hours to 7 days. The 24-hour maxAge meant that
-    // if a user returned after a day, the cache was expired and the UI would
-    // be empty until a successful fetch completed. With 7 days, the cache
-    // persists long enough to cover normal usage gaps (weekend, vacation, etc.)
-    // and stale-while-revalidate still ensures fresh data when online.
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    buster: 'riseos-secure-cache-v2',
   })
 }

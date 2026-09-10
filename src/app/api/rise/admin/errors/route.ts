@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/audit'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     const admin = await getSupabaseAdmin()
     if (!admin) {
-      return NextResponse.json({ errors: [], total24h: 0, topMessages: [] })
+      return NextResponse.json({ error: 'تعذر تحميل سجل الأخطاء' }, { status: 500 })
     }
     const sb = admin as any
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[admin/errors] error:', error)
-    return NextResponse.json({ errors: [], total24h: 0, topMessages: [] })
+    return NextResponse.json({ error: 'تعذر تحميل سجل الأخطاء' }, { status: 500 })
   }
 }
 
@@ -74,8 +75,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
+  return withIdempotency(request, adminId, async () => {
     const admin = await getSupabaseAdmin()
-    if (!admin) return NextResponse.json({ success: true, cleared: 0 })
+    if (!admin) return NextResponse.json({ error: 'قاعدة البيانات غير متاحة' }, { status: 503 })
     const sb = admin as any
 
     // Supabase requires a filter for DELETE — epoch bound = "all rows"
@@ -88,7 +90,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     return NextResponse.json({ success: true, cleared: count ?? 0 })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('[admin/errors] clear error:', error)
     return NextResponse.json({ error: 'فشل مسح السجل' }, { status: 500 })
   }

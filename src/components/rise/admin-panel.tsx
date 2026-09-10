@@ -70,118 +70,7 @@ import { RiseIcon } from './icons'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
-
-/* ═══════════════ Types ═══════════════ */
-
-interface AdminUser {
-  id: string
-  email: string | null
-  name: string
-  createdAt: string
-  isAdmin: boolean
-  storageUsed: number
-  storageLimit: number
-  aiLimit: number
-  aiUsed: number
-  level?: number
-  xp?: number
-  streak?: number
-  lastActive?: string
-}
-
-interface SystemStats {
-  totalUsers: number
-  activeUsers7d: number
-  totalTasks: number
-  totalHabits: number
-  totalJournals: number
-  totalGoals: number
-  totalStorageUsed: number
-  totalAiUsed: number
-  userGrowth: { date: string; count: number }[]
-  tableCounts: Record<string, number>
-  recentActivity: { time: string; action: string; user: string }[]
-}
-
-interface ApiKeyInfo {
-  id: string
-  name: string
-  userId: string
-  userName: string
-  userEmail: string
-  keyPreview: string
-  createdAt: string
-  lastUsed: string | null
-  usageCount: number
-}
-
-/* ═══════════════ Helpers ═══════════════ */
-
-function toArabicNum(n: number | null | undefined): string {
-  if (n == null || isNaN(n)) return '٠'
-  return n.toString().replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
-}
-
-function formatBytes(bytes: number | null | undefined): string {
-  if (!bytes) return '0 B'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—'
-  try {
-    return new Date(dateStr).toLocaleDateString('ar-EG', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return '—'
-  }
-}
-
-function formatDateTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—'
-  try {
-    return new Date(dateStr).toLocaleDateString('ar-EG', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return '—'
-  }
-}
-
-function timeAgo(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—'
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'الآن'
-  if (mins < 60) return `منذ ${toArabicNum(mins)} دقيقة`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `منذ ${toArabicNum(hours)} ساعة`
-  const days = Math.floor(hours / 24)
-  return `منذ ${toArabicNum(days)} يوم`
-}
-
-function timeAgoEn(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—'
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-/* ═══════════════ Loading Skeletons ═══════════════ */
+import { AdminUser, SystemStats, ApiKeyInfo, toArabicNum, formatBytes, formatDate, formatDateTime, timeAgo, timeAgoEn } from './admin-panel-utils'
 
 function StatsSkeleton() {
   return (
@@ -227,7 +116,7 @@ function UserManagementTab() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const loadUsers = useCallback(async (showLoading = true) => {
-    if (!auth?.accessToken) return
+    if (!auth?.isAuthenticated) return
     if (showLoading) setLoading(true)
     try {
       const res = await apiFetch('/api/rise/admin/users')
@@ -242,7 +131,7 @@ function UserManagementTab() {
     } finally {
       setLoading(false)
     }
-  }, [auth?.accessToken])
+  }, [auth?.isAuthenticated])
 
   useEffect(() => {
     loadUsers()
@@ -940,7 +829,17 @@ function DatabaseTab() {
     setResults(null)
 
     try {
-      const res = await apiPost('/api/rise/admin/query', { sql })
+      const legacyQueryMap: Record<string, string> = {
+        'SELECT tablename AS "الجدول", n_live_tup AS "عدد السجلات" FROM pg_stat_user_tables ORDER BY n_live_tup DESC;': 'table_counts',
+        'SELECT * FROM "User" ORDER BY "createdAt" DESC LIMIT 10;': 'recent_users',
+      }
+      const normalized = sql.trim() + (sql.trim().endsWith(';') ? '' : ';')
+      const queryId = legacyQueryMap[normalized]
+      if (!queryId) {
+        setError('لأسباب أمنية، محرر SQL الحر مغلق. استخدم أحد الاستعلامات الإدارية الجاهزة.')
+        return
+      }
+      const res = await apiPost('/api/rise/admin/query', { queryId, limit: 100 })
       const data = await res.json()
 
       if (data.error) {
@@ -1000,9 +899,9 @@ function DatabaseTab() {
         <div className="p-5 pb-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <Database className="w-4 h-4 text-forest" />
-            محرر الاستعلامات
-            <span className="pill bg-destructive/10 text-destructive text-[9px]">
-              ⚡ استعلام مباشر
+            قراءات قاعدة البيانات
+            <span className="pill bg-forest/10 text-forest text-[9px]">
+              🔒 Allowlist آمن
             </span>
           </h3>
         </div>
@@ -1010,7 +909,7 @@ function DatabaseTab() {
           <Textarea
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="اكتب استعلام SQL هنا..."
+            placeholder="اختر استعلامًا جاهزًا من الأزرار بالأعلى..."
             className="font-mono text-sm min-h-[120px] bg-surface-2 border-border text-foreground"
             dir="ltr"
             onKeyDown={(e) => {
@@ -1022,7 +921,7 @@ function DatabaseTab() {
           />
           <div className="flex items-center justify-between">
             <p className="text-[10px] text-muted-foreground">
-              <kbd className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono">Ctrl+Enter</kbd> للتنفيذ
+              القراءات الإدارية الجاهزة فقط — لا يتم تنفيذ SQL حر على السيرفر
             </p>
             <Button
               size="sm"

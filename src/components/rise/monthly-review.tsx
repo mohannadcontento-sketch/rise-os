@@ -1,5 +1,8 @@
 'use client'
 
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
+
+
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -154,7 +157,7 @@ export default function MonthlyReview() {
   const [allReviews, setAllReviews] = useState<MonthlyReview[]>(() => {
     if (typeof window === 'undefined') return []
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = getUserStorage(STORAGE_KEY)
       if (stored) {
         const parsed: MonthlyReview[] = JSON.parse(stored)
         return parsed.map((r) => ({ ...r, categories: hydrateCategories(r.categories || []) }))
@@ -165,7 +168,7 @@ export default function MonthlyReview() {
   const [review, setReview] = useState<MonthlyReview>(() => {
     if (typeof window === 'undefined') return emptyReview()
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = getUserStorage(STORAGE_KEY)
       if (stored) {
         const parsed: MonthlyReview[] = JSON.parse(stored)
         const thisMonth = parsed.find((r) => r.month === new Date().toISOString().slice(0, 7))
@@ -184,7 +187,7 @@ export default function MonthlyReview() {
       ? allReviews.map((r) => (r.id === review.id ? review : r))
       : [review, ...allReviews]
     setAllReviews(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    setUserStorage(STORAGE_KEY, JSON.stringify(updated))
     setShowSaveSuccess(true)
     setTimeout(() => setShowSaveSuccess(false), 2000)
     toast.success('تم حفظ المراجعة الشهرية')

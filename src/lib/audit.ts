@@ -5,7 +5,7 @@ import { isAdminRole } from '@/lib/supabase'
 // P3#3: Audit Logging — tracks admin actions for security
 // ------------------------------------------------------------
 // Logs all admin operations (user management, config changes,
-// data access) to the notifications table + console.
+// data access) to a dedicated durable audit ledger + console.
 // In production, forward to Sentry/external log service.
 // ============================================================
 
@@ -22,7 +22,7 @@ interface AuditEntry {
 
 /**
  * Log an admin action for audit trail.
- * Stores in notifications table (type: 'audit') + console.
+ * Stores in audit_logs + console.
  */
 export async function logAudit(
   req: NextRequest,
@@ -45,22 +45,29 @@ export async function logAudit(
     timestamp: new Date().toISOString(),
   }
 
-  // Always log to console (Vercel captures this)
   console.log('[AUDIT]', JSON.stringify(entry))
 
-  // Try to persist to notifications table
+  // Durable, append-oriented audit trail. Do NOT route audit events through
+  // notifications: notifications are user-facing mutable data, not a security ledger.
   try {
-    const { data } = await import('@/lib/data')
-    await data.notifications.create(userId, {
-      title: `Admin: ${action}`,
-      body: details?.resource ? `${details.resource}:${details.resourceId || ''}` : action,
-      type: 'audit',
-      icon: '🛡️',
-      actionUrl: '',
-      isRead: false,
+    const { getSupabaseAdmin } = await import('@/lib/supabase')
+    const admin = await getSupabaseAdmin()
+    if (!admin) return
+
+    const { error } = await (admin as any).from('audit_logs').insert({
+      actor_user_id: userId,
+      action,
+      target_type: details?.resource || null,
+      target_id: details?.resourceId || null,
+      metadata: details?.details || {},
+      ip_address: entry.ip || null,
+      user_agent: entry.userAgent || null,
+      created_at: entry.timestamp,
     })
-  } catch {
-    // Non-critical — console log is sufficient
+
+    if (error) console.error('[AUDIT] durable write failed:', error.message)
+  } catch (error) {
+    console.error('[AUDIT] durable write unavailable:', error)
   }
 }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { isAdmin } from '@/lib/audit'
+import { requireAdmin, logAudit } from '@/lib/audit'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,13 +11,10 @@ export const dynamic = 'force-dynamic'
  */
 export async function PUT(req: NextRequest) {
   try {
-    const adminId = await requireAuth(req)
-    if (!adminId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
+    const adminId = await requireAdmin(req)
+    if (!adminId) return NextResponse.json({ error: 'غير مصرح — الأدمن فقط' }, { status: 403 })
 
-    // Check admin
-    const admin = await isAdmin(adminId)
-    if (!admin) return NextResponse.json({ error: 'غير مصرح — الأدمن فقط' }, { status: 403 })
-
+  return withIdempotency(req, adminId, async () => {
     const { userId, storageLimit } = await req.json()
     if (!userId || !storageLimit || storageLimit < 1024) {
       return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 })
@@ -39,8 +36,15 @@ export async function PUT(req: NextRequest) {
       })
     }
 
+    await logAudit(req, adminId, 'update-storage-limit', {
+      resource: 'user_storage',
+      resourceId: userId,
+      details: { storageLimit },
+    })
+
     return NextResponse.json({ success: true, storageLimit })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Admin storage PUT error:', error)
     return NextResponse.json({ error: 'Failed to update storage limit' }, { status: 500 })
   }

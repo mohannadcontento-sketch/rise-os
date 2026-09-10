@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
+import { getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
 import { verifySupabaseToken } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -17,55 +17,33 @@ export const dynamic = 'force-dynamic'
 // ============================================================
 
 async function getProfileFlags(userId: string, email: string | undefined): Promise<{ isAdmin: boolean; avatar: string | null; suspended: boolean }> {
-  if (email && email === ADMIN_EMAIL) {
-    return { isAdmin: true, avatar: await getAvatar(userId), suspended: false } // admin email never suspended
-  }
-  if (isSupabaseConfigured()) {
-    try {
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const sb = admin as any
-        const { data } = await sb
-          .from('profiles')
-          .select('role, avatar, suspended')
-          .eq('id', userId)
-          .maybeSingle()
-        const d = data as { role?: string; avatar?: string; suspended?: boolean } | null
-        return {
-          isAdmin: isAdminRole(d?.role),
-          avatar: d?.avatar || null,
-          suspended: d?.suspended === true,
-        }
-      }
-    } catch { /* ignore */ }
-  }
-  return { isAdmin: false, avatar: null, suspended: false }
-}
+  if (!isSupabaseConfigured()) return { isAdmin: false, avatar: null, suspended: false }
 
-async function getAvatar(userId: string): Promise<string | null> {
-  if (!isSupabaseConfigured()) return null
-  try {
-    const admin = await getSupabaseAdmin()
-    if (admin) {
-      const sb = admin as any
-      const { data: profile } = await sb
-        .from('profiles')
-        .select('avatar')
-        .eq('id', userId)
-        .single()
-      const av = profile as { avatar?: string } | null
-      return av?.avatar || null
-    }
-  } catch { /* ignore */ }
-  return null
+  const admin = await getSupabaseAdmin()
+  if (!admin) throw new Error('Profile verification unavailable')
+
+  const sb = admin as any
+  const { data, error } = await sb
+    .from('profiles')
+    .select('role, avatar, suspended')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+
+  const d = data as { role?: string; avatar?: string; suspended?: boolean } | null
+  return {
+    isAdmin: isAdminRole(d?.role),
+    avatar: d?.avatar || null,
+    suspended: d?.suspended === true,
+  }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    let token = request.cookies.get('rise-access')?.value || ''
-    if (!token) {
-      token = request.headers.get('Authorization')?.replace('Bearer ', '') || ''
-    }
+    // Browser sessions are BFF/cookie-only. Authorization headers are reserved
+    // for non-browser API-key clients and are deliberately not accepted here.
+    const token = request.cookies.get('rise-access')?.value || ''
     if (!token) {
       return NextResponse.json({ user: null, expires: null })
     }
@@ -80,22 +58,29 @@ export async function GET(request: NextRequest) {
       if (supabase) {
         try {
           const { data: { user }, error } = await supabase.auth.getUser(token)
-          if (!error && user) {
-            const { isAdmin, avatar, suspended } = await getProfileFlags(user.id, user.email)
-            return NextResponse.json({
-              user: {
-                id: user.id,
-                email: user.email,
-                name: (user as any).user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
-                isAdmin,
-                avatar,
-                suspended,
-              },
-              expires: new Date(((user as any).exp || 0) * 1000).toISOString() || null,
-            })
+          if (error || !user) {
+            return NextResponse.json({ user: null, expires: null })
           }
-        } catch { /* fall through to local */ }
+
+          const { isAdmin, avatar, suspended } = await getProfileFlags(user.id, user.email)
+          return NextResponse.json({
+            user: {
+              id: user.id,
+              email: user.email,
+              name: (user as any).user_metadata?.name || user.email?.split('@')[0] || 'مستخدم',
+              isAdmin,
+              avatar,
+              suspended,
+            },
+            expires: new Date(((user as any).exp || 0) * 1000).toISOString() || null,
+          })
+        } catch {
+          // Production Supabase session/profile validation is fail-closed.
+          return NextResponse.json({ user: null, expires: null, error: 'خدمة الجلسة غير متاحة حالياً' }, { status: 503 })
+        }
       }
+
+      return NextResponse.json({ user: null, expires: null, error: 'خدمة المصادقة غير متاحة حالياً' }, { status: 503 })
     }
 
     const user = await db.user.findUnique({

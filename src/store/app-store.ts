@@ -84,27 +84,15 @@ export const useRiseStore = create<RiseStore>((set, get) => ({
     try {
       if (typeof window !== 'undefined') {
         clearAllCache()
+        const oldUserId = (() => { try { return JSON.parse(localStorage.getItem('rise-user-info') || '{}').id || '' } catch { return '' } })()
+        // Keep the user's encrypted offline mutations. They are user-bound and
+        // cannot be replayed by another account; deleting them here would lose
+        // work if the same user signs out before reconnecting.
+        window.dispatchEvent(new CustomEvent('rise:logout', { detail: { userId: oldUserId } }))
         localStorage.removeItem('rise-auth')
         localStorage.removeItem('rise-user-info')
-        // PERF FIX: this used to POST /api/auth/logout directly AND call
-        // supabaseClient.auth.signOut() — the signOut fires SIGNED_OUT, and
-        // AuthProvider's handler POSTs /api/auth/logout again → every logout
-        // sent TWO identical requests. Now: Supabase mode relies on the
-        // SIGNED_OUT handler (single POST); only mock/dev mode (no Supabase
-        // client, no SIGNED_OUT event) posts directly.
-        import('@/lib/supabase-client').then(({ supabaseClient }) => {
-          if (supabaseClient) {
-            supabaseClient.auth.signOut().catch(() => {})
-          } else {
-            try {
-              fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-            } catch { /* ignore */ }
-          }
-        }).catch(() => {
-          try {
-            fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-          } catch { /* ignore */ }
-        })
+        // Server-owned BFF authentication: clear the httpOnly cookies directly.
+        void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
       }
       set({ auth: null, user: null, activeModule: 'dashboard' })
     } finally {

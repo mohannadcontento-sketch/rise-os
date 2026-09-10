@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getSupabaseAnon, isSupabaseConfigured, ADMIN_EMAIL } from '@/lib/supabase'
+import { createSupabaseIsolatedClient, isSupabaseConfigured } from '@/lib/supabase'
 import { setAuthCookies } from '@/lib/cookie-auth'
+import { isMockAuthEnabled } from '@/lib/mock-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // ── Supabase Auth Flow ──
     if (isSupabaseConfigured()) {
-      const supabase = await getSupabaseAnon()
+      const supabase = await createSupabaseIsolatedClient()
       if (supabase) {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -66,40 +67,16 @@ export async function POST(request: NextRequest) {
         }
 
         if (data.session) {
-          // ADMIN BOOTSTRAP FIX: isAdmin كانت علامة واجهة فقط — profiles.role
-          // ما كانش بيتكتب أبداً، فـ requireAdmin() (اللي بيفحص profiles.role)
-          // كان بيرجّع 403 دائماً حتى لو الإيميل مطابق لـ ADMIN_EMAIL.
-          // دلوقتي الترقية بتحصل على السيرفر بعميل الأدمن لحظة التسجيل.
-          if (email === ADMIN_EMAIL) {
-            try {
-              const { getSupabaseAdmin } = await import('@/lib/supabase')
-              const adminClient = await getSupabaseAdmin()
-              if (adminClient) {
-                await (adminClient as any)
-                  .from('profiles')
-                  .update({ role: 'admin' })
-                  .eq('id', user.id)
-              }
-            } catch (e) {
-              console.error('[auth/signup] admin bootstrap failed:', e)
-            }
-          }
-
+          // SECURITY: self-service signup can never grant an admin role.
+          // Admin provisioning is performed out-of-band by the operator.
           const userInfo = {
             id: user.id,
             email: user.email || email,
             name: (user as any).user_metadata?.name || name || email.split('@')[0],
-            isAdmin: email === ADMIN_EMAIL,
+            isAdmin: false,
           }
           // P1#3: Set httpOnly cookies
-          const res = NextResponse.json({
-            user: userInfo,
-            session: {
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-              expires_at: data.session.expires_at,
-            },
-          })
+          const res = NextResponse.json({ user: userInfo })
           return setAuthCookies(res, {
             access_token: data.session.access_token,
             refresh_token: data.session.refresh_token,
@@ -112,6 +89,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Local Fallback (mock mode) ──
+    if (!isMockAuthEnabled()) {
+      return NextResponse.json({ error: 'المصادقة غير مُهيأة على الخادم' }, { status: 503 })
+    }
     const { createMockClient } = await import('@/lib/mock-client')
     const mock = createMockClient()
     const { data: signUpData, error: signUpError } = await mock.auth.signUp({
@@ -124,16 +104,9 @@ export async function POST(request: NextRequest) {
       id: signUpData.user.id,
       email: signUpData.user.email || email,
       name: name || email.split('@')[0],
-      isAdmin: email === ADMIN_EMAIL,
+      isAdmin: false,
     }
-    const res = NextResponse.json({
-      user: userInfo,
-      session: {
-        access_token: signUpData.session.access_token,
-        refresh_token: signUpData.session.refresh_token,
-        expires_at: signUpData.session.expires_at,
-      },
-    })
+    const res = NextResponse.json({ user: userInfo })
     return setAuthCookies(res, {
       access_token: signUpData.session.access_token,
       refresh_token: signUpData.session.refresh_token,

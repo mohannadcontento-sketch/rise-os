@@ -1,34 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const { name } = await req.json()
     if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
     const trimmed = name.trim()
-
-    // Update Supabase profile
-    if (isSupabaseConfigured()) {
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const { error } = await (admin as any)
-          .from('profiles')
-          .update({ name: trimmed })
-          .eq('id', userId)
-        if (error) console.error('[user/name] Supabase error:', error)
-      }
-    }
-
+    await data.profiles.update(userId, { name: trimmed })
     return NextResponse.json({ name: trimmed })
+  
+  })
   } catch (error) {
     console.error('[user/name] error:', error)
     return NextResponse.json({ error: 'Failed to update name' }, { status: 500 })

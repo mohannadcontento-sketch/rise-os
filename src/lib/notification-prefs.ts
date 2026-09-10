@@ -1,3 +1,4 @@
+import { getUserStorage } from '@/lib/user-storage'
 /**
  * Notification preferences — single source of truth.
  *
@@ -37,7 +38,7 @@ const STORAGE_KEY = 'rise-settings'
 export function getNotificationPrefs(): NotificationPrefs {
   if (typeof window === 'undefined') return NOTIFICATION_PREF_DEFAULTS
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = getUserStorage(STORAGE_KEY)
     if (!raw) return NOTIFICATION_PREF_DEFAULTS
     const parsed = JSON.parse(raw)
     return { ...NOTIFICATION_PREF_DEFAULTS, ...(parsed?.notifications || {}) }

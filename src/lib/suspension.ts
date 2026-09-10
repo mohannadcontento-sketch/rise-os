@@ -6,8 +6,9 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 // request would be too expensive, so results cache for 5 minutes
 // (serverless instances each hold their own copy; worst case a
 // suspension lands everywhere within TTL).
-// Graceful degradation: if migration 012 isn't applied yet, the
-// column is missing → treat as NOT suspended (fail open).
+// SECURITY: suspension is an authorization check, so database errors
+// MUST fail closed. A missing migration or unavailable DB must never
+// silently turn a suspended account into an active account.
 // ============================================================
 
 const TTL_MS = 5 * 60 * 1000
@@ -22,21 +23,22 @@ export async function isUserSuspended(userId: string): Promise<boolean> {
   const hit = cache.get(userId)
   if (hit && Date.now() - hit.ts < TTL_MS) return hit.value
 
-  let value = false
   try {
     const admin = await getSupabaseAdmin()
-    if (admin) {
-      const { data } = await (admin as any)
-        .from('profiles')
-        .select('suspended')
-        .eq('id', userId)
-        .maybeSingle()
-      value = data?.suspended === true
-    }
-  } catch {
-    value = false // column missing (migration pending) or DB hiccup → fail open
-  }
+    if (!admin) throw new Error('Suspension check unavailable: Supabase admin client is not configured')
 
-  cache.set(userId, { value, ts: Date.now() })
-  return value
+    const { data, error } = await (admin as any)
+      .from('profiles')
+      .select('suspended')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error) throw new Error(`Suspension check failed: ${error.message}`)
+    const value = data?.suspended === true
+    cache.set(userId, { value, ts: Date.now() })
+    return value
+  } catch (error) {
+    console.error('[suspension] fail-closed:', error)
+    throw error
+  }
 }

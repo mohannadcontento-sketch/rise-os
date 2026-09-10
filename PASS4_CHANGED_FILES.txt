@@ -1,0 +1,8 @@
+PASS4 changed files:
+src/hooks/use-tasks-controller.ts
+src/hooks/use-ambient-sounds.ts
+src/components/rise/tasks.tsx
+src/components/rise/deep-work.tsx
+src/components/rise/admin-panel-utils.ts
+src/components/rise/admin-panel.tsx
+PASS4_REPORT.md

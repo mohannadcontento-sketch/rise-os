@@ -16,6 +16,7 @@
  * granted), and persisted in-app notification (bell inbox, via the API).
  */
 
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { apiGet } from '@/lib/api-fetch'
@@ -53,7 +54,7 @@ function nowHHMM(): string {
 
 function loadFired(): FiredState {
   try {
-    const raw = localStorage.getItem(FIRED_KEY)
+    const raw = getUserStorage(FIRED_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as FiredState
       if (parsed.date === todayStr()) return parsed
@@ -63,7 +64,7 @@ function loadFired(): FiredState {
 }
 
 function saveFired(state: FiredState) {
-  try { localStorage.setItem(FIRED_KEY, JSON.stringify(state)) } catch { /* ignore */ }
+  try { setUserStorage(FIRED_KEY, JSON.stringify(state)) } catch { /* ignore */ }
 }
 
 export function ReminderEngine() {
@@ -158,7 +159,7 @@ export function ReminderEngine() {
 
       const time = nowHHMM()
       let settings: any = null
-      try { settings = JSON.parse(localStorage.getItem('rise-settings') || 'null') } catch { /* ignore */ }
+      try { settings = JSON.parse(getUserStorage('rise-settings') || 'null') } catch { /* ignore */ }
 
       // Wake-up reminder
       if (settings?.wakeUpTime && settings.wakeUpTime === time) {

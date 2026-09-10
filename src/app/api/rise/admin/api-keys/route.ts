@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = await getSupabaseAdmin()
     if (!supabase) {
-      return NextResponse.json({ keys: [] })
+      return NextResponse.json({ error: 'تعذر تحميل مفاتيح API' }, { status: 500 })
     }
 
     const sb = supabase as any
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Admin API keys fetch error:', error.message)
-      return NextResponse.json({ keys: [] })
+      return NextResponse.json({ error: 'تعذر تحميل مفاتيح API' }, { status: 500 })
     }
 
     // Fetch user profiles for name/email
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ keys: result })
   } catch (error) {
     console.error('Admin API keys error:', error)
-    return NextResponse.json({ keys: [] })
+    return NextResponse.json({ error: 'تعذر تحميل مفاتيح API' }, { status: 500 })
   }
 }
 
@@ -82,6 +83,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
+  return withIdempotency(request, adminId, async () => {
     const { searchParams } = new URL(request.url)
     const keyId = searchParams.get('id')
 
@@ -105,7 +107,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Admin API key revoke error:', error)
     return NextResponse.json({ error: 'فشل إلغاء المفتاح' }, { status: 500 })
   }

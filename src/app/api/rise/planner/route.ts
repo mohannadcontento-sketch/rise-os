@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { pickAllowed } from '@/lib/sanitize'
 import { getToday } from '@/lib/rise-utils'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
@@ -50,16 +50,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items, linkedTasks })
   } catch (error) {
     console.error('Planner GET error:', error)
-    return NextResponse.json({ items: [], linkedTasks: [] })
+    return NextResponse.json({ error: 'تعذر تحميل المخطط' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json()
     const { date, section } = body
 
@@ -77,7 +77,8 @@ export async function POST(req: NextRequest) {
       { ...pickAllowed(body, ['date', 'section', 'time', 'title']), order: nextOrder }
     )
     return NextResponse.json(item)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Planner POST error:', error)
     return NextResponse.json({ error: 'Failed to create planner item' }, { status: 500 })
   }
@@ -85,10 +86,10 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const { id, ...body } = await req.json()
     if (!id || typeof id !== 'string' || id === 'undefined' || id === 'null') {
       return NextResponse.json({ error: 'معرّف العنصر مطلوب' }, { status: 400 })
@@ -99,7 +100,8 @@ export async function PUT(req: NextRequest) {
       pickAllowed(body, ['date', 'section', 'time', 'title', 'completed', 'order'])
     )
     return NextResponse.json(item)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Planner PUT error:', error)
     return NextResponse.json({ error: 'Failed to update planner item' }, { status: 500 })
   }
@@ -107,17 +109,18 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.plannerItems.remove(id, userId)
     return NextResponse.json({ success: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Planner DELETE error:', error)
     return NextResponse.json({ error: 'Failed to delete planner item' }, { status: 500 })
   }

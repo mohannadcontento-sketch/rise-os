@@ -1,4 +1,13 @@
 import { db } from '@/lib/db'
+import {
+  assertMockAuthEnabled,
+  createMockAccessToken,
+  createMockRefreshToken,
+  hashMockPassword,
+  verifyMockAccessToken,
+  verifyMockPassword,
+  verifyMockRefreshToken,
+} from '@/lib/mock-auth'
 
 // ============================================================
 // Mock Supabase Client (local development mode)
@@ -258,7 +267,11 @@ class MockQueryBuilder {
         return { data: null, error: null }
       }
       if (this.operation === 'delete') {
+        // Match Supabase delete().select(): capture rows before deletion so
+        // batch operations can return an accurate deleted count in local mode.
+        const rows = this.selectCols ? await model.findMany({ where }) : null
         await model.deleteMany({ where })
+        if (this.selectCols) return { data: toSnake(rows ?? []), error: null }
         return { data: null, error: null }
       }
       return { data: null, error: { message: 'No operation', code: '', status: 0 } }
@@ -282,55 +295,75 @@ class MockQueryBuilder {
 class MockSupabaseClient {
   from(table: string) { return new MockQueryBuilder(table) }
   auth = {
-    async signInWithPassword({ email }: { email: string; password: string }): Promise<any> {
+    async signInWithPassword({ email, password }: { email: string; password: string }): Promise<any> {
+      assertMockAuthEnabled()
       const user = await (db as any).user.findFirst({ where: { email } })
-      if (!user) return { data: { user: null, session: null }, error: { message: 'Invalid credentials', code: '', status: 0 } }
-      const ts = Date.now()
+      if (!user || !verifyMockPassword(password, user.passwordHash)) {
+        return { data: { user: null, session: null }, error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS', status: 401 } }
+      }
+      const { token: accessToken, expiresAt } = createMockAccessToken(user.id)
+      const refreshToken = createMockRefreshToken(user.id)
       return {
         data: {
           user: { id: user.id, email: user.email, user_metadata: { name: user.name }, aud: 'authenticated', role: 'authenticated', app_metadata: {}, identities: [] },
           session: {
-            access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`,
-            refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`,
-            // FIX: 7 days (was 1 hour) — must match cookie maxAge in cookie-auth.ts.
-            // The 1-hour expiry caused the frontend to attempt refresh after 55 min,
-            // which hit the broken local fallback and cleared the session.
-            expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600,
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            expires_at: expiresAt,
           },
         },
         error: null,
       }
     },
-    async signUp({ email, data: meta, options }: any): Promise<any> {
+    async signUp({ email, password, data: meta, options }: any): Promise<any> {
+      assertMockAuthEnabled()
       const userData = meta || options?.data
+      const signupPassword = typeof password === 'string' ? password : ''
       const existing = await (db as any).user.findFirst({ where: { email } })
-      if (existing) return { data: { user: null, session: null }, error: { message: 'User already exists', code: '', status: 0 } }
+      if (existing) return { data: { user: null, session: null }, error: { message: 'User already exists', code: 'USER_EXISTS', status: 409 } }
       const user = await (db as any).user.create({
-        data: { email, name: userData?.name || email.split('@')[0], isDefault: false, settings: { create: {} }, storage: { create: { email, name: userData?.name || email.split('@')[0] } } },
+        data: {
+          email,
+          passwordHash: hashMockPassword(signupPassword),
+          name: userData?.name || email.split('@')[0],
+          isDefault: false,
+          settings: { create: {} },
+          storage: { create: { email, name: userData?.name || email.split('@')[0] } },
+        },
       })
-      const ts = Date.now()
+      const { token: accessToken, expiresAt } = createMockAccessToken(user.id)
+      const refreshToken = createMockRefreshToken(user.id)
       return {
         data: {
           user: { id: user.id, email: user.email, user_metadata: { name: user.name }, aud: 'authenticated', role: 'authenticated', app_metadata: {}, identities: [] },
-          session: { access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`, refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`, expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600 },
+          session: { access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt },
         },
         error: null,
       }
     },
     async getUser(token: string): Promise<any> {
-      const match = token.match(/^local\.(.+?)\.\d+\.risecos\.local/)
-      if (!match) return { data: { user: null }, error: { message: 'Invalid token', code: '', status: 0 } }
-      const user = await (db as any).user.findUnique({ where: { id: match[1] } })
-      if (!user) return { data: { user: null }, error: { message: 'User not found', code: '', status: 0 } }
+      assertMockAuthEnabled()
+      const verified = verifyMockAccessToken(token)
+      if (!verified) return { data: { user: null }, error: { message: 'Invalid token', code: 'INVALID_TOKEN', status: 401 } }
+      const user = await (db as any).user.findUnique({ where: { id: verified.userId } })
+      if (!user) return { data: { user: null }, error: { message: 'User not found', code: 'USER_NOT_FOUND', status: 401 } }
       return { data: { user: { id: user.id, email: user.email, user_metadata: { name: user.name }, aud: 'authenticated', role: 'authenticated', app_metadata: {}, identities: [] } }, error: null }
     },
     async refreshSession({ refresh_token }: { refresh_token: string }): Promise<any> {
-      const match = refresh_token.match(/^local\.refresh\.(.+?)\.\d+\.risecos\.local/)
-      if (!match) return { data: { user: null, session: null }, error: { message: 'Invalid refresh token', code: '', status: 0 } }
-      const user = await (db as any).user.findUnique({ where: { id: match[1] } })
-      if (!user) return { data: { user: null, session: null }, error: { message: 'User not found', code: '', status: 0 } }
-      const ts = Date.now()
-      return { data: { user: { id: user.id, email: user.email }, session: { access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`, refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`, expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600 } }, error: null }
+      assertMockAuthEnabled()
+      const verified = verifyMockRefreshToken(refresh_token)
+      if (!verified) return { data: { user: null, session: null }, error: { message: 'Invalid refresh token', code: 'INVALID_REFRESH_TOKEN', status: 401 } }
+      const user = await (db as any).user.findUnique({ where: { id: verified.userId } })
+      if (!user) return { data: { user: null, session: null }, error: { message: 'User not found', code: 'USER_NOT_FOUND', status: 401 } }
+      const { token: accessToken, expiresAt } = createMockAccessToken(user.id)
+      const refreshToken = createMockRefreshToken(user.id)
+      return {
+        data: {
+          user: { id: user.id, email: user.email, user_metadata: { name: user.name } },
+          session: { access_token: accessToken, refresh_token: refreshToken, expires_at: expiresAt },
+        },
+        error: null,
+      }
     },
     async resend(): Promise<any> { return { data: {}, error: null } },
     async signOut(): Promise<any> { return { error: null } },

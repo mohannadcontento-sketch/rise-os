@@ -97,21 +97,9 @@ async function trySubscribePush(registration: ServiceWorkerRegistration) {
       applicationServerKey: urlBase64ToUint8Array(vapidKey) as any,
     })
 
-    // Save subscription to server
-    const stored = localStorage.getItem('rise-auth')
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (stored) {
-      const session = JSON.parse(stored)
-      if (session.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
-    }
-
-    await fetch('/api/rise/notifications/push', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ subscription }),
-    })
+    // Save subscription using the httpOnly auth cookie through the central API client.
+    const { apiPost } = await import('@/lib/api-fetch')
+    await apiPost('/api/rise/notifications/push', { subscription })
   } catch {
     // Push subscription not available (HTTP, missing VAPID, etc.) — silent
   }

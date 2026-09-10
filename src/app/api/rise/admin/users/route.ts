@@ -1,7 +1,8 @@
 import { requireAdmin, logAudit } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, ADMIN_EMAIL, isAdminRole } from '@/lib/supabase'
+import { getSupabaseAdmin, isAdminRole } from '@/lib/supabase'
 import { bustSuspensionCache } from '@/lib/suspension'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const admin = await getSupabaseAdmin()
     if (!admin) {
-      return NextResponse.json({ users: [] })
+      return NextResponse.json({ error: 'تعذر تحميل المستخدمين' }, { status: 500 })
     }
     const sb = admin as any
 
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
           avatar: profile.avatar || null,
           createdAt: profile.created_at,
           role: profile.role || 'user',
-          isAdmin: isAdminRole(profile.role) || profile.email === ADMIN_EMAIL,
+          isAdmin: isAdminRole(profile.role),
           suspended: profile.suspended === true,
           suspendedAt: profile.suspended_at || null,
           level: profile.level ?? null,
@@ -101,7 +102,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[admin/users] error:', error)
-      return NextResponse.json({ users: [] })
+      return NextResponse.json({ error: 'تعذر تحميل المستخدمين' }, { status: 500 })
     }
 
     const users = (profiles ?? []).map((p: any) => ({
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
       name: p.name || 'مستخدم',
       avatar: p.avatar || null,
       createdAt: p.created_at,
-      isAdmin: isAdminRole(p.role) || p.email === ADMIN_EMAIL,
+      isAdmin: isAdminRole(p.role),
       role: p.role || 'user',
       suspended: p.suspended === true,
     }))
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ users })
   } catch (error) {
     console.error('Admin users error:', error)
-    return NextResponse.json({ users: [] })
+    return NextResponse.json({ error: 'تعذر تحميل المستخدمين' }, { status: 500 })
   }
 }
 
@@ -130,6 +131,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
+  return withIdempotency(request, adminId, async () => {
     const body = await request.json().catch(() => ({}))
     const { userId: targetUserId, action, role, title, message } = body
 
@@ -149,7 +151,7 @@ export async function POST(request: NextRequest) {
     // Self-protection: never suspend/delete another admin's account silently
     const target = await fetchProfile(sb, targetUserId)
     if (!target) return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
-    const targetIsAdmin = isAdminRole(target.role) || target.email === ADMIN_EMAIL
+    const targetIsAdmin = isAdminRole(target.role)
 
     switch (action) {
       case 'set-role': {
@@ -220,7 +222,8 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ error: 'إجراء غير معروف' }, { status: 400 })
     }
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Admin update error:', error)
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 })
   }
@@ -234,6 +237,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
+  return withIdempotency(request, adminId, async () => {
     const { userId: targetUserId } = await request.json()
 
     if (!targetUserId) {
@@ -256,53 +260,24 @@ export async function DELETE(request: NextRequest) {
 
     // Safety: never delete an admin account
     const target = await fetchProfile(sb, targetUserId)
-    if (target && (isAdminRole(target.role) || target.email === ADMIN_EMAIL)) {
+    if (target && isAdminRole(target.role)) {
       return NextResponse.json({ error: 'لا يمكن حذف حساب أدمن — أزل الصلاحية أولاً' }, { status: 400 })
     }
 
-    // Delete ALL user data from every table (not just profile)
-    // Order matters: child tables first, then parent
-    const tables = [
-      'habit_logs',
-      'habits',
-      'subtasks',
-      'tasks',
-      'milestones',
-      'goals',
-      'projects',
-      'journals',
-      'focus_sessions',
-      'health_logs',
-      'finance_records',
-      'books',
-      'knowledge_items',
-      'planner_items',
-      'morning_logs',
-      'daily_scores',
-      'user_achievements',
-      'notifications',
-      'user_ai_usage',
-      'user_storage',
-      'user_api_keys',
-      'user_settings',
-    ]
-
-    for (const table of tables) {
-      try {
-        await sb.from(table).delete().eq('user_id', targetUserId)
-      } catch { /* some tables may not have user_id column */ }
+    // One DB transaction: wipe all application data + profile together.
+    const { data: deletedCount, error: deleteError } = await sb.rpc('admin_delete_user_data_atomic', {
+      p_admin_user_id: adminId,
+      p_target_user_id: targetUserId,
+    })
+    if (deleteError) {
+      console.error('[admin/users] atomic delete failed:', deleteError.message)
+      return NextResponse.json({ error: 'تعذر حذف بيانات المستخدم بالكامل' }, { status: 503 })
     }
 
-    // Finally delete the profile
-    const { error } = await sb
-      .from('profiles')
-      .delete()
-      .eq('id', targetUserId)
-    if (error) console.error('[admin/users] delete error:', error)
-
-    await logAudit(request, adminId, 'delete-user', { resource: 'profiles', resourceId: targetUserId, details: { email: target?.email || '' } })
-    return NextResponse.json({ success: true, deleted: true })
-  } catch (error) {
+    await logAudit(request, adminId, 'delete-user', { resource: 'profiles', resourceId: targetUserId, details: { email: target?.email || '', deletedRows: Number(deletedCount || 0) } })
+    return NextResponse.json({ success: true, deleted: true, deletedRows: Number(deletedCount || 0) })
+  
+  })} catch (error) {
     console.error('Admin delete error:', error)
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 })
   }

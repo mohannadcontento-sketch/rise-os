@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAnon, isSupabaseConfigured } from '@/lib/supabase'
+import { createSupabaseIsolatedClient, isSupabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isSupabaseConfigured()) {
-      const supabase = await getSupabaseAnon()
+      const supabase = await createSupabaseIsolatedClient()
       if (supabase) {
         const { error } = await supabase.auth.resend({ type: 'signup', email })
         if (error) {

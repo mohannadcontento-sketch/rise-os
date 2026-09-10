@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
-import { getSupabaseAdmin, getSupabaseWithAuth } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { getToday, getLast30Days, getWeekDays, isoToCairoDate, taskCompletedDay, computeStreakFromActivity, getTodayCairo, calculateXpForLevel } from '@/lib/rise-utils'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 import { computeDailyScore, habitDueOn, DAILY_FOCUS_TARGET_MIN } from '@/lib/daily-score'
@@ -16,35 +15,15 @@ export const maxDuration = 30
 // Write routes call bustAggregateCache() so a fresh read right after a
 // mutation never serves pre-mutation numbers. On cache hits the embedded
 // dailyScores.upsert is skipped too — fewer Supabase writes per view.
-async function fetchUserProfile(userId: string, req: NextRequest): Promise<any> {
+async function fetchUserProfile(userId: string): Promise<any> {
   try {
-    // Try admin client first (has full access)
-    const admin = await getSupabaseAdmin()
-    if (admin) {
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
-      return profile ?? null
-    }
-    // Try per-user client (RLS allows reading own profile)
-    const userClient = await getSupabaseWithAuth(req)
-    if (userClient) {
-      const { data: profile } = await userClient
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
-      return profile ?? null
-    }
-    // Mock mode: fetch from local Prisma DB
-    const { db } = await import('@/lib/db')
-    return await (db as any).user.findUnique({ where: { id: userId } })
-  } catch {
-    return null
+    return await data.profiles.get(userId)
+  } catch (error) {
+    console.error('Dashboard profile fetch failed:', error)
+    throw error
   }
 }
+
 
 /**
  * DAY-SCOPED TASK SET (the "smart day reset" solution):
@@ -110,23 +89,23 @@ async function computeDashboard(userId: string, req: NextRequest) {
     books,
     journals,
   ] = await Promise.all([
-    fetchUserProfile(userId, req),
-    data.tasks.list(userId).catch(() => []),
-    data.habits.list(userId).catch(() => []),
+    fetchUserProfile(userId),
+    data.tasks.list(userId),
+    data.habits.list(userId),
     // BIG limit: focus sessions also feed the LIFETIME totalFocusMin stat —
     // the old default (last 50) silently truncated the lifetime sum.
-    data.focusSessions.list(userId, 1000).catch(() => []),
-    data.healthLogs.list(userId, [today]).catch(() => []),
-    data.morningLogs.list(userId, [today]).catch(() => []),
-    data.userAchievements.list(userId).catch(() => []),
+    data.focusSessions.list(userId, 1000),
+    data.healthLogs.list(userId, [today]),
+    data.morningLogs.list(userId, [today]),
+    data.userAchievements.list(userId),
     // Daily scores for last 30 days — use data layer (works in both Supabase + mock mode)
-    data.dailyScores.list(userId, last30).catch(() => []),
-    data.projects.list(userId).catch(() => []),
-    data.goals.list(userId).catch(() => []),
-    data.books.list(userId).catch(() => []),
+    data.dailyScores.list(userId, last30),
+    data.projects.list(userId),
+    data.goals.list(userId),
+    data.books.list(userId),
     // 30 rows: feeds the journal-streak calc (badge "كاتب" = 7 أيام) —
     // the response still returns only the last 5 (same payload size).
-    data.journals.list(userId, 30).catch(() => []),
+    data.journals.list(userId, 30),
   ])
 
   const allTasks = tasksResult as any[]
@@ -341,15 +320,13 @@ async function computeDashboard(userId: string, req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) {
       return NextResponse.json(
         { error: 'مطلوب تسجيل الدخول', code: 'UNAUTHORIZED' },
         { status: 401 }
       )
     }
-    setCurrentAuthToken(req)
-
     // Cache key MUST include the requested date — day-scoped payloads differ
     // per day (yesterday's cached numbers must never leak into today).
     // _v (client data-version): bumped after every write — guarantees the

@@ -12,6 +12,7 @@ model User {
   id             String   @id @default(cuid())
   name           String   @default("مستخدم")
   email          String   @unique @default("")
+  passwordHash   String?
   avatar         String?
   role           String   @default("user")
   level          Int      @default(1)
@@ -46,6 +47,31 @@ model User {
   aiUsage        UserAIUsage?
   storage        UserStorage?
   apiKeys        UserApiKey[]
+  idempotencyRequests RequestIdempotency[]
+  xpAwards        XpAward[]
+}
+
+// ==================== REQUEST IDEMPOTENCY ====================
+model RequestIdempotency {
+  id               String   @id @default(cuid())
+  userId           String
+  idempotencyKey   String
+  requestHash      String
+  route            String
+  method           String
+  status           String   @default("processing")
+  responseStatus   Int?
+  responseBody     String?
+  responseHeaders  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  expiresAt        DateTime
+  processingUntil  DateTime?
+  processingToken  String   @default(cuid())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, idempotencyKey])
+  @@index([expiresAt])
+  @@index([userId, createdAt])
 }
 
 // ==================== USER SETTINGS ====================
@@ -62,6 +88,7 @@ model UserSettings {
   weeklyExerciseGoal Int   @default(5)
   notifications    Boolean @default(true)
   budgets          String? // JSON string: [{category, limit}]
+  pushSubscription  String? // JSON-encoded web-push subscription
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -81,6 +108,7 @@ model UserAchievement {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
+  @@unique([userId, badgeId])
 }
 
 // ==================== DAILY SCORE ====================
@@ -275,6 +303,7 @@ model FocusSession {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
+  @@index([taskId])
 }
 
 // ==================== WORK SESSIONS ====================
@@ -440,6 +469,20 @@ model AppConfig {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// ==================== XP AWARD ====================
+model XpAward {
+  id        String   @id @default(cuid())
+  userId    String
+  reason    String
+  dedupeKey String
+  amount    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
 }
 
 // ==================== USER API KEY ====================

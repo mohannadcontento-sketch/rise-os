@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
-import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { getSupabaseWithAuth, isSupabaseConfigured } from '@/lib/supabase'
 import { getToday, getLast30Days } from '@/lib/rise-utils'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     // Set auth token for data layer
-    setCurrentAuthToken(req)
-
     // If Supabase is not configured, return early
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ success: true, seeded: false, offline: true })
@@ -29,17 +29,11 @@ export async function POST(req: NextRequest) {
     // Check if user profile already exists in Supabase
     let userExists = false
     try {
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const sb = admin as any
-        const { data: profile } = await sb
-          .from('profiles')
-          .select('id')
-          .eq('id', userId)
-          .maybeSingle()
-        userExists = !!profile
-      }
-    } catch { /* ignore */ }
+      userExists = !!(await data.profiles.get(userId))
+    } catch (error) {
+      console.error('[seed] profile read failed:', error)
+      return NextResponse.json({ error: 'تعذر التحقق من ملف المستخدم' }, { status: 503 })
+    }
 
     // If profileOnly mode: just ensure profile exists, no sample data
     if (createProfileOnly) {
@@ -60,58 +54,8 @@ export async function POST(req: NextRequest) {
     const today = getToday()
     const last30 = getLast30Days()
 
-    // --- Create / update User profile in Supabase ---
-    try {
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const sb = admin as any
-        const { data: existingProfile } = await sb
-          .from('profiles')
-          .select('id')
-          .eq('id', userId)
-          .maybeSingle()
-
-        if (!existingProfile) {
-          await sb.from('profiles').upsert({
-            id: userId,
-            name: 'مستخدم RiseOS',
-            email: '',
-            role: 'user',
-          }, { onConflict: 'id' })
-        }
-      }
-    } catch (err) {
-      console.error('[seed] profile upsert error:', err)
-    }
-
-    // --- Create user_settings row if missing ---
-    try {
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const sb = admin as any
-        const { data: existingSettings } = await sb
-          .from('user_settings')
-          .select('user_id')
-          .eq('user_id', userId)
-          .maybeSingle()
-
-        if (!existingSettings) {
-          await sb.from('user_settings').insert({
-            user_id: userId,
-            theme: 'system',
-            language: 'ar',
-            wake_up_time: '06:00',
-            sleep_time: '22:00',
-            focus_duration: 50,
-            daily_water_goal: 8,
-            daily_reading_goal: 30,
-            weekly_exercise_goal: 5,
-          })
-        }
-      }
-    } catch (err) {
-      console.error('[seed] user_settings insert error:', err)
-    }
+    // Profile/settings rows are created by the database signup triggers.
+    // Do not use service_role here; seeding must never elevate a normal user.
 
     // --- Projects ---
     let project0: any = { id: 'mock-p0' }, project1: any = { id: 'mock-p1' }, project2: any = { id: 'mock-p2' }
@@ -176,7 +120,7 @@ export async function POST(req: NextRequest) {
         }
       }
       if (habitLogRows.length > 0) {
-        const supabase = await getSupabaseAdmin()
+        const supabase = await getSupabaseWithAuth(req)
         if (supabase) {
           const sb = supabase as any
           // Insert in batches of 100
@@ -217,7 +161,7 @@ export async function POST(req: NextRequest) {
         milestoneRows.push({ goal_id: goal.id, title: 'النشر', completed: false, order: 3 })
       }
       if (milestoneRows.length > 0) {
-        const supabase = await getSupabaseAdmin()
+        const supabase = await getSupabaseWithAuth(req)
         if (supabase) {
           const sb = supabase as any
           for (let i = 0; i < milestoneRows.length; i += 100) {
@@ -360,7 +304,7 @@ export async function POST(req: NextRequest) {
         })
       }
       if (dailyScoreRows.length > 0) {
-        const supabase = await getSupabaseAdmin()
+        const supabase = await getSupabaseWithAuth(req)
         if (supabase) {
           const sb = supabase as any
           for (let i = 0; i < dailyScoreRows.length; i += 100) {
@@ -385,9 +329,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, seeded: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Seed error:', error)
-    // Return 200 even on failure — seed is best-effort, don't crash the app
-    return NextResponse.json({ success: true, seeded: false, error: error instanceof Error ? error.message : String(error) })
+    // Never report a failed seed as success; callers must be able to retry safely.
+    return NextResponse.json({ success: false, seeded: false, error: 'تعذر إكمال البيانات التجريبية' }, { status: 503 })
   }
 }

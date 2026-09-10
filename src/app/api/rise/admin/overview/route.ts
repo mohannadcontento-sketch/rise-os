@@ -72,19 +72,24 @@ export async function GET(request: NextRequest) {
       ? undefined // can't distinguish — errors tab reports tableMissing explicitly
       : undefined
 
-    // ── Latest audit entries (notifications type='audit') ──
+    // ── Latest audit entries (dedicated immutable audit log) ──
     let recentAudit: any[] = []
     try {
       const { data } = await sb
-        .from('notifications')
-        .select('id, user_id, title, body, created_at')
-        .eq('type', 'audit')
+        .from('audit_logs')
+        .select('id, actor_user_id, action, target_type, target_id, metadata, created_at')
         .order('created_at', { ascending: false })
         .limit(8)
       recentAudit = (data || []).map((n: any) => ({
-        id: n.id, adminId: n.user_id, action: n.title, detail: n.body, createdAt: n.created_at,
+        id: n.id,
+        adminId: n.actor_user_id,
+        action: n.action,
+        detail: [n.target_type, n.target_id].filter(Boolean).join(':') || JSON.stringify(n.metadata || {}),
+        createdAt: n.created_at,
       }))
-    } catch { /* table/type missing */ }
+    } catch (error) {
+      console.error('[admin/overview] audit lookup failed:', error)
+    }
 
     // ── Content totals (head counts, parallel) ──
     const countTable = async (t: string) => {

@@ -1,58 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
-import { db } from '@/lib/db'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
+    const [budgetItem, savingsItem] = await Promise.all([
+      data.knowledgeItems.getByType(userId, 'budget-config'),
+      data.knowledgeItems.getByType(userId, 'savings-goal'),
+    ])
 
     let budgets: { category: string; limit: number }[] = []
     let savingsGoal: number | null = null
-
-    if (isSupabaseConfigured()) {
-      // Production: read from knowledge_items (type='budget-config')
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const { data, error } = await admin
-          .from('knowledge_items')
-          .select('content')
-          .eq('user_id', userId)
-          .eq('type', 'budget-config')
-          .maybeSingle()
-        if (!error && data?.content) {
-          try { budgets = JSON.parse(data.content) } catch {}
-        }
-        // Savings goal — separate row (type='savings-goal', content = number)
-        const { data: goalRow } = await admin
-          .from('knowledge_items')
-          .select('content')
-          .eq('user_id', userId)
-          .eq('type', 'savings-goal')
-          .maybeSingle()
-        if (goalRow?.content) {
-          const g = parseFloat(goalRow.content)
-          if (!isNaN(g) && g > 0) savingsGoal = g
-        }
-      }
-    } else {
-      // Local dev: read from Prisma user_settings + knowledgeItem
-      const settings = await db.userSettings.findUnique({ where: { userId } })
-      if (settings && (settings as any).budgets) {
-        try { budgets = JSON.parse((settings as any).budgets) } catch {}
-      }
-      try {
-        const goalItem = await db.knowledgeItem.findFirst({
-          where: { userId, type: 'savings-goal' },
-        })
-        if (goalItem?.content) {
-          const g = parseFloat(goalItem.content)
-          if (!isNaN(g) && g > 0) savingsGoal = g
-        }
-      } catch {}
+    if (budgetItem?.content) {
+      try { budgets = JSON.parse(budgetItem.content) } catch { budgets = [] }
+    }
+    if (savingsItem?.content) {
+      const g = parseFloat(savingsItem.content)
+      if (!Number.isNaN(g) && g > 0) savingsGoal = g
     }
 
     const resp = NextResponse.json({ budgets, savingsGoal })
@@ -60,62 +29,24 @@ export async function GET(req: NextRequest) {
     return resp
   } catch (error) {
     console.error('[budgets] GET error:', error)
-    return NextResponse.json({ budgets: [] })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 503 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
-
+    return withIdempotency(req, userId, async () => {
     const body = await req.json()
     const { budgets, savingsGoal } = body as {
       budgets?: { category: string; limit: number }[]
       savingsGoal?: number
     }
 
-    // Savings-goal-only update (from the finance page's editable goal)
     if (savingsGoal !== undefined && !Array.isArray(budgets)) {
       const goal = Math.max(0, Math.round(Number(savingsGoal) || 0))
-      const goalJson = String(goal)
-      try {
-        if (isSupabaseConfigured()) {
-          const admin = await getSupabaseAdmin()
-          if (admin) {
-            const { data: existing } = await admin
-              .from('knowledge_items')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('type', 'savings-goal')
-              .maybeSingle()
-            if (existing?.id) {
-              await admin.from('knowledge_items').update({ content: goalJson }).eq('id', existing.id)
-            } else {
-              await admin.from('knowledge_items').insert({
-                user_id: userId,
-                type: 'savings-goal',
-                title: 'هدف الادخار',
-                content: goalJson,
-              })
-            }
-          }
-        } else {
-          const existing = await db.knowledgeItem.findFirst({
-            where: { userId, type: 'savings-goal' },
-          })
-          if (existing) {
-            await db.knowledgeItem.update({ where: { id: existing.id }, data: { content: goalJson } })
-          } else {
-            await db.knowledgeItem.create({
-              data: { userId, type: 'savings-goal', title: 'هدف الادخار', content: goalJson },
-            })
-          }
-        }
-      } catch (e) {
-        console.error('[budgets] savings-goal save error:', e)
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-      }
+      await data.knowledgeItems.upsertByType(userId, 'savings-goal', 'هدف الادخار', String(goal))
       const resp = NextResponse.json({ success: true, savingsGoal: goal })
       resp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
       return resp
@@ -124,51 +55,11 @@ export async function PUT(req: NextRequest) {
     if (!Array.isArray(budgets)) {
       return NextResponse.json({ error: 'budgets array required' }, { status: 400 })
     }
-
-    const budgetsJson = JSON.stringify(budgets)
-
-    if (isSupabaseConfigured()) {
-      // Production: save to knowledge_items (type='budget-config')
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        // Check if budget-config already exists
-        const { data: existing } = await admin
-          .from('knowledge_items')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('type', 'budget-config')
-          .maybeSingle()
-
-        if (existing?.id) {
-          // Update existing
-          await admin
-            .from('knowledge_items')
-            .update({ content: budgetsJson })
-            .eq('id', existing.id)
-        } else {
-          // Insert new
-          await admin
-            .from('knowledge_items')
-            .insert({
-              user_id: userId,
-              type: 'budget-config',
-              title: 'ميزانية المستخدم',
-              content: budgetsJson,
-            })
-        }
-      }
-    } else {
-      // Local dev: save to Prisma user_settings
-      await db.userSettings.upsert({
-        where: { userId },
-        update: { budgets: budgetsJson } as any,
-        create: { userId, budgets: budgetsJson } as any,
-      })
-    }
-
+    await data.knowledgeItems.upsertByType(userId, 'budget-config', 'ميزانية المستخدم', JSON.stringify(budgets))
     const resp = NextResponse.json({ budgets })
     resp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
     return resp
+    })
   } catch (error) {
     console.error('[budgets] PUT error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

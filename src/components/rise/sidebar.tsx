@@ -1,5 +1,8 @@
 'use client'
 
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
+
+
 import { useRiseStore, type ModuleId } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { playSound } from '@/lib/sounds'
@@ -183,12 +186,12 @@ export function Sidebar() {
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [quickNotes, setQuickNotes] = useState(() => {
     if (typeof window === 'undefined') return ''
-    try { return localStorage.getItem('rise-quick-notes') || '' } catch { return '' }
+    try { return getUserStorage('rise-quick-notes') || '' } catch { return '' }
   })
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const [selectedAvatar, setSelectedAvatar] = useState<string>(() => {
     if (typeof window === 'undefined') return ''
-    try { return localStorage.getItem('rise-user-avatar') || '' } catch { return '' }
+    try { return getUserStorage('rise-user-avatar') || '' } catch { return '' }
   })
 
   // ── Collapsible nav groups (persisted, external store) ──
@@ -219,7 +222,7 @@ export function Sidebar() {
   useEffect(() => {
     const handler = () => {
       try {
-        const stored = localStorage.getItem('rise-user-avatar')
+        const stored = getUserStorage('rise-user-avatar')
         if (stored) setSelectedAvatar(stored)
       } catch { /* ignore */ }
     }
@@ -238,7 +241,7 @@ export function Sidebar() {
   // Auto-save quick notes
   useEffect(() => {
     const timer = setTimeout(() => {
-      localStorage.setItem('rise-quick-notes', quickNotes)
+      setUserStorage('rise-quick-notes', quickNotes)
     }, 500)
     return () => clearTimeout(timer)
   }, [quickNotes])

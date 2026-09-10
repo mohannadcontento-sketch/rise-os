@@ -1,5 +1,7 @@
 'use client'
 
+import { getUserStorage, setUserStorage, removeUserStorage } from '@/lib/user-storage'
+import { useAmbientSounds } from '@/hooks/use-ambient-sounds'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -146,179 +148,10 @@ const FOCUS_QUOTES = [
   '« الأشخاص الناجحون لا يفعلون أشياء مختلفة — إنهم يفعلون الأشياء بشكل مختلف. »',
 ]
 
-/* ────────────── Ambient Sound System (HTML5 Audio with real MP3 files) ────────────── */
-
-function readSoundSettings(): { sounds: boolean; soundVolume: number } {
-  try {
-    const raw = localStorage.getItem('rise-settings')
-    if (raw) {
-      const data = JSON.parse(raw)
-      return { sounds: data.sounds ?? true, soundVolume: data.soundVolume ?? 0.5 }
-    }
-  } catch { /* ignore */ }
-  return { sounds: true, soundVolume: 0.5 }
-}
-
-interface ActiveSound {
-  audio: HTMLAudioElement
-  targetVolume: number
-  fadeInInterval: ReturnType<typeof setInterval> | null
-  fadeOutInterval: ReturnType<typeof setInterval> | null
-}
-
-/**
- * useAmbientSounds — plays real MP3 ambience files via HTML5 Audio.
- * Files live in /public/sounds/*.mp3 (downloaded from Wikimedia Commons, CC licensed).
- * - Fade in on start (1s ramp)
- * - Fade out + stop on stop (0.8s ramp)
- * - Tracks target volume so the global volume setting can be applied live
- */
-function useAmbientSounds() {
-  const audioMapRef = useRef<Map<string, ActiveSound>>(new Map())
-
-  const startSound = useCallback((label: string) => {
-    const url = AMBIENT_SOUND_URLS[label]
-    if (!url) {
-      console.warn('[ambient] no file mapped for label:', label)
-      return
-    }
-
-    // Stop existing instance if any (with quick fade)
-    const existing = audioMapRef.current.get(label)
-    if (existing) {
-      if (existing.fadeInInterval) clearInterval(existing.fadeInInterval)
-      if (existing.fadeOutInterval) clearInterval(existing.fadeOutInterval)
-      try { existing.audio.pause() } catch { /* ok */ }
-      audioMapRef.current.delete(label)
-    }
-
-    try {
-      const audio = new Audio(url)
-      audio.loop = true
-      audio.preload = 'auto'
-      // Cross-browser safety: never start at full volume
-      audio.volume = 0
-
-      const settings = readSoundSettings()
-      // Ambient sounds are quieter than UI sound effects — 55% of master volume
-      const targetVolume = Math.min(1, Math.max(0, settings.soundVolume * 0.55))
-
-      // Modern browsers return a Promise from play(); we must handle rejection
-      // (e.g. if autoplay policy blocks it, though user-gesture should allow it)
-      const playPromise = audio.play()
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch((err) => {
-          console.warn('[ambient] play() rejected for', label, err)
-          audioMapRef.current.delete(label)
-        })
-      }
-
-      // Fade in over 1s
-      const fadeSteps = 20
-      const fadeStepMs = 50
-      const stepSize = targetVolume / fadeSteps
-      let step = 0
-      const fadeInInterval = setInterval(() => {
-        step++
-        const v = Math.min(targetVolume, stepSize * step)
-        try { audio.volume = v } catch { /* ok */ }
-        if (step >= fadeSteps) {
-          if (fadeInInterval) clearInterval(fadeInInterval)
-          const e = audioMapRef.current.get(label)
-          if (e) e.fadeInInterval = null
-        }
-      }, fadeStepMs)
-
-      audioMapRef.current.set(label, {
-        audio,
-        targetVolume,
-        fadeInInterval,
-        fadeOutInterval: null,
-      })
-    } catch (err) {
-      console.error('[ambient] startSound error:', err)
-    }
-  }, [])
-
-  const stopSound = useCallback((label: string) => {
-    const entry = audioMapRef.current.get(label)
-    if (!entry) return
-    if (entry.fadeInInterval) {
-      clearInterval(entry.fadeInInterval)
-      entry.fadeInInterval = null
-    }
-    if (entry.fadeOutInterval) {
-      clearInterval(entry.fadeOutInterval)
-      entry.fadeOutInterval = null
-    }
-
-    const startVol = entry.audio.volume
-    const fadeSteps = 16
-    const fadeStepMs = 50
-    const stepSize = startVol / fadeSteps
-    let step = 0
-    entry.fadeOutInterval = setInterval(() => {
-      step++
-      const v = Math.max(0, startVol - stepSize * step)
-      try { entry.audio.volume = v } catch { /* ok */ }
-      if (step >= fadeSteps) {
-        try {
-          entry.audio.pause()
-          entry.audio.src = ''
-          // Force release of network resources
-          entry.audio.load()
-        } catch { /* ok */ }
-        if (entry.fadeOutInterval) clearInterval(entry.fadeOutInterval)
-        audioMapRef.current.delete(label)
-      }
-    }, fadeStepMs)
-  }, [])
-
-  // Live-update volume when settings change (poll + storage event)
-  useEffect(() => {
-    const handler = () => {
-      const { soundVolume } = readSoundSettings()
-      const target = Math.min(1, Math.max(0, soundVolume * 0.55))
-      audioMapRef.current.forEach((entry) => {
-        if (!entry.fadeOutInterval) {
-          entry.targetVolume = target
-          try { entry.audio.volume = target } catch { /* ok */ }
-        }
-      })
-    }
-    window.addEventListener('storage', handler)
-    window.addEventListener('rise-settings-changed', handler)
-    const interval = setInterval(handler, 2000)
-    return () => {
-      window.removeEventListener('storage', handler)
-      window.removeEventListener('rise-settings-changed', handler)
-      clearInterval(interval)
-    }
-  }, [])
-
-  // Cleanup all audio on unmount
-  useEffect(() => {
-    return () => {
-      audioMapRef.current.forEach((entry) => {
-        if (entry.fadeInInterval) clearInterval(entry.fadeInInterval)
-        if (entry.fadeOutInterval) clearInterval(entry.fadeOutInterval)
-        try {
-          entry.audio.pause()
-          entry.audio.src = ''
-          entry.audio.load()
-        } catch { /* ok */ }
-      })
-      audioMapRef.current.clear()
-    }
-  }, [])
-
-  return { startSound, stopSound }
-}
-
 /* ────────────── Helper ────────────── */
 
 function getSessionQuote(): string {
-  const sessionCount = parseInt(localStorage.getItem('rise-focus-session-count') || '0')
+  const sessionCount = parseInt(getUserStorage('rise-focus-session-count') || '0')
   return FOCUS_QUOTES[sessionCount % FOCUS_QUOTES.length]
 }
 
@@ -350,7 +183,7 @@ export default function DeepWork() {
   const QUICK_NOTES_KEY = 'rise-deep-work-quick-notes'
   const [sessionNotes, setSessionNotes] = useState(() => {
     if (typeof window === 'undefined') return ''
-    try { return localStorage.getItem(QUICK_NOTES_KEY) || '' } catch { return '' }
+    try { return getUserStorage(QUICK_NOTES_KEY) || '' } catch { return '' }
   })
   const [notesSaved, setNotesSaved] = useState(true)
 
@@ -361,7 +194,7 @@ export default function DeepWork() {
     setNotesSaved(false)
     if (notesTimerRef.current) clearTimeout(notesTimerRef.current)
     notesTimerRef.current = setTimeout(() => {
-      try { localStorage.setItem(QUICK_NOTES_KEY, val) } catch { /* ignore */ }
+      try { setUserStorage(QUICK_NOTES_KEY, val) } catch { /* ignore */ }
       setNotesSaved(true)
     }, 500)
   }
@@ -410,7 +243,7 @@ export default function DeepWork() {
   /* ─── Restore timer state on mount ─── */
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(FOCUS_TIMER_STORAGE_KEY)
+      const stored = getUserStorage(FOCUS_TIMER_STORAGE_KEY)
       if (stored) {
         const state = JSON.parse(stored)
         if (state.endTime && state.endTime > Date.now()) {
@@ -428,7 +261,7 @@ export default function DeepWork() {
           setSessionCompleted(true)
           setSessionStartTime(state.startedAt)
           setSelectedDuration(state.duration)
-          localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY)
+          removeUserStorage(FOCUS_TIMER_STORAGE_KEY)
         }
       }
     } catch { /* ignore */ }
@@ -443,7 +276,7 @@ export default function DeepWork() {
 
       // Save state to localStorage
       try {
-        localStorage.setItem(FOCUS_TIMER_STORAGE_KEY, JSON.stringify({
+        setUserStorage(FOCUS_TIMER_STORAGE_KEY, JSON.stringify({
           endTime: endTimeRef.current,
           duration: selectedDuration,
           startedAt: sessionStartTime,
@@ -464,12 +297,12 @@ export default function DeepWork() {
           setCelebrateKey((k) => k + 1)
           playSound('timer-done')
           setTimeout(() => playSound('achievement'), 400)
-          try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+          try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
         }
       }, 200)
     } else {
       if (!isRunning && !sessionCompleted) {
-        try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+        try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
       }
     }
 
@@ -610,7 +443,7 @@ export default function DeepWork() {
     setTimeRemaining(selectedDuration * 60)
     setSessionStartTime(null)
     endTimeRef.current = null
-    try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+    try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     playSound('click')
   }
 
@@ -618,7 +451,7 @@ export default function DeepWork() {
     setIsRunning(false)
     setIsPaused(false)
     endTimeRef.current = null
-    try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+    try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
     if (elapsedMin > 0) {
       saveSession(false)
@@ -642,7 +475,7 @@ export default function DeepWork() {
     setSessionCompleted(false)
     setSessionStartTime(null)
     endTimeRef.current = null
-    try { localStorage.removeItem(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
+    try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
     playSound('navigate')
   }
 

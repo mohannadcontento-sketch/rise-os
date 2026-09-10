@@ -1,5 +1,8 @@
 'use client'
 
+import { getUserStorage, setUserStorage, removeUserStorage } from '@/lib/user-storage'
+
+
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -162,7 +165,7 @@ export default function WorkSessions() {
   /* ─── Restore in-progress session on mount/refresh ─── */
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = getUserStorage(STORAGE_KEY)
       if (!stored) return
       const s = JSON.parse(stored)
       setSessionId(s.sessionId)
@@ -181,11 +184,11 @@ export default function WorkSessions() {
   /* ─── Persist live session to localStorage ─── */
   useEffect(() => {
     if (phase === 'idle' || phase === 'completed') {
-      try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+      try { removeUserStorage(STORAGE_KEY) } catch { /* ignore */ }
       return
     }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      setUserStorage(STORAGE_KEY, JSON.stringify({
         sessionId, plannedMin, sessionTitle, activeMs, breakMs,
         breaksLog, phaseStart, phase, notes,
         completedTaskIds: Array.from(completedTaskIds),
@@ -400,7 +403,7 @@ export default function WorkSessions() {
       setBreaksLog([])
       setNotes('')
       setCompletedTaskIds(new Set())
-      try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+      try { removeUserStorage(STORAGE_KEY) } catch { /* ignore */ }
       fetchHistory()
     } catch {
       toast.error('فشل في حفظ جلسة الشغل')

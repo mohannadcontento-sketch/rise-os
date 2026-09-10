@@ -1,6 +1,7 @@
+import { loadOfflineQueue, saveOfflineQueue, clearOfflineQueueStore } from '@/lib/secure-offline-db'
 /**
  * apiFetch — centralized fetch utility for RiseOS API calls.
- * Automatically attaches the Supabase auth token from localStorage.
+ * Uses httpOnly cookie authentication in production; legacy token fallback is limited to mock/dev mode.
  * Includes automatic token refresh on 401 responses.
  * Includes request timeout (8s) to fail fast when offline.
  * Includes localStorage cache for GET requests (stale-while-revalidate).
@@ -208,6 +209,11 @@ function resourceOf(url: string): string | undefined {
 
 function getAuthHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {}
+  // Production Supabase uses the server-issued httpOnly cookie as the auth
+  // source of truth. Never resurrect legacy JWTs from localStorage there.
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return {}
+  }
   try {
     const stored = localStorage.getItem('rise-auth')
     if (!stored) return {}
@@ -228,7 +234,7 @@ function getAuthHeaders(): Record<string, string> {
  * On failure, dispatches 'rise:session-expired' (throttled) so the
  * AuthProvider can clear the auth state and show the login page.
  */
-async function tryRefreshToken(): Promise<boolean> {
+async function tryRefreshToken(notifyOnFailure = true): Promise<boolean> {
   if (!isOnline()) return false
   if (_refreshPromise) return _refreshPromise
 
@@ -248,21 +254,22 @@ async function tryRefreshToken(): Promise<boolean> {
       clearTimeout(timeoutId)
 
       if (!res.ok) {
-        dispatchSessionExpired()
+        if (notifyOnFailure) dispatchSessionExpired()
         return false
       }
 
       const data = await res.json()
-      if (data.session && data.user) {
-        localStorage.setItem('rise-auth', JSON.stringify(data.session))
+      if (data.user) {
+        // Server httpOnly cookies are the durable auth state. Keep only non-secret
+        // user metadata in local storage; never persist access/refresh tokens here.
         localStorage.setItem('rise-user-info', JSON.stringify(data.user))
         window.dispatchEvent(new CustomEvent('rise:auth-refreshed', {
-          detail: { user: data.user, session: data.session },
+          detail: { user: data.user },
         }))
         return true
       }
 
-      dispatchSessionExpired()
+      if (notifyOnFailure) dispatchSessionExpired()
       return false
     } catch {
       return false
@@ -301,6 +308,14 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // Set Content-Type for JSON if not already set and has body
   if (options.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
+  }
+
+  const isMutation = !!options.method && options.method !== 'GET'
+  const mutationRequestId = isMutation
+    ? (headers.get('Idempotency-Key') || cryptoRandomId())
+    : null
+  if (mutationRequestId && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', mutationRequestId)
   }
 
   // FIX: Removed the per-request _t=<timestamp> cache-buster. It made every
@@ -365,12 +380,12 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
           headers: { 'Content-Type': 'application/json' },
         })
       }
-      // For write requests, queue and return success
+      // For write requests, queue and report 202 Accepted rather than pretending the mutation committed.
       if (options.method && options.method !== 'GET') {
-        enqueueRequest(url, options.method, options.body as string | undefined)
-        return new Response(JSON.stringify({ success: true, offline: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json', 'X-Offline-Queued': 'true' },
+        const requestId = await enqueueRequest(url, options.method, options.body as string | undefined, mutationRequestId)
+        return new Response(JSON.stringify({ accepted: !!requestId, queued: !!requestId, requestId }), {
+          status: requestId ? 202 : 401,
+          headers: { 'Content-Type': 'application/json', ...(requestId ? { 'X-Offline-Queued': 'true' } : {}) },
         })
       }
       // Return a timeout error response
@@ -396,13 +411,19 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         headers: { 'Content-Type': 'application/json' },
       })
     } else {
-      // POST/PUT/DELETE failed — queue for offline sync
-      enqueueRequest(url, options.method || 'POST', options.body as string | undefined)
+      // POST/PUT/DELETE failed — queue for offline sync.
+      const requestId = await enqueueRequest(url, options.method || 'POST', options.body as string | undefined, mutationRequestId)
+      if (!requestId) {
+        return new Response(JSON.stringify({ error: 'authentication required to queue offline mutation' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ accepted: true, queued: true, requestId }), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json', 'X-Offline-Queued': 'true' },
+      })
     }
-    return new Response(JSON.stringify({ success: true, offline: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', 'X-Offline-Queued': 'true' },
-    })
   }
 
   clearTimeout(timeoutId)
@@ -558,11 +579,12 @@ export function isFromCache(response: Response): boolean {
 }
 
 // ─── Offline Write Queue ───
-const QUEUE_KEY = 'rise-offline-queue'
+const QUEUE_KEY = 'rise-offline-queue' // legacy key; never read from it
 const MAX_QUEUE_SIZE = 50
 
 interface QueuedRequest {
   id: string
+  userId: string
   url: string
   method: string
   body: string | undefined
@@ -570,121 +592,150 @@ interface QueuedRequest {
   retries: number
 }
 
-function getQueue(): QueuedRequest[] {
-  if (typeof window === 'undefined') return []
+async function getQueue(userId: string): Promise<QueuedRequest[]> {
+  if (typeof window === 'undefined' || !userId) return []
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')
-  } catch { return [] }
+    const queue = await loadOfflineQueue<QueuedRequest[]>(userId)
+    return Array.isArray(queue)
+      ? queue.filter((q) => q && q.userId === userId && typeof q.id === 'string')
+      : []
+  } catch {
+    return []
+  }
 }
 
-function saveQueue(queue: QueuedRequest[]): void {
-  if (typeof window === 'undefined') return
+async function saveQueue(queue: QueuedRequest[], userId: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !userId) return false
+  try { await saveOfflineQueue(userId, queue); return true } catch { return false }
+}
+
+export async function clearOfflineQueue(userId = getCurrentUserId()): Promise<void> {
+  if (typeof window === 'undefined' || !userId) return
+  try { await clearOfflineQueueStore(userId) } catch { /* ignore */ }
+}
+
+async function enqueueRequest(
+  url: string,
+  method: string,
+  body: string | undefined,
+  requestId?: string | null,
+): Promise<string | null> {
+  const userId = getCurrentUserId()
+  if (!userId) return null
+  const queue = await getQueue(userId)
+  const existing = queue.find(q => q.url === url && q.method === method && q.body === body)
+  if (existing) return existing.id
+  if (queue.length >= MAX_QUEUE_SIZE) return null
+  const id = requestId || cryptoRandomId()
+  queue.push({ id, userId, url, method, body, timestamp: Date.now(), retries: 0 })
+  if (!(await saveQueue(queue, userId))) return null
+  return id
+}
+
+function cryptoRandomId(): string {
   try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
   } catch { /* ignore */ }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function enqueueRequest(url: string, method: string, body: string | undefined): void {
-  const queue = getQueue()
-  // FIX: a double-click while offline used to enqueue the SAME write twice
-  // (twoXP awards / two creates after reconnect). Skip exact duplicates.
-  if (queue.some(q => q.url === url && q.method === method && q.body === body)) return
-  if (queue.length >= MAX_QUEUE_SIZE) queue.shift() // Remove oldest
-  queue.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    url,
-    method,
-    body,
-    timestamp: Date.now(),
-    retries: 0,
-  })
-  saveQueue(queue)
-}
-
-// Give up on a queued request after this many transient failures — prevents
-// an undead request from blocking the queue forever.
 const MAX_QUEUE_RETRIES = 20
+let queueFlushPromise: Promise<void> | null = null
 
 async function flushQueue(): Promise<void> {
-  const queue = getQueue()
-  if (queue.length === 0) return
+  if (queueFlushPromise) return queueFlushPromise
+  queueFlushPromise = (async () => {
+    const userId = getCurrentUserId()
+    if (!userId || !isOnline()) return
+    const queue = await getQueue(userId)
+    if (queue.length === 0) return
 
-  const remaining: QueuedRequest[] = []
-  let changed = false // any request resolved (sent OR permanently dropped)
-  const authHeaders = getAuthHeaders()
+    const remaining: QueuedRequest[] = []
+    const authHeaders = getAuthHeaders()
 
-  for (const item of queue) {
-    try {
-      const headers = new Headers(authHeaders)
-      headers.set('Content-Type', 'application/json')
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    for (const item of queue) {
+      if (item.userId !== userId) continue
+      try {
+        const headers = new Headers(authHeaders)
+        headers.set('Idempotency-Key', item.id)
+        headers.set('Content-Type', 'application/json')
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+        let res = await fetch(item.url, {
+          method: item.method,
+          headers,
+          body: item.body,
+          signal: controller.signal,
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        clearTimeout(timeoutId)
 
-      const res = await fetch(item.url, {
-        method: item.method,
-        headers,
-        body: item.body,
-        signal: controller.signal,
-        // FIX: credentials:'include' is REQUIRED so the server receives the
-        // httpOnly auth cookie. Without it, the server returns 401 and the
-        // queued request is silently dropped — data is lost forever.
-        credentials: 'include',
-      })
-      clearTimeout(timeoutId)
+        if (res.status === 401) {
+          const refreshed = await tryRefreshToken(false)
+          if (refreshed) {
+            const retryHeaders = new Headers(getAuthHeaders())
+            retryHeaders.set('Idempotency-Key', item.id)
+            retryHeaders.set('Content-Type', 'application/json')
+            const retryController = new AbortController()
+            const retryTimeout = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS)
+            try {
+              res = await fetch(item.url, {
+                method: item.method,
+                headers: retryHeaders,
+                body: item.body,
+                signal: retryController.signal,
+                credentials: 'include',
+                cache: 'no-store',
+              })
+            } finally {
+              clearTimeout(retryTimeout)
+            }
+          }
+        }
 
-      if (res.ok) {
-        changed = true // success → remove from queue
-      } else if (
-        (res.status === 408 || res.status === 429 || res.status >= 500) &&
-        item.retries < MAX_QUEUE_RETRIES
-      ) {
-        // Transient failure — retry next cycle.
-        // FIX: timeouts (408) used to be REMOVED here as if they had
-        // succeeded, losing the mutation even though the server may never
-        // have processed it.
+        if (res.ok || res.status === 409 && ['IDEMPOTENCY_CONFLICT', 'IDEMPOTENCY_REPLAY_UNAVAILABLE'].includes((await res.clone().json().catch(() => ({}))).code)) {
+          continue
+        }
+
+        if (res.status === 401) {
+          remaining.push(item)
+          continue
+        }
+
+        if (res.status === 400 || res.status === 404 || res.status === 409 || res.status === 422) {
+          if (item.retries >= MAX_QUEUE_RETRIES) continue
+        }
+
+        if (item.retries >= MAX_QUEUE_RETRIES) continue
         remaining.push({ ...item, retries: item.retries + 1 })
-      } else if (res.status === 408 || res.status === 429 || res.status >= 500) {
-        console.warn(
-          `[apiFetch] Dropping queued ${item.method} ${item.url} after ${item.retries} transient failures`
-        )
-        changed = true
-      } else {
-        // Permanent 4xx rejection — retrying can never succeed. Drop it,
-        // log loudly, and refresh the UI so it reflects server state.
-        console.error(
-          `[apiFetch] Server permanently rejected queued ${item.method} ${item.url}: ${res.status}`
-        )
-        changed = true
+      } catch {
+        if (item.retries < MAX_QUEUE_RETRIES) remaining.push({ ...item, retries: item.retries + 1 })
       }
-    } catch {
-      // Network still down — retry next cycle.
-      remaining.push({ ...item, retries: item.retries + 1 })
     }
-  }
 
-  saveQueue(remaining)
-
-  // FIX: components were never told that queued writes landed, so their
-  // state stayed stale until the next poll. Notify them to re-fetch.
-  if (changed) {
-    invalidateCache()
-    clearGetCaches()
-    bumpDataVersion() // same cross-instance bust as online writes
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('rise:data-changed'))
+    const persisted = await saveQueue(remaining, userId)
+    if (!persisted) {
+      // Keep the already-persisted queue intact. Replayed successful items are
+      // safe because their same Idempotency-Key makes the server return a replay.
+      return
     }
-  }
+    if (remaining.length !== queue.length && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rise:offline-queue-flushed'))
+    }
+  })().finally(() => { queueFlushPromise = null })
+
+  return queueFlushPromise
 }
 
-// Auto-flush when coming back online
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    // Small delay to let the connection stabilize
-    setTimeout(flushQueue, 1000)
-  })
+  // Never migrate/replay the old global plaintext queue. Ownership is unknowable.
+  try { localStorage.removeItem(QUEUE_KEY) } catch { /* ignore */ }
+  window.addEventListener('online', () => setTimeout(() => void flushQueue(), 1000))
+  window.addEventListener('rise:auth-refreshed', () => setTimeout(() => void flushQueue(), 250))
+  window.addEventListener('rise:user-authenticated', () => setTimeout(() => void flushQueue(), 250))
+}
 
-  // Also flush on page load if online
-  if (navigator.onLine) {
-    setTimeout(flushQueue, 2000)
-  }
+export async function flushOfflineQueue(): Promise<void> {
+  await flushQueue()
 }

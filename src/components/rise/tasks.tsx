@@ -85,47 +85,16 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
+import { apiPut } from '@/lib/api-fetch'
 import { priorityLabels, statusLabels, formatDateShort, getToday } from '@/lib/rise-utils'
-import { notifyTaskComplete } from '@/lib/notifications'
 import { toast } from 'sonner'
 import { toastSaved, toastDeleted, toastError, toastCreated } from '@/lib/toast-helpers'
 import { playSound } from '@/lib/sounds'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, addDays } from 'date-fns'
 import { ar } from 'date-fns/locale'
+import { useTasksController, type Task, type Project } from '@/hooks/use-tasks-controller'
 
 /* ────────────── Types ────────────── */
-
-interface SubTask {
-  id: string
-  title: string
-  completed: boolean
-}
-
-interface Task {
-  id: string
-  title: string
-  description?: string | null
-  status: string
-  priority: string
-  label?: string | null
-  projectId?: string | null
-  project?: { name: string; color: string } | null
-  dueDate?: string | null
-  dueTime?: string | null
-  xpReward: number
-  completedAt?: string | null
-  subtasks: SubTask[]
-  order: number
-  dependsOn?: string | null
-}
-
-interface Project {
-  id: string
-  name: string
-  color: string
-}
 
 type ViewType = 'list' | 'board' | 'calendar'
 
@@ -218,41 +187,14 @@ function toArabicDigits(n: number): string {
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-
-  // FIX: rapid double-clicks used to fire /earn-xp twice for one completion.
-  // The server now dedupes too (xp_awards table) — this just avoids the
-  // wasted request and optimistic flicker.
-  const xpAwardedRef = useRef<Set<string>>(new Set())
-  const awardXpOnce = (key: string, amount: number, reason: string) => {
-    if (xpAwardedRef.current.has(key)) return
-    xpAwardedRef.current.add(key)
-    apiPost('/api/rise/earn-xp', { amount, reason }).catch(() => {})
-  }
-
-  const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewType>('list')
   const [addOpen, setAddOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-
-  // Filters
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [filterProject, setFilterProject] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
-
-  // ═══ SCOPE SEPARATION ═══
-  // 'mine' = المهام الحقيقية (بدون مشروع) — 'projects' = مهام المشاريع فقط.
-  // مهام المشاريع ما بتتخلطش في القائمة الحقيقية عشان الزحمة.
   const [scope, setScope] = useState<'mine' | 'projects'>('mine')
-  const scopedTasks = useMemo(
-    () => (scope === 'mine' ? tasks.filter((t) => !t.projectId) : tasks.filter((t) => t.projectId)),
-    [tasks, scope],
-  )
-  const projectTasksCount = useMemo(() => tasks.filter((t) => t.projectId).length, [tasks])
-
-  // Add task form
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formPriority, setFormPriority] = useState('medium')
@@ -260,240 +202,46 @@ export function Tasks() {
   const [formDueDate, setFormDueDate] = useState('')
   const [formDueTime, setFormDueTime] = useState('')
   const [formDependsOn, setFormDependsOn] = useState<string[]>([])
-  const [submitting, setSubmitting] = useState(false)
-
-  // Calendar state
   const [calendarMonth, setCalendarMonth] = useState(new Date())
 
-  // TASK 20: فشل جلب صامت كان يخلي المستخدم يظن المهام "اختفيت" — لافتة ظاهرة مع زر إعادة
-  const [fetchFailed, setFetchFailed] = useState(false)
-
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await apiFetch(`/api/rise/tasks`)
-      if (!res.ok) {
-        // FIX: Don't overwrite existing tasks with empty data on error.
-        // Just set loading to false and keep showing whatever we already have.
-        // Previously, a 503/network error would silently set tasks=[] causing
-        // the "tasks disappear" bug.
-        // TASK 20: also surface a visible retry banner — silent staleness made
-        // users think tasks " vanished" with no way to recover except re-opening.
-        setFetchFailed(true)
-        setLoading(false)
-        return
-      }
-      const data = await res.json()
-      setFetchFailed(false)
-      setTasks(data.tasks || [])
-      setProjects(data.projects || [])
-    } catch {
-      // Network/parse error — preserve existing state, don't wipe it
-      setFetchFailed(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const { refreshKey } = useDataRefresh()
-
-  useEffect(() => {
-    fetchData()
-  }, [fetchData, refreshKey])
-
-  /* ── Filtering ── */
-  const isTaskBlocked = useCallback((task: Task): boolean => {
-    if (!task.dependsOn) return false
-    const deps = task.dependsOn.split(',').filter(Boolean)
-    return deps.some((depId) => {
-      const depTask = tasks.find((t) => t.id === depId)
-      return depTask && depTask.status !== 'done'
-    })
-  }, [tasks])
-
-  const filteredTasks = useMemo(() => {
-    return scopedTasks.filter((t) => {
-      if (filterPriority !== 'all' && t.priority !== filterPriority) return false
-      if (scope === 'projects' && filterProject !== 'all' && t.projectId !== filterProject) return false
-      // 'blocked' is a virtual status — handle separately
-      if (filterStatus === 'blocked') {
-        return isTaskBlocked(t)
-      }
-      if (filterStatus !== 'all' && t.status !== filterStatus) return false
-      if (searchQuery && !t.title.includes(searchQuery) && !t.description?.includes(searchQuery)) return false
-      return true
-    })
-  }, [scopedTasks, filterPriority, filterProject, filterStatus, searchQuery, isTaskBlocked, scope])
-
-  const groupedTasks = useMemo(() => {
-    const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }
-    for (const t of filteredTasks) {
-      if (groups[t.status]) groups[t.status].push(t)
-    }
-    return groups
-  }, [filteredTasks])
-
-  /* ── Mutations ── */
-  // Compute today-scoped dashboard deltas so the KPI counters move in the
-  // SAME frame as the checkbox (rise:instant-update), before the refetch.
-  const dispatchInstant = (task: Task, nowDone: boolean) => {
-    const detail: Record<string, number | string> = { type: 'task' }
-    if (task.dueDate === getToday()) {
-      detail.deltaCompleted = nowDone ? 1 : -1
-    } else if (!task.dueDate) {
-      // bonus completion — enters today's total AND completed
-      detail.deltaCompleted = nowDone ? 1 : -1
-      detail.deltaTotal = nowDone ? 1 : -1
-    } else if (task.dueDate < getToday()) {
-      // overdue resolved/reopened — affects the overdue strip only
-      detail.overdueDelta = nowDone ? -1 : 1
-    }
-    window.dispatchEvent(new CustomEvent('rise:instant-update', { detail }))
-  }
-
-  const toggleTask = async (task: Task) => {
-    const isDone = task.status === 'done'
-    const newStatus = isDone ? 'todo' : 'done'
-    // OPTIMISTIC: flip locally first — instant feel, rollback on failure
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)))
-    if (!isDone) {
-      playSound('task-complete')
-      notifyTaskComplete(task.title, task.xpReward)
-      awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
-      checkUnblockedTasks(task.id)
-    }
-    dispatchInstant(task, !isDone)
-    try {
-      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)))
-        window.dispatchEvent(new CustomEvent('rise:instant-update', { detail: { type: 'task', deltaCompleted: isDone ? 1 : -1, deltaTotal: !task.dueDate ? (isDone ? 1 : -1) : 0, overdueDelta: task.dueDate && task.dueDate < getToday() ? (isDone ? 1 : -1) : 0 } }))
-        toastError('تحديث المهمة', errData.error || errData.details || 'حاول مرة أخرى')
-        fetchData()
-      }
-      // rise:data-changed (fired by apiPut) refetches globally
-    } catch {
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)))
-      toastError('تحديث المهمة')
-    }
-  }
-
-  const moveTask = async (task: Task, newStatus: string) => {
-    const oldStatus = task.status
-    if (oldStatus === newStatus) return
-    // OPTIMISTIC
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)))
-    const nowDone = newStatus === 'done'
-    if (nowDone) {
-      playSound('task-complete')
-      awardXpOnce(`task-done:${task.id}`, task.xpReward || 10, `task:${task.id}`)
-      checkUnblockedTasks(task.id)
-    }
-    dispatchInstant(task, nowDone)
-    try {
-      const res = await apiPut('/api/rise/tasks', { id: task.id, status: newStatus, completedAt: nowDone ? new Date().toISOString() : null })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: oldStatus } : t)))
-        toastError('تحديث المهمة', errData.error || errData.details || 'حاول مرة أخرى')
-        fetchData()
-      }
-    } catch {
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: oldStatus } : t)))
-      toastError('تحديث المهمة')
-    }
-  }
-
-  const deleteTask = async (taskId: string) => {
-    playSound('delete')
-    try {
-      const res = await apiDelete(`/api/rise/tasks?id=${taskId}`)
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${res.status}`)
-      }
-      toast.success('تم حذف المهمة بنجاح')
-    } catch (err) {
-      toastError('حذف المهمة', err instanceof Error ? err.message : 'حاول مرة أخرى')
-    }
-  }
-
-  const toggleSubtask = async (task: Task, subtaskId: string, completed: boolean) => {
-    const updatedSubtasks = task.subtasks.map((s) => (s.id === subtaskId ? { ...s, completed: !completed } : s))
-    try {
-      const res = await apiPut('/api/rise/tasks', {
-        id: task.id,
-        subtasks: updatedSubtasks.map((s) => ({ id: s.id, title: s.title, completed: s.completed })),
-      })
-      if (!res.ok) return
-      fetchData()
-    } catch {
-      // silent
-    }
-  }
+  const {
+    tasks,
+    projects,
+    loading,
+    fetchFailed,
+    submitting,
+    refresh: fetchData,
+    scopedTasks,
+    filteredTasks,
+    groupedTasks,
+    isTaskBlocked,
+    projectTasksCount,
+    toggleTask,
+    moveTask,
+    deleteTask,
+    toggleSubtask,
+    createTask: createTaskController,
+  } = useTasksController({ scope, filterPriority, filterProject, filterStatus, searchQuery })
 
   const createTask = async () => {
-    if (!formTitle.trim()) return
-    setSubmitting(true)
-    try {
-      const body: Record<string, unknown> = {
-        title: formTitle.trim(),
-        description: formDesc.trim() || null,
-        priority: formPriority,
-        dueDate: formDueDate || null,
-        dueTime: formDueTime || null,
-      }
-      if (formProject !== 'none') body.projectId = formProject
-      if (formDependsOn.length > 0) body.dependsOn = formDependsOn.join(',')
-      const res = await apiPost('/api/rise/tasks', body)
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        toast.error('فشلت إضافة المهمة', { description: errData.error || errData.details || 'حاول مرة أخرى' })
-        return
-      }
-      const result = await res.json().catch(() => ({}))
-      if (result.offline || result.success === true && !result.id) {
-        toast.error('فشل الاتصال بالخادم', { description: 'يرجى إعادة تسجيل الدخول' })
-        return
-      }
-      // Dynamic update: re-fetch from server to get the real data
-      setFormTitle('')
-      setFormDesc('')
-      setFormPriority('medium')
-      setFormProject('none')
-      setFormDueDate('')
-      setFormDueTime('')
-      setFormDependsOn([])
-      setAddOpen(false)
-      toastCreated('المهمة')
-      fetchData()
-    } catch {
-      toast.error('حدث خطأ أثناء الحفظ')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  /* ── Check unblocked tasks ── */
-  const checkUnblockedTasks = (completedTaskId: string) => {
-    const unblocked = tasks.filter((t) => {
-      if (!t.dependsOn || t.status === 'done') return false
-      const deps = t.dependsOn.split(',').filter(Boolean)
-      // This task was blocked by the completed task
-      if (!deps.includes(completedTaskId)) return false
-      // Now check if ALL dependencies are done
-      const allDepsDone = deps.every((depId) => {
-        const dep = tasks.find((tt) => tt.id === depId)
-        return dep && dep.status === 'done'
-      })
-      return allDepsDone
+    const success = await createTaskController({
+      title: formTitle,
+      description: formDesc,
+      priority: formPriority,
+      projectId: formProject !== 'none' ? formProject : null,
+      dueDate: formDueDate || null,
+      dueTime: formDueTime || null,
+      dependsOn: formDependsOn.length > 0 ? formDependsOn.join(',') : null,
     })
-    if (unblocked.length > 0) {
-      toast.success('🔓 تم فتح مهام محظورة', {
-        description: unblocked.map((t) => t.title).join('، '),
-        duration: 4000,
-      })
-    }
+    if (!success) return
+    setFormTitle('')
+    setFormDesc('')
+    setFormPriority('medium')
+    setFormProject('none')
+    setFormDueDate('')
+    setFormDueTime('')
+    setFormDependsOn([])
+    setAddOpen(false)
   }
 
   /* ── Calendar helpers ── */

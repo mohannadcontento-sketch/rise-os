@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAdmin, logAudit } from '@/lib/audit'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
 
+  return withIdempotency(request, adminId, async () => {
     const body = await request.json().catch(() => null)
     const parsed = BroadcastSchema.safeParse(body)
     if (!parsed.success) {
@@ -52,34 +54,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'لا يوجد مستلمون' }, { status: 400 })
     }
 
-    // Batch insert (chunks of 500)
-    const rows = recipientIds.map(uid => ({
-      user_id: uid,
-      title,
-      body: bodyText,
-      type: 'announcement',
-      icon: '📣',
-      action_url: '',
-      is_read: false,
-    }))
-    let sent = 0
-    for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await sb.from('notifications').insert(rows.slice(i, i + 500))
-      if (error) {
-        console.error('[admin/broadcast] chunk insert error:', error.message)
-        continue
-      }
-      sent += Math.min(500, rows.length - i)
+    // Single database-side insert keeps broadcast atomic. A partial broadcast
+    // must never be reported as success because Idempotency-Key would replay it.
+    const { data: sent, error: broadcastError } = await sb.rpc('admin_broadcast_notifications_atomic', {
+      p_admin_user_id: adminId,
+      p_target_user_ids: targetUserIds?.length ? targetUserIds : null,
+      p_title: title,
+      p_body: bodyText,
+    })
+    if (broadcastError) {
+      console.error('[admin/broadcast] atomic broadcast failed:', broadcastError.message)
+      return NextResponse.json({ error: 'فشل إرسال الإعلان بالكامل' }, { status: 503 })
     }
 
+    const sentCount = Number(sent || 0)
     await logAudit(request, adminId, 'broadcast', {
       resource: 'notifications',
-      resourceId: `${sent} recipients`,
+      resourceId: `${sentCount} recipients`,
       details: { title, targeted: !!targetUserIds?.length },
     })
 
-    return NextResponse.json({ success: true, sent, recipients: recipientIds.length })
-  } catch (error) {
+    return NextResponse.json({ success: true, sent: sentCount, recipients: recipientIds.length })
+  
+  })} catch (error) {
     console.error('[admin/broadcast] error:', error)
     return NextResponse.json({ error: 'فشل إرسال الإعلان' }, { status: 500 })
   }

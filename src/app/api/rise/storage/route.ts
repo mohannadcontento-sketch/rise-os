@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,26 +10,25 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     // Count records in each table for this user
     const [tasks, habits, journals, focusSessions, healthLogs, financeRecords, books, knowledgeItems, plannerItems, morningLogs, goals, projects, achievements, dailyScores] = await Promise.all([
-      data.tasks.list(userId).catch(() => []),
-      data.habits.list(userId).catch(() => []),
-      data.journals.list(userId, 1000).catch(() => []),
-      data.focusSessions.list(userId, 1000).catch(() => []),
-      data.healthLogs.list(userId, []).catch(() => []),
-      data.financeRecords.list(userId).catch(() => []),
-      data.books.list(userId).catch(() => []),
-      data.knowledgeItems.list(userId).catch(() => []),
-      data.plannerItems.list(userId, '1970-01-01').catch(() => []),
-      data.morningLogs.list(userId, []).catch(() => []),
-      data.goals.list(userId).catch(() => []),
-      data.projects.list(userId).catch(() => []),
-      data.userAchievements.list(userId).catch(() => []),
-      data.dailyScores.list(userId, []).catch(() => []),
+      data.tasks.list(userId),
+      data.habits.list(userId),
+      data.journals.list(userId, 1000),
+      data.focusSessions.list(userId, 1000),
+      data.healthLogs.list(userId, []),
+      data.financeRecords.list(userId),
+      data.books.list(userId),
+      data.knowledgeItems.list(userId),
+      data.plannerItems.list(userId, '1970-01-01'),
+      data.morningLogs.list(userId, []),
+      data.goals.list(userId),
+      data.projects.list(userId),
+      data.userAchievements.list(userId),
+      data.dailyScores.list(userId, []),
     ])
 
     // Count records
@@ -72,50 +70,18 @@ export async function GET(req: NextRequest) {
     // Total used = text content + fixed overhead
     const used = fixedBytes + journalBytes + knowledgeBytes + taskBytes + goalBytes + bookBytes
 
-    // Get storage limit from user_storage table
-    let limit = 10 * 1024 * 1024 // Default: 10MB
-    let aiLimit = 100
-    let aiUsed = 0
-    try {
-      const admin = await getSupabaseAdmin()
-      if (admin) {
-        const { data: storage } = await admin
-          .from('user_storage')
-          .select('storage_used, storage_limit, ai_limit')
-          .eq('user_id', userId)
-          .maybeSingle()
-        if (storage) {
-          limit = storage.storage_limit || limit
-          aiLimit = storage.ai_limit || 100
-        }
-        // Get AI usage
-        const { data: aiUsage } = await admin
-          .from('user_ai_usage')
-          .select('monthly_used, monthly_limit')
-          .eq('user_id', userId)
-          .maybeSingle()
-        if (aiUsage) {
-          aiUsed = aiUsage.monthly_used || 0
-          aiLimit = aiUsage.monthly_limit || aiLimit
-        }
-        // Update actual usage in user_storage
-        await admin.from('user_storage').update({ storage_used: used }).eq('user_id', userId)
-      } else {
-        // Mock mode
-        const { db } = await import('@/lib/db')
-        const us = await (db as any).userStorage.findUnique({ where: { userId } })
-        if (us) {
-          limit = us.storageLimit || limit
-          aiLimit = us.aiLimit || 100
-          await (db as any).userStorage.update({ where: { userId }, data: { storageUsed: used } })
-        }
-        const au = await (db as any).userAIUsage.findUnique({ where: { userId } })
-        if (au) {
-          aiUsed = au.monthlyUsed || 0
-          aiLimit = au.monthlyLimit || aiLimit
-        }
-      }
-    } catch { /* ignore */ }
+    // Read/update the current user's quota through the RLS-first data layer.
+    // Never use service_role for a normal user's own records.
+    const storage = await data.userStorage.get(userId)
+    const aiUsage = await data.userAIUsage.get(userId)
+
+    const limit = storage?.storageLimit || 10 * 1024 * 1024
+    const aiLimit = aiUsage?.monthlyLimit || storage?.aiLimit || 100
+    const aiUsed = aiUsage?.monthlyUsed || 0
+
+    if (storage) {
+      await data.userStorage.update(userId, { storageUsed: used })
+    }
 
     const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
 
@@ -138,6 +104,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('Storage GET error:', error)
-    return NextResponse.json({ used: 0, limit: 10485760, percent: 0, counts: {}, aiUsed: 0, aiLimit: 100, breakdown: {} })
+    return NextResponse.json({ error: 'تعذر التحقق من مساحة التخزين' }, { status: 503 })
   }
 }

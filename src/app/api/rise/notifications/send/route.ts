@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { data } from '@/lib/data'
 import webpush from 'web-push'
+import { withIdempotency } from '@/lib/idempotency'
 
 // Configure web-push with VAPID keys
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || ''
@@ -20,10 +22,12 @@ export const dynamic = 'force-dynamic'
  * Body: { title: string, body?: string, tag?: string, url?: string, actions?: Array<{action: string, title: string}> }
  */
 export async function POST(req: NextRequest) {
-  try {
-    const userId = await requireAuth(req)
-    if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
+  const userId = await requireUser(req)
+  if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  try {
+
+  return withIdempotency(req, userId, async () => {
     if (!VAPID_PRIVATE_KEY) {
       return NextResponse.json({ error: 'VAPID not configured on server' }, { status: 500 })
     }
@@ -36,21 +40,8 @@ export async function POST(req: NextRequest) {
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
     }
-
-    const admin = await getSupabaseAdmin()
-    if (!admin) {
-      return NextResponse.json({ error: 'Admin client unavailable' }, { status: 500 })
-    }
-
-    // Get user's push subscription
-    const sb = admin as any
-    const { data: settings } = await sb
-      .from('user_settings')
-      .select('push_subscription')
-      .eq('user_id', userId)
-      .single()
-
-    const subscriptionJson = (settings as any)?.push_subscription
+    const settings = await data.userSettings.get(userId)
+    const subscriptionJson = (settings as any)?.pushSubscription
     if (!subscriptionJson) {
       return NextResponse.json({ success: false, reason: 'no_subscription' })
     }
@@ -69,22 +60,15 @@ export async function POST(req: NextRequest) {
     await webpush.sendNotification(subscription, payload)
 
     return NextResponse.json({ success: true })
+  
+  })
   } catch (error: any) {
     console.error('[push/send] error:', error)
 
     // If subscription is invalid/expired, clear it
     if (error?.statusCode === 404 || error?.statusCode === 410) {
       try {
-        const admin2 = await getSupabaseAdmin()
-        if (admin2) {
-          const userId2 = await requireAuth(req)
-          if (userId2) {
-            await (admin2 as any)
-              .from('user_settings')
-              .update({ push_subscription: null })
-              .eq('user_id', userId2)
-          }
-        }
+        await data.userSettings.update(userId, { pushSubscription: null })
       } catch { /* ignore cleanup error */ }
 
       return NextResponse.json({ success: false, reason: 'subscription_expired' })

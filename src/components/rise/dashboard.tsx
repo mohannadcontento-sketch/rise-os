@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { KpiTile, MetricCard, Pill } from './neo'
@@ -48,9 +49,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPut, isFromCache } from '@/lib/api-fetch'
-import { useDataRefresh } from '@/hooks/use-data-refresh'
-import { useToday } from '@/hooks/use-today'
+import { apiFetch } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { calculateLevel, BADGES, type BadgeStats } from '@/lib/gamification'
 import { HabitIcon } from '@/components/rise/icons'
@@ -63,6 +62,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getToday, formatDateShort } from '@/lib/rise-utils'
+import { useDashboardData } from '@/hooks/use-dashboard-data'
 
 /* ────────────── Types ────────────── */
 
@@ -854,7 +854,7 @@ function MotivationalWall() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     try {
-      const stored = localStorage.getItem('rise-favorite-quotes')
+      const stored = getUserStorage('rise-favorite-quotes')
       if (stored) return new Set(JSON.parse(stored) as string[])
     } catch { /* ignore */ }
     return new Set()
@@ -862,7 +862,7 @@ function MotivationalWall() {
   const [seenToday, setSeenToday] = useState<Set<number>>(() => {
     try {
       const todayKey = getToday()
-      const stored = localStorage.getItem('rise-seen-quotes-today')
+      const stored = getUserStorage('rise-seen-quotes-today')
       if (stored) {
         const parsed = JSON.parse(stored) as { date: string; indices: number[] }
         if (parsed.date === todayKey) {
@@ -881,13 +881,13 @@ function MotivationalWall() {
 
   // Save favorites
   useEffect(() => {
-    localStorage.setItem('rise-favorite-quotes', JSON.stringify([...favorites]))
+    setUserStorage('rise-favorite-quotes', JSON.stringify([...favorites]))
   }, [favorites])
 
   // Save seen today
   useEffect(() => {
     const todayKey = getToday()
-    localStorage.setItem('rise-seen-quotes-today', JSON.stringify({
+    setUserStorage('rise-seen-quotes-today', JSON.stringify({
       date: todayKey,
       indices: [...seenToday],
     }))
@@ -1165,112 +1165,17 @@ function OnThisDayWidget() {
    ══════════════════════════════════════════════════════════════════════ */
 
 export default function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [fromCache, setFromCache] = useState(false)
-
-  // FIX: Deduplication guard with pending-refresh flag.
-  // If a fetch is in progress when a new refresh is requested, the new
-  // request is NOT dropped — it's queued via pendingRefreshRef and executed
-  // after the current fetch completes. This ensures the dashboard always
-  // shows the latest data after any save operation.
-  const fetchingRef = useRef(false)
-  const pendingRefreshRef = useRef(false)
-  // Cairo-local today — refetches automatically at exactly midnight
-  // (useToday fires rise:day-changed) so the dashboard resets visually.
-  const todayDate = useToday()
-  const fetchDashboard = useCallback(async () => {
-    // If already fetching, queue a refresh for when the current fetch completes
-    if (fetchingRef.current) {
-      pendingRefreshRef.current = true
-      return
-    }
-    fetchingRef.current = true
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await apiFetch(`/api/rise/dashboard?date=${todayDate}`)
-      if (res.ok) {
-        const json = await res.json()
-        setFromCache(isFromCache(res))
-        setData(json)
-      } else {
-        throw new Error('فشل في تحميل البيانات')
-      }
-    } catch (err: any) {
-      setError(err.message || 'حدث خطأ غير متوقع')
-    } finally {
-      setLoading(false)
-      fetchingRef.current = false
-      // If a refresh was requested while we were fetching, fetch again now
-      if (pendingRefreshRef.current) {
-        pendingRefreshRef.current = false
-        fetchDashboard()
-      }
-    }
-  }, [todayDate])
-
-  const { refreshKey } = useDataRefresh()
-
-  useEffect(() => {
-    fetchDashboard()
-  }, [fetchDashboard, refreshKey])
-
-  // Re-fetch when the calendar day changes (midnight rollover / tab refocus)
-  // so the dashboard shows the new day's data without requiring logout/login.
-  useEffect(() => {
-    const handler = () => fetchDashboard()
-    window.addEventListener('rise:day-changed', handler)
-    return () => window.removeEventListener('rise:day-changed', handler)
-  }, [fetchDashboard])
-
-  // ═══ INSTANT KPI UPDATES (optimistic — before the refetch lands) ═══
-  // tasks.tsx / habits.tsx dispatch `rise:instant-update` right when a
-  // checkbox is tapped; the counters move in the SAME frame, then the
-  // regular refetch reconciles with the server.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail: any = (e as CustomEvent).detail || {}
-      setData((prev: DashboardData | null) => {
-        if (!prev?.today) return prev
-        const t = { ...prev.today }
-        if (detail.type === 'task') {
-          if (detail.deltaCompleted) t.tasksCompleted = Math.max(0, t.tasksCompleted + detail.deltaCompleted)
-          if (detail.deltaTotal) t.tasksTotal = Math.max(0, t.tasksTotal + detail.deltaTotal)
-          if (detail.overdueDelta) t.overdueCount = Math.max(0, (t.overdueCount || 0) + detail.overdueDelta)
-        }
-        if (detail.type === 'habit' && detail.deltaCompleted) {
-          t.habitsCompleted = Math.max(0, t.habitsCompleted + detail.deltaCompleted)
-        }
-        return { ...prev, today: t }
-      })
-    }
-    window.addEventListener('rise:instant-update', handler)
-    return () => window.removeEventListener('rise:instant-update', handler)
-  }, [])
-
-  // ═══ SMART ROLLOVER — move an overdue task to today ═══
-  const [movingId, setMovingId] = useState<string | null>(null)
-  const moveOverdueToToday = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) return
-    setMovingId(ids.join(','))
-    let failed = 0
-    for (const id of ids) {
-      try {
-        const res = await apiPut('/api/rise/tasks', { id, dueDate: todayDate })
-        if (!res.ok) failed++
-      } catch { failed++ }
-    }
-    setMovingId(null)
+  const { data, loading, error, fromCache, fetchDashboard, movingId, moveOverdueToToday } = useDashboardData()
+  const handleMoveOverdueToToday = useCallback(async (ids: string[]) => {
+    const failed = await moveOverdueToToday(ids)
+    if (failed === undefined) return
     if (failed === 0) {
       toast.success(ids.length === 1 ? 'اتنقلت المهمة ليهاردة 💪' : `اتنقلت ${ids.length} مهام ليهاردة 💪`)
       playSound('task-complete')
     } else {
       toast.error('فشل نقل بعض المهام — حاول تاني')
     }
-    fetchDashboard()
-  }, [todayDate, fetchDashboard])
+  }, [moveOverdueToToday])
 
   // Play achievement sound on first load if there are achievements
   const achievementSoundPlayed = useRef(false)
@@ -1309,7 +1214,7 @@ export default function Dashboard() {
   let displayName = typeof user.name === 'string' ? user.name : 'مستخدم'
   if (displayName === 'مستخدم' || displayName === 'مستخدم RiseOS' || displayName === 'مستخدم تجريبي') {
     try {
-      const stored = localStorage.getItem('rise-settings')
+      const stored = getUserStorage('rise-settings')
       if (stored) {
         const parsed = JSON.parse(stored)
         if (parsed.userName?.trim()) displayName = parsed.userName.trim()

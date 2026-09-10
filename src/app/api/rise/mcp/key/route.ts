@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { hashApiKey, isSupabaseConfigured } from '@/lib/supabase'
 import crypto from 'crypto'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,75 +14,74 @@ function generateApiKey(): string {
 /** POST: Generate a new API key */
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
+  return withIdempotency(req, userId, async () => {
     const apiKey = generateApiKey()
+    const keyHash = await hashApiKey(apiKey)
 
-    const supabase = await getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json(
-        { error: 'Database not available', details: 'Supabase admin client not configured' },
-        { status: 503 },
-      )
-    }
-
-    const { error } = await (supabase as any)
-      .from('user_api_keys')
-      .insert({
-        user_id: userId,
-        key: apiKey,
+    if (isSupabaseConfigured()) {
+      await data.userApiKeys.create(userId, keyHash, 'MCP Key')
+    } else {
+      // Local/mock mode: the legacy Prisma `key` field stores only the digest.
+      // The plaintext secret is returned once and is never persisted.
+      const { db } = await import('@/lib/db')
+      await (db as any).userApiKey.create({
+        data: {
+          userId,
+          key: keyHash,
+          name: 'MCP Key',
+        },
       })
-
-    if (error) {
-      console.error('[mcp/key] POST insert error:', error.message)
-      return NextResponse.json(
-        { error: 'فشل في إنشاء مفتاح API', details: error.message },
-        { status: 500 },
-      )
     }
 
+    // Secret is returned once only. It is never stored or retrievable later.
     return NextResponse.json({ apiKey, createdAt: new Date().toISOString() })
-  } catch (error) {
+  
+  }, { persistResponse: false })} catch (error) {
     console.error('[mcp/key] POST error:', error)
-    return NextResponse.json(
-      { error: 'فشل في إنشاء مفتاح API', details: error instanceof Error ? error.message : 'خطأ غير معروف' },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: 'فشل في إنشاء مفتاح API' }, { status: 500 })
   }
 }
 
-/** GET: Get the current user's API key (masked) */
+/** GET: Get key metadata only. The secret is never returned after creation. */
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    const supabase = await getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json({ apiKey: null, hasKey: false })
+    if (isSupabaseConfigured()) {
+      const keyRecord = await data.userApiKeys.latest(userId)
+      return NextResponse.json(keyRecord ? {
+        apiKey: null,
+        masked: 'rise_••••••••••••',
+        hasKey: true,
+        name: keyRecord.name || 'MCP Key',
+        createdAt: keyRecord.createdAt || null,
+        lastUsedAt: keyRecord.lastUsedAt || null,
+      } : { apiKey: null, hasKey: false })
     }
 
-    const sb = supabase as any
-    const { data: keyRecord } = await sb
-      .from('user_api_keys')
-      .select('key')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    const { db } = await import('@/lib/db')
+    const keyRecord = await (db as any).userApiKey.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { key: true, name: true, createdAt: true, lastUsedAt: true },
+    })
 
-    if (keyRecord?.key) {
-      const key = keyRecord.key
-      const masked = key.slice(0, 8) + '...' + key.slice(-4)
-      return NextResponse.json({ apiKey: masked, hasKey: true })
-    }
-
-    return NextResponse.json({ apiKey: null, hasKey: false })
+    return NextResponse.json(keyRecord ? {
+      apiKey: null,
+      masked: 'rise_••••••••••••',
+      hasKey: true,
+      name: keyRecord.name || 'MCP Key',
+      createdAt: keyRecord.createdAt || null,
+      lastUsedAt: keyRecord.lastUsedAt || null,
+    } : { apiKey: null, hasKey: false })
   } catch (error) {
     console.error('[mcp/key] GET error:', error)
     return NextResponse.json({ apiKey: null, hasKey: false })
@@ -90,31 +91,22 @@ export async function GET(req: NextRequest) {
 /** DELETE: Revoke the current user's API keys */
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
+    const userId = await requireUser(req)
     if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
 
-    const supabase = await getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json(
-        { error: 'Database not available' },
-        { status: 503 },
-      )
-    }
-
-    const { error } = await (supabase as any)
-      .from('user_api_keys')
-      .delete()
-      .eq('user_id', userId)
-
-    if (error) {
-      console.error('[mcp/key] DELETE error:', error.message)
-      return NextResponse.json({ error: 'فشل في حذف مفتاح API' }, { status: 500 })
+  return withIdempotency(req, userId, async () => {
+    if (isSupabaseConfigured()) {
+      await data.userApiKeys.removeAll(userId)
+    } else {
+      const { db } = await import('@/lib/db')
+      await (db as any).userApiKey.deleteMany({ where: { userId } })
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('[mcp/key] DELETE error:', error)
     return NextResponse.json({ error: 'فشل في حذف مفتاح API' }, { status: 500 })
   }

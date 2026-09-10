@@ -1,6 +1,8 @@
+
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun,
@@ -202,7 +204,7 @@ function getCurrentHour() {
 function loadNotes(): QuickNote[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = localStorage.getItem(NOTES_STORAGE_KEY)
+    const raw = getUserStorage(NOTES_STORAGE_KEY)
     if (raw) return JSON.parse(raw)
   } catch { /* ignore */ }
   return []
@@ -210,7 +212,7 @@ function loadNotes(): QuickNote[] {
 
 function saveNotes(notes: QuickNote[]) {
   try {
-    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes))
+    setUserStorage(NOTES_STORAGE_KEY, JSON.stringify(notes))
   } catch { /* ignore */ }
 }
 
@@ -824,12 +826,12 @@ export default function DailyPlanner() {
   const [editNoteText, setEditNoteText] = useState('')
   const [quickNoteText, setQuickNoteText] = useState(() => {
     if (typeof window === 'undefined') return ''
-    try { return localStorage.getItem(QUICK_NOTE_TEXT_KEY) || '' } catch { return '' }
+    try { return getUserStorage(QUICK_NOTE_TEXT_KEY) || '' } catch { return '' }
   })
 
   // Auto-save quick note
   useEffect(() => {
-    try { localStorage.setItem(QUICK_NOTE_TEXT_KEY, quickNoteText) } catch { /* ignore */ }
+    try { setUserStorage(QUICK_NOTE_TEXT_KEY, quickNoteText) } catch { /* ignore */ }
   }, [quickNoteText])
 
   // Derive section items from flat list, merged with linked tasks

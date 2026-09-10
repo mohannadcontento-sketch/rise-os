@@ -71,8 +71,31 @@ export async function getSupabaseAnon() {
   if (_anonClient) return _anonClient
 
   const { createClient } = await loadSupabase()
-  _anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  _anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
   return _anonClient
+}
+
+/** Create an isolated non-persistent client for sensitive auth flows.
+ * Never share password-auth state across concurrent requests.
+ */
+export async function createSupabaseIsolatedClient() {
+  if (!isSupabaseConfigured()) return null
+  const { createClient } = await loadSupabase()
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+/** Create a per-request RLS client from an explicit access token. */
+export async function createSupabaseUserClient(accessToken: string) {
+  if (!isSupabaseConfigured() || !accessToken) return null
+  const { createClient } = await loadSupabase()
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  })
 }
 
 /**
@@ -84,7 +107,9 @@ export async function getSupabaseAdmin() {
   if (_adminClient) return _adminClient
 
   const { createClient } = await loadSupabase()
-  _adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  _adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
   return _adminClient
 }
 
@@ -179,15 +204,32 @@ export async function resolveUserId(apiKey: string): Promise<string | null> {
 async function resolveUserIdLocal(apiKey: string): Promise<string | null> {
   try {
     const { db } = await import('@/lib/db')
-    const key = await (db as any).userApiKey.findUnique({ where: { key: apiKey } })
-    if (key?.userId) {
+    const hashedKey = await hashApiKey(apiKey)
+
+    // New local/mock records store the SHA-256 digest in the legacy Prisma
+    // `key` column so no plaintext secret is written to SQLite.
+    const hashedRecord = await (db as any).userApiKey.findUnique({ where: { key: hashedKey } })
+    if (hashedRecord?.userId) {
       await (db as any).userApiKey.update({
-        where: { id: key.id },
+        where: { id: hashedRecord.id },
         data: { lastUsedAt: new Date() },
       })
-      return key.userId
+      return hashedRecord.userId
     }
-  } catch { /* ignore */ }
+
+    // One-time compatibility for old local installations that still contain
+    // plaintext keys. New code never writes this form.
+    const legacyRecord = await (db as any).userApiKey.findUnique({ where: { key: apiKey } })
+    if (legacyRecord?.userId) {
+      await (db as any).userApiKey.update({
+        where: { id: legacyRecord.id },
+        data: { key: hashedKey, lastUsedAt: new Date() },
+      })
+      return legacyRecord.userId
+    }
+  } catch (err) {
+    console.error('[resolveUserIdLocal] error:', err)
+  }
   return null
 }
 

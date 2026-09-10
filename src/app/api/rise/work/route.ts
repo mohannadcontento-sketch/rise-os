@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,24 +62,23 @@ function computeQualityScore(opts: {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const sessions = await data.workSessions.list(userId, 50)
     return NextResponse.json({ sessions })
   } catch (error) {
     console.error('Work GET error:', error)
-    return NextResponse.json({ sessions: [] })
+    return NextResponse.json({ error: 'تعذر تحميل جلسات العمل' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -101,7 +101,8 @@ export async function POST(req: NextRequest) {
       tasksCompleted: 0,
     })
     return NextResponse.json(session)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Work POST error:', error)
     return NextResponse.json({ error: 'فشل في بدء جلسة الشغل' }, { status: 500 })
   }
@@ -109,10 +110,10 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -145,7 +146,8 @@ export async function PUT(req: NextRequest) {
 
     const session = await data.workSessions.update(id, userId, updateData)
     return NextResponse.json(session)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Work PUT error:', error)
     return NextResponse.json({ error: 'فشل في تحديث جلسة الشغل' }, { status: 500 })
   }

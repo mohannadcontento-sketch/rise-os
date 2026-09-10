@@ -179,11 +179,10 @@ function arabicNum(n: number): string {
 
 function getSessionStorageKey(): string {
   try {
-    const stored = localStorage.getItem('rise-auth')
-    if (stored) {
-      const session = JSON.parse(stored)
-      const userId = session.user?.id || session.access_token?.slice(0, 20) || 'default'
-      return `rise-morning-session-${userId}`
+    const userInfo = localStorage.getItem('rise-user-info')
+    if (userInfo) {
+      const info = JSON.parse(userInfo)
+      if (info.id) return `rise-morning-session-${info.id}`
     }
   } catch { /* ignore */ }
   return 'rise-morning-session-default'

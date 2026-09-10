@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { getToday } from '@/lib/rise-utils'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +24,7 @@ const JournalCreateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const today = getToday()
@@ -37,16 +37,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ journal: journal || null, recentJournals })
   } catch (error) {
     console.error('Journal GET error:', error)
-    return NextResponse.json({ journal: null, recentJournals: [] })
+    return NextResponse.json({ error: 'تعذر تحميل اليوميات' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json()
     const parsed = JournalCreateSchema.safeParse(body)
     if (!parsed.success) {
@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
     const result = await data.journals.upsert(userId, journalDate, journalData)
     bustAggregateCache(userId)
     return NextResponse.json(result)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Journal POST error:', error)
     return NextResponse.json({ error: 'Failed to save journal' }, { status: 500 })
   }

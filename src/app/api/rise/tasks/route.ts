@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { getPaginationParams, paginatedResponse } from '@/lib/pagination'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,8 +65,7 @@ const TaskUpdateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const [allTasks, projects] = await Promise.all([
@@ -96,16 +96,16 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     return response
   } catch (error) {
     console.error('Tasks GET error:', error)
-    return NextResponse.json({ tasks: [], projects: [] })
+    return NextResponse.json({ error: 'تعذر تحميل المهام' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -127,7 +127,8 @@ export async function POST(req: NextRequest) {
     const task = await data.tasks.create(userId, cleanData)
     bustAggregateCache(userId)
     return NextResponse.json(task)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Tasks POST error:', error)
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 })
   }
@@ -135,10 +136,10 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -155,7 +156,8 @@ export async function PUT(req: NextRequest) {
     const task = await data.tasks.update(id, userId, updateData)
     bustAggregateCache(userId)
     return NextResponse.json(task)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Tasks PUT error:', error)
     return NextResponse.json({ error: 'Failed to update task' }, { status: 500 })
   }
@@ -163,10 +165,10 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
@@ -174,7 +176,8 @@ export async function DELETE(req: NextRequest) {
     await data.tasks.remove(id, userId)
     bustAggregateCache(userId)
     return NextResponse.json({ success: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Tasks DELETE error:', error)
     return NextResponse.json({ error: 'Failed to delete task' }, { status: 500 })
   }

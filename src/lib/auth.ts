@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAnon, isSupabaseConfigured, resolveUserId } from '@/lib/supabase'
+import { isMockAuthEnabled, verifyMockAccessToken } from '@/lib/mock-auth'
 
 // ============================================================
 // P1#4 FIX: Authentication enforcement
@@ -17,25 +18,20 @@ export class AuthError extends Error {
 export async function verifySupabaseToken(token: string): Promise<string | null> {
   if (!token) return null
 
-  // 🔒 CRITICAL FIX: تعطيل المحاكاة تماماً في الإنتاج
-  if (process.env.NODE_ENV === 'production') {
-    if (!isSupabaseConfigured()) {
-      console.error('[CRITICAL] Supabase environment variables missing in production!')
+  // 🔒 Mock authentication is strictly disabled in production.
+  if (!isSupabaseConfigured()) {
+    if (!isMockAuthEnabled()) {
+      console.error('[CRITICAL] Supabase environment variables missing in a non-local environment!')
       return null
     }
-  }
 
-  // Local mock mode: tokens are `local.{userId}.{ts}.risecos.local...`
-  if (!isSupabaseConfigured()) {
-    const match = token.match(/^local\.(.+?)\.\d+\.risecos\.local/)
-    if (match) {
-      try {
-        const { db } = await import('@/lib/db')
-        const user = await (db as any).user.findUnique({ where: { id: match[1] } })
-        return user?.id || null
-      } catch { return null }
-    }
-    return null
+    const verified = verifyMockAccessToken(token)
+    if (!verified) return null
+    try {
+      const { db } = await import('@/lib/db')
+      const user = await (db as any).user.findUnique({ where: { id: verified.userId } })
+      return user?.id || null
+    } catch { return null }
   }
 
   // Supabase mode: verify real JWT
@@ -83,11 +79,14 @@ export async function getUserId(req: NextRequest): Promise<string | null> {
 export async function requireAuth(req: NextRequest): Promise<string | null> {
   const userId = await getUserId(req)
   if (!userId) return null
-  // ADMIN PRO: حساب موقوف = ممنوع من كل مسارات الـ API (كاش 5 دقائق)
+  // SECURITY: suspended/unknown authorization state must fail closed.
   try {
     const { isUserSuspended } = await import('@/lib/suspension')
     if (await isUserSuspended(userId)) return null
-  } catch { /* fail open */ }
+  } catch (error) {
+    console.error('[auth] suspension authorization unavailable; denying request', error)
+    return null
+  }
   return userId
 }
 
@@ -104,8 +103,8 @@ export function withAuth<T = any>(
         )
       }
       const { setCurrentAuthToken } = await import('@/lib/data')
-      const token = req.headers.get('Authorization')?.replace('Bearer ', '') || ''
-      setCurrentAuthToken(token)
+      // Bind cookie auth for browser requests and Authorization for API-key clients.
+      setCurrentAuthToken(req)
 
       return await handler(req, userId)
     } catch (err) {

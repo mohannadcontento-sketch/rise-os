@@ -1,5 +1,8 @@
 'use client'
 
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
+
+
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -89,7 +92,7 @@ export default function WeeklyReview() {
   const [review, setReview] = useState<WeeklyReview>(() => {
     if (typeof window === 'undefined') return emptyReview()
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = getUserStorage(STORAGE_KEY)
       if (stored) {
         const parsed: WeeklyReview[] = JSON.parse(stored)
         const thisWeek = parsed.find((r) => {
@@ -104,7 +107,7 @@ export default function WeeklyReview() {
   const [allReviews, setAllReviews] = useState<WeeklyReview[]>(() => {
     if (typeof window === 'undefined') return []
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = getUserStorage(STORAGE_KEY)
       if (stored) return JSON.parse(stored) as WeeklyReview[]
     } catch { /* ignore */ }
     return []
@@ -131,7 +134,7 @@ export default function WeeklyReview() {
       ? allReviews.map((r) => (r.id === review.id ? review : r))
       : [review, ...allReviews]
     setAllReviews(updated)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    setUserStorage(STORAGE_KEY, JSON.stringify(updated))
     setShowConfetti(true)
     setTimeout(() => setShowConfetti(false), 2500)
     toast.success('تم حفظ المراجعة الأسبوعية')

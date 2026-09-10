@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,13 +11,12 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const [tasks, journals] = await Promise.all([
-      data.tasks.list(userId).catch(() => []),
-      data.journals.list(userId, 5).catch(() => []),
+      data.tasks.list(userId),
+      data.journals.list(userId, 5),
     ])
 
     // P2#2: Limit recent tasks to 5 (was loading all)
@@ -31,6 +30,6 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     })
   } catch (error) {
     console.error('Recent activity error:', error)
-    return NextResponse.json({ recentTasks: [], recentJournals: [] })
+    return NextResponse.json({ error: 'تعذر تحميل النشاط الأخير' }, { status: 500 })
   }
 }

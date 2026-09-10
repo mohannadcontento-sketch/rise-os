@@ -1,3 +1,4 @@
+
 'use client'
 
 /**
@@ -11,6 +12,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Repeat,
@@ -92,7 +94,7 @@ const RECENT_LIMIT = 6
 
 function loadRecent(): string[] {
   try {
-    const raw = localStorage.getItem(RECENT_KEY)
+    const raw = getUserStorage(RECENT_KEY)
     return raw ? (JSON.parse(raw) as string[]).slice(0, RECENT_LIMIT) : []
   } catch { return [] }
 }
@@ -101,7 +103,7 @@ function loadRecent(): string[] {
 
 function loadContributions(): KnowledgeEntry[] {
   try {
-    const raw = localStorage.getItem(CONTRIB_KEY)
+    const raw = getUserStorage(CONTRIB_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed.slice(0, 50) : []
@@ -109,7 +111,7 @@ function loadContributions(): KnowledgeEntry[] {
 }
 
 function saveContributions(list: KnowledgeEntry[]) {
-  try { localStorage.setItem(CONTRIB_KEY, JSON.stringify(list.slice(0, 50))) } catch { /* ignore */ }
+  try { setUserStorage(CONTRIB_KEY, JSON.stringify(list.slice(0, 50))) } catch { /* ignore */ }
 }
 
 /* ─────────────── الواجهة ─────────────── */
@@ -132,7 +134,7 @@ export default function AICoach() {
     if (!entry.id.startsWith('user-')) {
       setRecent((prev) => {
         const next = [entry.id, ...prev.filter((id) => id !== entry.id)].slice(0, RECENT_LIMIT)
-        try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+        try { setUserStorage(RECENT_KEY, JSON.stringify(next)) } catch { /* ignore */ }
         return next
       })
     }

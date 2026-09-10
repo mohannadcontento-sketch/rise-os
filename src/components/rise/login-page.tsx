@@ -8,10 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { apiPost } from '@/lib/api-fetch'
-import { supabaseClient, isSupabaseClientConfigured } from '@/lib/supabase-client'
 
 interface LoginPageProps {
-  onLogin: (data: { user: { id: string; email: string; isAdmin: boolean }; session: { access_token: string; refresh_token: string; expires_at: number } }) => void
+  onLogin: (data: { user: { id: string; email: string; isAdmin: boolean; name?: string; avatar?: string | null } }) => void
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
@@ -27,11 +26,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    // Client-side validation (mirrors server Zod messages) — the Supabase
-    // client path below bypasses /api/auth/*, whose Zod schema normally
-    // returns these, so without this check users get a misleading
-    // "wrong email or password" for validation failures.
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('بريد إلكتروني غير صالح')
       return
@@ -40,153 +34,42 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       setError('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
       return
     }
-
     setLoading(true)
-
     try {
-      // MODE 1: Supabase client (production)
-      // autoRefreshToken refreshes the JWT ~60s before expiry, preventing 401.
-      if (isSupabaseClientConfigured && supabaseClient) {
-        if (mode === 'login') {
-          const { data, error: sbError } = await supabaseClient.auth.signInWithPassword({
-            email, password,
-          })
-          if (sbError) {
-            if (sbError.message.includes('Email not confirmed')) {
-              setError('البريد الإلكتروني لم يتم تأكيده بعد. تحقق من صندوق البريد.')
-            } else {
-              setError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
-            }
-            setLoading(false)
-            return
-          }
-          if (data.session && data.user) {
-            // PERF FIX: was POST /api/auth/login — the server re-ran a FULL
-            // Supabase signInWithPassword round-trip just to set the httpOnly
-            // cookie. We already hold a valid session from the client-side
-            // sign-in above — /api/auth/sync-token sets the same cookies with
-            // ZERO extra Supabase calls.
-            try {
-              await fetch('/api/auth/sync-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  access_token: data.session.access_token,
-                  refresh_token: data.session.refresh_token,
-                  expires_at: data.session.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
-                }),
-                credentials: 'include',
-              })
-            } catch { /* non-fatal */ }
-            const userInfo = {
-              id: data.user.id,
-              email: data.user.email || email,
-              name: (data.user as any).user_metadata?.name || email.split('@')[0],
-              isAdmin: email === process.env.NEXT_PUBLIC_ADMIN_EMAIL,
-            }
-            const sessionData = {
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-              expires_at: data.session.expires_at || 0,
-            }
-            localStorage.setItem('rise-auth', JSON.stringify(sessionData))
-            localStorage.setItem('rise-user-info', JSON.stringify(userInfo))
-            onLogin({ user: userInfo, session: sessionData })
-          }
-        } else {
-          const { data, error: sbError } = await supabaseClient.auth.signUp({
-            email, password,
-            options: { data: { name: name || email.split('@')[0] } },
-          })
-          if (sbError) {
-            if (sbError.message.includes('already registered') || sbError.message.includes('already been registered')) {
-              setError('هذا البريد مسجل بالفعل. استخدم تسجيل الدخول.')
-            } else {
-              setError(`خطأ في التسجيل: ${sbError.message}`)
-            }
-            setLoading(false)
-            return
-          }
-          if (!data.session && data.user?.confirmed_at === null) {
-            setError('تم إرسال رابط تأكيد إلى بريدك الإلكتروني')
-            setLoading(false)
-            return
-          }
-          if (data.session && data.user) {
-            // PERF FIX: was POST /api/auth/signup — the user was ALREADY
-            // created by the client-side signUp above, so the server route
-            // always re-attempted signup and answered 409 (a wasted Supabase
-            // round-trip + a console error on every new account).
-            // /api/auth/sync-token sets the httpOnly cookies directly from
-            // the session we already have.
-            try {
-              await fetch('/api/auth/sync-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  access_token: data.session.access_token,
-                  refresh_token: data.session.refresh_token,
-                  expires_at: data.session.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
-                }),
-                credentials: 'include',
-              })
-            } catch { /* non-fatal */ }
-            const userInfo = {
-              id: data.user.id,
-              email: data.user.email || email,
-              name: name || (data.user as any).user_metadata?.name || email.split('@')[0],
-              isAdmin: email === process.env.NEXT_PUBLIC_ADMIN_EMAIL,
-            }
-            const sessionData = {
-              access_token: data.session.access_token,
-              refresh_token: data.session.refresh_token,
-              expires_at: data.session.expires_at || 0,
-            }
-            localStorage.setItem('rise-auth', JSON.stringify(sessionData))
-            localStorage.setItem('rise-user-info', JSON.stringify(userInfo))
-            onLogin({ user: userInfo, session: sessionData })
-          }
-        }
-        return
-      }
-
-      // MODE 2: Mock/dev (no Supabase env vars)
       const url = mode === 'login' ? '/api/auth/login' : '/api/auth/signup'
-      const body = mode === 'login'
-        ? { email, password }
-        : { email, password, name }
-
+      const body = mode === 'login' ? { email, password } : { email, password, name }
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         credentials: 'include',
+        cache: 'no-store',
       })
-
-      const data = await res.json()
-
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data.error || 'حدث خطأ')
-        setLoading(false)
+        if (data.errorType === 'email_not_confirmed') {
+          setError(data.error || 'البريد الإلكتروني لم يتم تأكيده بعد. تحقق من صندوق البريد.')
+        } else {
+          setError(data.error || 'حدث خطأ')
+        }
         return
       }
-
       if (data.needsConfirmation) {
         setError('تم إرسال رابط تأكيد إلى بريدك الإلكتروني')
-        setLoading(false)
         return
       }
-
-      if (data.errorType === 'email_not_confirmed') {
-        setError(data.error)
-        setLoading(false)
-        return
-      }
-
-      if (data.session) {
-        localStorage.setItem('rise-auth', JSON.stringify(data.session))
-        localStorage.setItem('rise-user-info', JSON.stringify(data.user))
-        onLogin({ user: data.user, session: data.session })
+      if (data.user) {
+        const userInfo = {
+          id: data.user.id,
+          email: data.user.email || email,
+          name: data.user.name || name || email.split('@')[0],
+          isAdmin: !!data.user.isAdmin,
+          avatar: data.user.avatar ?? null,
+        }
+        localStorage.setItem('rise-user-info', JSON.stringify(userInfo))
+        onLogin({ user: userInfo })
+      } else {
+        setError('تعذر إنشاء جلسة صالحة')
       }
     } catch {
       setError('تعذر الاتصال بالخادم')

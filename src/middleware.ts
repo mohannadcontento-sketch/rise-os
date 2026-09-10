@@ -77,6 +77,13 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/auth/login': { limit: 5, window: '1 m' },
   '/api/auth/signup': { limit: 3, window: '1 m' },
   '/api/auth/refresh': { limit: 10, window: '1 m' },
+  '/api/error-log': { limit: 30, window: '1 m' },
+  '/api/rise/export': { limit: 5, window: '1 m' },
+  '/api/rise/delete-all': { limit: 2, window: '1 m' },
+  '/api/rise/mcp/key': { limit: 5, window: '1 m' },
+  '/api/rise/mcp/call': { limit: 60, window: '1 m' },
+  '/api/rise/notifications/send': { limit: 20, window: '1 m' },
+  '/api/rise/admin/query': { limit: 10, window: '1 m' },
   // FIX: Increased from 100 to 300/min for /api/rise — the dashboard is
   // fetched by multiple components (sidebar 30s poll, dashboard on mount,
   // analytics, settings) plus useDataRefresh re-fetches. 100/min was too
@@ -100,25 +107,27 @@ function matchRateLimit(pathname: string): RateLimitConfig | null {
   return null
 }
 
-function setSecurityHeaders(res: NextResponse): NextResponse {
+function setSecurityHeaders(res: NextResponse, nonce: string): NextResponse {
   if (process.env.NODE_ENV === 'production') {
     res.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   }
 
-  res.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'", // Removed 'unsafe-eval' for better security
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https: blob:",
-      "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn wss://*.supabase.co https://*.upstash.io",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ')
-  )
+  const isDev = process.env.NODE_ENV === 'development'
+  const csp = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn wss://*.supabase.co https://*.upstash.io",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
+  ].join('; ')
+
+  res.headers.set('Content-Security-Policy', csp)
 
   res.headers.set('X-Content-Type-Options', 'nosniff')
   res.headers.set('X-Frame-Options', 'DENY')
@@ -130,6 +139,30 @@ function setSecurityHeaders(res: NextResponse): NextResponse {
 }
 
 // FIX: Add no-cache headers for API responses
+function isStateChangingMethod(method: string): boolean {
+  return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE'
+}
+
+function isSameOriginOrAllowed(req: NextRequest): boolean {
+  const origin = req.headers.get('origin')
+  // Non-browser/API clients may omit Origin. Bearer-authenticated clients are
+  // still protected by endpoint authentication; browser cookie requests carry Origin.
+  if (!origin) return true
+  try {
+    const originUrl = new URL(origin)
+    const allowed = new Set<string>([
+      req.nextUrl.origin,
+      ...(process.env.ALLOWED_ORIGINS || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean),
+    ])
+    return allowed.has(originUrl.origin)
+  } catch {
+    return false
+  }
+}
+
 function addNoCacheHeaders(res: NextResponse, pathname: string): NextResponse {
   if (pathname.startsWith('/api/')) {
     res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -141,6 +174,54 @@ function addNoCacheHeaders(res: NextResponse, pathname: string): NextResponse {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+  const nonce = btoa(globalThis.crypto.randomUUID())
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('Content-Security-Policy', [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn wss://*.supabase.co https://*.upstash.io",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
+  ].join('; '))
+
+  const withNonceRequest = (response: NextResponse) => {
+    response.headers.set('x-nonce', nonce)
+    return response
+  }
+
+  // CSRF defense for cookie-authenticated browser mutations.
+  // API clients without Origin are still handled by endpoint auth / API keys.
+  // Every RiseOS data/admin mutation must carry a client-generated stable idempotency key.
+  // api-fetch.ts supplies it automatically, and the server-side store prevents replay/double-submit.
+  if (pathname.startsWith('/api/rise') && isStateChangingMethod(req.method) && pathname !== '/api/rise/mcp/call') {
+    const idempotencyKey = req.headers.get('Idempotency-Key')?.trim() || ''
+    if (!idempotencyKey) {
+      return setSecurityHeaders(
+        withNonceRequest(NextResponse.json(
+          { error: 'Idempotency-Key is required for state-changing requests', code: 'IDEMPOTENCY_KEY_REQUIRED' },
+          { status: 428 },
+        )),
+        nonce,
+      )
+    }
+  }
+
+  if (pathname.startsWith('/api/') && isStateChangingMethod(req.method) && !isSameOriginOrAllowed(req)) {
+    return setSecurityHeaders(
+      withNonceRequest(NextResponse.json(
+        { error: 'طلب غير موثوق المصدر', code: 'CSRF_BLOCKED' },
+        { status: 403 }
+      )),
+      nonce,
+    )
+  }
 
   const rateConfig = matchRateLimit(pathname)
   if (rateConfig) {
@@ -156,7 +237,7 @@ export async function middleware(req: NextRequest) {
         if (!success) {
           const retryAfter = Math.ceil((reset - Date.now()) / 1000)
           return setSecurityHeaders(
-            NextResponse.json(
+            withNonceRequest(NextResponse.json(
               { error: 'تجاوزت الحد المسموح من الطلبات. حاول لاحقاً.', code: 'RATE_LIMITED' },
               {
                 status: 429,
@@ -167,7 +248,8 @@ export async function middleware(req: NextRequest) {
                   'X-RateLimit-Reset': String(reset),
                 },
               }
-            )
+            )),
+            nonce,
           )
         }
       }
@@ -177,7 +259,7 @@ export async function middleware(req: NextRequest) {
       if (!success) {
         const retryAfter = Math.ceil((reset - Date.now()) / 1000)
         return setSecurityHeaders(
-          NextResponse.json(
+          withNonceRequest(NextResponse.json(
             { error: 'تجاوزت الحد المسموح من الطلبات. حاول لاحقاً.', code: 'RATE_LIMITED' },
             {
               status: 429,
@@ -187,15 +269,17 @@ export async function middleware(req: NextRequest) {
                 'X-RateLimit-Remaining': String(remaining),
                 'X-RateLimit-Reset': String(reset),
               },
-            }
-          )
+            })
+          ),
+          nonce,
         )
       }
     }
   }
 
-  const res = NextResponse.next()
-  setSecurityHeaders(res)
+  const res = NextResponse.next({ request: { headers: requestHeaders } })
+  setSecurityHeaders(res, nonce)
+  res.headers.set('x-nonce', nonce)
   addNoCacheHeaders(res, pathname)
   return res
 }

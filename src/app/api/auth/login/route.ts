@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, ADMIN_EMAIL, isAdminRole } from '@/lib/supabase'
+import { createSupabaseIsolatedClient, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
 import { setAuthCookies } from '@/lib/cookie-auth'
+import { isMockAuthEnabled } from '@/lib/mock-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
 
     // ── Local Mock Mode (development without Supabase) ──
     if (!isSupabaseConfigured()) {
+      if (!isMockAuthEnabled()) {
+        return NextResponse.json({ error: 'المصادقة غير مُهيأة على الخادم' }, { status: 503 })
+      }
       const { createMockClient } = await import('@/lib/mock-client')
       const mock = createMockClient()
       const { data: mockData, error: mockError } = await mock.auth.signInWithPassword({ email, password })
@@ -47,14 +51,7 @@ export async function POST(request: NextRequest) {
         isAdmin: false,
         avatar: null,
       }
-      const res = NextResponse.json({
-        user: userInfo,
-        session: {
-          access_token: mockData.session.access_token,
-          refresh_token: mockData.session.refresh_token,
-          expires_at: mockData.session.expires_at,
-        },
-      })
+      const res = NextResponse.json({ user: userInfo })
       const { setAuthCookies } = await import('@/lib/cookie-auth')
       return setAuthCookies(res, {
         access_token: mockData.session.access_token,
@@ -65,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // ── Supabase Auth Flow (production) ──
 
-    const supabase = await getSupabaseAnon()
+    const supabase = await createSupabaseIsolatedClient()
     if (!supabase) {
       return NextResponse.json(
         { error: 'خدمة المصادقة غير متوفرة حالياً. يرجى المحاولة لاحقاً.' },
@@ -97,24 +94,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'فشل تسجيل الدخول' }, { status: 401 })
     }
 
-    // Check admin role and avatar from Supabase profiles table
-    let isAdmin = email === ADMIN_EMAIL
+    // Check admin role, avatar, AND suspension from the server-side profile.
+    // A failure to verify account state must fail closed in production.
+    let isAdmin = false
     let avatar: string | null = null
     let suspended = false
     try {
       const admin = await getSupabaseAdmin()
-      if (admin) {
-        const { data: profile } = await admin
-          .from('profiles')
-          .select('role, avatar')
-          .eq('id', user.id)
-          .single()
-        const p = profile as { role?: string; avatar?: string; suspended?: boolean } | null
-        if (isAdminRole(p?.role)) isAdmin = true
-        avatar = p?.avatar || null
-        suspended = p?.suspended === true
-      }
-    } catch { /* ignore */ }
+      if (!admin) throw new Error('profile verification unavailable')
+      const { data: profile, error: profileError } = await admin
+        .from('profiles')
+        .select('role, avatar, suspended')
+        .eq('id', user.id)
+        .single()
+      if (profileError) throw profileError
+      const p = profile as { role?: string; avatar?: string; suspended?: boolean } | null
+      if (isAdminRole(p?.role)) isAdmin = true
+      avatar = p?.avatar || null
+      suspended = p?.suspended === true
+    } catch (error) {
+      console.error('[auth/login] profile verification failed:', error)
+      return NextResponse.json(
+        { error: 'تعذر التحقق من حالة الحساب حالياً. حاول لاحقاً.' },
+        { status: 503 }
+      )
+    }
 
     // ADMIN PRO: حساب موقوف — منع الدخول برسالة واضحة (423 Locked)
     if (suspended) {
@@ -133,14 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     // P1#3: Set httpOnly cookies (not accessible to JS → XSS protection)
-    const res = NextResponse.json({
-      user: userInfo,
-      session: {
-        access_token: data.session!.access_token,
-        refresh_token: data.session!.refresh_token,
-        expires_at: data.session!.expires_at,
-      },
-    })
+    const res = NextResponse.json({ user: userInfo })
     return setAuthCookies(res, {
       access_token: data.session!.access_token,
       refresh_token: data.session!.refresh_token,

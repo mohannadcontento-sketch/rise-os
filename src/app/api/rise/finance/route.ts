@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,24 +20,23 @@ const FinanceCreateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const records = await data.financeRecords.list(userId)
     return NextResponse.json({ records })
   } catch (error) {
     console.error('Finance GET error:', error)
-    return NextResponse.json({ records: [], summary: { income: 0, expense: 0, balance: 0 } })
+    return NextResponse.json({ error: 'تعذر تحميل السجل المالي' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
     const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
     const record = await data.financeRecords.create(userId, parsed.data)
     return NextResponse.json(record)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Finance POST error:', error)
     return NextResponse.json({ error: 'Failed to create finance record' }, { status: 500 })
   }
@@ -61,17 +62,18 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'No id' }, { status: 400 })
 
     await data.financeRecords.remove(id, userId)
     return NextResponse.json({ success: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Finance DELETE error:', error)
     return NextResponse.json({ error: 'Failed to delete finance record' }, { status: 500 })
   }

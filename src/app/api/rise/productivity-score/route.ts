@@ -1,38 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { getTodayCairo, isoToCairoDate, taskCompletedDay, computeStreakFromActivity } from '@/lib/rise-utils'
-import { getSupabaseAdmin } from '@/lib/supabase'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 import { computeDailyScore, habitDueOn } from '@/lib/daily-score'
 
 export const dynamic = 'force-dynamic'
 
 async function getUserStreak(userId: string): Promise<number> {
-  // Try Supabase admin first
-  const supabase = await getSupabaseAdmin()
-  if (supabase) {
-    // FIX: chaining .catch() on the query builder crashed in the production
-    // build ("catch is not a function"). Await + try/catch is equivalent
-    // and safe.
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('streak')
-        .eq('id', userId)
-        .single()
-      return (profile as { streak?: number } | null)?.streak || 0
-    } catch {
-      return 0
-    }
-  }
-  // Mock mode: fetch from Prisma
-  try {
-    const { db } = await import('@/lib/db')
-    const user = await (db as any).user.findUnique({ where: { id: userId }, select: { streak: true } })
-    return user?.streak || 0
-  } catch { return 0 }
+  const profile = await data.profiles.get(userId)
+  return Number(profile?.streak || 0)
 }
+
 
 // PERF: fetch each dataset exactly once for ALL requested dates, then score
 // locally. The previous shape re-queried tasks/habits/focus (+streak) per date
@@ -132,8 +111,7 @@ async function computeScores(userId: string, dates: string[]) {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)

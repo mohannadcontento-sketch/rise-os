@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +24,7 @@ const NotificationUpdateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
@@ -49,16 +49,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ notifications: filtered, unreadCount })
   } catch (error) {
     console.error('Notifications GET error:', error)
-    return NextResponse.json({ notifications: [], unreadCount: 0 })
+    return NextResponse.json({ error: 'تعذر تحميل الإشعارات' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -77,7 +77,8 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true, notification })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Notifications POST error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -85,10 +86,10 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -101,12 +102,11 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    for (const id of parsed.data.ids) {
-      await data.notifications.update(id, userId, { read: true })
-    }
+    const updated = await data.notifications.updateMany(parsed.data.ids, userId, { read: true })
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
+    return NextResponse.json({ success: true, updated })
+  
+  })} catch (error) {
     console.error('Notifications PUT error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -114,10 +114,10 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     // Batch delete: ?id=<uuid> (single) | ?ids=a,b,c | ?all=true
     const { searchParams } = new URL(req.url)
     const all = searchParams.get('all') === 'true'
@@ -125,19 +125,14 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id')
 
     if (all) {
-      const notifications = await data.notifications.list(userId)
-      for (const n of notifications) {
-        await data.notifications.remove(n.id, userId)
-      }
-      return NextResponse.json({ success: true, deleted: notifications.length })
+      const deleted = await data.notifications.removeAll(userId)
+      return NextResponse.json({ success: true, deleted })
     }
 
     if (idsParam) {
       const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 100)
-      for (const nid of ids) {
-        await data.notifications.remove(nid, userId)
-      }
-      return NextResponse.json({ success: true, deleted: ids.length })
+      const deleted = await data.notifications.removeMany(ids, userId)
+      return NextResponse.json({ success: true, deleted })
     }
 
     if (!id) {
@@ -146,7 +141,8 @@ export async function DELETE(req: NextRequest) {
 
     await data.notifications.remove(id, userId)
     return NextResponse.json({ success: true })
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Notifications DELETE error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

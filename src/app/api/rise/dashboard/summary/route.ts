@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 import { taskCompletedDay, getTodayCairo, calculateXpForLevel } from '@/lib/rise-utils'
 
@@ -11,22 +11,9 @@ async function computeSummary(userId: string, date: string) {
   // (was a second sequential round trip), so worst-case latency is one
   // Supabase hop instead of two.
   const [tasks, habits, userProfile] = await Promise.all([
-    data.tasks.list(userId).catch(() => []),
-    data.habits.list(userId).catch(() => []),
-    (async () => {
-      try {
-        const { getDefaultUser, getSupabaseAdmin } = await import('@/lib/supabase')
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-          return await getDefaultUser()
-        }
-        const admin = await getSupabaseAdmin()
-        if (admin) {
-          const { data: profile } = await admin.from('profiles').select('*').eq('id', userId).single()
-          return profile
-        }
-      } catch { /* ignore */ }
-      return null
-    })(),
+    data.tasks.list(userId),
+    data.habits.list(userId),
+    data.profiles.get(userId),
   ])
 
   // DAY-SCOPED + Cairo-local (client sends ?date=) — matches the main
@@ -73,8 +60,7 @@ async function computeSummary(userId: string, date: string) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) {
       return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
     }

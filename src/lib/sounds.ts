@@ -1,3 +1,4 @@
+import { getUserStorage } from '@/lib/user-storage'
 /**
  * RiseOS Sound Effects System
  * All sounds generated programmatically using Web Audio API — no external files.
@@ -71,7 +72,7 @@ interface SoundSettings {
 
 function readSettings(): SoundSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = getUserStorage(STORAGE_KEY)
     if (raw) {
       const data = JSON.parse(raw)
       return {

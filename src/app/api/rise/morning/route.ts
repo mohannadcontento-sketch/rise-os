@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { getTodayCairo, getLast30Days } from '@/lib/rise-utils'
 import { pickAllowed } from '@/lib/sanitize'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     // TZ FIX: the client's Cairo-local date is authoritative when present —
@@ -28,16 +28,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ logs, todayLog })
   } catch (error) {
     console.error('Morning GET error:', error)
-    return NextResponse.json({ logs: [], todayLog: null })
+    return NextResponse.json({ error: 'تعذر تحميل السجل الصباحي' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     let body: any
     try {
       body = await req.json()
@@ -64,7 +64,8 @@ export async function POST(req: NextRequest) {
     bustAggregateCache(userId)
 
     return NextResponse.json(result)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Morning POST error:', error)
     return NextResponse.json({ error: 'Failed to save morning log' }, { status: 500 })
   }

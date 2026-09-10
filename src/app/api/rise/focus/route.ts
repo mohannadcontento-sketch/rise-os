@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAuth } from '@/lib/auth'
-import { data, setCurrentAuthToken } from '@/lib/data'
+import { requireUser } from '@/lib/api-auth'
+import { data } from '@/lib/data'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
+import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,8 +33,7 @@ const FocusUpdateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const sessions = await data.focusSessions.list(userId, 50)
@@ -41,16 +41,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ sessions })
   } catch (error) {
     console.error('Focus GET error:', error)
-    return NextResponse.json({ sessions: [], todayMin: 0, totalMin: 0 })
+    return NextResponse.json({ error: 'تعذر تحميل جلسات التركيز' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
     })
     bustAggregateCache(userId)
     return NextResponse.json(session)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Focus POST error:', error)
     return NextResponse.json({ error: 'Failed to create focus session' }, { status: 500 })
   }
@@ -77,10 +78,10 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await requireAuth(req)
-    setCurrentAuthToken(req)
+    const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
+  return withIdempotency(req, userId, async () => {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'جسم غير صالح' }, { status: 400 })
 
@@ -97,7 +98,8 @@ export async function PUT(req: NextRequest) {
     const session = await data.focusSessions.update(id, userId, updateData)
     bustAggregateCache(userId)
     return NextResponse.json(session)
-  } catch (error) {
+  
+  })} catch (error) {
     console.error('Focus PUT error:', error)
     return NextResponse.json({ error: 'Failed to update focus session' }, { status: 500 })
   }

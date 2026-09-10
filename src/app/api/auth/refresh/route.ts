@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ADMIN_EMAIL, getSupabaseAnon, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
+import { createSupabaseIsolatedClient, getSupabaseAdmin, isSupabaseConfigured, isAdminRole } from '@/lib/supabase'
+import { isMockAuthEnabled, verifyMockRefreshToken, createMockAccessToken, createMockRefreshToken } from '@/lib/mock-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,24 +20,29 @@ async function doRefresh(
   refreshToken: string
 ): Promise<{ ok: boolean; session?: any; user?: any }> {
   if (isSupabaseConfigured() && refreshToken.length > 20) {
-    const supabase = await getSupabaseAnon()
+    const supabase = await createSupabaseIsolatedClient()
     if (supabase) {
       try {
         const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
         if (!error && data.session && data.user) {
-          let isAdmin = data.user.email === ADMIN_EMAIL
+          let isAdmin = false
           try {
             const admin = await getSupabaseAdmin()
             if (admin) {
-              const { data: profile } = await admin
+              const { data: profile, error: profileError } = await admin
                 .from('profiles')
-                .select('role')
+                .select('role, avatar, suspended')
                 .eq('id', data.user.id)
                 .single()
-              const p = profile as { role?: string } | null
+              if (profileError) throw profileError
+              const p = profile as { role?: string; suspended?: boolean } | null
               if (isAdminRole(p?.role)) isAdmin = true
+              if (p?.suspended === true) return { ok: false }
             }
-          } catch { /* ignore */ }
+          } catch (error) {
+            console.error('[auth/refresh] profile verification failed:', error)
+            return { ok: false }
+          }
           return {
             ok: true,
             session: {
@@ -61,43 +67,34 @@ async function doRefresh(
   }
 
   // Local Fallback (mock mode)
-  let userId: string | null = null
-  const mockMatch = refreshToken.match(/^local\.refresh\.(.+?)\.\d+\.risecos\.local/)
-  if (mockMatch) {
-    userId = mockMatch[1]
-  } else {
-    userId = refreshToken
-  }
-  const user = await db.user.findUnique({ where: { id: userId! } })
+  if (!isMockAuthEnabled()) return { ok: false }
+
+  const verified = verifyMockRefreshToken(refreshToken)
+  if (!verified) return { ok: false }
+
+  const user = await db.user.findUnique({ where: { id: verified.userId }, select: { id: true, email: true, name: true, role: true } })
   if (!user) return { ok: false }
-  const ts = Date.now()
+
+  const { token: accessToken, expiresAt } = createMockAccessToken(user.id)
   return {
     ok: true,
     session: {
-      access_token: `local.${user.id}.${ts}.risecos.local.auth.token.payload.sig`,
-      refresh_token: `local.refresh.${user.id}.${ts}.risecos.local`,
-      expires_at: Math.floor(ts / 1000) + 7 * 24 * 3600,
+      access_token: accessToken,
+      refresh_token: createMockRefreshToken(user.id),
+      expires_at: expiresAt,
     },
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
-      isAdmin: user.email === ADMIN_EMAIL,
+      isAdmin: isAdminRole(user.role),
     },
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    let refresh_token: string | undefined = request.cookies.get('rise-refresh')?.value
-    if (!refresh_token) {
-      try {
-        const body = await request.json()
-        if (body?.refresh_token && typeof body.refresh_token === 'string' && body.refresh_token.length > 0) {
-          refresh_token = body.refresh_token
-        }
-      } catch { /* no body */ }
-    }
+    const refresh_token = request.cookies.get('rise-refresh')?.value
     if (!refresh_token) {
       return NextResponse.json({ error: 'انتهت صلاحية الجلسة' }, { status: 401 })
     }
@@ -117,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { setAuthCookies } = await import('@/lib/cookie-auth')
-    const res = NextResponse.json({ session: result.session, user: result.user })
+    const res = NextResponse.json({ user: result.user })
     return setAuthCookies(res, result.session, result.user)
   } catch (error) {
     console.error('[auth/refresh] error:', error)

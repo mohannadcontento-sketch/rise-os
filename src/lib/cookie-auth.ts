@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const ACCESS_COOKIE = 'rise-access'
 const REFRESH_COOKIE = 'rise-refresh'
-const USER_COOKIE = 'rise-user'
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -51,14 +50,8 @@ export function setAuthCookies(
     maxAge: 60 * 60 * 24 * 7, // 7 days
   })
 
-  // User info: readable by JS (for UI), NOT httpOnly
-  res.cookies.set(USER_COOKIE, JSON.stringify(user), {
-    httpOnly: false,
-    secure: isProduction,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  })
+  // User metadata is returned in the JSON response and stored client-side
+  // only as non-authoritative UI state. No readable auth/user cookie is needed.
 
   return res
 }
@@ -67,7 +60,6 @@ export function setAuthCookies(
 export function clearAuthCookies(res: NextResponse): NextResponse {
   res.cookies.delete(ACCESS_COOKIE)
   res.cookies.delete(REFRESH_COOKIE)
-  res.cookies.delete(USER_COOKIE)
   return res
 }
 
@@ -88,17 +80,6 @@ export function getAccessToken(req: NextRequest): string | null {
 /** Read refresh token from request cookies. */
 export function getRefreshToken(req: NextRequest): string | null {
   return req.cookies.get(REFRESH_COOKIE)?.value || null
-}
-
-/** Read user info from cookie (client-readable). */
-export function getUserFromCookie(req: NextRequest): UserInfo | null {
-  const raw = req.cookies.get(USER_COOKIE)?.value
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as UserInfo
-  } catch {
-    return null
-  }
 }
 
 /** Build Authorization header value from cookie for internal API calls. */

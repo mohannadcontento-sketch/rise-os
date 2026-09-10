@@ -38,7 +38,35 @@ export function QueryProvider({ children }: { children: ReactNode }) {
 
   // P2#11: Setup offline persistence after mount
   useEffect(() => {
-    setupOfflinePersistence(queryClient)
+    let unsubscribe: (() => void) | undefined
+    let timer: number | undefined
+    let cancelled = false
+
+    const start = () => {
+      if (cancelled || unsubscribe) return
+      const result = setupOfflinePersistence(queryClient)
+      if (typeof result === 'function') unsubscribe = result
+    }
+
+    // Auth/user metadata is established shortly after mount. Bind the
+    // persistence store to that user's ID as soon as it becomes available.
+    start()
+    timer = window.setTimeout(start, 750)
+
+    const onAuthenticated = () => start()
+    const onLogout = () => {
+      queryClient.clear()
+    }
+    window.addEventListener('rise:user-authenticated', onAuthenticated)
+    window.addEventListener('rise:logout', onLogout)
+
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+      if (unsubscribe) unsubscribe()
+      window.removeEventListener('rise:user-authenticated', onAuthenticated)
+      window.removeEventListener('rise:logout', onLogout)
+    }
   }, [queryClient])
 
   return (

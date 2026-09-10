@@ -1,5 +1,9 @@
 'use client'
 
+import { getUserStorage, setUserStorage, clearUserStorage } from '@/lib/user-storage'
+import { clearSecureUserData } from '@/lib/secure-offline-db'
+
+
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
@@ -183,7 +187,7 @@ export default function Settings() {
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [selectedAvatar, setSelectedAvatar] = useState<string>(() => {
     if (typeof window === 'undefined') return ''
-    return localStorage.getItem('rise-user-avatar') || ''
+    return getUserStorage('rise-user-avatar') || ''
   })
 
   // FIX: Load avatar from server (survives cookie/cache clearing)
@@ -193,7 +197,7 @@ export default function Settings() {
       .then(data => {
         if (data?.user?.avatar) {
           setSelectedAvatar(data.user.avatar)
-          localStorage.setItem('rise-user-avatar', data.user.avatar)
+          setUserStorage('rise-user-avatar', data.user.avatar)
         }
       })
       .catch(() => {})
@@ -204,7 +208,7 @@ export default function Settings() {
   const [settings, setSettings] = useState<SettingsData>(() => {
     if (typeof window === 'undefined') return defaultSettings
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = getUserStorage(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored)
         return {
@@ -252,8 +256,8 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-    localStorage.setItem(NAME_KEY, settings.userName)
+    setUserStorage(STORAGE_KEY, JSON.stringify(settings))
+    setUserStorage(NAME_KEY, settings.userName)
   }, [settings])
 
   const updateNotification = (key: string, value: boolean) => {
@@ -278,7 +282,7 @@ export default function Settings() {
 
   const handleSelectAvatar = async (avatar: AvatarItem) => {
     setSelectedAvatar(avatar.id)
-    localStorage.setItem('rise-user-avatar', avatar.id)
+    setUserStorage('rise-user-avatar', avatar.id)
     window.dispatchEvent(new CustomEvent('rise:avatar-changed'))
     setAvatarPickerOpen(false)
     toast.success(`تم اختيار ${avatar.name}`)
@@ -316,7 +320,7 @@ export default function Settings() {
       try {
         const data = JSON.parse(ev.target?.result as string)
         Object.entries(data).forEach(([key, value]) => {
-          localStorage.setItem(key, JSON.stringify(value))
+          setUserStorage(key, JSON.stringify(value))
         })
         toast.success('تم استيراد البيانات بنجاح')
         const ls = getLocalStorageSize()
@@ -365,8 +369,16 @@ export default function Settings() {
         return
       }
 
-      const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('rise-') && k !== 'rise-auth' && k !== 'rise-user-info')
-      allKeys.forEach((key) => localStorage.removeItem(key))
+      const currentUserId = (() => { try { return JSON.parse(localStorage.getItem('rise-user-info') || '{}').id || '' } catch { return '' } })()
+      if (currentUserId) {
+        clearUserStorage(currentUserId)
+        void clearSecureUserData(currentUserId)
+      }
+      // Remove only legacy global application data. Never delete another
+      // user's encrypted queue/cache or migrate unknown ownership.
+      for (const key of ['rise-auth']) {
+        try { localStorage.removeItem(key) } catch { /* ignore */ }
+      }
       setSettings(defaultSettings)
       setResetDialogOpen(false)
       setConfirmText('')

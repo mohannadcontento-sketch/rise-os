@@ -1,9 +1,11 @@
+
 // RiseOS — Sync Manager
 // Handles bidirectional sync between IndexedDB (offline) and the server API.
 // Strategy: server-wins on conflict, periodic background sync when online.
 
 import { getOfflineDB, type StoreName } from './offline-db';
 import { apiFetch } from './api-fetch';
+import { getUserStorage, setUserStorage } from './user-storage';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -99,11 +101,10 @@ class SyncManager {
    */
   private static recordFailure(store: string, action: string, recordId: string, status: number): void {
     try {
-      const KEY = 'rise-sync-failures';
-      const raw = localStorage.getItem(KEY);
+      const raw = getUserStorage('sync-failures');
       const list: unknown[] = raw ? JSON.parse(raw) : [];
       list.push({ store, action, recordId, status, at: new Date().toISOString() });
-      localStorage.setItem(KEY, JSON.stringify(list.slice(-50)));
+      setUserStorage('sync-failures', JSON.stringify(list.slice(-50)));
     } catch { /* diagnostics are best-effort */ }
   }
 
