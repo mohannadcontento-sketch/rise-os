@@ -225,3 +225,25 @@ Work Log:
 Stage Summary:
 - Code live and healthy on reads+auth; writes blocked ONLY on SQL migration step
 - NEXT: owner runs SQL → re-run node scripts/smoke-27.js → expect 12/12
+
+---
+Task ID: 27-c (production incident: writes 500 + CSP inline-script block after pass5 deploy)
+Agent: Super Z (main)
+Task: Owner reported /api/rise/* 500s + CSP inline-script violation; user had already run ALL migrations 013-022
+
+Work Log:
+- CSP: theme-init inline script (next-themes) had NO nonce → blocked by strict-dynamic. FIX: RootLayout reads x-nonce from headers (set by middleware) and passes nonce to ThemeProvider (verified live: theme script now carries nonce)
+- Writes 500 with EMPTY body + middleware-only headers = uncaught crash signature. Built temp diag endpoints (v1-v10, additive only, ALL REMOVED now) and bisected live on prod:
+  * diag v1: request_idempotency table EXISTS + admin CRUD ok (owner's SQL ran correctly)
+  * diag v4: manual JWT client writes morning_logs OK + auth.getUser ok → token+RLS+table all fine individually
+  * diag v8 matrix: sb() JWT SELECT ok / sb() JWT WRITE crash / admin INSERT ok
+  * diag v9/v10 THE PROOF: getRequestAuthToken() = NONE inside route after await requireUser() → AsyncLocalStorage.enterWith() called AFTER an await (inside requireUser's resumed sub-context) does NOT propagate to the route's continuation. Data layer's sb() saw no token → built ANON client → RLS denied every write; reads silently returned empty rows. (Pre-singleton the same flaw hid behind caught RLS errors; the empty-500 = uncaught route error on Vercel.)
+- FIXES (code): (1) request-context.ts: share ONE ALS instance via globalThis (Turbopack duplicated the module across import graphs) (2) api-auth.ts requireUser + auth.ts withAuth + audit.ts requireAdmin: bind setCurrentAuthToken(req) SYNCHRONOUSLY BEFORE the first await (in-place context mutation survives all downstream awaits) (3) layout.tsx nonce→ThemeProvider
+- FOUND BUT NOT YET FIXED IN DB: create_task_with_subtasks / update_task_with_subtasks / create_goal_with_milestones (migrations 016/018) have uuid-cast bugs — COALESCE(...,gen_random_uuid()::text) inserts TEXT into uuid columns (42804) and `uuid = text` comparisons. These RPCs were never runtime-tested (audit container could not run the build) and the old code used plain INSERTs. Corrective SQL delivered: download/riseos-fix-composite-functions.sql (logic/signatures/grants unchanged, casts fixed)
+- Local repro rig built (scripts/mock-postgrest.js + local-diag route) — chain works locally, crash was prod-context-specific
+- PROD VERIFIED post-fix: POST morning 200 (persisted), POST books 200, smoke-27 11/12 — ONLY task-create pending the SQL fix
+- Removed all diag endpoints (diag-idem, local-diag, diag-token) after diagnosis
+
+Stage Summary:
+- ROOT CAUSES: (A) enterWith-after-await loses token context → all writes ran as anon (B) composite RPC functions have uuid-cast defects (C) next-themes script lacked CSP nonce
+- REMAINING OWNER ACTION: run download/riseos-fix-composite-functions.sql → then tasks create/update/goals fully work; everything else VERIFIED working
