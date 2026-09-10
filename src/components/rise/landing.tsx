@@ -403,7 +403,6 @@ const MODULE_AR: Record<string, string> = {
   "monthly-review": "المراجعة الشهرية",
   "weekly-review": "المراجعة الأسبوعية",
   notifications: "الإشعارات",
-  "ai-coach": "قاعدة المعارف",
   "admin-panel": "الإدارة",
   admin: "الإدارة",
   settings: "الإعدادات",
@@ -412,7 +411,7 @@ const MODULE_AR: Record<string, string> = {
 const MARQUEE_KEYS = [
   "morning", "planner", "tasks", "projects", "goals", "habits", "reading",
   "second-brain", "journal", "health", "deep-work", "work", "finance",
-  "calendar", "analytics", "weekly-review", "ai-coach", "learning",
+  "calendar", "analytics", "weekly-review", "learning",
 ];
 
 function ModulesMarquee() {

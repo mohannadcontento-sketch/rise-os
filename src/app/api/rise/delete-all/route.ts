@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/api-auth'
 import { createSupabaseIsolatedClient, createSupabaseUserClient } from '@/lib/supabase'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 import { withIdempotency } from '@/lib/idempotency'
+import { parseBody, deleteAllSchema } from '@/lib/validators'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,16 +17,9 @@ export async function DELETE(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
   return withIdempotency(req, userId, async () => {
-    const body = await req.json().catch(() => ({}))
-    const { email, password, confirmDelete } = body
-
-    // 1. Enforce strict validation
-    if (!confirmDelete || !email || !password) {
-      return NextResponse.json(
-        { error: 'مطلوب تأكيد الحذف مع البريد الإلكتروني وكلمة المرور' },
-        { status: 400 }
-      )
-    }
+    const parsed = await parseBody(req, deleteAllSchema)
+    if (!parsed.ok) return parsed.response!
+    const { email, password } = parsed.data!
 
     // 2. Re-verify credentials
     // Re-authenticate on an isolated, non-persistent Supabase client so a

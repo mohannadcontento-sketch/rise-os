@@ -46,7 +46,6 @@ export type RiseGlyph =
   | "calendar"
   | "analytics"
   | "review"
-  | "coach"
   | "settings"
   | "bolt"
   | "flame"
@@ -217,13 +216,6 @@ const glyphs: Record<RiseGlyph, React.ReactNode> = {
       <path d="M6 3h9l4 4v14H6a2.5 2.5 0 0 1-2.5-2.5v-13A2.5 2.5 0 0 1 6 3Z" transform="translate(1.5 0)" />
       <path d="M15.5 3v4.5H20" />
       <path d="m8.5 14.5 2 2 4-4" />
-    </g>
-  ),
-  /* chat sparkles (AI coach) */
-  coach: (
-    <g {...P}>
-      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H12l-4.5 4v-4h-1A2.5 2.5 0 0 1 4 14.5v-8Z" />
-      <path d="m9.3 10.5 1.5-3 1.5 3 3 1.5-3 1.5-1.5 3-1.5-3-3-1.5 3-1.5Z" transform="translate(2.2 -0.6) scale(.82)" />
     </g>
   ),
   settings: (
@@ -725,7 +717,6 @@ export const MODULE_ICONS: Record<string, { glyph: RiseGlyph; hue: RiseHue }> = 
   "monthly-review": { glyph: "review", hue: "cyan" },
   "weekly-review": { glyph: "review", hue: "blue" },
   notifications: { glyph: "bell", hue: "amber" },
-  "ai-coach": { glyph: "coach", hue: "violet" },
   "admin-panel": { glyph: "shield", hue: "rose" },
   admin: { glyph: "shield", hue: "rose" },
   settings: { glyph: "settings", hue: "forest" },

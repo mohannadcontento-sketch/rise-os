@@ -464,13 +464,6 @@ model UserStorage {
   @@index([userId])
 }
 
-// ==================== APP CONFIG ====================
-model AppConfig {
-  key       String   @id
-  value     String
-  updatedAt DateTime @updatedAt
-}
-
 // ==================== XP AWARD ====================
 model XpAward {
   id        String   @id @default(cuid())

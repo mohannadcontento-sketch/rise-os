@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { withIdempotency } from '@/lib/idempotency'
 import { AVATARS } from '@/lib/avatars'
+import { parseBody, avatarIdSchema } from '@/lib/validators'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,10 +13,9 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
   return withIdempotency(req, userId, async () => {
-    const { avatar } = await req.json()
-    if (!avatar || typeof avatar !== 'string') {
-      return NextResponse.json({ error: 'الصورة الرمزية مطلوبة' }, { status: 400 })
-    }
+    const parsed = await parseBody(req, avatarIdSchema)
+    if (!parsed.ok) return parsed.response!
+    const { avatar } = parsed.data!
     if (!AVATARS.some(item => item.id === avatar)) {
       return NextResponse.json({ error: 'الصورة الرمزية غير صالحة' }, { status: 400 })
     }

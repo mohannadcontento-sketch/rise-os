@@ -42,7 +42,6 @@
 - ⚡ **الإنتاجية**: مهام مع تبعيات، مشاريع، أهداف، تخطيط يومي
 - 📚 **التطوير الذاتي**: قراءة، تعلم، دماغ ثاني (Second Brain)
 - 📊 **التحليلات**: درجة إنتاجية يومية، رسوم بيانية، مراجعات أسبوعية وشهرية
-- 🤖 **الذكاء الاصطناعي**: مدرب ذكي بالعربية (ZhipuAI مع Fallback ذكي)
 - 🎮 **اللعب (Gamification)**: XP، مستويات، ١٥ شارة، سلاسل (Streaks)
 
 كل شيء في **مكان واحد**، بتصميم **premium** باللغة العربية مع دعم كامل لـ **RTL**.
@@ -51,10 +50,9 @@
 
 ## 🖼️ لقطات من التطبيق
 
-| لوحة التحكم | المهام (Kanban) | المدرب الذكي |
+| لوحة التحكم | المهام (Kanban) | لوحة الإدارة |
 |:---:|:---:|:---:|
-| درجة إنتاجية دائرية، رسوم بيانية أسبوعية، جدار تحفيز، تتبع الأهداف | أعمدة Kanban مع Drag & Drop، تبعيات المهام، فلترات متعددة | محادثة AI بالعربية، اقتراحات سريعة، أفاتار مداري متحرك |
-| | | |
+| درجة إنتاجية دائرية، رسوم بيانية أسبوعية، جدار تحفيز، تتبع الأهداف | أعمدة Kanban مع Drag & Drop، تبعيات المهام، فلترات متعددة | إدارة المستخدمين والحدود والصلاحيات |
 
 | العادات | العمل العميق | التقويم |
 |:---:|:---:|:---:|
@@ -78,7 +76,7 @@
 | # | الوحدة | الوصف |
 |---|--------|-------|
 | 7 | **تتبع العادات** | خريطة حرارية (Heatmap)، تذكيرات بالوقت، سلاسل، Toggle سريع، درجة إنجاز اليوم (A-D) |
-| 8 | **اليوميات** | مزاج يومي مع Sparkline، طاقة، تتبع السلسلة، تنسيق MDX، محرر متقدم |
+| 8 | **اليوميات** | مزاج يومي مع Sparkline، طاقة، تتبع السلسلة، محرر متقدم |
 | 9 | **العمل العميق** | مؤقت بومودورو، Focus Zone (وضع تركيز مُعتّم)، ربط الجلسات بالمهام، اقتباسات تحفيزية |
 | 10 | **القراءة** | كتب مع تقدم ونجوم، Tilt Cards ثلاثية الأبعاد، سلسلة القراءة، تصنيفات ملونة |
 | 11 | **التعلم** | شجرة المهارات (SVG)، Progress Rings، أهداف تعلم، رادار المهارات |
@@ -105,7 +103,6 @@
 ### 🤖 الذكاء
 | # | الوحدة | الوصف |
 |---|--------|-------|
-| 19 | **المدرب الذكي** | محادثة AI بالعربية، ٤ أسئلة مُثبّتة، AIAvatar بحلقات مدارية، اقتراحات ذكية، تتبع الاستخدام الشهري |
 
 ### ⚙️ النظام
 | # | الوحدة | الوصف |
@@ -133,15 +130,15 @@
 │  └────────────────────────┼──────────────────────────────┘  │
 │                           │ HTTP (JSON)                    │
 │  ┌────────────────────────┼──────────────────────────────┐  │
-│  │                API Routes (24)                        │  │
+│  │                API Routes (43)                        │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌────────────────────┐  │  │
-│  │  │  Auth x6 │  │ Rise x18 │  │ Admin x1           │  │  │
+│  │  │  Auth x7 │  │ Rise x24 │  │ Admin x10          │  │  │
 │  │  │ login    │  │ tasks    │  │ users CRUD         │  │  │
 │  │  │ signup   │  │ habits   │  │ limits editing     │  │  │
 │  │  │ session  │  │ goals    │  │                    │  │  │
 │  │  │ refresh  │  │ journal  │  └────────────────────┘  │  │
 │  │  │ resend   │  │ finance  │                          │  │
-│  │  └─────┬────┘  │ AI chat  │                          │  │
+│  │  └─────┬────┘  │ Rate     │                          │  │
 │  │        │       │ ...etc   │                          │  │
 │  │  ┌─────┴──────────────────┘                          │  │
 │  │  │      getSupabaseWithAuth(req)                     │  │
@@ -162,9 +159,9 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                    PWA Layer (Standalone Only)                │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐  │
-│  │ Service Worker│  │  IndexedDB   │  │ Bluetooth Share    │  │
-│  │ (Cache-First │  │ (Per-User    │  │ (Web Bluetooth +   │  │
-│  │  + Network)  │  │  Isolation)  │  │  Web Share Fallback)│  │
+│  │ Service Worker│  │  IndexedDB   │  │ Offline Persister  │  │
+│  │ (Cache-First │  │ (Per-User    │  │ (React Query +     │  │
+│  │  + Network)  │  │  Isolation)  │  │  Encrypted Local DB)│  │
 │  └──────────────┘  └──────────────┘  └────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -235,7 +232,6 @@
 | `/api/rise/planner` | GET, POST, PUT, DELETE — المخطط |
 | `/api/rise/productivity-score` | GET — درجة الإنتاجية |
 | `/api/rise/earn-xp` | POST — اكتساب خبرة |
-| `/api/rise/ai-chat` | POST — محادثة AI |
 | `/api/rise/export` | GET — تصدير كل البيانات JSON |
 | `/api/rise/seed` | POST — بيانات تجريبية |
 
@@ -268,9 +264,7 @@
 |--------|----------|
 | **Web App Manifest** | `manifest.json` مع أيقونات + shortcuts بالعربية |
 | **Service Worker** | `sw.js` — Cache-First للموارد الثابتة + Network-First للـ API |
-| **IndexedDB** | `offline-db.ts` — عزل كامل لكل مستخدم (`riseos-offline-{userId}`) |
-| **Sync Manager** | `sync-manager.ts` — مزامنة ثنائية الاتجاه عند العودة للإنترنت |
-| **Bluetooth Share** | مشاركة البيانات بين الأجهزة عبر Web Bluetooth API |
+| **IndexedDB مشفّر** | `secure-offline-db.ts` — تخزين أوفلاين مشفّر مع عزل كامل لكل مستخدم |
 | **Install Prompt** | عرض موجه تثبيت PWA تلقائياً للمتصفحات الداعمة |
 | **وضع مزدوج** | المتصفح = Supabase فقط / التطبيق المثبت = Supabase + IndexedDB |
 
@@ -312,7 +306,6 @@ Gold Light:   oklch(0.88 0.08 85)      — تمييز خفيف
 ### المتطلبات
 - Node.js 18+ أو Bun
 - حساب Supabase (مجاني)
-- مفتاح ZhipuAI API (اختياري — للمدرب الذكي)
 
 ### 1. استنساخ المشروع
 ```bash
@@ -337,7 +330,6 @@ cp .env.example .env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ADMIN_EMAIL=your-email@example.com
-# BIGMODEL_API_KEY=your-zhipuai-key  # اختياري
 ```
 
 ### 4. تشغيل التطوير
@@ -386,13 +378,12 @@ src/
 │   └── ui/                     # 40+ مكون shadcn/ui
 │
 ├── lib/
-│   ├── supabase.ts            # Supabase clients + ZhipuAI JWT
+│   ├── supabase.ts            # Supabase clients (user/admin/RLS)
 │   ├── api-fetch.ts           # مركزي fetch مع auth تلقائي
 │   ├── gamification.ts        # نظام XP/Level/شارات
 │   ├── pwa.tsx                # مكونات PWA
-│   ├── offline-db.ts          # IndexedDB wrapper
-│   ├── sync-manager.ts        # مزامنة أوفلاين
-│   └── bluetooth-share.ts     # مشاركة بلوتوث
+│   ├── secure-offline-db.ts   # IndexedDB مشفّر (أوفلاين)
+│   └── validators.ts          # تحقق مركزي من المدخلات الحساسة
 │
 ├── store/
 │   └── app-store.ts           # Zustand — حالة التطبيق
@@ -412,14 +403,14 @@ src/
 
 ### ✅ مكتمل
 - [x] 20 وحدة واجهة مستخدم كاملة ومحسّنة بتصميم premium
-- [x] 24 API route (6 مصادقة + 18 بيانات + 1 أدمن)
+- [x] 43 API route (7 مصادقة + 24 بيانات + 10 أدمن + 2 مساعدة)
 - [x] Full Supabase integration مع RLS لكل جدول
 - [x] نظام Gamification كامل (XP, المستويات, 15 شارة, سلاسل)
 - [x] مصادقة Supabase Auth مع تحقق من الجلسة
 - [x] لوحة تحكم أدمن (بحث، تعديل صلاحيات، حذف مع تأكيد)
 - [x] بحث شامل ⌘K (6 أنواع بيانات + كل الوحدات)
 - [x] اختصارات لوحة المفاتيح (Ctrl+1-0, Ctrl+N, Ctrl+D, Ctrl+/)
-- [x] PWA مع Service Worker و IndexedDB و Bluetooth
+- [x] PWA مع Service Worker و IndexedDB مشفّر (بدون Bluetooth — أُلغي)
 - [x] Drag & Drop لترتيب المهام
 - [x] تبعيات المهام + تذكيرات العادات
 - [x] نظام الميزانية الشهرية (8 فئات)

@@ -80,7 +80,6 @@ const SecondBrain = lazy(() => import('@/components/rise/second-brain').then(m =
 const WeeklyReview = lazy(() => import('@/components/rise/weekly-review').then(m => ({ default: m.default })))
 const MonthlyReview = lazy(() => import('@/components/rise/monthly-review').then(m => ({ default: m.default })))
 const Analytics = lazy(() => import('@/components/rise/analytics').then(m => ({ default: m.default })))
-const AICoach = lazy(() => import('@/components/rise/ai-coach').then(m => ({ default: m.default })))
 const AdminPanel = lazy(() => import('@/components/rise/admin-panel').then(m => ({ default: m.default })))
 const Settings = lazy(() => import('@/components/rise/settings').then(m => ({ default: m.default })))
 
@@ -104,7 +103,6 @@ const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.Compone
   'weekly-review': WeeklyReview,
   'monthly-review': MonthlyReview,
   'analytics': Analytics,
-  'ai-coach': AICoach,
   'admin-panel': AdminPanel,
   'settings': Settings,
 }
@@ -129,7 +127,6 @@ const moduleNames: Record<ModuleId, string> = {
   'weekly-review': 'مراجعة أسبوعية',
   'monthly-review': 'مراجعة شهرية',
   'analytics': 'التحليلات',
-  'ai-coach': 'قاعدة المعارف',
   'admin-panel': 'لوحة الإدارة',
   'settings': 'الإعدادات',
 }

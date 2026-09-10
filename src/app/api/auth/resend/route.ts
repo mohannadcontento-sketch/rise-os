@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseIsolatedClient, isSupabaseConfigured } from '@/lib/supabase'
+import { parseBody, resendSchema } from '@/lib/validators'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json()
-    if (!email) {
-      return NextResponse.json({ error: 'البريد مطلوب' }, { status: 400 })
-    }
+    const parsed = await parseBody(request, resendSchema)
+    if (!parsed.ok) return parsed.response!
+    const { email } = parsed.data!
 
     if (isSupabaseConfigured()) {
       const supabase = await createSupabaseIsolatedClient()

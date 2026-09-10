@@ -1,0 +1,101 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+
+/**
+ * التحقق المركزي من المدخلات الحساسة — المرحلة 01 (Audit وتنظيف المشروع)
+ * الهدف: مصدر واحد لمخططات zod للمدخلات الحساسة بدل فحوص يدوية مبعثرة.
+ * ملاحظة: بقية المسارات ذات الفحوص اليدوية المكتملة (sanitize.ts وغيره)
+ * تُهاجر تدريجيًا عند لمسها في مراحلها (المرحلة 04 تضيف entitlement checks).
+ */
+
+// ─── أنواع أساسية ───
+
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254, 'البريد الإلكتروني أطول من الحد المسموح')
+  .email('بريد إلكتروني غير صالح')
+
+export const passwordSchema = z
+  .string()
+  .min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+  .max(128, 'كلمة المرور أطول من الحد المسموح')
+
+export const uuidSchema = z.string().uuid('معرّف غير صالح')
+
+// ─── مخططات المسارات الحساسة ───
+
+/** POST /api/auth/resend */
+export const resendSchema = z.object({ email: emailSchema })
+
+/** DELETE /api/rise/delete-all — تدمير بيانات: أقصى صرامة */
+export const deleteAllSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  confirmDelete: z.literal(true, {
+    message: 'يجب تأكيد الحذف صراحةً',
+  }),
+})
+
+/** PUT /api/rise/admin/storage — حد التخزين بالبايت: من 1KB إلى 10GB */
+export const storageLimitSchema = z.object({
+  userId: uuidSchema,
+  storageLimit: z
+    .number()
+    .int('الحد يجب أن يكون عددًا صحيحًا')
+    .min(1024, 'الحد الأدنى 1KB')
+    .max(10 * 1024 * 1024 * 1024, 'الحد الأقصى 10GB'),
+})
+
+/** POST /api/rise/user/name */
+export const userNameSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'الاسم مطلوب')
+    .max(80, 'الاسم أطول من 80 حرفًا'),
+})
+
+/** POST /api/rise/user/avatar */
+export const avatarIdSchema = z.object({
+  avatar: z.string().min(1, 'الصورة الرمزية مطلوبة').max(64),
+})
+
+// ─── مساعد موحد لتحليل جسم الطلب ───
+
+export interface ParsedBody<T> {
+  ok: boolean
+  data?: T
+  response?: NextResponse
+}
+
+/**
+ * يقرأ جسم الطلب ويطبق مخطط zod.
+ * عند الفشل يرجع استجابة 400 جاهزة برسالة الخطأ الأولى (بنمط المسارات الحالية).
+ */
+export async function parseBody<T>(
+  req: NextRequest,
+  schema: z.ZodType<T>
+): Promise<ParsedBody<T>> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'جسم الطلب غير صالح' }, { status: 400 }),
+    }
+  }
+  const parsed = schema.safeParse(body)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: parsed.error.issues[0]?.message || 'بيانات غير صالحة' },
+        { status: 400 }
+      ),
+    }
+  }
+  return { ok: true, data: parsed.data }
+}

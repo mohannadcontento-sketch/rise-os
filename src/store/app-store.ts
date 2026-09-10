@@ -26,7 +26,6 @@ export type ModuleId =
   | 'weekly-review'
   | 'monthly-review'
   | 'analytics'
-  | 'ai-coach'
   | 'admin-panel'
   | 'settings'
 

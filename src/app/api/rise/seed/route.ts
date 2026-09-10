@@ -7,7 +7,14 @@ import { withIdempotency } from '@/lib/idempotency'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * POST /api/rise/seed — أداة تطوير فقط (dev/test).
+ * معزولة عن الإنتاج: تُرجع 404 في بيئة production.
+ */
 export async function POST(req: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'غير متاح' }, { status: 404 })
+  }
   try {
     const userId = await requireUser(req)
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })

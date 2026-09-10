@@ -6,10 +6,9 @@
  *  1. RainbowCheckbox — glow-spread checkbox (ref: instagram-glow checkbox)
  *  2. BellToggle       — bell regular ↔ solid morph (ref: bell checkbox)
  *  3. ComicButton      — bold bordered CTA with hard offset shadow (ref: comic button)
- *  4. PulseCard        — success notification card with pulsing circle (ref: order validated)
- *  5. ActivityRing     — conic-gradient progress ring (ref: smartwatch activity)
- *  6. HeartbeatChart   — rose gradient bars + average line (ref: heart-rate chart)
- *  7. BoltBadge        — lightning XP/energy accent (ref: yellow lightning card)
+ *  4. ActivityRing     — conic-gradient progress ring (ref: smartwatch activity)
+ *  5. HeartbeatChart   — rose gradient bars + average line (ref: heart-rate chart)
+ *  6. BoltBadge        — lightning XP/energy accent (ref: yellow lightning card)
  * Every color flows from the token layer → automatic day/night adaptation.
  */
 
@@ -194,69 +193,6 @@ export function ComicButton({
     >
       {children}
     </button>
-  );
-}
-
-/* ============================================================
-   4. PulseCard — success notification with pulsing circle
-   ============================================================ */
-
-export function PulseCard({
-  title,
-  message,
-  onClose,
-  actionLabel,
-  onAction,
-  className,
-}: {
-  title: string;
-  message?: string;
-  onClose?: () => void;
-  actionLabel?: string;
-  onAction?: () => void;
-  className?: string;
-}) {
-  return (
-    <div
-      role="status"
-      className={cn(
-        "neo-card relative overflow-hidden p-5 text-center",
-        className
-      )}
-    >
-      {onClose ? (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="إغلاق"
-          className="absolute end-3 top-3 grid h-7 w-7 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-destructive hover:bg-destructive hover:text-white"
-        >
-          <svg viewBox="0 0 20 20" width="14" height="14" fill="none">
-            <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        </button>
-      ) : null}
-      <div className="mx-auto grid h-12 w-12 place-items-center">
-        {/* pulsing halo + static disc */}
-        <span className="absolute h-12 w-12 animate-pulse-ring rounded-full bg-emerald-400/50" />
-        <span className="relative grid h-12 w-12 place-items-center rounded-full bg-emerald-500/15">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none">
-            <path d="M20 7 9.5 17.5 4 12.5" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
-      </div>
-      <p className="mt-3 text-base font-bold text-emerald-700 dark:text-emerald-300">{title}</p>
-      {message ? <p className="mt-1.5 text-sm text-muted-foreground">{message}</p> : null}
-      {actionLabel ? (
-        <button
-          type="button"
-          onClick={onAction}
-          className="mt-4 w-full rounded-lg bg-forest px-4 py-2.5 text-sm font-bold text-paper-soft transition-transform active:scale-[0.98] dark:bg-lime dark:text-ink"
-        >
-          {actionLabel}
-        </button>
-      ) : null}
-    </div>
   );
 }
 
@@ -448,30 +384,5 @@ export function BoltBadge({
       <span className="num">{value}</span>
       {label ? <span className="font-bold">{label}</span> : null}
     </span>
-  );
-}
-
-/* ============================================================
-   8. ThemeAwareLoader — orbiting dots (already in CSS) wrapped
-   ============================================================ */
-
-export function NeoLoader({ label = "جارٍ التحميل…", className }: { label?: string; className?: string }) {
-  const [dotCount] = useState(3);
-  return (
-    <div role="status" aria-live="polite" className={cn("grid place-items-center gap-3 py-8", className)}>
-      <div className="relative h-12 w-12">
-        <span className="absolute inset-0 rounded-full border-2 border-border" />
-        {Array.from({ length: dotCount }).map((_, i) => (
-          <span
-            key={i}
-            className="orbit-dot-outer absolute inset-0 grid place-items-start justify-center"
-            style={{ animationDelay: `${-0.6 * i}s` }}
-          >
-            <span className="h-2.5 w-2.5 rounded-full bg-lime-deep shadow-[0_0_10px_rgba(168,204,34,0.6)]" />
-          </span>
-        ))}
-      </div>
-      <span className="text-sm font-semibold text-muted-foreground">{label}</span>
-    </div>
   );
 }

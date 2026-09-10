@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { requireAdmin, logAudit } from '@/lib/audit'
 import { withIdempotency } from '@/lib/idempotency'
+import { parseBody, storageLimitSchema } from '@/lib/validators'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,10 +16,9 @@ export async function PUT(req: NextRequest) {
     if (!adminId) return NextResponse.json({ error: 'غير مصرح — الأدمن فقط' }, { status: 403 })
 
   return withIdempotency(req, adminId, async () => {
-    const { userId, storageLimit } = await req.json()
-    if (!userId || !storageLimit || storageLimit < 1024) {
-      return NextResponse.json({ error: 'بيانات غير صالحة' }, { status: 400 })
-    }
+    const parsed = await parseBody(req, storageLimitSchema)
+    if (!parsed.ok) return parsed.response!
+    const { userId, storageLimit } = parsed.data!
 
     const sb = await getSupabaseAdmin()
     if (sb) {

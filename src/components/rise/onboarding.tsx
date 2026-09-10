@@ -27,17 +27,13 @@ import {
   Sun,
   Trophy,
   Zap,
-  Award,
-  Star,
   ChevronLeft,
   ChevronRight,
   Keyboard,
   Smartphone,
-  Search,
   X,
   Rocket,
   Library,
-  ListOrdered,
   Sunrise,
   Target,
 } from 'lucide-react'
@@ -47,7 +43,7 @@ import {
    ═══════════════════════════════════════════════════════ */
 
 const STORAGE_KEY = 'rise-onboarding-done'
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 4
 
 /* ═══════════════════════════════════════════════════════
    useOnboarding hook
@@ -85,7 +81,6 @@ const stepTitles = [
   'أهلاً بك',
   'يومك مع Rise OS',
   'استكشف الوحدات',
-  'قاعدة المعارف والتحفيز',
   'نصائح سريعة',
 ]
 
@@ -320,78 +315,6 @@ function ModulesStep() {
   )
 }
 
-/* ═══════════════════════════════════════════════════════
-   Step 4 — Knowledge Base highlight + Gamification
-   ═══════════════════════════════════════════════════════ */
-
-function KnowledgeStep() {
-  return (
-    <div className="space-y-4 py-2">
-      <div className="text-center space-y-2">
-        <span className="pill bg-violet-accent/10 text-violet-accent mb-1">
-          <Library className="size-3 me-1" />
-          الميزة المميزة
-        </span>
-        <h2 className="text-xl sm:text-2xl font-bold">قاعدة المعارف — خلاصات من الكتب</h2>
-        <p className="text-sm text-muted-foreground">خلاصات عملية من أشهر كتب التنمية والإنتاجية — تضغط وتطبّق فوراً</p>
-      </div>
-
-      {/* KB feature card */}
-      <div className="neo-card p-4 bg-gradient-to-l from-emerald-accent/10 via-transparent to-gold/10">
-        <div className="flex items-start gap-3">
-          <div className="shrink-0">
-            <RiseIcon glyph="coach" hue="violet" size="lg" lift />
-          </div>
-          <div className="flex-1 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { icon: ListOrdered, text: 'أزرار معروفة — تضغط وتأخذ خطوات جاهزة' },
-                { icon: Library, text: '+80 مقالة من +40 كتاباً حقيقياً' },
-                { icon: Search, text: 'بحث عربي ذكي يفهم الهمزات والتشكيل' },
-                { icon: Sparkles, text: 'شارك معرفتك — أضف فائدة من عندك' },
-              ].map((f, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <f.icon className="size-3.5 text-forest dark:text-lime shrink-0 mt-0.5" />
-                  <span className="text-[11px] leading-snug text-muted-foreground">{f.text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Gamification */}
-      <div className="space-y-2.5">
-        <h3 className="text-sm font-semibold text-center text-gold flex items-center justify-center gap-1.5">
-          <Star className="size-3.5" />
-          ونظام تحفيز يخلّيك تكمل
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            { icon: Zap, label: 'نقاط XP', desc: 'من كل نشاط تنجزه' },
-            { icon: Trophy, label: 'مستويات', desc: 'تتقدم كل ما تكمل' },
-            { icon: Flame, label: 'سلاسل', desc: 'لا تكسر استمراريتك' },
-            { icon: Award, label: 'شارات', desc: 'اجمع الإنجازات' },
-          ].map((item, i) => (
-            <div
-              key={item.label}
-              className="animate-[fadeSlideIn_0.3s_ease-out]"
-              style={{ animationDelay: `${300 + i * 60}ms`, animationFillMode: 'both' }}
-            >
-              <div className="neo-card card-lift p-3 text-center">
-                <div className="space-y-1.5">
-                  <item.icon className="size-5 text-gold mx-auto" />
-                  <p className="text-xs font-semibold leading-tight">{item.label}</p>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">{item.desc}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ═══════════════════════════════════════════════════════
    Step 5 — Quick Tips + CTA
@@ -614,8 +537,6 @@ export default function Onboarding() {
             <DayJourneyStep />
           ) : currentStep === 2 ? (
             <ModulesStep />
-          ) : currentStep === 3 ? (
-            <KnowledgeStep />
           ) : (
             <QuickTipsStep />
           )}
