@@ -1,13 +1,13 @@
 // ============================================================
 // data/community.ts — طبقة بيانات المجتمع (المرحلة 07 + 07-ب)
-// الخلاصة/التفاصيل/التعليقات/التفاعل/البلاغ/الأعضاء + رفع صور R2.
+// الخلاصة/التفاصيل/التعليقات/التفاعل/البلاغ/الأعضاء + رفع صور Cloudinary.
 // ============================================================
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-fetch'
 import { MAX_MEDIA_PER_POST } from '@/lib/media-constants'
 
-/** عنصر ميديا كما يرجعه الخادم (url موقّع مؤقت أو null إذا
- *  لم تُضبط مفاتيح R2 بعد — العميل يعرض حالة «غير متاح») */
+/** عنصر ميديا كما يرجعه الخادم (رابط CDN أو null إذا
+ *  لم تُضبط مفاتيح Cloudinary بعد — العميل يعرض حالة «غير متاح») */
 export interface CommunityMediaItem {
   key: string
   contentType: string
@@ -150,10 +150,11 @@ export async function createCommunityPost(
 }
 
 /**
- * رفع صورة منشور إلى Cloudflare R2 (قرار المالك — وثيقة النطاق §4):
- * 1) presign خادمي (يدقق النوع/الحجم/الحصة قبل توليد المفتاح)
- * 2) PUT مباشرة من المتصفح إلى R2 عبر الرابط الموقّع
- * (يتجاوز حد body الفيرسل — حتى 8MB للصورة)
+ * رفع صورة منشور إلى Cloudinary (قرار المالك — بديل R2):
+ * 1) presign خادمي (يدقق النوع/الحجم/الحصة قبل توليد المفتاح
+ *    والتوقيع — المفتاح لا يختاره العميل)
+ * 2) POST مباشر من المتصفح إلى Cloudinary بالتوقيع
+ *    (يتجاوز حد body الفيرسل — حتى 8MB للصورة)
  */
 export async function uploadCommunityImage(
   file: File,
@@ -163,13 +164,24 @@ export async function uploadCommunityImage(
       contentType: file.type,
       bytes: file.size,
     })
-    const pres = await readJson<{ mediaId: string; key: string; uploadUrl: string; expiresIn?: number }>(r)
-    const put = await fetch(pres.uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    })
-    if (!put.ok) {
+    const pres = await readJson<{
+      mediaId: string
+      key: string
+      uploadUrl: string
+      apiKey: string
+      timestamp: number
+      publicId: string
+      signature: string
+    }>(r)
+    // signed upload مباشر إلى Cloudinary (CORS مفتوح للرفع)
+    const form = new FormData()
+    form.append('file', file)
+    form.append('api_key', pres.apiKey)
+    form.append('timestamp', String(pres.timestamp))
+    form.append('public_id', pres.publicId)
+    form.append('signature', pres.signature)
+    const up = await fetch(pres.uploadUrl, { method: 'POST', body: form })
+    if (!up.ok) {
       return { ok: false, error: 'فشل رفع الصورة إلى التخزين — أعد المحاولة' }
     }
     return {

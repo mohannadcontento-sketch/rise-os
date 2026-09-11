@@ -6,7 +6,7 @@ import { parseBody, communityPostCreateSchema } from '@/lib/validators'
 import { processMentions } from '@/lib/community-mentions'
 import { logAudit } from '@/lib/audit'
 import { consumeUsage, limitReachedResponse } from '@/lib/billing/entitlements'
-import { signMediaForApi } from '@/lib/r2'
+import { signMediaForApi, verifyMediaUploads, publicIdFromKey, extFromKey } from '@/lib/cloudinary'
 import { tursoUpsertPost, tursoUpsertMember } from '@/lib/community-sync'
 import { MAX_MEDIA_PER_POST } from '@/lib/media-constants'
 
@@ -18,13 +18,14 @@ export const dynamic = 'force-dynamic'
 // GET  : خلاصة المنشورات (RPC get_community_feed — نداء واحد:
 //        عناصر + total + hasMore + liked_by_me + media).
 //        ?page=1&filter=latest|top
-//        روابط صور R2 توقّع خادميًا (مؤقتة) قبل الإرسال.
+//        روابط صور Cloudinary (CDN) تُبنى خادميًا من المفاتيح.
 // POST : نشر منشور/سؤال (zod + rate limit) → حد الخطة أولًا
 //        (المجانية 3 منشورات/يوم — consume_usage داخل DB)
 //        → RLS insert-own + إذونات أعمدة (لا يمكن تعيين العدادات)
-//        → إرفاق مرفقات R2 (media) عبر service_role بعد التحقق
-//        من ملكية media_objects (لا نثق بقوائم العميل)
-//        → تحليل @mentions خادميًا → إشعار mention لكل مذكور
+//        → إرفاق مرفقات Cloudinary (media) عبر service_role بعد
+//        التحقق من ملكية media_objects (لا نثق بقوائم العميل)
+//        والتأكد عبر Admin API أن الرفع تم فعلًا وبالحجم/الصيغة
+//        الحقيقيين → تحليل @mentions خادميًا → إشعار mention
 //        → مزامنة مرآة Turso (فصل مسار البيانات العامة —
 //          قرار المالك في وثيقة النطاق §4؛ fire-and-forget).
 // ============================================================
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'تعذّر تحميل المجتمع — أعد المحاولة' }, { status: 500 })
   }
   const payload = (data ?? { items: [], total: 0, page, perPage: 20, hasMore: false }) as any
-  // توقيع روابط صور R2 خادميًا (R2 غير مضبوط → url=null — العميل
+  // روابط صور Cloudinary من المفاتيح (غير مضبوط → url=null — العميل
   // يعرض حالة «غير متاح»، والنص يعمل كالسابق)
   if (Array.isArray(payload.items)) {
     await Promise.all(
@@ -101,11 +102,11 @@ export async function POST(req: NextRequest) {
   const client = await createSupabaseUserClient(token)
   if (!client) return NextResponse.json({ error: 'خطأ في تكوين الخادم' }, { status: 500 })
 
-  // ── التحقق من مرفقات R2 قبل النشر (لا نثق بقوائم العميل) ──
+  // ── التحقق من مرفقات Cloudinary قبل النشر (لا نثق بقوائم العميل) ──
   // صفوف media_objects: ملكيتي + status pending/active + غير
   // معلّقة بمنشور آخر + المفتاح المُرسَل يطابق صف القاعدة.
   const admin = await getSupabaseAdmin()
-  let mediaRows: Array<{ id: string; object_key: string; bytes: number; content_type: string }> = []
+  let mediaRows: Array<{ id: string; object_key: string; bytes: number; declared_bytes?: number; content_type: string }> = []
   if (media && media.length > 0) {
     if (media.length > MAX_MEDIA_PER_POST) {
       return NextResponse.json({ error: `حتى ${MAX_MEDIA_PER_POST} صور في المنشور` }, { status: 400 })
@@ -135,6 +136,36 @@ export async function POST(req: NextRequest) {
       valid.push(o)
     }
     mediaRows = valid
+
+    // ── تحقق Admin API: الرفع تم فعلًا؟ الصيغة والحجم الحقيقيان؟ ──
+    // (ترقية على سلوك R2: كنا نكتفي بوجود الصف؛ الآن نتأكد أن
+    //  الملف موجود فعلًا في Cloudinary ونحسب الحصة من حجمه الموثوق)
+    const verified = await verifyMediaUploads(mediaRows.map((o) => o.object_key))
+    if (verified) {
+      for (const o of mediaRows) {
+        const info = verified.get(publicIdFromKey(o.object_key))
+        if (!info) {
+          return NextResponse.json(
+            { error: 'الصورة لم تُرفع فعليًا إلى التخزين — أعد رفعها وأعد المحاولة', code: 'INVALID_MEDIA' },
+            { status: 400 },
+          )
+        }
+        if (info.format !== extFromKey(o.object_key)) {
+          return NextResponse.json(
+            { error: 'نوع الصورة الفعلي لا يطابق المُعلَن — أعد رفعها', code: 'INVALID_MEDIA' },
+            { status: 400 },
+          )
+        }
+        if (!(info.bytes >= 1 && info.bytes <= 8388608)) {
+          return NextResponse.json(
+            { error: 'حجم الصورة الفعلي خارج الحدود المسموحة', code: 'INVALID_MEDIA' },
+            { status: 400 },
+          )
+        }
+        o.declared_bytes = o.bytes
+        o.bytes = info.bytes
+      }
+    }
   }
 
   const { data: created, error } = await (client as any)
@@ -178,6 +209,12 @@ export async function POST(req: NextRequest) {
         .from('media_objects')
         .update({ status: 'active', post_id: created.id })
         .in('id', mediaRows.map((o) => o.id))
+      // الحجم الموثوق من Cloudinary يُحفظ في صف الحساب (حصة دقيقة)
+      for (const o of mediaRows) {
+        if (o.declared_bytes != null && o.declared_bytes !== o.bytes) {
+          await (admin as any).from('media_objects').update({ bytes: o.bytes }).eq('id', o.id)
+        }
+      }
     }
   }
 

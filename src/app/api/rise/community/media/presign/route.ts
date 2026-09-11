@@ -2,31 +2,42 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/api-auth'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { parseBody, communityMediaPresignSchema } from '@/lib/validators'
-import { isR2Configured, presignMediaPut, buildMediaKey, r2Status } from '@/lib/r2'
+import {
+  isCloudinaryConfigured,
+  presignMediaUpload,
+  buildMediaKey,
+  cloudinaryStatus,
+} from '@/lib/cloudinary'
 import { mediaExtFor, MEDIA_UPLOAD_URL_TTL_SECONDS, MAX_IMAGE_BYTES } from '@/lib/media-constants'
 import { logAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
 // ============================================================
-// /api/rise/community/media/presign — المرحلة 07-ب
+// /api/rise/community/media/presign — المرحلة 07-ب (Cloudinary)
 //
-// POST : رابط رفع موقّع (presigned PUT) لصورة منشور إلى Cloudflare R2.
+// POST : توقيع رفع صورة منشور — العميل يرفع الملف مباشرة إلى
+//        Cloudinary (signed upload) متجاوزًا حد body الفيرسل.
 //
-// القرار المعماري (وثيقة النطاق §4 — قرار المالك): الصور على R2،
-// لا تخزين صور في Supabase — هذا الجدول يحمل المفاتيح والحساب فقط.
+// القرار المعماري (تحديث قرار المالك — بديل R2): الصور على
+// Cloudinary، لا تخزين صور في Supabase — هذا الجدول يحمل
+// المفاتيح والحساب فقط.
 //
 // التدفق:
 //   العميل → POST {contentType, bytes}
 //     ├─ 401 بدون جلسة
-//     ├─ 503 STORAGE_NOT_CONFIGURED إذا لم تُضبط مفاتيح R2 بعد
+//     ├─ 503 STORAGE_NOT_CONFIGURED إذا لم تُضبط مفاتيح Cloudinary
 //     ├─ 402 STORAGE_LIMIT عند تجاوز حصة الخطة (50MB/1GB/10GB)
-//     └─ {mediaId, key, uploadUrl} → العميل يرفع الملف PUT مباشرة
-//         إلى R2 (يتجاوز حد body الفيرسل 4.5MB — حتى 8MB للصورة)
+//     └─ {mediaId, key, uploadUrl, apiKey, timestamp, publicId,
+//         signature, cloudName} → العميل يرسل FormData (file +
+//         api_key + timestamp + public_id + signature) POST إلى
+//         uploadUrl مباشرة (حتى 8MB للصورة).
 //
 // الأمان: صف pending في media_objects يُنشأ خادميًا (المفتاح
 // يولَّد هنا — العميل لا يختاره)، والحصص تحتسب من status
-// pending+active، والملكية تتحقق عند تعليق المرفق بالمنشور.
+// pending+active، والملكية تتحقق عند تعليق المرفق بالمنشور —
+// حيث يتأكد الخادم عبر Admin API أن الرفع تم فعلًا وبالحجم
+// والصيغة الحقيقيين (لا نثق بأرقام العميل).
 // ============================================================
 
 const DEFAULT_FREE_STORAGE_BYTES = 52428800 // 50MB — fail-closed
@@ -40,13 +51,13 @@ export async function POST(req: NextRequest) {
 
   const { contentType, bytes } = parsed.data
 
-  // 1) R2 مضبوط؟ (رسالة صريحة ترشد للتفعيل)
-  if (!isR2Configured()) {
+  // 1) Cloudinary مضبوط؟ (رسالة صريحة ترشد للتفعيل)
+  if (!(await isCloudinaryConfigured())) {
     return NextResponse.json(
       {
-        error: 'تخزين الصور غير مفعّل بعد — أضف مفاتيح Cloudflare R2 في متغيرات البيئة (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET)',
+        error: 'تخزين الصور غير مفعّل بعد — أضف مفاتيح Cloudinary (CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET)',
         code: 'STORAGE_NOT_CONFIGURED',
-        storage: r2Status(),
+        storage: await cloudinaryStatus(),
       },
       { status: 503 },
     )
@@ -104,7 +115,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 3) مفتاح خادمي + صف pending + رابط رفع موقّع
+  // 3) مفتاح خادمي + صف pending + توقيع الرفع
   const ext = mediaExtFor(contentType)
   const key = buildMediaKey(userId, contentType, ext)
 
@@ -126,10 +137,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'تعذّر بدء الرفع — أعد المحاولة' }, { status: 500 })
   }
 
-  const uploadUrl = await presignMediaPut(key, contentType, MEDIA_UPLOAD_URL_TTL_SECONDS)
-  if (!uploadUrl) {
-    console.warn('[community/media/presign] presign failed')
-    return NextResponse.json({ error: 'تعذّر توليد رابط الرفع — أعد المحاولة' }, { status: 500 })
+  const presigned = await presignMediaUpload(key)
+  if (!presigned) {
+    console.warn('[community/media/presign] cloudinary presign failed')
+    return NextResponse.json({ error: 'تعذّر توليد توقيع الرفع — أعد المحاولة' }, { status: 500 })
   }
 
   await logAudit(req, userId, 'community-media-presign', {
@@ -142,7 +153,12 @@ export async function POST(req: NextRequest) {
     {
       mediaId: obj.id,
       key,
-      uploadUrl,
+      uploadUrl: presigned.uploadUrl,
+      cloudName: presigned.cloudName,
+      apiKey: presigned.apiKey,
+      timestamp: presigned.timestamp,
+      publicId: presigned.publicId,
+      signature: presigned.signature,
       expiresIn: MEDIA_UPLOAD_URL_TTL_SECONDS,
     },
     { status: 201 },

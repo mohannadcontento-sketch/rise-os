@@ -21,7 +21,7 @@
 // ============================================================
 
 import type { Client } from '@libsql/client'
-import { getTursoClient, isTursoConfigured } from '@/lib/turso'
+import { getTursoClient } from '@/lib/turso'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 // ─────────────── المخطط المرآة (libSQL/SQLite) ───────────────
@@ -81,8 +81,8 @@ let schemaEnsured = false
 
 /** يضمن وجود مخطط المرآة (مرة واحدة لكل عملية) — يرجّع العميل أو null */
 export async function ensureTursoSchema(client?: Client): Promise<Client | null> {
-  if (!isTursoConfigured() && !client) return null
-  const c = client ?? getTursoClient()
+  // عميل صريح (اختبار/سكربت) أو الإنتاجي (env أو app_config)
+  const c = client ?? (await getTursoClient())
   if (!c) return null
   if (!schemaEnsured || client) {
     for (const sql of SCHEMA_STATEMENTS) {

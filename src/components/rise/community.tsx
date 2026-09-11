@@ -130,7 +130,7 @@ export default function CommunityModule() {
 
   // الكومبوزر
   const [composerOpen, setComposerOpen] = useState(false)
-  // ── مرفقات صور R2 (المرحلة 07-ب): رفع presign + معاينة محلية ──
+  // ── مرفقات صور Cloudinary (المرحلة 07-ب): رفع موقّع + معاينة محلية ──
   interface LocalAttachment extends PendingMediaRef { localUrl: string; uploading: boolean }
   const [attachments, setAttachments] = useState<LocalAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -273,7 +273,7 @@ export default function CommunityModule() {
     setMentionSuggests([])
   }
 
-  // ─── مرفقات الصور (R2): presign → PUT مباشرة → معاينة محلية ───
+  // ─── مرفقات الصور (Cloudinary): presign → POST موقّع → معاينة محلية ───
   const onPickImages = async (files: FileList | null) => {
     if (!files || files.length === 0) return
     const room = MAX_MEDIA_PER_POST - attachments.length
@@ -765,7 +765,7 @@ export default function CommunityModule() {
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {/* إرفاق صور — R2 presign (يظهر رسالة واضحة إذا لم تُضبط المفاتيح) */}
+              {/* إرفاق صور — Cloudinary presign (يظهر رسالة واضحة إذا لم تُضبط المفاتيح) */}
               <input
                 ref={fileInputRef}
                 type="file"

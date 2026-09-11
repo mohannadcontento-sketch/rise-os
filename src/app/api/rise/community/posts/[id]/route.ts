@@ -4,7 +4,7 @@ import { createSupabaseUserClient, getSupabaseAdmin, isSupabaseConfigured } from
 import { getAccessToken } from '@/lib/cookie-auth'
 import { parseBody, communityPostUpdateSchema } from '@/lib/validators'
 import { logAudit } from '@/lib/audit'
-import { signMediaForApi, deleteMediaObject } from '@/lib/r2'
+import { signMediaForApi, deleteMediaObject } from '@/lib/cloudinary'
 import { tursoUpsertPost, tursoDeletePost } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
   if (!data) return NextResponse.json({ error: 'المنشور غير موجود أو غير متاح' }, { status: 404 })
 
-  // توقيع روابط صور R2 خادميًا (url=null عند غياب الإعداد)
+  // روابط صور Cloudinary من المفاتيح (url=null عند غياب الإعداد)
   const detail = data as any
   if (Array.isArray(detail.media) && detail.media.length > 0) {
     detail.media = await signMediaForApi(detail.media)
@@ -114,7 +114,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const client = await createSupabaseUserClient(token)
   if (!client) return NextResponse.json({ error: 'خطأ في تكوين الخادم' }, { status: 500 })
 
-  // مفاتيح صور المنشور قبل الحذف (لتنظيف R2 والحساب لاحقًا)
+  // مفاتيح صور المنشور قبل الحذف (لتنظيف Cloudinary والحساب لاحقًا)
   const admin = await getSupabaseAdmin()
   let mediaKeys: string[] = []
   if (admin) {
@@ -134,7 +134,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'تعذّر حذف المنشور' }, { status: 400 })
   }
 
-  // ── تنظيف مرفقات R2: تحرير الحصة + حذف الكائنات best-effort ──
+  // ── تنظيف مرفقات Cloudinary: تحرير الحصة + حذف الكائنات best-effort ──
   // (إزالة المشرف الإدارية تبقي الصور عمدًا كدليل مراجعة — هنا
   // الحذف الذاتي فقط، حيث يطلب المستخدم تحرير مساحته)
   if (mediaKeys.length > 0 && admin) {

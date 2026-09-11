@@ -285,13 +285,13 @@ async function main() {
   const members = (await r.json()).members
   check('يجد B بدون A (استبعاد النفس)', members.some((m: any) => m.handle === 'member') && !members.some((m: any) => m.handle === 'owner'))
 
-  // ═══ 15. المرحلة 07-ب: مرفقات R2 (بيئة بلا مفاتيح — تدرّج آمن) ═══
-  console.log('══ [15] مرفقات R2 (بيئة بلا مفاتيح — تدرّج آمن) ═══')
-  // presign: R2 غير مضبوط في بيئة الاختبار → 503 واضح لا يكسر شيئًا
+  // ═══ 15. المرحلة 07-ب: مرفقات Cloudinary (بيئة بلا مفاتيح — تدرّج آمن) ═══
+  console.log('══ [15] مرفقات Cloudinary (بيئة بلا مفاتيح — تدرّج آمن) ═══')
+  // presign: Cloudinary غير مضبوط في بيئة الاختبار → 503 واضح لا يكسر شيئًا
   r = await req('/api/rise/community/media/presign', TOKEN_A, { method: 'POST', body: JSON.stringify({ contentType: 'image/jpeg', bytes: 102400 }) })
   const pres = r.status === 503 ? await r.json() : {}
-  check('presign بدون مفاتيح R2 → 503 STORAGE_NOT_CONFIGURED', r.status === 503, `got ${r.status}`)
-  check('رسالة 503 عربية مع كود واضح', pres?.code === 'STORAGE_NOT_CONFIGURED' && /R2/.test(String(pres?.error || '')))
+  check('presign بدون مفاتيح Cloudinary → 503 STORAGE_NOT_CONFIGURED', r.status === 503, `got ${r.status}`)
+  check('رسالة 503 عربية مع كود واضح', pres?.code === 'STORAGE_NOT_CONFIGURED' && /Cloudinary/.test(String(pres?.error || '')))
   r = await req('/api/rise/community/media/presign', TOKEN_A, { method: 'POST', body: JSON.stringify({ contentType: 'video/mp4', bytes: 1024 }) })
   check('presign بنوع غير صورة → 400 (zod)', r.status === 400, `got ${r.status}`)
   r = await req('/api/rise/community/media/presign', TOKEN_A, { method: 'POST', body: JSON.stringify({ contentType: 'image/jpeg', bytes: 99999999 }) })
