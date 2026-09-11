@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Heart, MessageCircle, Flag, Trash2, Pencil, ArrowRight, Users, Loader2, CornerUpLeft, X, Send } from 'lucide-react'
+import { Heart, MessageCircle, Flag, Trash2, Pencil, ArrowRight, Users, Loader2, CornerUpLeft, X, Send, ImagePlus, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -37,11 +37,14 @@ import {
   toggleCommunityReaction,
   reportCommunityContent,
   searchCommunityMembers,
+  uploadCommunityImage,
+  type PendingMediaRef,
   type CommunityPostCard,
   type CommunityPostDetail,
   type CommunityCommentCard,
 } from '@/lib/data/community'
 import { getPendingCommunityPost, consumePendingCommunityPost } from '@/lib/community-focus'
+import { MAX_MEDIA_PER_POST, MAX_IMAGE_BYTES, isAllowedImageType } from '@/lib/media-constants'
 
 // ─── أدوات عرض ─────────────────────────────────────────────
 
@@ -127,6 +130,10 @@ export default function CommunityModule() {
 
   // الكومبوزر
   const [composerOpen, setComposerOpen] = useState(false)
+  // ── مرفقات صور R2 (المرحلة 07-ب): رفع presign + معاينة محلية ──
+  interface LocalAttachment extends PendingMediaRef { localUrl: string; uploading: boolean }
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [draftTitle, setDraftTitle] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -266,20 +273,70 @@ export default function CommunityModule() {
     setMentionSuggests([])
   }
 
+  // ─── مرفقات الصور (R2): presign → PUT مباشرة → معاينة محلية ───
+  const onPickImages = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const room = MAX_MEDIA_PER_POST - attachments.length
+    if (room <= 0) {
+      toast.error(`حتى ${MAX_MEDIA_PER_POST} صور في المنشور الواحد`)
+      return
+    }
+    for (const f of Array.from(files).slice(0, room)) {
+      if (!isAllowedImageType(f.type)) {
+        toast.error('نوع غير مدعوم — JPG / PNG / WebP / GIF فقط')
+        continue
+      }
+      if (f.size > MAX_IMAGE_BYTES) {
+        toast.error('الصورة أكبر من 8MB — صغّرها وأعد المحاولة')
+        continue
+      }
+      const localUrl = URL.createObjectURL(f)
+      // صف متفائل (loading) → يُستبدل عند اكتمال الرفع
+      setAttachments((prev) => [...prev, { mediaId: '', key: `local-${localUrl}`, contentType: f.type, bytes: f.size, localUrl, uploading: true }])
+      const r = await uploadCommunityImage(f)
+      if (r.ok) {
+        setAttachments((prev) =>
+          prev.map((a) => (a.localUrl === localUrl
+            ? { ...a, mediaId: r.media.mediaId, key: r.media.key, uploading: false }
+            : a)),
+        )
+      } else {
+        setAttachments((prev) => prev.filter((a) => a.localUrl !== localUrl))
+        URL.revokeObjectURL(localUrl)
+        toast.error(r.error || 'تعذّر رفع الصورة')
+      }
+    }
+  }
+
+  const removeAttachment = (localUrl: string) => {
+    setAttachments((prev) => prev.filter((a) => a.localUrl !== localUrl))
+    URL.revokeObjectURL(localUrl)
+  }
+
+  const clearAttachments = () => {
+    attachments.forEach((a) => URL.revokeObjectURL(a.localUrl))
+    setAttachments([])
+  }
+
   const submitPost = async () => {
     if (submitting) return
     const title = draftTitle.trim()
     const body = draftBody.trim()
     if (title.length < 3) { toast.error('العنوان قصير جدًا (3 أحرف على الأقل)'); return }
     if (body.length < 1) { toast.error('المحتوى مطلوب'); return }
+    if (attachments.some((a) => a.uploading)) { toast.error('انتظر اكتمال رفع الصور'); return }
     setSubmitting(true)
     try {
-      const r = await createCommunityPost(title, body)
+      const media = attachments
+        .filter((a) => !a.uploading && a.mediaId)
+        .map((a) => ({ key: a.key, mediaId: a.mediaId, contentType: a.contentType, bytes: a.bytes }))
+      const r = await createCommunityPost(title, body, media.length > 0 ? media : undefined)
       if (r.ok) {
         toast.success('تم نشر منشورك في المجتمع')
         setComposerOpen(false)
         setDraftTitle('')
         setDraftBody('')
+        clearAttachments()
         void loadFeed(filter, 1, true)
       } else {
         toast.error(r.error || 'تعذّر النشر')
@@ -482,6 +539,26 @@ export default function CommunityModule() {
                 <>
                   <h2 className="text-lg font-bold leading-8">{detail.title}</h2>
                   <RichText text={detail.body} />
+                  {detail.media && detail.media.length > 0 && (
+                    <div
+                      className="grid gap-2 mt-2"
+                      style={{ gridTemplateColumns: detail.media.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))' }}
+                    >
+                      {detail.media.map((m, i) => (
+                        <div key={m.key || i} className="rounded-xl overflow-hidden border bg-muted">
+                          {m.url ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={m.url} alt={`صورة ${i + 1}`} className="w-full max-h-96 object-cover" loading="lazy" />
+                          ) : (
+                            <div className="h-24 grid place-items-center text-muted-foreground/50 gap-1">
+                              <ImageIcon className="w-5 h-5" />
+                              <span className="text-[10px]">الصورة غير متاحة — التخزين غير مفعّل</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex items-center gap-4 pt-2 border-t">
                     <button
                       onClick={() => void like('post', detail.id)}
@@ -687,12 +764,61 @@ export default function CommunityModule() {
             )}
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">{AR(draftBody.length)} / ١٠٬٠٠٠</span>
+            <div className="flex items-center gap-2">
+              {/* إرفاق صور — R2 presign (يظهر رسالة واضحة إذا لم تُضبط المفاتيح) */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                hidden
+                onChange={(e) => {
+                  void onPickImages(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={attachments.length >= MAX_MEDIA_PER_POST}
+                title="إرفاق صور (حتى ٤)"
+              >
+                <ImagePlus className="w-4 h-4" />
+                <span className="text-[11px]">{attachments.length}/{MAX_MEDIA_PER_POST}</span>
+              </Button>
+              <span className="text-[11px] text-muted-foreground">{AR(draftBody.length)} / ١٠٬٠٠٠</span>
+            </div>
             <Button size="sm" onClick={submitPost} disabled={submitting || !draftTitle.trim() || !draftBody.trim()}>
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               نشر
             </Button>
           </div>
+
+          {/* معاينات المرفقات (قبل النشر — إزالة محلية فقط) */}
+          {attachments.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {attachments.map((a) => (
+                <div key={a.localUrl} className="relative w-20 h-20 rounded-xl overflow-hidden border bg-muted shrink-0 group/att">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={a.localUrl} alt="مرفق" className="w-full h-full object-cover" />
+                  {a.uploading && (
+                    <div className="absolute inset-0 grid place-items-center bg-background/60">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(a.localUrl)}
+                    className="absolute top-1 left-1 w-5 h-5 rounded-full bg-black/60 text-white grid place-items-center hover:bg-destructive"
+                    aria-label="إزالة المرفق"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -736,6 +862,23 @@ export default function CommunityModule() {
                 </div>
                 <h3 className="font-bold mt-3 leading-7 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">{p.title}</h3>
                 <p className="text-sm text-muted-foreground leading-7 line-clamp-2 mt-1">{p.body_snippet}</p>
+                {p.media && p.media.length > 0 && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="w-24 h-16 rounded-lg overflow-hidden border bg-muted shrink-0">
+                      {p.media[0]?.url ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={p.media[0].url} alt="صورة المنشور" className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full grid place-items-center text-muted-foreground/50">
+                          <ImageIcon className="w-4 h-4" />
+                        </div>
+                      )}
+                    </div>
+                    {p.media.length > 1 && (
+                      <span className="text-[10px] rounded-full bg-muted px-2 py-0.5 text-muted-foreground">+{AR(p.media.length - 1)} صور</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-4 mt-3 pt-2.5 border-t text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <MessageCircle className="w-3.5 h-3.5" />

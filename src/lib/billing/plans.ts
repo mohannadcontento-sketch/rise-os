@@ -31,6 +31,8 @@ export const PLANS_UI: Record<PlanCode, PlanDisplayInfo> = {
       'كل وحدات أوج الأساسية',
       '5 عمليات ذكاء اصطناعي يوميًا',
       '3 عمليات تصدير يوميًا',
+      'المجتمع: قراءة + 3 منشورات يوميًا',
+      'مساحة مرفقات 50MB (Cloudflare R2)',
       'إعلانات خفيفة ومتحكم فيها',
     ],
   },
@@ -45,6 +47,8 @@ export const PLANS_UI: Record<PlanCode, PlanDisplayInfo> = {
       'بدون أي إعلانات',
       '30 عملية ذكاء اصطناعي يوميًا',
       '15 عملية تصدير يوميًا',
+      'المجتمع كاملًا بلا حدود يومية',
+      'مساحة مرفقات 1GB (Cloudflare R2)',
       'دعم أولوية',
     ],
   },
@@ -58,6 +62,8 @@ export const PLANS_UI: Record<PlanCode, PlanDisplayInfo> = {
     perks: [
       '100 عملية ذكاء اصطناعي يوميًا (3000 شهريًا)',
       '50 عملية تصدير يوميًا',
+      'المجتمع كاملًا بلا حدود يومية',
+      'مساحة مرفقات 10GB (Cloudflare R2)',
       'مفتاح MCP — أوج داخل أي عميل MCP',
       'أعلى حدود ضمن سياسة Fair Use',
     ],
@@ -71,6 +77,8 @@ export const FEATURE_LABELS: Record<string, string> = {
   'ai.action': 'عمليات الذكاء الاصطناعي',
   'export.data': 'تصدير البيانات',
   'mcp.key': 'مفتاح MCP',
+  'community.post': 'منشورات المجتمع',
+  'media.storage': 'مساحة المرفقات',
 }
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {

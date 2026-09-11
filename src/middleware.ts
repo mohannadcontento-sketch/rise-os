@@ -105,6 +105,7 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   // (منشور أثقل من تعليق، والتفاعل أخف شيء؛ القراءة تحت
   // المظلة العامة /api/rise 300/min).
   '/api/rise/community/posts': { limit: 30, window: '1 m' },
+  '/api/rise/community/media/presign': { limit: 10, window: '1 m' },
   '/api/rise/community/comments': { limit: 30, window: '1 m' },
   '/api/rise/community/reactions': { limit: 60, window: '1 m' },
   '/api/rise/community/reports': { limit: 5, window: '1 m' },

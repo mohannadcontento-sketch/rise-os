@@ -39,7 +39,7 @@ function mi(id: string): { glyph: RiseGlyph; hue: RiseHue; label: string } {
 
 /**
  * SIDEBAR v3 — regrouped, collapsible, and visually calm.
- * 22 modules live in 4 tidy accordion cards + pinned dashboard + settings.
+ * 23 modules live in 5 tidy accordion cards + pinned dashboard + settings.
  * Each group has a color identity dot, item count, and a smooth
  * grid-rows accordion animation. The user card opens Settings.
  */
@@ -81,6 +81,15 @@ const navGroups: NavGroup[] = [
       { id: 'learning', ...mi('learning') },
       { id: 'brain', ...mi('brain') },
     ],
+  },
+  {
+    // FIX (owner: «مش شايف تاب المجتمع»): وحدة المجتمع كانت مسجّلة في
+    // الـstore والصفحة لكن بلا أي مدخل تنقّل — هذه المجموعة هي التاب.
+    id: 'community',
+    title: 'المجتمع',
+    hint: 'منشورات · تعليقات · تفاعل',
+    dot: 'bg-lime',
+    items: [{ id: 'community', ...mi('community') }],
   },
   {
     id: 'life',

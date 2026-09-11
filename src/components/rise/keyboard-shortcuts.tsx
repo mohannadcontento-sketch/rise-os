@@ -14,6 +14,7 @@ import {
   Brain,
   GraduationCap,
   Heart,
+  Users,
   Wallet,
   Calendar as CalendarIcon,
   Network,
@@ -55,6 +56,7 @@ const NAVIGATION_SHORTCUTS: (Omit<ShortcutDef, 'action'> & { module: ModuleId })
   { keys: 'Ctrl+7', label: 'العادات', description: 'الانتقال إلى العادات', category: 'navigation', icon: Flame, module: 'habits' },
   { keys: 'Ctrl+8', label: 'اليوميات', description: 'الانتقال إلى اليوميات', category: 'navigation', icon: BookOpen, module: 'journal' },
   { keys: 'Ctrl+9', label: 'العمل العميق', description: 'الانتقال إلى العمل العميق', category: 'navigation', icon: Brain, module: 'deepwork' },
+  { keys: 'Ctrl+M', label: 'المجتمع', description: 'الانتقال إلى مجتمع أوج', category: 'navigation', icon: Users, module: 'community' },
   { keys: 'Ctrl+0', label: 'الإعدادات', description: 'الانتقال إلى الإعدادات', category: 'navigation', icon: SettingsIcon, module: 'settings' },
 ]
 
@@ -279,6 +281,13 @@ export function useKeyboardShortcuts() {
       if (e.key === '0') {
         e.preventDefault()
         setActiveModule('settings')
+        return
+      }
+
+      // Ctrl+M: المجتمع (mnemonic: مجتمع)
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault()
+        setActiveModule('community')
         return
       }
 

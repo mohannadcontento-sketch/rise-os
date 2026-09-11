@@ -1,9 +1,27 @@
 // ============================================================
-// data/community.ts — طبقة بيانات المجتمع (المرحلة 07)
-// الخلاصة/التفاصيل/التعليقات/التفاعل/البلاغ/الأعضاء + أنواع مشتركة.
+// data/community.ts — طبقة بيانات المجتمع (المرحلة 07 + 07-ب)
+// الخلاصة/التفاصيل/التعليقات/التفاعل/البلاغ/الأعضاء + رفع صور R2.
 // ============================================================
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-fetch'
+import { MAX_MEDIA_PER_POST } from '@/lib/media-constants'
+
+/** عنصر ميديا كما يرجعه الخادم (url موقّع مؤقت أو null إذا
+ *  لم تُضبط مفاتيح R2 بعد — العميل يعرض حالة «غير متاح») */
+export interface CommunityMediaItem {
+  key: string
+  contentType: string
+  bytes: number
+  url: string | null
+}
+
+/** مرفق مرفوع وجاهز للنشر مع منشور */
+export interface PendingMediaRef {
+  mediaId: string
+  key: string
+  contentType: string
+  bytes: number
+}
 
 export interface CommunityPostCard {
   id: string
@@ -13,6 +31,7 @@ export interface CommunityPostCard {
   author_name: string
   author_handle: string
   author_avatar: string | null
+  media?: CommunityMediaItem[] | null
   like_count: number
   reply_count: number
   created_at: string
@@ -25,6 +44,7 @@ export interface CommunityPostDetail {
   id: string
   title: string
   body: string
+  media?: CommunityMediaItem[] | null
   userId: string
   author: { name: string; handle: string; avatar: string | null } | null
   status: string
@@ -111,13 +131,53 @@ export async function fetchCommunityComments(postId: string, page: number): Prom
   }
 }
 
-export async function createCommunityPost(title: string, body: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+export async function createCommunityPost(
+  title: string,
+  body: string,
+  media?: PendingMediaRef[],
+): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
-    const r = await apiPost('/api/rise/community/posts', { title, body })
+    const payload: Record<string, unknown> = { title, body }
+    if (media && media.length > 0) {
+      payload.media = media.slice(0, MAX_MEDIA_PER_POST).map((m) => ({ key: m.key, mediaId: m.mediaId }))
+    }
+    const r = await apiPost('/api/rise/community/posts', payload)
     const data = await readJson<{ id?: string }>(r)
     return { ok: true, id: data.id }
   } catch (e) {
     return { ok: false, error: (e as Error)?.message || 'تعذّر النشر' }
+  }
+}
+
+/**
+ * رفع صورة منشور إلى Cloudflare R2 (قرار المالك — وثيقة النطاق §4):
+ * 1) presign خادمي (يدقق النوع/الحجم/الحصة قبل توليد المفتاح)
+ * 2) PUT مباشرة من المتصفح إلى R2 عبر الرابط الموقّع
+ * (يتجاوز حد body الفيرسل — حتى 8MB للصورة)
+ */
+export async function uploadCommunityImage(
+  file: File,
+): Promise<{ ok: true; media: PendingMediaRef } | { ok: false; error: string }> {
+  try {
+    const r = await apiPost('/api/rise/community/media/presign', {
+      contentType: file.type,
+      bytes: file.size,
+    })
+    const pres = await readJson<{ mediaId: string; key: string; uploadUrl: string; expiresIn?: number }>(r)
+    const put = await fetch(pres.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) {
+      return { ok: false, error: 'فشل رفع الصورة إلى التخزين — أعد المحاولة' }
+    }
+    return {
+      ok: true,
+      media: { mediaId: pres.mediaId, key: pres.key, contentType: file.type, bytes: file.size },
+    }
+  } catch (e) {
+    return { ok: false, error: (e as Error)?.message || 'تعذّر رفع الصورة' }
   }
 }
 

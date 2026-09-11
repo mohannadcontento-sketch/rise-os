@@ -4,6 +4,7 @@ import { createSupabaseUserClient, isSupabaseConfigured } from '@/lib/supabase'
 import { getAccessToken } from '@/lib/cookie-auth'
 import { parseBody, communityReactionSchema } from '@/lib/validators'
 import { logAudit } from '@/lib/audit'
+import { tursoSyncReaction } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,6 +65,10 @@ export async function POST(req: NextRequest) {
     }
     // اقرأ العداد بعد التريجر
     const { data: after } = await (client as any).from(table).select('like_count').eq('id', targetId).maybeSingle()
+
+    // مرآة Turso — إلغاء الإعجاب + إعادة مزامنة عدادات الهدف
+    void tursoSyncReaction(userId, targetType, targetId, false)
+
     return NextResponse.json({ liked: false, likeCount: after?.like_count ?? 0 })
   }
 
@@ -90,5 +95,9 @@ export async function POST(req: NextRequest) {
   })
 
   const { data: after } = await (client as any).from(table).select('like_count').eq('id', targetId).maybeSingle()
+
+  // مرآة Turso — إعجاب جديد + إعادة مزامنة عدادات الهدف
+  void tursoSyncReaction(userId, targetType, targetId, true)
+
   return NextResponse.json({ liked: true, likeCount: after?.like_count ?? 1 })
 }

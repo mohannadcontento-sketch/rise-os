@@ -3,6 +3,7 @@ import { requireAdmin, logAudit } from '@/lib/audit'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { parseBody, communityModerateSchema } from '@/lib/validators'
 import { notifyUser, communityModerationMessage, communityBannedMessage, communityUnbannedMessage } from '@/lib/notifications-service'
+import { tursoUpsertPost, tursoDeletePost, tursoUpsertComment, tursoDeleteComment } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -156,6 +157,9 @@ export async function POST(req: NextRequest) {
         if (delErr) throw delErr
         await resolveReportsFor(admin, r.target_type, r.target_id, 'resolved_removed', adminId)
         await writeLog(admin, adminId, 'remove_reported', r.target_type, r.target_id, act.reason)
+        // مرآة Turso — حذف المحتوى المُبلَّغ عنه من المرآة
+        if (r.target_type === 'post') void tursoDeletePost(r.target_id)
+        else void tursoDeleteComment(r.target_id)
         if (target) {
           await notifyUser(admin, {
             userId: target.user_id,
@@ -196,6 +200,20 @@ export async function POST(req: NextRequest) {
           dedupKey: `mod-unban-${act.userId}-${Date.now()}`,
         })
         break
+      }
+    }
+
+    // ── مرآة Turso: أثر الإشراف على المحتوى العام (fire-and-forget) ──
+    // الحظر/البلاغات بيانات تشغيلية → لا تدخل المرآة (تبقى Supabase).
+    {
+      const a = act as any
+      if (a.postId) {
+        if (act.action === 'remove_post') void tursoDeletePost(a.postId)
+        else void tursoUpsertPost(a.postId)
+      }
+      if (a.commentId) {
+        if (act.action === 'remove_comment') void tursoDeleteComment(a.commentId)
+        else void tursoUpsertComment(a.commentId)
       }
     }
 

@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { withIdempotency } from '@/lib/idempotency'
 import { parseBody, userNameSchema } from '@/lib/validators'
+import { tursoUpsertMember } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,8 @@ export async function POST(req: NextRequest) {
     const { name } = parsed.data!
     const trimmed = name.trim()
     await data.profiles.update(userId, { name: trimmed })
+    // مرآة Turso — تحديث لقطة العضو العام (fire-and-forget)
+    void tursoUpsertMember(userId)
     return NextResponse.json({ name: trimmed })
   
   })

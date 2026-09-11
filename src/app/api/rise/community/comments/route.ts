@@ -6,6 +6,7 @@ import { parseBody, communityCommentCreateSchema } from '@/lib/validators'
 import { processMentions } from '@/lib/community-mentions'
 import { notifyUser, communityCommentMessage, communityReplyMessage } from '@/lib/notifications-service'
 import { logAudit } from '@/lib/audit'
+import { tursoUpsertComment, tursoUpsertPost, tursoUpsertMember } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -129,6 +130,12 @@ export async function POST(req: NextRequest) {
       sourceId: created.id,
     })
   }
+
+  // ── مرآة Turso: تعليق جديد + تحديث عدادات المنشور + لقطة العضو ──
+  // (fire-and-forget — no-op بدون مفاتيح Turso، لا تكسر الطلب أبدًا)
+  void tursoUpsertMember(userId)
+  void tursoUpsertComment(created.id)
+  void tursoUpsertPost(postId)
 
   return NextResponse.json({ id: created.id }, { status: 201 })
 }

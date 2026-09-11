@@ -4,6 +4,7 @@ import { data } from '@/lib/data'
 import { withIdempotency } from '@/lib/idempotency'
 import { AVATARS } from '@/lib/avatars'
 import { parseBody, avatarIdSchema } from '@/lib/validators'
+import { tursoUpsertMember } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'الصورة الرمزية غير صالحة' }, { status: 400 })
     }
     await data.profiles.update(userId, { avatar })
+    // مرآة Turso — تحديث لقطة العضو العام (fire-and-forget)
+    void tursoUpsertMember(userId)
     return NextResponse.json({ success: true, avatar })
   
   })

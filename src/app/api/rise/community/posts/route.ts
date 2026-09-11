@@ -5,18 +5,28 @@ import { getAccessToken } from '@/lib/cookie-auth'
 import { parseBody, communityPostCreateSchema } from '@/lib/validators'
 import { processMentions } from '@/lib/community-mentions'
 import { logAudit } from '@/lib/audit'
+import { consumeUsage, limitReachedResponse } from '@/lib/billing/entitlements'
+import { signMediaForApi } from '@/lib/r2'
+import { tursoUpsertPost, tursoUpsertMember } from '@/lib/community-sync'
+import { MAX_MEDIA_PER_POST } from '@/lib/media-constants'
 
 export const dynamic = 'force-dynamic'
 
 // ============================================================
-// /api/rise/community/posts — المرحلة 07 (المجتمع)
+// /api/rise/community/posts — المرحلة 07 (المجتمع) + 07-ب
 //
 // GET  : خلاصة المنشورات (RPC get_community_feed — نداء واحد:
-//        عناصر + total + hasMore + liked_by_me).
+//        عناصر + total + hasMore + liked_by_me + media).
 //        ?page=1&filter=latest|top
-// POST : نشر منشور/سؤال (zod + rate limit 5/min في الـmiddleware)
+//        روابط صور R2 توقّع خادميًا (مؤقتة) قبل الإرسال.
+// POST : نشر منشور/سؤال (zod + rate limit) → حد الخطة أولًا
+//        (المجانية 3 منشورات/يوم — consume_usage داخل DB)
 //        → RLS insert-own + إذونات أعمدة (لا يمكن تعيين العدادات)
-//        → تحليل @mentions خادميًا → إشعار mention لكل مذكور.
+//        → إرفاق مرفقات R2 (media) عبر service_role بعد التحقق
+//        من ملكية media_objects (لا نثق بقوائم العميل)
+//        → تحليل @mentions خادميًا → إشعار mention لكل مذكور
+//        → مزامنة مرآة Turso (فصل مسار البيانات العامة —
+//          قرار المالك في وثيقة النطاق §4؛ fire-and-forget).
 // ============================================================
 
 export async function GET(req: NextRequest) {
@@ -49,7 +59,19 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ error: 'تعذّر تحميل المجتمع — أعد المحاولة' }, { status: 500 })
   }
-  return NextResponse.json(data ?? { items: [], total: 0, page, perPage: 20, hasMore: false })
+  const payload = (data ?? { items: [], total: 0, page, perPage: 20, hasMore: false }) as any
+  // توقيع روابط صور R2 خادميًا (R2 غير مضبوط → url=null — العميل
+  // يعرض حالة «غير متاح»، والنص يعمل كالسابق)
+  if (Array.isArray(payload.items)) {
+    await Promise.all(
+      payload.items.map(async (item: any) => {
+        if (item && Array.isArray(item.media) && item.media.length > 0) {
+          item.media = await signMediaForApi(item.media)
+        }
+      }),
+    )
+  }
+  return NextResponse.json(payload)
 }
 
 export async function POST(req: NextRequest) {
@@ -66,9 +88,54 @@ export async function POST(req: NextRequest) {
   const parsed = await parseBody(req, communityPostCreateSchema)
   if (!parsed.ok || !parsed.data) return parsed.response!
 
-  const { title, body } = parsed.data
+  const { title, body, media } = parsed.data
+
+  // ── حد الخطة (وثيقة النطاق §5: المجانية «قراءة + 3 منشورات/يوم») ──
+  // القرار الذري داخل consume_usage في DB؛ عند المنع → 402 مع
+  // الاستخدام → واجهة المستخدم تعرض upgrade prompt (نفس مسار export).
+  const usage = await consumeUsage(req, 'community.post')
+  if (!usage.allowed) {
+    return limitReachedResponse(usage)
+  }
+
   const client = await createSupabaseUserClient(token)
   if (!client) return NextResponse.json({ error: 'خطأ في تكوين الخادم' }, { status: 500 })
+
+  // ── التحقق من مرفقات R2 قبل النشر (لا نثق بقوائم العميل) ──
+  // صفوف media_objects: ملكيتي + status pending/active + غير
+  // معلّقة بمنشور آخر + المفتاح المُرسَل يطابق صف القاعدة.
+  const admin = await getSupabaseAdmin()
+  let mediaRows: Array<{ id: string; object_key: string; bytes: number; content_type: string }> = []
+  if (media && media.length > 0) {
+    if (media.length > MAX_MEDIA_PER_POST) {
+      return NextResponse.json({ error: `حتى ${MAX_MEDIA_PER_POST} صور في المنشور` }, { status: 400 })
+    }
+    if (!admin) return NextResponse.json({ error: 'خطأ في تكوين الخادم' }, { status: 500 })
+    const ids = media.map((m: { mediaId: string }) => m.mediaId)
+    const { data: objs } = await (admin as any)
+      .from('media_objects')
+      .select('id, object_key, bytes, content_type, user_id, status, post_id')
+      .in('id', ids)
+    const byId = new Map<string, any>((objs ?? []).map((o: any) => [o.id, o]))
+    const valid: any[] = []
+    for (const m of media) {
+      const o = byId.get(m.mediaId)
+      if (
+        !o ||
+        o.user_id !== userId ||
+        !['pending', 'active'].includes(o.status) ||
+        o.post_id != null ||
+        o.object_key !== m.key
+      ) {
+        return NextResponse.json(
+          { error: 'مرفق غير صالح أو مستخدم بالفعل — أعد رفع الصورة وأعد المحاولة', code: 'INVALID_MEDIA' },
+          { status: 400 },
+        )
+      }
+      valid.push(o)
+    }
+    mediaRows = valid
+  }
 
   const { data: created, error } = await (client as any)
     .from('community_posts')
@@ -88,11 +155,33 @@ export async function POST(req: NextRequest) {
   await logAudit(req, userId, 'community-post-create', {
     resource: 'community_posts',
     resourceId: created.id,
-    details: { title: title.slice(0, 80) },
+    details: { title: title.slice(0, 80), mediaCount: mediaRows.length },
   })
 
-  // mentions — فشلها لا يفشّل النشر أبدًا
-  const admin = await getSupabaseAdmin()
+  // ── إرفاق المرفقات عبر service_role (عمود media خارج إذونات
+  // المستخدم — لا يمكن تزويره حتى عبر PostgREST مباشرة) ──
+  if (mediaRows.length > 0 && admin) {
+    const mediaJson = mediaRows.map((o) => ({
+      key: o.object_key,
+      contentType: o.content_type,
+      bytes: Number(o.bytes) || 0,
+    }))
+    const { error: attachErr } = await (admin as any)
+      .from('community_posts')
+      .update({ media: mediaJson })
+      .eq('id', created.id)
+    if (attachErr) {
+      // المنشور نُشر نصيًا؛ فشل الإرفاق لا يفسده — يُسجّل فقط
+      console.warn('[community/posts] media attach failed:', attachErr.message)
+    } else {
+      await (admin as any)
+        .from('media_objects')
+        .update({ status: 'active', post_id: created.id })
+        .in('id', mediaRows.map((o) => o.id))
+    }
+  }
+
+  // mentions — فشلها لا يفشّل النشر أبدًا (admin جاهز من بلوك المرفقات)
   if (admin) {
     const { data: me } = await (admin as any)
       .from('profiles')
@@ -111,6 +200,11 @@ export async function POST(req: NextRequest) {
       })
     }
   }
+
+  // ── مرآة Turso (قرار المالك — فصل مسار البيانات العامة §4) ──
+  // no-op بدون مفاتيح Turso؛ fire-and-forget لا يكسر الطلب أبدًا.
+  void tursoUpsertMember(userId)
+  void tursoUpsertPost(created.id)
 
   return NextResponse.json({ id: created.id }, { status: 201 })
 }

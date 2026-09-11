@@ -4,6 +4,7 @@ import { createSupabaseUserClient, isSupabaseConfigured } from '@/lib/supabase'
 import { getAccessToken } from '@/lib/cookie-auth'
 import { parseBody, communityCommentUpdateSchema } from '@/lib/validators'
 import { logAudit } from '@/lib/audit'
+import { tursoUpsertComment, tursoDeleteComment, tursoUpsertPost } from '@/lib/community-sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     resource: 'community_comments',
     resourceId: id,
   })
+
+  // مرآة Turso (fire-and-forget — no-op بدون مفاتيح Turso)
+  void tursoUpsertComment(id)
+
   return NextResponse.json({ ok: true })
 }
 
@@ -70,6 +75,14 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const client = await createSupabaseUserClient(token)
   if (!client) return NextResponse.json({ error: 'خطأ في تكوين الخادم' }, { status: 500 })
 
+  // post_id قبل الحذف لإعادة مزامنة عدادات المنشور في المرآة
+  const { data: cRow } = await (client as any)
+    .from('community_comments')
+    .select('post_id')
+    .eq('id', id)
+    .maybeSingle()
+  const postIdForSync: string | null = cRow?.post_id ?? null
+
   const { error } = await (client as any).from('community_comments').delete().eq('id', id)
   if (error) {
     console.warn('[community/comments/id] delete failed:', error.message)
@@ -80,5 +93,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     resource: 'community_comments',
     resourceId: id,
   })
+
+  // مرآة Turso — حذف التعليق + إعادة مزامنة عدادات منشوره
+  void tursoDeleteComment(id)
+  if (postIdForSync) void tursoUpsertPost(postIdForSync)
+
   return NextResponse.json({ ok: true })
 }

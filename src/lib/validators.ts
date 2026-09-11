@@ -245,6 +245,12 @@ export async function parseBody<T>(
 export const communityPostCreateSchema = z.object({
   title: z.string().trim().min(3, 'العنوان قصير جدًا (3 أحرف على الأقل)').max(200, 'العنوان طويل جدًا (200 حرف كحد أقصى)'),
   body: z.string().trim().min(1, 'المحتوى مطلوب').max(10000, 'المحتوى طويل جدًا (10000 حرف كحد أقصى)'),
+  // المرحلة 07-ب: مفاتيح مرفقات سبق رفعها إلى R2 عبر مسار presign.
+  // التحقق من الملكية والحالة يجري خادميًا ضد media_objects (لا نثق بالعميل).
+  media: z.array(z.object({
+    key: z.string().trim().min(5, 'مفتاح المرفق غير صالح').max(300, 'مفتاح المرفق غير صالح'),
+    mediaId: z.string().uuid('معرّف المرفق غير صالح'),
+  })).max(4, 'حتى 4 صور في المنشور الواحد').optional(),
 })
 
 export const communityPostUpdateSchema = z.object({
@@ -276,6 +282,18 @@ export const communityReportSchema = z.object({
 
 export const communityMembersSearchSchema = z.object({
   q: z.string().trim().min(1, 'اكتب حرفًا للبحث').max(64, 'استعلام طويل جدًا').optional(),
+})
+
+// ── المرحلة 07-ب: طلب رابط رفع موقّع (presigned PUT) لصورة إلى R2 ──
+export const communityMediaPresignSchema = z.object({
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'], {
+    message: 'نوع الصورة غير مدعوم (JPG / PNG / WebP / GIF فقط)',
+  }),
+  bytes: z
+    .number({ message: 'حجم الصورة مطلوب' })
+    .int('حجم غير صالح')
+    .min(1, 'حجم غير صالح')
+    .max(8388608, 'الصورة أكبر من 8MB — صغّرها وأعد المحاولة'),
 })
 
 export const communityModerateSchema = z.discriminatedUnion('action', [

@@ -13,12 +13,15 @@ import { MODULE_ICONS, RiseGlyphIcon, type RiseGlyph } from "./icons";
 import { MODULE_LABELS } from "@/lib/module-labels";
 
 // Unified labels come from MODULE_LABELS (same names as desktop sidebar + page title)
+// FIX (owner: «مش شايف تاب المجتمع»): community replaces finance in the 5-slot
+// mobile bar — finance stays fully reachable via the sidebar («المال والمراجعة»).
+// A 6th item would overflow 360px viewports (labels are ~10px Arabic).
 const NAV_ITEMS: { id: ModuleId; label: string; glyph: RiseGlyph }[] = [
   { id: "dashboard", label: MODULE_LABELS.dashboard, glyph: MODULE_ICONS.dashboard.glyph },
   { id: "tasks", label: MODULE_LABELS.tasks, glyph: MODULE_ICONS.tasks.glyph },
   { id: "habits", label: MODULE_LABELS.habits, glyph: MODULE_ICONS.habits.glyph },
   { id: "planner", label: MODULE_LABELS.planner, glyph: MODULE_ICONS.planner.glyph },
-  { id: "finance", label: MODULE_LABELS.finance, glyph: MODULE_ICONS.finance.glyph },
+  { id: "community", label: MODULE_LABELS.community, glyph: MODULE_ICONS.community.glyph },
 ];
 
 export function GlassNav() {
