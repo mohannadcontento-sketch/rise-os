@@ -3,9 +3,11 @@
 // (أوج | awj.life) — نسخة برمجية من
 // docs/phase-3/recovery-email-template.html
 //
-// يستخدمه مسار الأدمن /api/rise/admin/email-template لتطبيق
-// القالب على Supabase (auth.email_templates → type='recovery')
-// بضغطة واحدة من لوحة الإدارة — بدل اللصق اليدوي من الـDashboard.
+// يستخدمه مسار /api/rise/email-template/ensure لتطبيق القالب
+// على Supabase (auth.email_templates → type='recovery')
+// تلقائيًا عبر Vercel Cron يوميًا — بلا أي تدخل يدوي من المالك
+// (طلب المالك: «زبط الايميل لاني مش فاهم» — التاب أُزيل من
+// لوحة التحكم والقالب بيتطبّق لوحده).
 //
 // متغيرات Supabase الحيوية (لا تغيّرها — تدفق PKCE يعتمد عليها):
 //   {{ .ConfirmationURL }}  رابط إعادة التعيين

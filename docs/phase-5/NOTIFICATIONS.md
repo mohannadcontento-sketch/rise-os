@@ -58,9 +58,12 @@
 **جديد**:
 - `src/lib/notifications-service.ts` — الخدمة الموحدة + نصوص الرسائل
 - `src/components/rise/notifications-drawer.tsx` — مركز الإشعارات الكامل
-- `src/app/api/rise/admin/email-template/route.ts` — تطبيق قالب إيميل الريست في Supabase (طلب المالك)
-- `src/components/rise/admin-email-template-tab.tsx` — تاب «الإيميل» بلوحة الأدمن
+- `src/app/api/rise/email-template/ensure/route.ts` — تطبيق قالب إيميل الريست في Supabase آليًا (cron يومي) — حلّ محل مسار الأدمن القديم
 - `src/lib/email/recovery-template.ts` — القالب برمجيًا (نفس `docs/phase-3/recovery-email-template.html`)
+
+**محذوف (طلب المالك «شيل الجزء الخاص بالإيميل من التحكم»)**:
+- `src/app/api/rise/admin/email-template/route.ts` — استُبدل بـ`/api/rise/email-template/ensure`
+- `src/components/rise/admin-email-template-tab.tsx` — تاب «الإيميل» أُزيل من لوحة الأدمن
 
 **معدَّل**:
 - `src/lib/data/notifications.ts` — feed / markAllRead / unreadCount (RPC + fallback)
@@ -71,8 +74,10 @@
 - `src/app/api/rise/admin/users/route.ts` — تصليح notify + إشعار إلغاء الإيقاف
 - `src/app/api/rise/export/route.ts` — إشعارات نجاح/فشل الخلفية
 - `src/app/api/rise/user/subscription/route.ts` — إشعار قرب انتهاء الاشتراك (آخر 7 أيام)
-- `src/components/rise/admin-panel.tsx` — تاب «الإيميل»
-- `docs/phase-3/AUTH.md` §5.3 — تطبيق القالب بضغطة واحدة
+- `src/components/rise/admin-panel.tsx` — إزالة تاب «الإيميل» (طلب المالك)
+- `vercel.json` — cron يومي (01:17 UTC) لمسار التطبيق الآلي
+- `src/middleware.ts` — rate-limit 2/min لمسار التطبيق الآلي
+- `docs/phase-3/AUTH.md` §5.3 — التطبيق الآلي عبر الـcron
 
 ---
 
@@ -90,13 +95,18 @@
    `supabase/migrations/026_phase5_notifications_center.sql`
    — بدونه تعمل المنصة بوضع degraded (المسار القديم: بلا فلاتر/dedup/أولوية) ولا يُطبَّق قالب الإيميل آليًا.
 2. **(اختياري) تشغيل اختبار SQL**: `supabase/tests/phase5_notifications.sql` — لا يترك أثرًا.
-3. **قالب إيميل إعادة التعيين (طلب المالك «حط قالب الايميل دا في سوبا بيز»)**:
-   لوحة الأدمن → تاب **«الإيميل»** → **«تطبيق القالب في Supabase»**.
-   - `updated` → تم ✓
-   - `table_missing`/`permission` → هذا المشروع يمنع الكتابة على auth.email_templates من دور التطبيق → استخدم زر «نسخ HTML» واللصق اليدوي من الـDashboard (الخطوات معروضة في نفس التاب).
+3. **قالب إيميل إعادة التعيين — آلي، لا خطوة مطلوبة** (طلب المالك «زبط الايميل لاني مش فاهم»):
+   التاب اليدوي أُزيل من لوحة الأدمن، والمسار
+   `GET /api/rise/email-template/ensure` يُطبّق القالب بصلاحيات الخادم
+   (service role موجودة أصلًا في بيئة Vercel)، وVercel Cron يعيد
+   التطبيق يوميًا (self-healing).
+   الفحص: `curl https://rise-os-gamma.vercel.app/api/rise/email-template/ensure`
+   - `applied:true` → تم ✓
+   - `table_missing`/`permission` → لصق يدوي مرة واحدة من الـDashboard
+     (الخطوات في `docs/phase-3/AUTH.md` §5.3).
 4. (اختياري) بعد التطبيق: جرّب «نسيت كلمة المرور؟» وتأكد من شكل الإيميل الجديد.
 
-> ملاحظة: تطبيق القالب آليًا يحتاج migration 026 أولًا (RPC التطبيق فيها).
+> ملاحظة: التطبيق الآلي يحتاج migration 026 — **متطبق فعلًا في الإنتاج** (تم التحقق 2026-09-12: الـRPC موجود ويستجيب).
 
 ---
 

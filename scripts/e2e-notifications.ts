@@ -14,6 +14,10 @@
 //   B) mock-direct (عبر RPC على الموك نفسه):
 //  10. ai.action: القرب من الحد (80%) → إشعار near (normal)
 //  11. الحد اليومي 5 → blocked — ثم التحقق عبر feed التطبيق
+//   C) email-template/ensure (تحديث المالك — التطبيق الآلي للقالب):
+//  12. GET بلا توكن → 200 applied/updated + قالب سليم + الموضوع أوج
+//  13. كاش 10 دقائق + force متكرر (idempotent)
+//  14. rate-limit 5/min → 429 (GET فقط — بلا POST/middleware idempotency)
 // Run: bun scripts/e2e-notifications.ts  (APP=http://127.0.0.1:3100)
 // ============================================================
 
@@ -185,6 +189,43 @@ async function main() {
     n.type === 'usage' && (n.metadata as any)?.reason === 'daily_limit' && (n.metadata as any)?.feature === 'ai.action'
   )
   check('إشعار حظر ai واحد فقط (dedup)', dailyBlocked.length === 1, `length=${dailyBlocked.length}`)
+
+  // ═════════ PART C: email-template/ensure (تحديث المالك — التطبيق الآلي) ═════════
+
+  console.log('── STEP 11: مسار تطبيق قالب الإيميل آليًا (بلا مصادقة — idempotent) ──')
+  // المسار عام (يناديه cron Vercel برأس x-vercel-cron) — بلا توكن مستخدم.
+  const plain = (path: string, init: RequestInit = {}) =>
+    fetch(`${APP}${path}`, { ...init, headers: { 'content-type': 'application/json', ...(init.headers as any) }, redirect: 'manual' })
+
+  const rE1 = await plain('/api/rise/email-template/ensure')
+  const jE1 = await rE1.json().catch(() => ({}))
+  check('GET (بلا توكن) → 200', rE1.status === 200, String(rE1.status))
+  check('applied=true + reason=updated (RPC بصلاحيات الخادم)', jE1.applied === true && jE1.reason === 'updated', JSON.stringify(jE1).slice(0, 140))
+  check('القالب يحتوي {{ .ConfirmationURL }} (تدفق PKCE سليم)', jE1.hasConfirmationUrl === true, String(jE1.hasConfirmationUrl))
+  check('الموضوع = «إعادة تعيين كلمة المرور — أوج»', jE1.subject === 'إعادة تعيين كلمة المرور — أوج', String(jE1.subject))
+  check('contentLength منطقي (> 3KB قالب HTML كامل)', Number(jE1.contentLength) > 3000, String(jE1.contentLength))
+
+  const rE2 = await plain('/api/rise/email-template/ensure')
+  const jE2 = await rE2.json().catch(() => ({}))
+  check('الاستدعاء المتكرر → كاش 10 دقائق (cached=true)', rE2.status === 200 && jE2.cached === true && jE2.applied === true, JSON.stringify(jE2).slice(0, 100))
+
+  const rE3 = await plain('/api/rise/email-template/ensure?force=1')
+  const jE3 = await rE3.json().catch(() => ({}))
+  check('?force=1 → إعادة تطبيق حقيقية (بلا كاش)', rE3.status === 200 && jE3.applied === true && jE3.cached === undefined, JSON.stringify(jE3).slice(0, 100))
+
+  const rE4 = await plain('/api/rise/email-template/ensure?force=1')
+  const jE4 = await rE4.json().catch(() => ({}))
+  check('force متكرر → 200 applied (idempotent دائمًا)', rE4.status === 200 && jE4.applied === true, String(rE4.status))
+
+  console.log('── STEP 12: rate-limit مسار التطبيق (5/min) ──')
+  // استهلكنا 4 طلبات (GET×2 + force×2) — الخامس يمر، ثم 429.
+  const rE5 = await plain('/api/rise/email-template/ensure')
+  check('الطلب #5 → آخر طلب مسموح (200)', rE5.status === 200, String(rE5.status))
+  const rE6 = await plain('/api/rise/email-template/ensure')
+  const jE6 = await rE6.json().catch(() => ({}))
+  check('الطلب #6 → 429 RATE_LIMITED (middleware)', rE6.status === 429 && jE6.code === 'RATE_LIMITED', `${rE6.status} ${JSON.stringify(jE6).slice(0, 80)}`)
+  const rE7 = await plain('/api/rise/email-template/ensure?force=1')
+  check('الطلب #7 (force) → 429 أيضًا (الحد قبل المسار)', rE7.status === 429, String(rE7.status))
 
   console.log('')
   if (failures === 0) {
