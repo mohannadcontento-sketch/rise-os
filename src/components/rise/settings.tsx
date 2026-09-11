@@ -75,6 +75,8 @@ import { AVATARS, type AvatarItem } from '@/lib/avatars'
 import { getToday } from '@/lib/rise-utils'
 import { RiseIcon } from '@/components/rise/icons'
 import { BellToggle } from '@/components/rise/kit-v2'
+import { SectionCard } from '@/components/rise/settings-section-card'
+import { SubscriptionSection } from '@/components/rise/subscription-section'
 import {
   getBrowserPermissionState,
   requestBrowserPermission,
@@ -144,43 +146,8 @@ function formatBytes(bytes: number): string {
 }
 
 /* ────────────── Section shell ────────────── */
-
-function SectionCard({
-  icon: Icon,
-  well,
-  title,
-  desc,
-  children,
-  className,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  well: string
-  title: string
-  desc?: string
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className={cn('neo-card card-lift overflow-hidden', className)}>
-      <div className="p-5 pb-4">
-        <h3 className="text-base font-bold flex items-center gap-2.5">
-          <span className={cn('icon-well h-7 w-7', well)}>
-            <Icon className="h-4 w-4" />
-          </span>
-          <span>
-            {title}
-            {desc && (
-              <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
-                {desc}
-              </span>
-            )}
-          </span>
-        </h3>
-      </div>
-      <div className="px-5 pb-5 space-y-4">{children}</div>
-    </div>
-  )
-}
+// SectionCard انتقل إلى settings-section-card.tsx (مشترك مع قسم
+// الاشتراك — المرحلة 04) والاستيراد في الأعلى.
 
 /* ────────────── Component ────────────── */
 
@@ -297,11 +264,26 @@ export default function Settings() {
   const handleExportData = () => {
     toast.loading('جاري تصدير البيانات...', { id: 'export' })
     apiFetch('/api/rise/export')
-      .then((res) => {
+      .then(async (res) => {
+        // ── المرحلة 04: 402 LIMIT_REACHED → upgrade prompt ──
+        if (res.status === 402) {
+          const body = await res.json().catch(() => ({}))
+          toast.dismiss('export')
+          toast.error(body.error || 'وصلت للحد اليومي من التصدير', {
+            id: 'export-limit',
+            duration: 8000,
+            action: {
+              label: 'ترقية الخطة',
+              onClick: () => window.dispatchEvent(new CustomEvent('awj:open-upgrade')),
+            },
+          })
+          return null
+        }
         if (!res.ok) throw new Error('فشل التصدير')
         return res.blob()
       })
       .then((blob) => {
+        if (!blob) return
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -780,6 +762,14 @@ export default function Settings() {
       {/* Appearance */}
       {/* Masonry: sections flow into balanced columns — no dead space on laptop */}
       <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
+      {/* الخطة والاشتراك — المرحلة 04 */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="break-inside-avoid mb-4"
+      >
+        <SubscriptionSection />
+      </motion.div>
       {/* الحساب والأمان — المرحلة 03 */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}

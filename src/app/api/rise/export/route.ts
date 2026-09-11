@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
+import { consumeUsage, limitReachedResponse } from '@/lib/billing/entitlements'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,15 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await requireUser(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
+
+    // ── المرحلة 04: حد تصدير البيانات (server-side، لا تجاوز من الفرونت) ──
+    // القرار الذري داخل consume_usage (قاعدة البيانات)؛ عند المنع
+    // نرجّع 402 LIMIT_REACHED مع الاستخدام → واجهة المستخدم تعرض
+    // upgrade prompt. (degraded = الهجرة غير مطبقة → سلوك سابق)
+    const usage = await consumeUsage(req, 'export.data')
+    if (!usage.allowed) {
+      return limitReachedResponse(usage)
+    }
 
     const [
       tasksResult,

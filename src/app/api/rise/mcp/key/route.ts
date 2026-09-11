@@ -4,6 +4,7 @@ import { data } from '@/lib/data'
 import { hashApiKey, isSupabaseConfigured } from '@/lib/supabase'
 import crypto from 'crypto'
 import { withIdempotency } from '@/lib/idempotency'
+import { checkEntitlement } from '@/lib/billing/entitlements'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,21 @@ export async function POST(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
     }
+
+  // ── المرحلة 04: مفتاح MCP متاح لخطة ماكس فقط (entitlement منطقي
+  // بلا عدّ — check_entitlement RPC؛ degraded = الهجرة غير مطبقة)
+  const entitlement = await checkEntitlement(req, 'mcp.key')
+  if (!entitlement.entitled) {
+    return NextResponse.json(
+      {
+        error: 'مفتاح MCP متاح في خطة ماكس فقط — رقّي حسابك لتفعيله.',
+        code: 'PLAN_REQUIRED',
+        requiredPlan: 'max',
+        currentPlan: entitlement.plan,
+      },
+      { status: 403 },
+    )
+  }
 
   return withIdempotency(req, userId, async () => {
     const apiKey = generateApiKey()

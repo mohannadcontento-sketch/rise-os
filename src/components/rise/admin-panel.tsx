@@ -7,6 +7,7 @@ import {
   Users,
   Database,
   Key,
+  Crown,
   BarChart3,
   Search,
   RefreshCw,
@@ -71,6 +72,7 @@ import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { AdminUser, SystemStats, ApiKeyInfo, toArabicNum, formatBytes, formatDate, formatDateTime, timeAgo, timeAgoEn } from './admin-panel-utils'
+import { AdminSubscriptionsTab } from './admin-subscriptions-tab'
 
 function StatsSkeleton() {
   return (
@@ -1808,6 +1810,10 @@ export default function AdminPanel() {
             <Users className="w-3.5 h-3.5" />
             <span>المستخدمين</span>
           </TabsTrigger>
+          <TabsTrigger value="subscriptions" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Crown className="w-3.5 h-3.5" />
+            <span>الاشتراكات</span>
+          </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
             <Activity className="w-3.5 h-3.5" />
             <span>الصحة والأخطاء</span>
@@ -1835,6 +1841,9 @@ export default function AdminPanel() {
         </TabsContent>
         <TabsContent value="users">
           <UserManagementTab />
+        </TabsContent>
+        <TabsContent value="subscriptions">
+          <AdminSubscriptionsTab />
         </TabsContent>
         <TabsContent value="stats">
           <SystemStatsTab />

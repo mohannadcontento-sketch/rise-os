@@ -82,6 +82,9 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/auth/update-password': { limit: 5, window: '1 m' },
   '/api/auth/delete-account': { limit: 2, window: '1 m' },
   '/api/auth/logout-all': { limit: 10, window: '1 m' },
+  // المرحلة 04 — طلبات الترقية وإدارة الاشتراكات
+  '/api/rise/user/subscription/requests': { limit: 3, window: '1 m' },
+  '/api/rise/admin/subscriptions': { limit: 20, window: '1 m' },
   '/api/error-log': { limit: 30, window: '1 m' },
   '/api/rise/export': { limit: 5, window: '1 m' },
   '/api/rise/delete-all': { limit: 2, window: '1 m' },

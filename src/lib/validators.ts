@@ -95,6 +95,63 @@ export const deleteAccountSchema = z.object({
   }),
 })
 
+// ─── المرحلة 04 — Plans والاشتراكات والـUsage Limits ───
+
+/**
+ * POST /api/rise/user/subscription/requests — طلب ترقية (دفع يدوي v1).
+ * المرجع = رقم عملية الدفع لدى الوسيلة (InstaPay/كاش...) 4–64 حرفًا.
+ */
+export const subscriptionRequestSchema = z.object({
+  requestedPlan: z.enum(['plus', 'max'], {
+    message: 'الخطة المطلوبة يجب أن تكون بلس أو ماكس',
+  }),
+  paymentMethod: z.enum(['instapay', 'vodafone_cash', 'etisalat_cash', 'other'], {
+    message: 'وسيلة دفع غير معروفة',
+  }),
+  reference: z
+    .string()
+    .trim()
+    .min(4, 'رقم عملية الدفع مطلوب (4 أحرف على الأقل)')
+    .max(64, 'رقم العملية أطول من اللازم'),
+  note: z.string().trim().max(200, 'الملاحظة أطول من 200 حرف').optional(),
+})
+
+/**
+ * POST /api/rise/admin/subscriptions — إجراءات الأدمن:
+ * approve (requestId + مدة) / reject (requestId + سبب) / set-plan يدوي.
+ */
+export const adminSubscriptionActionSchema = z
+  .object({
+    action: z.enum(['approve', 'reject', 'set-plan'], {
+      message: 'إجراء غير معروف',
+    }),
+    requestId: uuidSchema.optional(),
+    userId: uuidSchema.optional(),
+    plan: z.enum(['free', 'plus', 'max']).optional(),
+    months: z
+      .number()
+      .int('المدة يجب أن تكون عددًا صحيحًا من الشهور')
+      .min(1, 'أقل مدة شهر واحد')
+      .max(12, 'أقصى مدة 12 شهرًا')
+      .optional(),
+    reference: z
+      .string()
+      .trim()
+      .min(4, 'مرجع العملية مطلوب (4 أحرف على الأقل)')
+      .max(64, 'مرجع العملية أطول من اللازم')
+      .optional(),
+    reason: z.string().trim().min(3, 'سبب الرفض مطلوب').max(200, 'السبب أطول من 200 حرف').optional(),
+  })
+  .refine((v) => (v.action === 'approve' ? !!v.requestId : true), {
+    message: 'requestId مطلوب للاعتماد',
+  })
+  .refine((v) => (v.action === 'reject' ? !!v.requestId : true), {
+    message: 'requestId مطلوب للرفض',
+  })
+  .refine((v) => (v.action === 'set-plan' ? !!v.userId && !!v.plan : true), {
+    message: 'userId و plan مطلوبان للتعيين اليدوي',
+  })
+
 // ─── مساعد موحد لتحليل جسم الطلب ───
 
 export interface ParsedBody<T> {
