@@ -134,26 +134,24 @@ GRANT UPDATE (name, avatar) ON profiles TO authenticated;
    - `https://rise-os-gamma.vercel.app/auth/callback`
    - `http://localhost:3000/auth/callback` (للتطوير)
    بدون هذه الخطوة يرسل Supabase رابط الاستعادة إلى العنوان الافتراضي بدل `/auth/callback` فلا تُنشأ جلسة الاستعادة.
-3. **(المرحلة 05 — محدّث) قالب الإيميل المحسَّن يُطبَّق تلقائيًا — لا خطوة مطلوبة**:
+3. **(المرحلة 05 — محدّث 2026-09-12) قالب الإيميل المحسَّن — شبه آلي (خطوة نسخ/لصق واحدة)**:
    طلب المالك «زبط الايميل لاني مش فاهم» → أُزيل تاب «الإيميل» من لوحة الأدمن
-   بالكامل، واستُبدل بآلية ذاتية:
-   - `vercel.json` → **Vercel Cron** يوميًا (01:17 UTC ≈ 03:17 بتوقيت القاهرة)
-     ينادي `GET /api/rise/email-template/ensure`.
-   - المسار يستخدم صلاحيات الخادم (SUPABASE_SERVICE_ROLE_KEY — موجودة أصلًا في
-     بيئة Vercel) لنداء RPC `admin_apply_recovery_email_template` (migration 026)
-     الذي يكتب القالب في `auth.email_templates (type='recovery')` —
-     **idempotent + self-healing**: لو أُعيد ضبط المشروع يعيد الـcron تطبيقه
-     في اليوم التالي تلقائيًا.
+   بالكامل. **نتيجة الفحص المباشر للإنتاج**: هذا المشروع على Supabase لا يملك
+   جدول `auth.email_templates` (نسخة المنصة تخزّن القوالب في إعدادات GoTrue
+   لا في SQL) — لذا التطبيق الآلي الكامل مستحيل على مستوى المنصة، والـRPC
+   يرجع `reason:table_missing` بصدق (لو وفّرت المنصة الجدول لاحقًا سيعمل
+   الـcron تلقائيًا).
+   - **آلية دائمة**: `vercel.json` → Vercel Cron يوميًا (01:17 UTC) ينادي
+     `GET /api/rise/email-template/ensure` بصلاحيات الخادم — idempotent +
+     self-healing (يرجع الحالة الصادقة: applied / table_missing / …).
+   - **الخطوة الواحدة المتبقية (مرة واحدة فقط)**: افتح صفحة المساعدة
+     `https://rise-os-gamma.vercel.app/api/rise/email-template/view`
+     → اضغط «نسخ كود القالب» → Supabase Dashboard → Authentication →
+     Email Templates → Reset Password → Body type: HTML → الصق → Save.
+     (الصفحة فيها المعاينة + الخطوات + زر النسخ.)
    - الرابط الحي `{{ .ConfirmationURL }}` نفسه (لا تغيير في آلية PKCE).
-   - فحص يدوي في أي وقت (يُرجع حالة واضحة applied/reason):
+   - فحص الحالة في أي وقت:
      `curl https://rise-os-gamma.vercel.app/api/rise/email-template/ensure`
-   - ⚠️ لو عدّلت القالب يدويًا من الداشبورد لاحقًا وتريد تخصيصك الخاص —
-     أخبر المطوّر ليشيل الـcron، وإلا سيعيده للنسخة القياسية في اليوم التالي.
-   - *(حالة نادرة: `table_missing` / `permission`)* بعض المشاريع لا تتيح
-     الكتابة على auth schema — عندها فقط اللصق اليدوي مرة واحدة:
-     Dashboard → Authentication → **Email Templates** → **Reset Password** →
-     Body type: **HTML** → الصق محتوى `docs/phase-3/recovery-email-template.html`
-     → Save. معاينة: `download/recovery-email-preview.png`.
 
 ---
 

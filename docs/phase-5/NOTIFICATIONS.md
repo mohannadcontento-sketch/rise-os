@@ -58,7 +58,8 @@
 **جديد**:
 - `src/lib/notifications-service.ts` — الخدمة الموحدة + نصوص الرسائل
 - `src/components/rise/notifications-drawer.tsx` — مركز الإشعارات الكامل
-- `src/app/api/rise/email-template/ensure/route.ts` — تطبيق قالب إيميل الريست في Supabase آليًا (cron يومي) — حلّ محل مسار الأدمن القديم
+- `src/app/api/rise/email-template/ensure/route.ts` — فحص/تطبيق قالب إيميل الريست آليًا (cron يومي، idempotent) — حلّ محل مسار الأدمن القديم
+- `src/app/api/rise/email-template/view/route.ts` — صفحة المساعدة العامة (زر نسخ + خطوات + معاينة) — الخصلة الواحدة المتبقية بعد اكتشاف table_missing
 - `src/lib/email/recovery-template.ts` — القالب برمجيًا (نفس `docs/phase-3/recovery-email-template.html`)
 
 **محذوف (طلب المالك «شيل الجزء الخاص بالإيميل من التحكم»)**:
@@ -95,15 +96,15 @@
    `supabase/migrations/026_phase5_notifications_center.sql`
    — بدونه تعمل المنصة بوضع degraded (المسار القديم: بلا فلاتر/dedup/أولوية) ولا يُطبَّق قالب الإيميل آليًا.
 2. **(اختياري) تشغيل اختبار SQL**: `supabase/tests/phase5_notifications.sql` — لا يترك أثرًا.
-3. **قالب إيميل إعادة التعيين — آلي، لا خطوة مطلوبة** (طلب المالك «زبط الايميل لاني مش فاهم»):
-   التاب اليدوي أُزيل من لوحة الأدمن، والمسار
-   `GET /api/rise/email-template/ensure` يُطبّق القالب بصلاحيات الخادم
-   (service role موجودة أصلًا في بيئة Vercel)، وVercel Cron يعيد
-   التطبيق يوميًا (self-healing).
-   الفحص: `curl https://rise-os-gamma.vercel.app/api/rise/email-template/ensure`
-   - `applied:true` → تم ✓
-   - `table_missing`/`permission` → لصق يدوي مرة واحدة من الـDashboard
-     (الخطوات في `docs/phase-3/AUTH.md` §5.3).
+3. **قالب إيميل إعادة التعيين — شبه آلي (خطوة نسخ/لصق واحدة)** (طلب المالك «زبط الايميل لاني مش فاهم»):
+   التاب اليدوي أُزيل من لوحة الأدمن. المسار `GET /api/rise/email-template/ensure`
+   (cron يومي 01:17 UTC، idempotent، بصلاحيات الخادم) يفحص ويطبّق آليًا —
+   **والنتيجة الفعلية على هذا المشروع: `table_missing`** (المنصة تخزّن القوالب
+   في إعدادات GoTrue لا في SQL — migration 026 متطبقة والـRPC موجود ويعمل).
+   الخطوة الواحدة المتبقية: صفحة المساعدة
+   `https://rise-os-gamma.vercel.app/api/rise/email-template/view`
+   → زر «نسخ كود القالب» → لصق في Dashboard → Authentication → Email
+   Templates → Reset Password (HTML) → Save — مرة واحدة فقط.
 4. (اختياري) بعد التطبيق: جرّب «نسيت كلمة المرور؟» وتأكد من شكل الإيميل الجديد.
 
 > ملاحظة: التطبيق الآلي يحتاج migration 026 — **متطبق فعلًا في الإنتاج** (تم التحقق 2026-09-12: الـRPC موجود ويستجيب).

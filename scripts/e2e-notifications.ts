@@ -227,6 +227,14 @@ async function main() {
   const rE7 = await plain('/api/rise/email-template/ensure?force=1')
   check('الطلب #7 (force) → 429 أيضًا (الحد قبل المسار)', rE7.status === 429, String(rE7.status))
 
+  console.log('── STEP 13: صفحة المساعدة العامة (view) ──')
+  const rV = await plain('/api/rise/email-template/view')
+  const tV = await rV.text().catch(() => '')
+  check('view → 200 HTML', rV.status === 200 && String(rV.headers.get('content-type') || '').includes('text/html'), `${rV.status} ${rV.headers.get('content-type')}`)
+  check('فيها زر النسخ + الخطوات + المعاينة', tV.includes('نسخ كود القالب') && tV.includes('Email Templates') && tV.includes('Reset Password'), `len=${tV.length}`)
+  check('كود القالب كامل داخل textarea ({{ .ConfirmationURL }} مهرّب صحيح)', tV.includes('&lt;!DOCTYPE html&gt;') && tV.includes('{{ .ConfirmationURL }}'))
+  check('noindex (صفحة أداة — ليست للمحركات)', tV.includes('noindex'))
+
   console.log('')
   if (failures === 0) {
     console.log(`✅ e2e-notifications: ALL CHECKS PASS`)
