@@ -28,6 +28,9 @@
 --       g. سقف الساعة: 10 ادعاءات → rate_limited_hour
 --   9.  cleanup_stale: جهاز قديم (created_at قبل 31 يومًا) → إبطال
 --   10. الإشعار داخل الموقع موجود رغم كل رفض Push (DoD)
+--   11. إصلاح 029: مستخدم بلا صف تفضيلات → الافتراضيات (لا NULL)
+--       + upsert جهاز ينشئ الصف + البوابة تسمح (كانت ترفض
+--       بـcategory_disabled صامتًا — باگ «لا Push يصل أبدًا»)
 --
 -- ملاحظة: تعمل الجلسة هنا كـpostgres؛ نستخدم SET ROLE
 -- + request.jwt.claims لمحاكاة جلسة مستخدم حقيقية بالضبط.
@@ -44,6 +47,8 @@ DECLARE
   v_sub_id2 uuid;
   v_sub_id3 uuid;
   v_res jsonb;
+  v_pref jsonb;
+  v_gate jsonb;
   v_count int;
   v_notif uuid;
   v_notif2 uuid;
@@ -355,6 +360,62 @@ BEGIN
     RAISE EXCEPTION '❌ [10] فشل: last_push_at لم يُحدّث بعد النجاح';
   END IF;
   RAISE NOTICE '✅ [10] last_push_at يُحدّث بعد الإرسال الناجح';
+
+  RESET ROLE;
+  RAISE NOTICE '';
+  RAISE NOTICE '══ [11] إصلاح 029: تفضيلات مستخدم بلا صف ══';
+  -- الباگ القديم: COALESCE داخل إسقاط الصف ⇒ صفر صفوف ⇒ NULL بدل
+  -- الافتراضيات ⇒ البوابة ترفض category_disabled بصمت (لا Push يصل).
+  -- 029: نمط الاستعلام الجزئي (scalar subquery) + upsert ينشئ الصف.
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'authenticated')::text, false);
+
+  -- (أ) مستخدم نظيف بلا صف تفضيلات → الافتراضيات (كانت NULL)
+  DELETE FROM public.notification_preferences WHERE user_id = v_user;
+  SELECT public.get_notification_preferences() INTO v_pref;
+  IF v_pref IS NULL OR (v_pref->>'push_important')::boolean IS DISTINCT FROM true
+     OR (v_pref->>'push_community')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION '❌ [11a] فشل: بلا صف تفضيلات يجب أن ترجع الافتراضيات (لا NULL)';
+  END IF;
+  RAISE NOTICE '✅ [11a] بلا صف → الافتراضيات (enabled+important=true, community=false)';
+
+  -- (ب) _user_push_prefs للمستخدم بلا صف → الافتراضيات (كانت NULL)
+  --     (دالة داخلية: service_role فقط — نعود لpostgres للنداء)
+  RESET ROLE;
+  IF public._user_push_prefs(v_user) IS NULL THEN
+    RAISE EXCEPTION '❌ [11b] فشل: المساعد الداخلي يرجع NULL للمستخدم بلا صف';
+  END IF;
+  RAISE NOTICE '✅ [11b] _user_push_prefs يرجع الافتراضيات (وليس NULL)';
+
+  -- (ج) upsert جهاز ⇒ صف التفضيلات يُنشأ تلقائيًا
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'authenticated')::text, false);
+  PERFORM public.upsert_push_subscription(
+    'https://fcm.googleapis.com/fcm/send/test-029-prefs',
+    repeat('B', 87), repeat('a', 24), 'اختبار 029', 'test');
+  SELECT count(*) INTO v_count FROM public.notification_preferences
+  WHERE user_id = v_user AND push_enabled AND push_important;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION '❌ [11c] فشل: تسجيل جهاز يجب أن ينشئ صف التفضيلات';
+  END IF;
+  RAISE NOTICE '✅ [11c] تسجيل جهاز ⇒ صف التفضيلات موجود (افتراضيات)';
+
+  -- (د) السيناريو الكامل للباغ: جهاز + إشعار + بوابة → ok=true
+  --     (قبل 029 كان يُرفض بـ category_disabled صامتًا)
+  DELETE FROM public.notification_preferences WHERE user_id = v_user;
+  PERFORM public.notify_user(v_user, 'system', 'اختبار 029', 'بوابة Push',
+    null, null, null, 'normal', null, 'test-029-gate');
+  SELECT id INTO v_notif FROM public.notifications
+  WHERE user_id = v_user AND dedup_key = 'test-029-gate';
+  -- تصفير سقوف الفيضان (اختبار [8g] ملأها بـ10 ادعاءات داخل هذه المعاملة)
+  UPDATE public.notifications SET pushed_at = NULL WHERE user_id = v_user;
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'service_role')::text, false);
+  SELECT public.gate_push_for_notification(v_notif) INTO v_gate;
+  IF (v_gate->>'ok')::boolean IS NOT TRUE OR (v_gate->>'category')::text IS DISTINCT FROM 'important' THEN
+    RAISE EXCEPTION '❌ [11d] فشل: مستخدم بلا صف تفضيلات + جهاز مسجل يجب أن تسمح البوابة (ok=true, important) — رُفض بـ %', v_gate->>'reason';
+  END IF;
+  RAISE NOTICE '✅ [11d] بلا صف تفضيلات → البوابة تسمح (ok=true, category=important)';
 
   RESET ROLE;
   RAISE NOTICE '';
