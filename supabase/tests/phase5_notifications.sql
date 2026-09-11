@@ -232,7 +232,7 @@ BEGIN
   RAISE NOTICE '✅ [9] المنتهي حُذف كسولًا (purged=%) والعدّاد لم يحسبه', v_purged;
 
   -- ── [10] consume_usage: قرب الحد + المنع (dedup) ──
-  RAISE NOTICE '══ [10] ai.action: قرب 80% ثم المنع — إشعارات بلا تكرار ══';
+  RAISE NOTICE '══ [10] ai.action: قرب 80%% ثم المنع — إشعارات بلا تكرار ══';
   -- نظف عدادات اليوم لهذا الاختبار (داخل ROLLBACK — لا أثر).
   -- التنظيف بصلاحيات postgres: جدولات الاستخدام لا write policies
   -- للمستخدمين (عمدًا) فتنظيفها كـ authenticated يمس 0 صفوف.
@@ -255,9 +255,9 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.notifications
     WHERE user_id = v_user AND dedup_key LIKE 'usage-near-d:%';
   IF v_count <> 1 THEN
-    RAISE EXCEPTION '❌ [10b] فشل: إشعارات القرب = % (المتوقع 1 عند 80%)', v_count;
+    RAISE EXCEPTION '❌ [10b] فشل: إشعارات القرب = % (المتوقع 1 عند 80%%)', v_count;
   END IF;
-  RAISE NOTICE '✅ [10b] إشعار «اقتربت من حدك اليومي» ظهر مرة واحدة (80% = 4/5)';
+  RAISE NOTICE '✅ [10b] إشعار «اقتربت من حدك اليومي» ظهر مرة واحدة (80%% = 4/5)';
 
   v_res := public.consume_usage('ai.action');
   IF NOT (v_res->>'allowed')::boolean THEN

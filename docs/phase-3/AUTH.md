@@ -167,3 +167,14 @@ GRANT UPDATE (name, avatar) ON profiles TO authenticated;
 - `scripts/e2e-mock-supabase.ts` + `scripts/e2e-reset-flow.ts` (E2E كاملة ضد stub خادمي بتحقق SHA-256 حقيقي): 24 فحصًا ✅ — كوكي verifier httpOnly، إعادة التوجيه إلى `/reset-password` (وليس `/app`)، الفورم يظهر فقط بجلسة استعادة، الزيارة المباشرة محروسة، الجهاز الآخر → `state=device`، التغيير ينجح ويمحو الكوكيز، وبدون marker يُرفض 403.
 - `scripts/e2e-reset-run.sh` (بيئة العميل): يرفع الـ stub + `next start -p 3100` ويشغّل الـ E2E — النتيجة: «ALL E2E RECOVERY-FLOW CHECKS PASSED ✅» مع تبادل PKCE موثّق في سجل الـ stub.
 - tsc نظيف، والبناء يحتوي كوكي `rise-pkce-verifier` في chunks الخادم (تم التحقق بـ rg).
+
+### 6.2 دليل إرسال الإيميل المباشر (2026-09-12) — اتصال DB كامل
+
+- كلمة مرور قاعدة البيانات التي وفّرها المالك → تحقق مباشر من خط الاستعادة كاملًا على الإنتاج:
+  طلب استعادة لإيميل المالك الحقيقي عبر `POST /api/auth/reset-password` → 200 + كوكي verifier httpOnly،
+  وخلال ثانيتين ظهرت في القاعدة صف `recovery_token` في `auth.one_time_tokens` + صف PKCE جديد في
+  `auth.flow_state` — أي أن GoTrue قبل الطلب وأنشأ التوكن وأرسل الإيميل فعلًا لإنبوكس المالك.
+- فحص قاطع لتخزين القوالب: استعراض كامل لجداول schema الـ`auth` بصلاحيات postgres —
+  **لا يوجد جدول قوالب إيميل في Postgres** (المنصة تخزّنها في إعدادات GoTrue خارج القاعدة)،
+  لذا يبقى تغيير «شكل» الإيميل خطوة لوحة تحكم واحدة (صفحة المساعدة موجودة).
+- فحص المجهول (anti-enumeration) على الإنتاج: إيميل غير موجود → 200 نجاح عام + كوكي verifier ✓.

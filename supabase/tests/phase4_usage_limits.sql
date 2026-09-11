@@ -18,6 +18,9 @@
 -- + request.jwt.claims لمحاكاة جلسة مستخدم حقيقية بالضبط.
 -- ============================================================
 
+-- معاملة صريحة تُلغى في النهاية (ROLLBACK أدناه) — لا أثر على البيانات.
+BEGIN;
+
 DO $$
 DECLARE
   v_user uuid;
@@ -59,9 +62,11 @@ BEGIN
 
   -- ── [2] الإعادة اليومية ──
   RAISE NOTICE '══ [2] عداد الأمس (مملوء) لا يؤثر على اليوم ══';
+  RESET ROLE; -- seeding as table owner (normal sessions can NEVER write counters — by design)
   INSERT INTO public.usage_daily (user_id, day, feature_key, count, updated_at)
   VALUES (v_user, (current_date - 1), 'export.data', 999, now())
   ON CONFLICT (user_id, day, feature_key) DO UPDATE SET count = 999;
+  SET ROLE authenticated;
   v_res := public.consume_usage('export.data');
   -- كان محظورًا (3/3 اليوم)؛ عدّاد الأمس 999 يجب ألا يسمح به
   IF (v_res->>'allowed')::boolean THEN
@@ -77,9 +82,11 @@ BEGIN
 
   -- ── [3] الإعادة الشهرية ──
   RAISE NOTICE '══ [3] عدّاد الشهر الماضي (مملوء) لا يحسب هذا الشهر ══';
+  RESET ROLE; -- same pattern: seed as owner, resume user session
   INSERT INTO public.usage_monthly (user_id, month, feature_key, count, updated_at)
   VALUES (v_user, date_trunc('month', (now() - interval '1 month'))::date, 'export.data', 999, now())
   ON CONFLICT (user_id, month, feature_key) DO UPDATE SET count = 999;
+  SET ROLE authenticated;
   v_res := public.consume_usage('export.data');
   IF (v_res->>'reason') IS DISTINCT FROM 'daily_limit' THEN
     RAISE EXCEPTION '❌ [3] فشل: سبب المنع % (المتوقع daily_limit — الشهر الماضي لا يحجب)', v_res->>'reason';
