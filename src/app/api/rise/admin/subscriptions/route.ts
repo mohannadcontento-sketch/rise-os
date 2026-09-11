@@ -3,6 +3,7 @@ import { requireAdmin, logAudit } from '@/lib/audit'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { parseBody } from '@/lib/validators'
 import { adminSubscriptionActionSchema } from '@/lib/validators'
+import { notifyUser, subscriptionApprovedMessage, subscriptionRejectedMessage, subscriptionSetPlanMessage } from '@/lib/notifications-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -212,6 +213,15 @@ export async function POST(request: NextRequest) {
         },
       })
 
+      // المرحلة 05: إشعار المستخدم بالتفعيل (dedup على مستوى الطلب —
+      // لا يتكرر لو أعاد الأدمن المراجعة/التزامن). فشل الإشعار لا
+      // يفشّل الموافقة.
+      await notifyUser(sb, {
+        userId: reqRow.user_id,
+        ...subscriptionApprovedMessage(reqRow.requested_plan, months, expires),
+        dedupKey: `subreq-approved:${String(input.requestId)}`,
+      })
+
       return NextResponse.json({
         success: true,
         message: `تم تفعيل خطة ${reqRow.requested_plan === 'max' ? 'ماكس' : 'بلس'} لمدة ${months} شهر.`,
@@ -256,10 +266,21 @@ export async function POST(request: NextRequest) {
         details: { userId: reqRow.user_id, plan: reqRow.requested_plan, reason: input.reason ?? '' },
       })
 
+      // المرحلة 05: إشعار المستخدم بالرفض + السبب (dedup على الطلب)
+      await notifyUser(sb, {
+        userId: reqRow.user_id,
+        ...subscriptionRejectedMessage(reqRow.requested_plan, input.reason ?? 'لم يُقبل الدفع'),
+        dedupKey: `subreq-rejected:${String(input.requestId)}`,
+      })
+
       return NextResponse.json({ success: true, message: 'تم رفض الطلب وإبلاغ المستخدم.' })
     }
 
     // ── set-plan (تعيين يدوي مباشر) ──
+    // (zod refine يضمن وجودهما؛ هذا الحرس يضيّق الأنواع أيضًا)
+    if (!input.userId || !input.plan) {
+      return NextResponse.json({ error: 'userId و plan مطلوبان للتعيين اليدوي' }, { status: 400 })
+    }
     const now = new Date().toISOString()
     const months = input.months ?? 1
     const isFree = input.plan === 'free'
@@ -290,6 +311,13 @@ export async function POST(request: NextRequest) {
       resource: 'user_subscriptions',
       resourceId: String(input.userId),
       details: { plan: input.plan, months, reference: input.reference ?? 'admin-set' },
+    })
+
+    // المرحلة 05: إشعار المستخدم بالتعيين اليدوي (dedup على المستخدم+الخطة+التاريخ)
+    await notifyUser(sb, {
+      userId: input.userId,
+      ...subscriptionSetPlanMessage(input.plan, isFree ? null : months, isFree ? null : expires),
+      dedupKey: `sub-set:${input.userId}:${input.plan}:${now.slice(0, 10)}`,
     })
 
     return NextResponse.json({

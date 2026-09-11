@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { consumeUsage, limitReachedResponse } from '@/lib/billing/entitlements'
+import { notifyUser, exportDoneMessage, exportFailedMessage } from '@/lib/notifications-service'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  let userId: string | null = null
   try {
-    const userId = await requireUser(req)
+    userId = await requireUser(req)
 if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     // ── المرحلة 04: حد تصدير البيانات (server-side، لا تجاوز من الفرونت) ──
@@ -193,6 +196,20 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     const dateStr = new Date().toISOString().split('T')[0]
     const jsonStr = JSON.stringify(exportData, null, 2)
 
+    // المرحلة 05: إشعار «عملية خلفية» — سجل التصدير في مركز الإشعارات
+    // (dedup يومي؛ ينتهي تلقائيًا بعد 30 يومًا). فشل الإشعار لا يفسد التنزيل.
+    try {
+      const admin = await getSupabaseAdmin()
+      if (admin) {
+        await notifyUser(admin as any, {
+          userId,
+          ...exportDoneMessage(dateStr),
+          expiresAt: new Date(Date.now() + 30 * 864e5).toISOString(),
+          dedupKey: `export-done:${userId}:${dateStr}`,
+        })
+      }
+    } catch { /* silent — الإشعار ترف لا أساس */ }
+
     return new NextResponse(jsonStr, {
       status: 200,
       headers: {
@@ -202,6 +219,23 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     })
   } catch (error) {
     console.error('Export error:', error)
+
+    // المرحلة 05: إشعار فشل العملية (high) — يوثّق الفشل الحقيقي
+    // للمستخدم حتى لو رجعنا ملف fallback لعدم كسر التنزيل.
+    try {
+      if (userId) {
+        const admin = await getSupabaseAdmin()
+        if (admin) {
+          await notifyUser(admin as any, {
+            userId,
+            ...exportFailedMessage(String((error as Error)?.message || 'خطأ غير معروف')),
+            expiresAt: new Date(Date.now() + 30 * 864e5).toISOString(),
+            dedupKey: `export-fail:${userId}:${new Date().toISOString().slice(0, 13)}`,
+          })
+        }
+      }
+    } catch { /* silent */ }
+
     // Return a minimal valid export file as fallback
     const fallbackData = {
       metadata: {

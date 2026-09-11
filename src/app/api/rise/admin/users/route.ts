@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, isAdminRole } from '@/lib/supabase'
 import { bustSuspensionCache } from '@/lib/suspension'
 import { withIdempotency } from '@/lib/idempotency'
+import { notifyUser, adminMessageNotification, accountUnsuspendedMessage } from '@/lib/notifications-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -192,23 +193,32 @@ export async function POST(request: NextRequest) {
         }
         bustSuspensionCache(targetUserId)
         await logAudit(request, adminId, 'unsuspend', { resource: 'profiles', resourceId: targetUserId, details: { email: target.email } })
+        // المرحلة 05: أهلاً بعودتك — إشعار ترحيبي عند إلغاء الإيقاف
+        // (dedup شهري: لا يتكرر لو تكرر الإيقاف/التنشيط مرات في نفس الشهر)
+        await notifyUser(sb, {
+          userId: targetUserId,
+          ...accountUnsuspendedMessage(),
+          dedupKey: `unsuspend:${targetUserId}:${new Date().toISOString().slice(0, 7)}`,
+        })
         return NextResponse.json({ success: true })
       }
 
       case 'notify': {
+        // المرحلة 05 — تصليح جذري: الإدراج القديم كان يفشل صامتًا
+        // (type 'admin_message' خارج CHECK constraint + عمود is_read
+        // غير موجود). الآن عبر الخدمة الموحدة: type 'system' صحيح +
+        // dedup على (المستخدم+محتوى الرسالة+اليوم) يمنع التكرار.
         if (!title || !message) return NextResponse.json({ error: 'العنوان والنص مطلوبان' }, { status: 400 })
-        const { error } = await sb.from('notifications').insert({
-          user_id: targetUserId,
-          title: String(title).slice(0, 120),
-          body: String(message).slice(0, 1000),
-          type: 'admin_message',
-          icon: '🛡️',
-          action_url: '',
-          is_read: false,
+        const result = await notifyUser(sb, {
+          userId: targetUserId,
+          ...adminMessageNotification(String(title), String(message)),
+          dedupKey: `admin-msg:${targetUserId}:${String(title).slice(0, 60)}:${new Date().toISOString().slice(0, 10)}`,
         })
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        if (!result.created && !result.deduplicated) {
+          return NextResponse.json({ error: 'تعذر إرسال الإشعار' }, { status: 500 })
+        }
         await logAudit(request, adminId, 'notify-user', { resource: 'notifications', resourceId: targetUserId })
-        return NextResponse.json({ success: true })
+        return NextResponse.json({ success: true, deduplicated: result.deduplicated })
       }
 
       default:

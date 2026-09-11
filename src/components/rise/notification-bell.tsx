@@ -21,6 +21,8 @@ interface Notification {
   actionUrl?: string
   read?: boolean
   isRead?: boolean
+  priority?: 'normal' | 'high'
+  expiresAt?: string | null
   createdAt: string
 }
 
@@ -29,7 +31,7 @@ function isUnread(n: Notification): boolean {
   return !(n.isRead ?? n.read ?? false)
 }
 
-// Type-based icon color mapping
+// Type-based icon color mapping — أنواع المرحلة 05 (الاشتراك/الحدود/الخلفية)
 const typeColors: Record<string, string> = {
   success: 'bg-emerald-accent/15 text-emerald-accent',
   achievement: 'bg-violet-accent/15 text-violet-accent',
@@ -41,6 +43,12 @@ const typeColors: Record<string, string> = {
   focus: 'bg-violet-accent/15 text-violet-accent',
   morning: 'bg-gold/15 text-gold',
   level: 'bg-gold/15 text-gold',
+  subscription: 'bg-emerald-accent/15 text-emerald-accent',
+  usage: 'bg-gold/15 text-gold',
+  system: 'bg-glass/15 text-glass',
+  community: 'bg-violet-accent/15 text-violet-accent',
+  mention: 'bg-violet-accent/15 text-violet-accent',
+  background: 'bg-emerald-accent/15 text-emerald-accent',
 }
 
 // Fallback icon by type
@@ -55,6 +63,12 @@ const typeIcons: Record<string, string> = {
   warning: '⚠️',
   error: '❌',
   info: '💡',
+  subscription: '🎫',
+  usage: '📊',
+  system: '🛡️',
+  community: '💬',
+  mention: '📣',
+  background: '📦',
 }
 
 function timeAgo(dateStr: string): string {
@@ -164,10 +178,11 @@ export function NotificationBell() {
   }, [])
 
   // Lightweight badge-only fetch (tiny payload) for background polling —
-  // avoids pulling the full notifications list every cycle.
+  // المرحلة 05: mode=count عبر RPC يعدّ غير المقروء فقط (أرخص من
+  // جلب القائمة). الإشعارات المنتهية لا تُعدّ.
   const fetchBadgeCount = useCallback(async () => {
     try {
-      const r = await apiGet('/api/rise/notifications?unreadOnly=true')
+      const r = await apiGet('/api/rise/notifications?mode=count')
       if (!r.ok) return
       const data = await r.json()
       lastFetchAtRef.current = Date.now()
@@ -268,8 +283,12 @@ export function NotificationBell() {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true, read: true })))
     setUnreadCount(0)
     try {
-      await apiPut('/api/rise/notifications', { ids: unreadIds })
-    } catch { /* silent */ }
+      // المرحلة 05: { all: true } — RPC ذري بطلب واحد، مع fallback
+      // للمسار القديم (ids) لو الهجرة غير مطبقة.
+      await apiPut('/api/rise/notifications', { all: true })
+    } catch {
+      try { await apiPut('/api/rise/notifications', { ids: unreadIds }) } catch { /* silent */ }
+    }
   }
 
   const deleteNotification = async (id: string) => {
@@ -304,6 +323,12 @@ export function NotificationBell() {
       window.dispatchEvent(new CustomEvent('rise:navigate', { detail: notif.actionUrl }))
       setOpen(false)
     }
+  }
+
+  // المرحلة 05: فتح Drawer الإشعارات الكامل (فلترة + كل السجل)
+  const openFullDrawer = () => {
+    window.dispatchEvent(new CustomEvent('awj:open-notifications'))
+    setOpen(false)
   }
 
   const handleEnableNotifications = async () => {
@@ -454,18 +479,22 @@ export function NotificationBell() {
                       >
                         <div className={cn(
                           'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-sm',
-                          getNotificationColor(notif.type)
+                          getNotificationColor(notif.type),
+                          notif.priority === 'high' && 'ring-1 ring-gold/40'
                         )}>
                           {getNotificationIcon(notif)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className={cn(
                               'text-sm truncate',
                               isUnread(notif) ? 'text-foreground font-semibold' : 'text-muted-foreground'
                             )}>
                               {notif.title}
                             </p>
+                            {notif.priority === 'high' && (
+                              <span className="shrink-0 pill bg-gold/15 text-gold text-[9px] font-bold">مهم</span>
+                            )}
                             {isUnread(notif) && (
                               <span className="w-2 h-2 rounded-full bg-rose-accent shrink-0" />
                             )}
@@ -497,9 +526,18 @@ export function NotificationBell() {
               )}
             </ScrollArea>
 
-            {/* Footer: Clear all */}
+            {/* Footer: عرض الكل (Drawer المرحلة 05) + مسح جميع الإشعارات */}
             {notifications.length > 0 && (
-              <div className="border-t border-border px-4 py-2">
+              <div className="border-t border-border px-4 py-2 flex flex-col gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-8 text-[11px] text-gold hover:text-gold hover:bg-gold/10"
+                  onClick={openFullDrawer}
+                >
+                  <RiseGlyphIcon glyph="bell" size={12} />
+                  عرض كل الإشعارات
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

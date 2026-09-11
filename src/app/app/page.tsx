@@ -63,6 +63,8 @@ const PWAInstallPrompt = lazy(() => import('@/lib/pwa').then(m => ({ default: m.
 import Onboarding from '@/components/rise/onboarding'
 import SunCloudLoader from '@/components/rise/sun-cloud-loader'
 const NotificationBell = lazy(() => import('@/components/rise/notification-bell').then(m => ({ default: m.NotificationBell })))
+// المرحلة 05: مركز الإشعارات الكامل (Drawer) — يُفتح من الجرس
+const NotificationsDrawer = lazy(() => import('@/components/rise/notifications-drawer').then(m => ({ default: m.NotificationsDrawer })))
 const ReminderEngine = lazy(() => import('@/components/rise/reminder-engine').then(m => ({ default: m.ReminderEngine })))
 
 // Lazy load all modules
@@ -438,6 +440,11 @@ export default function AwjApp() {
             </Button>
           )}
         </header>
+
+        {/* المرحلة 05: مركز الإشعارات الكامل (Drawer) — خارج الهيدر
+            عمدًا: الهيدر فيه backdrop-blur الذي ينشئ containing block
+            للـfixed، فأي fixed داخل سيرتّب على حدود الهيدر لا الشاشة */}
+        <Suspense fallback={null}><NotificationsDrawer /></Suspense>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto" style={{ containIntrinsicSize: 'auto' }}>

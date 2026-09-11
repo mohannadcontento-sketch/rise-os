@@ -33,6 +33,7 @@ import {
   CheckSquare,
   Megaphone,
   UserPlus,
+  Mail,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +74,7 @@ import { apiFetch, apiPost, apiDelete } from '@/lib/api-fetch'
 import { toast } from 'sonner'
 import { AdminUser, SystemStats, ApiKeyInfo, toArabicNum, formatBytes, formatDate, formatDateTime, timeAgo, timeAgoEn } from './admin-panel-utils'
 import { AdminSubscriptionsTab } from './admin-subscriptions-tab'
+import { AdminEmailTemplateTab } from './admin-email-template-tab'
 
 function StatsSkeleton() {
   return (
@@ -1814,6 +1816,10 @@ export default function AdminPanel() {
             <Crown className="w-3.5 h-3.5" />
             <span>الاشتراكات</span>
           </TabsTrigger>
+          <TabsTrigger value="email" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Mail className="w-3.5 h-3.5" />
+            <span>الإيميل</span>
+          </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
             <Activity className="w-3.5 h-3.5" />
             <span>الصحة والأخطاء</span>
@@ -1844,6 +1850,9 @@ export default function AdminPanel() {
         </TabsContent>
         <TabsContent value="subscriptions">
           <AdminSubscriptionsTab />
+        </TabsContent>
+        <TabsContent value="email">
+          <AdminEmailTemplateTab />
         </TabsContent>
         <TabsContent value="stats">
           <SystemStatsTab />

@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/api-auth'
 import { createSupabaseUserClient, isSupabaseConfigured } from '@/lib/supabase'
 import { getAccessToken } from '@/lib/cookie-auth'
 import { PLANS_UI, type PlanCode } from '@/lib/billing/plans'
+import { notifySelf, subscriptionExpiringMessage } from '@/lib/notifications-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,6 +86,28 @@ export async function GET(req: NextRequest) {
     }
 
     const sub = (data as { plan?: string; status?: string; expires_at?: string | null } | null) ?? null
+
+    // ── 3. المرحلة 05: إشعار «قرب انتهاء الاشتراك» (آخر 7 أيام) ──
+    // إشعار ذاتي عبر notify_user (بوابة auth.uid = المستخدم). dedup
+    // على تاريخ الانتهاء: واحد فقط لكل دورة اشتراك حتى لو فتح
+    // الإعدادات مرات عديدة. يتجاهل بصمت لو الهجرة 026 غير مطبقة.
+    if (
+      sub?.plan && sub.plan !== 'free' && sub.status === 'active' && sub.expires_at
+    ) {
+      const msLeft = new Date(sub.expires_at).getTime() - Date.now()
+      const daysLeft = Math.ceil(msLeft / 864e5)
+      if (daysLeft > 0 && daysLeft <= 7) {
+        await notifySelf(
+          client as any,
+          {
+            ...subscriptionExpiringMessage(sub.plan, sub.expires_at, daysLeft),
+            dedupKey: `sub-expiring:${userId}:${sub.expires_at.slice(0, 10)}`,
+          },
+          userId,
+        )
+      }
+    }
+
     return NextResponse.json({
       subscription: {
         plan: sub?.plan || 'free',

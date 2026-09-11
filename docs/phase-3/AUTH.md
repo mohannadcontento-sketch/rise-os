@@ -134,9 +134,17 @@ GRANT UPDATE (name, avatar) ON profiles TO authenticated;
    - `https://rise-os-gamma.vercel.app/auth/callback`
    - `http://localhost:3000/auth/callback` (للتطوير)
    بدون هذه الخطوة يرسل Supabase رابط الاستعادة إلى العنوان الافتراضي بدل `/auth/callback` فلا تُنشأ جلسة الاستعادة.
-3. **(المرحلة 04) تفعيل قالب الإيميل المحسَّن** — تصميم عربي RTL بهوية أوج بدل نص Supabase الافتراضي:
+3. **(المرحلة 05) تفعيل قالب الإيميل المحسَّن — بضغطة واحدة**:
+   لوحة الأدمن (أوج) → تاب **«الإيميل»** → معاينة القالب → زر **«تطبيق القالب في Supabase»**.
+   المسار يكتب القالب في `auth.email_templates (type='recovery')` عبر RPC
+   `admin_apply_recovery_email_template` (migration 026) بصلاحيات الخادم —
+   ولا يغيّر الرابط الحي `{{ .ConfirmationURL }}` (لا تغيير في آلية PKCE).
+   إن ظهرت حالة `table_missing` / `permission` (بعض المشاريع لا تتيح الكتابة
+   على auth schema من الدور) — استخدم البديل اليدوي نفسه بالأسفل:
+   *(البديل اليدوي)* قالب عربي RTL بهوية أوج بدل نص Supabase الافتراضي. — تصميم عربي RTL بهوية أوج بدل نص Supabase الافتراضي:
    Dashboard → Authentication → **Email Templates** → **Reset Password** →
    Body type: **HTML** → الصق كامل محتوى `docs/phase-3/recovery-email-template.html`
+   (أو زر «نسخ HTML» من تاب «الإيميل» في لوحة الأدمن)
    → Save. الرابط `{{ .ConfirmationURL }}` نفسه (لا تغيير في آلية PKCE) —
    تحسين شكلي فقط. معاينة: `download/recovery-email-preview.png`.
 
