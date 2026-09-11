@@ -27,6 +27,7 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   'weekly-review': 'مراجعة أسبوعية',
   'monthly-review': 'مراجعة شهرية',
   'analytics': 'التحليلات',
+  'community': 'المجتمع',
   'admin-panel': 'لوحة الإدارة',
   'settings': 'الإعدادات',
 }

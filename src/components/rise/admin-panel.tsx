@@ -65,6 +65,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { AdminCommunityTab } from './admin-community-tab'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRiseStore } from '@/store/app-store'
 import { RiseIcon } from './icons'
@@ -1814,6 +1815,10 @@ export default function AdminPanel() {
             <Crown className="w-3.5 h-3.5" />
             <span>الاشتراكات</span>
           </TabsTrigger>
+          <TabsTrigger value="community" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Users className="w-3.5 h-3.5" />
+            <span>المجتمع</span>
+          </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
             <Activity className="w-3.5 h-3.5" />
             <span>الصحة والأخطاء</span>
@@ -1844,6 +1849,9 @@ export default function AdminPanel() {
         </TabsContent>
         <TabsContent value="subscriptions">
           <AdminSubscriptionsTab />
+        </TabsContent>
+        <TabsContent value="community">
+          <AdminCommunityTab />
         </TabsContent>
         <TabsContent value="stats">
           <SystemStatsTab />

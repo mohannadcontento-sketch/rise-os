@@ -89,6 +89,7 @@ const MonthlyReview = lazy(() => import('@/components/rise/monthly-review').then
 const Analytics = lazy(() => import('@/components/rise/analytics').then(m => ({ default: m.default })))
 const AdminPanel = lazy(() => import('@/components/rise/admin-panel').then(m => ({ default: m.default })))
 const Settings = lazy(() => import('@/components/rise/settings').then(m => ({ default: m.default })))
+const Community = lazy(() => import('@/components/rise/community').then(m => ({ default: m.default })))
 
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
   'dashboard': Dashboard,
@@ -110,6 +111,7 @@ const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.Compone
   'weekly-review': WeeklyReview,
   'monthly-review': MonthlyReview,
   'analytics': Analytics,
+  'community': Community,
   'admin-panel': AdminPanel,
   'settings': Settings,
 }
@@ -294,6 +296,19 @@ export default function AwjApp() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
       const target = String(detail || '').replace(/^\/app\/?/, '').replace(/^\//, '')
+      // إشعارات المجتمع: community?post=<id> — افتح الوحدة + المنشور
+      if (target.startsWith('community')) {
+        const qs = target.split('?')[1] ?? ''
+        const postId = new URLSearchParams(qs).get('post')
+        setActiveModule('community')
+        if (postId) {
+          import('@/lib/community-focus').then(m => {
+            m.setPendingCommunityPost(postId)
+            window.dispatchEvent(new CustomEvent('awj:open-community-post', { detail: postId }))
+          })
+        }
+        return
+      }
       if ((moduleNames as Record<string, string>)[target]) {
         setActiveModule(target as ModuleId)
       }

@@ -237,3 +237,97 @@ export async function parseBody<T>(
   }
   return { ok: true, data: parsed.data }
 }
+
+// ============================================================
+// المرحلة 07 — المجتمع (community validators)
+// ============================================================
+
+export const communityPostCreateSchema = z.object({
+  title: z.string().trim().min(3, 'العنوان قصير جدًا (3 أحرف على الأقل)').max(200, 'العنوان طويل جدًا (200 حرف كحد أقصى)'),
+  body: z.string().trim().min(1, 'المحتوى مطلوب').max(10000, 'المحتوى طويل جدًا (10000 حرف كحد أقصى)'),
+})
+
+export const communityPostUpdateSchema = z.object({
+  title: z.string().trim().min(3, 'العنوان قصير جدًا (3 أحرف على الأقل)').max(200, 'العنوان طويل جدًا (200 حرف كحد أقصى)').optional(),
+  body: z.string().trim().min(1, 'المحتوى مطلوب').max(10000, 'المحتوى طويل جدًا (10000 حرف كحد أقصى)').optional(),
+}).refine((v) => v.title !== undefined || v.body !== undefined, { message: 'لا يوجد ما يُحدّث' })
+
+export const communityCommentCreateSchema = z.object({
+  postId: z.string().uuid('معرّف المنشور غير صالح'),
+  parentId: z.string().uuid('معرّف التعليق غير صالح').optional().nullable(),
+  body: z.string().trim().min(1, 'التعليق مطلوب').max(5000, 'التعليق طويل جدًا (5000 حرف كحد أقصى)'),
+})
+
+export const communityCommentUpdateSchema = z.object({
+  body: z.string().trim().min(1, 'التعليق مطلوب').max(5000, 'التعليق طويل جدًا (5000 حرف كحد أقصى)'),
+})
+
+export const communityReactionSchema = z.object({
+  targetType: z.enum(['post', 'comment'], { message: 'نوع الهدف غير صالح' }),
+  targetId: z.string().uuid('معرّف الهدف غير صالح'),
+})
+
+export const communityReportSchema = z.object({
+  targetType: z.enum(['post', 'comment'], { message: 'نوع الهدف غير صالح' }),
+  targetId: z.string().uuid('معرّف الهدف غير صالح'),
+  reason: z.enum(['spam', 'abuse', 'offensive', 'off_topic', 'other'], { message: 'سبب البلاغ غير صالح' }),
+  details: z.string().trim().max(2000, 'التفاصيل طويلة جدًا').optional(),
+})
+
+export const communityMembersSearchSchema = z.object({
+  q: z.string().trim().min(1, 'اكتب حرفًا للبحث').max(64, 'استعلام طويل جدًا').optional(),
+})
+
+export const communityModerateSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('hide_post'),
+    postId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('restore_post'),
+    postId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('remove_post'),
+    postId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('hide_comment'),
+    commentId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('restore_comment'),
+    commentId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('remove_comment'),
+    commentId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('dismiss_report'),
+    reportId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('remove_reported'),
+    reportId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal('ban_user'),
+    userId: z.string().uuid(),
+    reason: z.string().trim().min(3, 'سبب الحظر مطلوب').max(500),
+    days: z.number().int().min(1).max(365).optional(),
+  }),
+  z.object({
+    action: z.literal('unban_user'),
+    userId: z.string().uuid(),
+    reason: z.string().trim().max(500).optional(),
+  }),
+])

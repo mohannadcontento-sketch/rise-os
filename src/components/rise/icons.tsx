@@ -51,7 +51,8 @@ export type RiseGlyph =
   | "flame"
   | "shield"
   | "trophy"
-  | "bell";
+  | "bell"
+  | "users";
 
 const P = {
   stroke: "currentColor",
@@ -259,6 +260,15 @@ const glyphs: Record<RiseGlyph, React.ReactNode> = {
       <path d="M12 3a6 6 0 0 0-6 6v3.2c0 .8-.3 1.5-.9 2.1L4 15.5h16l-1.1-1.2a3 3 0 0 1-.9-2.1V9a6 6 0 0 0-6-6Z" />
       <path d="M9.8 18.5a2.3 2.3 0 0 0 4.4 0" />
       <path d="M12 3V1.8" opacity="0" />
+    </g>
+  ),
+  /* three people — community */
+  users: (
+    <g {...P}>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3.5 19.5c.4-3 2.6-4.8 5.5-4.8s5.1 1.8 5.5 4.8" />
+      <path d="M15.5 5.8a3.2 3.2 0 0 1 0 5.4" />
+      <path d="M17 14.9c2.1.5 3.3 2.1 3.5 4.1" />
     </g>
   ),
 };
@@ -717,6 +727,7 @@ export const MODULE_ICONS: Record<string, { glyph: RiseGlyph; hue: RiseHue }> = 
   "monthly-review": { glyph: "review", hue: "cyan" },
   "weekly-review": { glyph: "review", hue: "blue" },
   notifications: { glyph: "bell", hue: "amber" },
+  community: { glyph: "users", hue: "forest" },
   "admin-panel": { glyph: "shield", hue: "rose" },
   admin: { glyph: "shield", hue: "rose" },
   settings: { glyph: "settings", hue: "forest" },

@@ -286,3 +286,87 @@ export function exportFailedMessage(reason: string) {
     metadata: { reason: reason.slice(0, 300) },
   }
 }
+
+// ─── المرحلة 07 — رسائل الأحداث الاجتماعية ──────────────────
+
+/** تعليق جديد على منشوري */
+export function communityCommentMessage(actorName: string, actorHandle: string, postTitle: string, snippet: string, postId: string, commentId: string) {
+  return {
+    type: 'community' as NotificationType,
+    priority: 'normal' as NotificationPriority,
+    icon: '💬',
+    actionUrl: `community?post=${postId}`,
+    title: 'تعليق جديد على منشورك',
+    body: `${actorName} (@${actorHandle}) علّق على «${postTitle.slice(0, 60)}»: ${snippet}`,
+    metadata: { postId, commentId, actorHandle },
+  }
+}
+
+/** رد جديد على تعليقي */
+export function communityReplyMessage(actorName: string, actorHandle: string, snippet: string, postId: string, commentId: string) {
+  return {
+    type: 'community' as NotificationType,
+    priority: 'normal' as NotificationPriority,
+    icon: '↩️',
+    actionUrl: `community?post=${postId}`,
+    title: 'رد جديد على تعليقك',
+    body: `${actorName} (@${actorHandle}) رد عليك: ${snippet}`,
+    metadata: { postId, commentId, actorHandle },
+  }
+}
+
+/** ذِكر في منشور/تعليق */
+export function communityMentionMessage(actorName: string, actorHandle: string, postId: string, source: 'post' | 'comment', sourceId: string) {
+  return {
+    type: 'mention' as NotificationType,
+    priority: 'high' as NotificationPriority,
+    icon: '📣',
+    actionUrl: `community?post=${postId}`,
+    title: `${actorName} (@${actorHandle}) ذكرك في المجتمع`,
+    body: 'فتح المنشور لعرض ما قيل عنك والرد عليه.',
+    metadata: { postId, source, sourceId, actorHandle },
+  }
+}
+
+/** إجراء إشراف على محتواي (إخفاء/إزالة) */
+export function communityModerationMessage(kind: 'post' | 'comment', action: 'hidden' | 'removed', reason?: string, postId?: string) {
+  const what = kind === 'post' ? 'منشورك' : 'تعليقك'
+  const verb = action === 'hidden' ? 'أُخفي' : 'أُزيل'
+  return {
+    type: 'system' as NotificationType,
+    priority: 'high' as NotificationPriority,
+    icon: '🛡️',
+    actionUrl: postId ? `community?post=${postId}` : 'community',
+    title: `${what} ${verb} بواسطة المشرفين`,
+    body: reason ? `السبب: ${reason.slice(0, 300)}` : 'لمخالفته قواعد المجتمع. يمكنك مراسلة الإدارة للاستفسار.',
+    metadata: { kind, action },
+  }
+}
+
+/** حظر من المجتمع (بأسلوب يمكن للمستخدم فهمه) */
+export function communityBannedMessage(reason: string, until?: string | null) {
+  return {
+    type: 'system' as NotificationType,
+    priority: 'high' as NotificationPriority,
+    icon: '⛔',
+    actionUrl: 'settings',
+    title: 'تم حظرك من المجتمع',
+    body: until
+      ? `السبب: ${reason.slice(0, 300)} — يستمر الحظر حتى ${until}.`
+      : `السبب: ${reason.slice(0, 300)}.`,
+    metadata: { reason: reason.slice(0, 300), until: until ?? null },
+  }
+}
+
+/** فك الحظر */
+export function communityUnbannedMessage() {
+  return {
+    type: 'system' as NotificationType,
+    priority: 'normal' as NotificationPriority,
+    icon: '✅',
+    actionUrl: 'community',
+    title: 'أُلغي حظرك من المجتمع',
+    body: 'يمكنك الآن النشر والتعليق من جديد. مرحبًا بعودتك.',
+    metadata: {},
+  }
+}

@@ -567,6 +567,13 @@ export async function apiPut(url: string, body?: unknown) {
   })
 }
 
+export async function apiPatch(url: string, body?: unknown) {
+  return apiFetch(url, {
+    method: 'PATCH',
+    body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
 export async function apiDelete(url: string) {
   return apiFetch(url, { method: 'DELETE' })
 }

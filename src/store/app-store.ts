@@ -26,6 +26,7 @@ export type ModuleId =
   | 'weekly-review'
   | 'monthly-review'
   | 'analytics'
+  | 'community'
   | 'admin-panel'
   | 'settings'
 

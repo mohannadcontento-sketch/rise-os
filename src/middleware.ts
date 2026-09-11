@@ -101,6 +101,15 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/rise/push/subscribe': { limit: 30, window: '1 m' },
   '/api/rise/push/vapid-key': { limit: 60, window: '1 m' },
   '/api/rise/user/notification-preferences': { limit: 10, window: '1 m' },
+  // المرحلة 07 — كتابة المجتمع: سقوف مضادة للسبام
+  // (منشور أثقل من تعليق، والتفاعل أخف شيء؛ القراءة تحت
+  // المظلة العامة /api/rise 300/min).
+  '/api/rise/community/posts': { limit: 30, window: '1 m' },
+  '/api/rise/community/comments': { limit: 30, window: '1 m' },
+  '/api/rise/community/reactions': { limit: 60, window: '1 m' },
+  '/api/rise/community/reports': { limit: 5, window: '1 m' },
+  '/api/rise/community/members': { limit: 30, window: '1 m' },
+  '/api/rise/admin/community/moderate': { limit: 20, window: '1 m' },
   '/api/rise/admin/query': { limit: 10, window: '1 m' },
   // FIX: Increased from 100 to 300/min for /api/rise — the dashboard is
   // fetched by multiple components (sidebar 30s poll, dashboard on mount,
