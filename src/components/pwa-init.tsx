@@ -41,25 +41,13 @@ export function PWAInit() {
         }
       })
 
-      // Request notification permission and subscribe to push
-      if ('Notification' in window) {
-        // If already granted, try to subscribe immediately
-        if (Notification.permission === 'granted') {
-          await trySubscribePush(reg)
-        } else if (Notification.permission === 'default') {
-          // Request on first user interaction
-          const requestOnInteraction = () => {
-            Notification.requestPermission().then(async (result) => {
-              if (result === 'granted') {
-                await trySubscribePush(reg)
-              }
-            }).catch(() => {})
-            window.removeEventListener('click', requestOnInteraction)
-            window.removeEventListener('keydown', requestOnInteraction)
-          }
-          window.addEventListener('click', requestOnInteraction, { once: true })
-          window.addEventListener('keydown', requestOnInteraction, { once: true })
-        }
+      // المرحلة 06: لا نطلب صلاحية الإشعارات أبدًا تلقائيًا — فقط
+      // إعادة مزامنة اشتراك قائم (الصلاحية ممنوحة أصلًا) مع
+      // مسار التسجيل الجديد per-device. الطلب الصريح من زر
+      // الإعدادات أو شريحة درج الإشعارات.
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const { resyncPushSubscription } = await import('@/lib/push-notifications')
+        await resyncPushSubscription()
       }
     }).catch(() => {
       // Service worker registration failed — silent (normal in dev)
@@ -74,44 +62,4 @@ export function PWAInit() {
   }, [])
 
   return null
-}
-
-async function trySubscribePush(registration: ServiceWorkerRegistration) {
-  try {
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_KEY
-    if (!vapidKey) return
-
-    if (!registration.pushManager) return
-
-    // Check if already subscribed
-    const existing = await registration.pushManager.getSubscription()
-    if (existing) return // Already subscribed
-
-    // Only subscribe on HTTPS (push requires secure context)
-    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      return
-    }
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey) as any,
-    })
-
-    // Save subscription using the httpOnly auth cookie through the central API client.
-    const { apiPost } = await import('@/lib/api-fetch')
-    await apiPost('/api/rise/notifications/push', { subscription })
-  } catch {
-    // Push subscription not available (HTTP, missing VAPID, etc.) — silent
-  }
-}
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const rawData = window.atob(base64)
-  const outputArray = new Uint8Array(rawData.length)
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i)
-  }
-  return outputArray
 }

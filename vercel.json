@@ -7,6 +7,10 @@
     {
       "path": "/api/rise/email-template/ensure",
       "schedule": "17 1 * * *"
+    },
+    {
+      "path": "/api/rise/push/cleanup",
+      "schedule": "23 2 * * 0"
     }
   ]
 }

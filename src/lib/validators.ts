@@ -161,6 +161,54 @@ export interface ParsedBody<T> {
 }
 
 /**
+ * ── المرحلة 06 — Web Push ─────────────────────────────────────
+ */
+
+/** POST /api/rise/push/subscribe — تسجيل اشتراك جهاز */
+export const pushSubscribeSchema = z.object({
+  endpoint: z
+    .string()
+    .trim()
+    .startsWith('https://', 'عنوان الاشتراك يجب أن يكون https')
+    .max(2048, 'عنوان الاشتراك أطول من اللازم'),
+  keys: z.object({
+    p256dh: z.string().min(64, 'مفتاح p256dh غير صالح').max(160, 'مفتاح p256dh غير صالح'),
+    auth: z.string().min(16, 'مفتاح auth غير صالح').max(64, 'مفتاح auth غير صالح'),
+  }),
+  label: z.string().trim().max(120, 'تسمية الجهاز أطول من اللازم').optional(),
+})
+
+/** DELETE /api/rise/push/subscribe — إبطال بالـid (من القائمة) أو endpoint (لجهازنا) */
+export const pushUnsubscribeSchema = z
+  .object({
+    id: z.string().uuid('معرّف الجهاز غير صالح').optional(),
+    endpoint: z.string().trim().startsWith('https://', 'عنوان الاشتراك غير صالح').max(2048).optional(),
+  })
+  .refine((v) => !!v.id || !!v.endpoint, { message: 'مطلوب معرّف الجهاز أو عنوان الاشتراك' })
+
+/**
+ * PUT /api/rise/user/notification-preferences — تفضيلات الفئات.
+ * التسويق خيار منفصل بطلب موافقة صريحة من الواجهة (checkbox
+ * نصي) — الخادم يقبل القيمة فقط؛ الافتراضية false عند أول تفعيل.
+ */
+export const notificationPreferencesSchema = z.object({
+  pushEnabled: z.boolean().optional(),
+  categories: z
+    .object({
+      important: z.boolean().optional(),
+      security: z.boolean().optional(),
+      reminders: z.boolean().optional(),
+      community: z.boolean().optional(),
+      marketing: z.boolean().optional(),
+    })
+    .refine((v) => Object.values(v).some((x) => x !== undefined), {
+      message: 'حدد فئة واحدة على الأقل',
+    })
+    .optional(),
+})
+
+/**
+ * POST /api/rise/error-log وغيرها — تحليل جسم الطلب الموحد.
  * يقرأ جسم الطلب ويطبق مخطط zod.
  * عند الفشل يرجع استجابة 400 جاهزة برسالة الخطأ الأولى (بنمط المسارات الحالية).
  */

@@ -77,6 +77,7 @@ import { RiseIcon } from '@/components/rise/icons'
 import { BellToggle } from '@/components/rise/kit-v2'
 import { SectionCard } from '@/components/rise/settings-section-card'
 import { SubscriptionSection } from '@/components/rise/subscription-section'
+import { PushNotificationsSection } from '@/components/rise/push-notifications-section'
 import {
   getBrowserPermissionState,
   requestBrowserPermission,
@@ -769,6 +770,14 @@ export default function Settings() {
         className="break-inside-avoid mb-4"
       >
         <SubscriptionSection />
+      </motion.div>
+      {/* إشعارات الجهاز (Push) — المرحلة 06 */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="break-inside-avoid mb-4"
+      >
+        <PushNotificationsSection />
       </motion.div>
       {/* الحساب والأمان — المرحلة 03 */}
       <motion.div

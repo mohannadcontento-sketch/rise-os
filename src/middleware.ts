@@ -93,7 +93,14 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/rise/delete-all': { limit: 2, window: '1 m' },
   '/api/rise/mcp/key': { limit: 5, window: '1 m' },
   '/api/rise/mcp/call': { limit: 60, window: '1 m' },
-  '/api/rise/notifications/send': { limit: 20, window: '1 m' },
+  // المرحلة 06 — Web Push: تجربة الإرسال ضيقة عن قصد (هي إشعار
+  // حقيقي يمر بالمسار الموحد)، والتسجيل متساهل عمدًا — pwa-init
+  // يعيد مزامنة الاشتراك عند كل إقلاع (multi-tab = نداءات متتالية)،
+  // والـupsert idempotent by endpoint فلا خطر من التكرار.
+  '/api/rise/push/test': { limit: 2, window: '1 m' },
+  '/api/rise/push/subscribe': { limit: 30, window: '1 m' },
+  '/api/rise/push/vapid-key': { limit: 60, window: '1 m' },
+  '/api/rise/user/notification-preferences': { limit: 10, window: '1 m' },
   '/api/rise/admin/query': { limit: 10, window: '1 m' },
   // FIX: Increased from 100 to 300/min for /api/rise — the dashboard is
   // fetched by multiple components (sidebar 30s poll, dashboard on mount,

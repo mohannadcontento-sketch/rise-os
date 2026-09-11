@@ -15,6 +15,11 @@
 //                 يمر عبر RPC notify_user (بوابة auth.uid() =
 //                 المستخدم).
 //
+// المرحلة 06 — قناة Web Push مربوطة بنفس الحدث: بعد إنشاء
+//  الإشعار (وليس عند منعه dedup) نستدعي dispatchPushForNotification
+//  ديناميكيًا. فشل Push أو غيابه لا يفشّل الإنشاء أبدًا («الإشعار
+//  يظهر In-App حتى لو فشل Push»).
+//
 // منع التكرار: كل نداء يحمل dedupKey اختياريًا — الفهرس الفريد
 // (user_id, dedup_key) في الهجرة 026 يضمن نداءً واحدًا فقط
 // لكل مفتاح. نداء مكرر يعيد { deduplicated: true } ولا يفشل.
@@ -98,6 +103,23 @@ async function viaRpc(client: AnyClient, input: CreateNotificationInput): Promis
 }
 
 /**
+ * القناة الثانية (Web Push) — تُستدعى بعد الإنشاء فقط.
+ * حماية مزدوجة: لا ترمي استثناء + مهلة إجمالية 10 ثوان حتى
+ *  لا يعلّق مسار المستخدم لو تعثّر مزود Push.
+ */
+async function dispatchPushQuietly(notificationId: string): Promise<void> {
+  try {
+    const { dispatchPushForNotification } = await import('@/lib/push/dispatch')
+    await Promise.race([
+      dispatchPushForNotification(notificationId),
+      new Promise((resolve) => setTimeout(resolve, 10_000)),
+    ])
+  } catch {
+    // صمتًا — القناة اختيارية بحكم التصميم
+  }
+}
+
+/**
  * إشعار من جهة الخادم (admin → أي مستخدم / حدث نظام).
  * client = service-role client (getSupabaseAdmin) أو أي عميل يملك
  * بوابة RPC. لا يرفع استثناء — يرجّع النتيجة ويترك القرار
@@ -107,22 +129,29 @@ export async function notifyUser(
   client: AnyClient & { from: (t: string) => any },
   input: CreateNotificationInput,
 ): Promise<CreateNotificationResult> {
+  let result: CreateNotificationResult
   try {
-    return await viaRpc(client, input)
+    result = await viaRpc(client, input)
   } catch (err) {
     const msg = String((err as Error)?.message || '')
     // 026 غير مطبقة: الدالة غير موجودة → إدراج مباشر (client أدمن يتجاوز RLS)
     if (msg.includes('notify_user') || msg.includes('function') || msg.includes('404') || msg.includes('PGRST202')) {
       try {
-        return await directInsert(client, input)
+        result = await directInsert(client, input)
       } catch (err2) {
         console.warn('[notifications-service] direct insert failed:', (err2 as Error)?.message)
         return { created: false, deduplicated: false, degraded: true }
       }
+    } else {
+      console.warn('[notifications-service] notifyUser failed:', msg)
+      return { created: false, deduplicated: false, degraded: false }
     }
-    console.warn('[notifications-service] notifyUser failed:', msg)
-    return { created: false, deduplicated: false, degraded: false }
   }
+  // Web Push — نفس الحدث، بعد الإنشاء فقط (وليس عند dedup)
+  if (result.created && result.id && !result.degraded) {
+    await dispatchPushQuietly(result.id)
+  }
+  return result
 }
 
 /**
@@ -130,18 +159,26 @@ export async function notifyUser(
  * يستدعي notify_user بجلسة المستخدم — البوابة تسمح auth.uid() =
  * المستخدم. لو 026 غير مطبقة يتجاهل بصمت (لا توجد بديل آمن
  * عبر RLS لأن insert policy تشترط user_id = auth.uid()).
+ * الإرسال Push يحدث عبر client الأدمن الداخلي (لا يحتاج جلسة
+ * المستخدم) — نفس ربط الحدث الموحد.
  */
 export async function notifySelf(
   client: AnyClient,
   input: Omit<CreateNotificationInput, 'userId'>,
   userId: string,
 ): Promise<CreateNotificationResult> {
+  let result: CreateNotificationResult
   try {
-    return await viaRpc(client, { ...input, userId })
+    result = await viaRpc(client, { ...input, userId })
   } catch (err) {
     console.warn('[notifications-service] notifySelf skipped (migration 026 not applied?):', (err as Error)?.message)
     return { created: false, deduplicated: false, degraded: true }
   }
+  // Web Push — نفس ربط الحدث
+  if (result.created && result.id) {
+    await dispatchPushQuietly(result.id)
+  }
+  return result
 }
 
 // ─── نصوص جاهزة لمصادر الأحداث (توحيد الرسائل) ────────────────

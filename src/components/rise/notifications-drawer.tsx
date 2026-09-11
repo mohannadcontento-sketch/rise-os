@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, BellRing, CheckCheck, Trash2, X, Inbox, Filter } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, Trash2, X, Inbox, Filter, Smartphone, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { apiGet, apiPut, apiDelete } from '@/lib/api-fetch'
@@ -224,6 +225,52 @@ export function NotificationsDrawer() {
 
   const unreadInList = notifications.filter(isUnread).length
 
+  // ── شريحة تفعيل Push (المرحلة 06) — غير مزعجة ─────────────
+  // تظهر فقط: صلاحية «default» + لا اشتراك + لم يُغلقها المستخدم
+  // في هذه الجلسة. النقر = إيماءة صريحة → enablePush. لا تُطلب
+  // الصلاحية أبدًا بدون نقرة (متطلب الخطة: UX واضح وغير مزعج).
+  const [pushBanner, setPushBanner] = useState<'hidden' | 'visible' | 'busy'>('hidden')
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    ;(async () => {
+      try {
+        if (sessionStorage.getItem('awj-push-banner-dismissed') === '1') return
+        const { getPushStatus } = await import('@/lib/push-notifications')
+        const s = await getPushStatus()
+        if (alive && s.supported && s.permission === 'default' && !s.subscribed) {
+          setPushBanner('visible')
+        } else if (alive) {
+          setPushBanner('hidden')
+        }
+      } catch { /* صامت */ }
+    })()
+    return () => { alive = false }
+  }, [open])
+
+  const dismissPushBanner = () => {
+    try { sessionStorage.setItem('awj-push-banner-dismissed', '1') } catch { /* ignore */ }
+    setPushBanner('hidden')
+  }
+
+  const handleEnablePush = async () => {
+    setPushBanner('busy')
+    try {
+      const { enablePush } = await import('@/lib/push-notifications')
+      const result = await enablePush()
+      if (result.ok) {
+        toast.success('تم التفعيل — ستصل إشعاراتك المهمة إلى جهازك')
+        setPushBanner('hidden')
+      } else {
+        toast.error(result.message || 'تعذّر تفعيل إشعارات الجهاز')
+        // denied أو فشل — نخفي الشريحة كي لا نلح
+        setPushBanner('hidden')
+      }
+    } catch {
+      setPushBanner('hidden')
+    }
+  }
+
   return (
     <AnimatePresence>
       {open && (
@@ -313,6 +360,37 @@ export function NotificationsDrawer() {
                 ))}
               </div>
             </div>
+
+            {/* شريحة Push — غير مزعجة (مرّة واحدة للجلسة، بنقرة فقط) */}
+            {pushBanner !== 'hidden' && (
+              <div className="mx-3 mt-2 p-2.5 rounded-xl bg-violet-accent/[0.08] border border-violet-accent/25 flex items-center gap-2.5 shrink-0">
+                <span className="icon-well h-8 w-8 iw-violet shrink-0">
+                  <Smartphone className="h-4 w-4" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold">استلم إشعارات أوج على جهازك</p>
+                  <p className="text-[10px] text-muted-foreground">حتى والموقع مغلق — بضغطة واحدة</p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleEnablePush}
+                  disabled={pushBanner === 'busy'}
+                  className="h-7 px-3 text-[11px] rounded-lg bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shrink-0"
+                >
+                  {pushBanner === 'busy' ? <Loader2 className="w-3 h-3 me-1 animate-spin" /> : <BellRing className="w-3 h-3 me-1" />}
+                  تفعيل
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground"
+                  onClick={dismissPushBanner}
+                  aria-label="إخفاء"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            )}
 
             {/* القائمة */}
             <ScrollArea className="flex-1 min-h-0">
