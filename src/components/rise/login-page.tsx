@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Zap, Mail, Lock, User, Eye, EyeOff, Sparkles, Shield, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,10 +15,23 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
+  // روابط عميقة: ?forgot=1 (من صفحة رابط الاستعادة المنتهي) و ?authError= (من /auth/callback)
+  const searchParams = useSearchParams()
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(
+    () => (searchParams.get('forgot') === '1' ? 'forgot' : 'login')
+  )
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const [error, setError] = useState(() => {
+    const authError = searchParams.get('authError')
+    if (authError === 'expired') return 'انتهت صلاحية رابط البريد أو تم استخدامه من قبل. اطلب رابطًا جديدًا.'
+    if (authError === 'unavailable') return 'خدمة المصادقة غير متوفرة حالياً، حاول بعد قليل.'
+    if (authError === 'unsupported') return 'تسجيل الدخول غير متاح في وضع التطوير المحلي.'
+    if (authError === 'unknown') return 'تعذر إتمام العملية، حاول مرة أخرى.'
+    return ''
+  })
+  const [notice, setNotice] = useState(
+    () => (searchParams.get('forgot') === '1' ? 'أدخل بريدك وسنرسل لك رابط إعادة تعيين كلمة المرور' : '')
+  )
   const [resendLoading, setResendLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')

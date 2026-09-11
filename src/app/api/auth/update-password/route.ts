@@ -9,6 +9,7 @@ import {
   isSupabaseConfigured,
 } from '@/lib/supabase'
 import { clearAuthCookies } from '@/lib/cookie-auth'
+import { RECOVERY_COOKIE } from '@/lib/auth-pkce'
 import { parseBody, updatePasswordSchema } from '@/lib/validators'
 
 export const dynamic = 'force-dynamic'
@@ -27,8 +28,6 @@ export const dynamic = 'force-dynamic'
 // بعد النجاح: تُبطل كل جلسات المستخدم (admin signOut) ويجب تسجيل
 // الدخول من جديد — لا تبقى أي جلسة قديمة بعد تغيير كلمة المرور.
 // ============================================================
-
-const RECOVERY_COOKIE = 'rise-pwd-recovery'
 
 export async function POST(req: NextRequest) {
   try {

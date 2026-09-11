@@ -39,13 +39,15 @@
 - **دخول**: `POST /api/auth/login` → `signInWithPassword` على عميل معزول → فحص الحالة → كوكيز.
 - **خروج**: `POST /api/auth/logout` → إبطال توكن التحديث الحالي على الخادم → مسح الكوكيز.
 - **خروج شامل**: `POST /api/auth/logout-all` → `admin.auth.signOut(userId)` يبطل كل refresh tokens للمستخدم في كل الأجهزة.
-- **استعادة كلمة المرور** (جديد):
-  1. «نسيت كلمة المرور؟» في صفحة الدخول → `POST /api/auth/reset-password {email}` → `resetPasswordForEmail` برابط `${site}/auth/callback?flow=recovery`.
-  2. `/auth/callback` يبدّل الكود بجلسة (PKCE) على عميل معزول → يضع كوكيز الجلسة + **marker cookie httpOnly عمره 10 دقائق** (`rise-pwd-recovery`) → يوجه إلى `/reset-password`.
-  3. صفحة `/reset-password` ترسل `{newPassword}` إلى `POST /api/auth/update-password` — المسار يقبل الكلمة بدون كلمة المرور الحالية **فقط** بوجود الـ marker (إثبات أن الجلسة نشأت من رابط وصل فعلًا لبريد المالك).
-  4. بعد التغيير: تُبطل كل الجلسات ويعاد المستخدم لتسجيل الدخول.
+- **استعادة كلمة المرور** (hotfix 2026-09-11 — آلية PKCE خادمية موثوقة):
+  1. «نسيت كلمة المرور؟» في صفحة الدخول → `POST /api/auth/reset-password {email}` → `resetPasswordForEmail` على عميل **flowType: pkce** مع شيم تخزين يلتقط الـ code_verifier لحظة توليده (`lib/auth-pkce.ts`) → يُرسل الـ code_challenge إلى Supabase ويوضع الـ verifier في **كوكي httpOnly** (`rise-pkce-verifier`، عمره ساعة، SameSite=Lax) على متصفح الطالب نفسه. الـ redirectTo بلا أي query: `${site}/auth/callback` (مطابقة حرفية للقائمة البيضاء).
+  2. ضغط المستخدم على رابط الإيميل = تنقّل top-level من نفس المتصفح → الكوكي يصل مع الطلب → `/auth/callback` يبذل الكوكي كـ storage لعميل PKCE ثم `exchangeCodeForSession` على الخادم → كوكيز الجلسة httpOnly + **marker cookie عمره 10 دقائق** (`rise-pwd-recovery`) لأن الـ verifier نفسه يحمل لاحقة `/recovery` (إشارة لا يمكن تزويرها من العميل) → توجيه إلى `/reset-password`. الكوكي يُستهلك بعد أي محاولة تبديل (أحادي الاستخدام).
+  3. صفحة `/reset-password` **محروسة على الخادم**: الفورم يظهر فقط عند وجود marker + جلسة حية؛ أي زيارة مباشرة أو رابط مستهلك أو جهاز مختلف تظهر حالة ودّية (`?state=expired|device|invalid`) مع تفسير السبب.
+  4. الفورم يرسل `{newPassword}` إلى `POST /api/auth/update-password` — المسار يقبل الكلمة بدون كلمة المرور الحالية **فقط** بوجود الـ marker (إثبات أن الجلسة نشأت من رابط وصل فعلًا لبريد المالك).
+  5. بعد التغيير: تُبطل كل الجلسات ويعاد المستخدم لتسجيل الدخول.
+  - **السبب الجذري للعطل القديم**: استدعاء `resetPasswordForEmail` على عميل خادمي implicit → الإيميل يُرسل بلا code_challenge → رابط الاستعادة يوجّه إلى `/auth/callback#access_token=…` — توكنز في hash fragment لا يصل للخادم أبدًا → الكallback بلا `code` → المستخدم يُرمى على `/app` وصفحة الاستعادة كانت غير قابلة للوصول نهائيًا.
 - **تغيير كلمة المرور من الإعدادات** (جديد): `{currentPassword, newPassword}` → جلب البريد من الجلسة → `signInWithPassword` على عميل معزول للتأكد من صحة كلمة المرور الحالية ومطابقة هوية المستخدم → `updateUser` → إبطال كل الجلسات.
-- **تأكيد البريد**: رابط التأكيد يهبط على `/auth/callback` (بدون flow) → جلسة مباشرة → `/app`.
+- **تأكيد البريد**: رابط التأكيد يستخدم Site URL الافتراضي (signUp لا يمرر emailRedirectTo) — لا يعتمد على كوكي الـ verifier؛ دخول يدوي بعد التأكيد.
 
 ### 2.2 حذف الحساب نهائيًا (جديد) — `DELETE /api/auth/delete-account`
 
@@ -140,3 +142,10 @@ GRANT UPDATE (name, avatar) ON profiles TO authenticated;
 - **مِلَفات جديدة**: 5 مسارات API (`reset-password`, `update-password`, `logout-all`, `delete-account`, `user/subscription`) + مسار تبادل بريد (`/auth/callback`) + صفحة `/reset-password` + migration 024.
 - **مِلَفات معدلة**: `login-page.tsx` (وضع «نسيت كلمة المرور؟»)، `settings.tsx` (قسم «الحساب والأمان»)، `logout/route.ts` (إبطال الجلسة)، `validators.ts` (3 مخططات)، `middleware.ts` (4 rate limits).
 - **اختبارات**: tsc نظيف، build ناجح، اختبار دخان محلي: صفحة 200، callback يعيد التوجيه الصحيح بدون كود، الحراسات ترفض بلا جلسة (401/503 كما هو متوقع في الوضع المحلي).
+
+### 6.1 هوتفيكس PKCE (2026-09-11) — أدلة الاختبار
+
+- `scripts/pkce-flow-test.ts` (ميكانيكا دون شبكة): 12/12 ✅ — الطلب يحمل s256 code_challenge، الكابتور يلتقط `<verifier>/recovery`، والتبادل يرسل نفس الـ code_verifier ويكشف `redirectType=recovery`.
+- `scripts/e2e-mock-supabase.ts` + `scripts/e2e-reset-flow.ts` (E2E كاملة ضد stub خادمي بتحقق SHA-256 حقيقي): 24 فحصًا ✅ — كوكي verifier httpOnly، إعادة التوجيه إلى `/reset-password` (وليس `/app`)، الفورم يظهر فقط بجلسة استعادة، الزيارة المباشرة محروسة، الجهاز الآخر → `state=device`، التغيير ينجح ويمحو الكوكيز، وبدون marker يُرفض 403.
+- `scripts/e2e-reset-run.sh` (بيئة العميل): يرفع الـ stub + `next start -p 3100` ويشغّل الـ E2E — النتيجة: «ALL E2E RECOVERY-FLOW CHECKS PASSED ✅» مع تبادل PKCE موثّق في سجل الـ stub.
+- tsc نظيف، والبناء يحتوي كوكي `rise-pkce-verifier` في chunks الخادم (تم التحقق بـ rg).
