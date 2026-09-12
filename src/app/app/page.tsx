@@ -1,5 +1,17 @@
 'use client'
 
+// ============================================================
+// app/page.tsx — مُوجِّه الوحدات المركزي (Shell) لصفحة /app
+//
+// الهيكل الوحيد للعرض: يستقبل الجلسة ويحمّل الوحدات العشرين كسولاً
+// عبر خريطة moduleComponents، ويدير البحث الشامل ⌘K والتنقل.
+//
+// المسؤوليات:
+//   1) خريطة moduleComponents: ربط كل ModuleId بمكون lazy (حزم منفصلة).
+//   2) استعادة الجلسة من localStorage + مستمعو أحداث rise:*.
+//   3) Command Palette للبحث + FAB + تأكيد الخروج + Onboarding.
+// ============================================================
+
 /* ─────────────────────────────────────────────────────────────
    Global SVG fix: Recharts internally calls setAttribute('r', undefined)
    which causes "Expected length, undefined" errors in the browser.
@@ -91,6 +103,9 @@ const AdminPanel = lazy(() => import('@/components/rise/admin-panel').then(m => 
 const Settings = lazy(() => import('@/components/rise/settings').then(m => ({ default: m.default })))
 const Community = lazy(() => import('@/components/rise/community').then(m => ({ default: m.default })))
 
+// ── القسم: خريطة الوحدات moduleComponents ──────────────────────────────────
+// خريطة MODULES: كل ModuleId يُحل إلى مكونه الكسول — تحميل كل وحدة في chunk
+// منفصل عند أول فتح لها فقط (مع Suspense أدناه) هو مفتاح سرعة أول زيارة لـ /app.
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
   'dashboard': Dashboard,
   'morning': MorningRoutine,
@@ -119,6 +134,8 @@ const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.Compone
 // Unified module labels — single source of truth (lib/module-labels)
 const moduleNames = MODULE_LABELS
 
+// ── القسم: مساعدو العرض وهوية الوحدات البصرية ──────────────────────────────────
+
 function LoadingFallback() {
   return <SunCloudLoader className="h-64" />
 }
@@ -143,6 +160,8 @@ interface SearchJournal { id: string; date: string; content: string; mood: numbe
 interface SearchBook { id: string; title: string; author: string | null; status: string }
 interface SearchKnowledge { id: string; title: string; type: string; folder: string | null }
 
+// ── القسم: المكوّن الجذر — الحالة والآثار الجانبية ──────────────────────────────────
+
 export default function AwjApp() {
   const { activeModule, setActiveModule, toggleSidebar, auth, setAuth, logout } = useRiseStore()
   const { theme, setTheme } = useTheme()
@@ -161,6 +180,8 @@ export default function AwjApp() {
   // overnight), this hook clears the API cache and dispatches global events
   // so every module re-fetches fresh "today" data — no logout/login needed.
   useToday()
+  // خدعة hydration: false على السيرفر و true على العميل بعد الترطيب —
+  // تخفي عناصر تعتمد على المتصفح (ThemeToggle/زر المستخدم) فلا يحدث mismatch
   const mounted = useSyncExternalStore(
     () => () => {},
     () => (mountedRef.current = true, true),
@@ -213,6 +234,7 @@ export default function AwjApp() {
       isAdmin: data.user.isAdmin,
       accessToken: '',
     })
+    // إشعار المستمعين (reminders/PWA/...) ببدء جلسة جديدة
     window.dispatchEvent(new CustomEvent('rise:user-authenticated'))
   }, [setAuth])
 
@@ -232,6 +254,8 @@ export default function AwjApp() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // ── القسم: مستمعو أحداث rise:* (تحديث المستخدم/تجديد الجلسة/التنقل) ──────────────────────────────────
 
   // Listen for user-updated events to refresh user data from session
   useEffect(() => {
@@ -302,6 +326,8 @@ export default function AwjApp() {
         const postId = new URLSearchParams(qs).get('post')
         setActiveModule('community')
         if (postId) {
+          // تحميل كسول لأداة تركيز المجتمع + بث حدث يفتح المنشور داخل الوحدة
+          // (مساران: التخزين المؤقت pending + الحدث المباشر حسب حالة التحميل)
           import('@/lib/community-focus').then(m => {
             m.setPendingCommunityPost(postId)
             window.dispatchEvent(new CustomEvent('awj:open-community-post', { detail: postId }))
@@ -309,6 +335,7 @@ export default function AwjApp() {
         }
         return
       }
+      // لا ننتقل إلا لوحدة معروفة في الخريطة — قيمة خارجية عشوائية تُتجاهل
       if ((moduleNames as Record<string, string>)[target]) {
         setActiveModule(target as ModuleId)
       }
@@ -335,6 +362,7 @@ export default function AwjApp() {
       return
     }
     const q = searchQuery.toLowerCase()
+    // debounce 300ms + AbortController: إلغاء نتائج البحث السابقة أثناء الكتابة السريعة
     const controller = new AbortController()
     const timer = setTimeout(() => {
       Promise.all([
@@ -367,6 +395,7 @@ export default function AwjApp() {
     return `${days[now.getDay()]}، ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`
   }, [])
 
+  // مكون الوحدة النشطة يُحل من الخريطة — تغيير activeModule يعيد رسم المحتوى فقط
   const ActiveComponent = moduleComponents[activeModule]
   const activeMeta = moduleMeta(activeModule)
 
@@ -375,6 +404,7 @@ export default function AwjApp() {
     return <Suspense fallback={<LoadingFallback />}><LoginPage onLogin={handleLogin as any} /></Suspense>
   }
 
+  // ── القسم: العرض — هيكل الصفحة (JSX) ──────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Suspense fallback={null}><Sidebar /></Suspense>

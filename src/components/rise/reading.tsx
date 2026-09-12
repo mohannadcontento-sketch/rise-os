@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// reading.tsx — وحدة «القراءة»
+//
+// تتبع الكتب والمقالات والدورات والفيديوهات: تقدّم الصفحات،
+// التقييم، الاقتباسات والمقتطفات والملاحظات، وتقدير موعد الإنهاء.
+//
+// البنية الداخلية:
+//   1) أنواع وخرائط عرض: نموذج Book + ملصقات/أيقونات/ألوان لكل
+//      نوع محتوى + arabicNum وStarRating
+//   2) المكوّن الرئيسي: الجلب مع تطبيع حالات قديمة، إضافة/تحديث
+//      تفاؤلي، تسجيل صفحات مع حساب التقدم والاكتمال
+//   3) مشتقات: إحصاءات، فلترة حسب التبويب والبحث، وتقدير تاريخ
+//      الإنهاء من سرعة القراءة الفعلية
+//   4) العرض: لافتة إعادة المحاولة، ترويسة وحوار إضافة، إحصاءات،
+//      قسم «أقرأ الآن» المميّز، شبكة بطاقات قابلة للتوسيع
+//
+// UX: شريط ذهبي للتقدم + أزرار سريعة (+١٠/+٢٥) وإدخال الصفحة
+// مباشرة؛ التنقل بين القوائم يضبط تاريخي البدء/الإنهاء تلقائياً.
+// ============================================================
+
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -162,12 +182,15 @@ export default function Reading() {
   const [newStatus, setNewStatus] = useState('reading') // 'reading' | 'want_to_read'
 
   // Update book
+  // مسودات تحرير لكل كتاب: معرّف الكتاب → قيمة الإدخال الجاري قبل الحفظ
   const [editNotes, setEditNotes] = useState<Record<string, string>>({})
   const [editQuote, setEditQuote] = useState<Record<string, string>>({})
   const [editHighlight, setEditHighlight] = useState<Record<string, string>>({})
   const [editPage, setEditPage] = useState<Record<string, string>>({})
 
   const { refreshKey } = useDataRefresh()
+
+  // ── الجلب: القائمة مع تطبيع الحالات + لافتة إعادة المحاولة ──
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -188,6 +211,8 @@ export default function Reading() {
   useEffect(() => {
     fetchBooks()
   }, [fetchBooks, refreshKey])
+
+  // ── الطفرات: إضافة تفاؤلية وتحديث وتسجيل صفحات ومقتطفات ────
 
   const handleAddBook = async () => {
     if (!newTitle.trim()) return
@@ -328,6 +353,7 @@ export default function Reading() {
 
   const handleSaveHighlight = (bookId: string) => {
     const book = books.find((b) => b.id === bookId)
+    // المقتطفات تُخزَّن في قاعدة البيانات كنص JSON لمصفوفة نصوص
     const existing: string[] = book?.highlights ? JSON.parse(book.highlights) : []
     const newHighlight = editHighlight[bookId]?.trim()
     if (newHighlight) {
@@ -341,10 +367,13 @@ export default function Reading() {
     })
   }
 
+  // ── مشتقات العرض: إحصاءات وفلترة وتقدير الإنهاء ─────────────
+
   // Stats
   const readingBooks = books.filter((b) => b.status === 'reading')
   const completedBooks = books.filter((b) => b.status === 'completed')
   const totalBooks = books.length
+  // المنجَز يُحسب بكل صفحاته والجاري بصفحاته المقروءة فقط
   const totalPagesRead = completedBooks.reduce((sum, b) => sum + (typeof b.totalPages === 'number' ? b.totalPages : 0), 0) +
     readingBooks.reduce((sum, b) => sum + (typeof b.currentPage === 'number' ? b.currentPage : 0), 0)
 
@@ -361,6 +390,7 @@ export default function Reading() {
     if (!book.totalPages || !book.startDate) return null
     const pagesRead = book.currentPage
     if (pagesRead === 0) return null
+    // السرعة = الصفحات المقروءة ÷ الأيام منذ البدء؛ وتُسقط على المتبقي للوصول للتقدير
     const startDate = new Date(book.startDate)
     const daysSinceStart = Math.max(1, (Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24))
     const pagesPerDay = pagesRead / daysSinceStart
@@ -371,6 +401,8 @@ export default function Reading() {
     completionDate.setDate(completionDate.getDate() + daysRemaining)
     return completionDate.toLocaleDateString('ar', { month: 'short', day: 'numeric' })
   }
+
+  // ── العرض: لافتة إعادة المحاولة ثم الترويسة والإحصاءات والقوائم ──
 
   return (
     <div dir="rtl" className="space-y-6">
@@ -833,6 +865,7 @@ export default function Reading() {
                                   <Library className="w-3 h-3 text-gold" />
                                   القائمة
                                 </label>
+                                {/* التنقل بين القوائم يضبط تاريخي البدء/الإنهاء تلقائياً */}
                                 <div className="grid grid-cols-4 gap-1.5">
                                   {([
                                     ['want_to_read', 'قائمة القراءة'],

@@ -9,6 +9,20 @@ import { playSound } from '@/lib/sounds'
 import { toast } from 'sonner'
 import { toastError, toastCreated } from '@/lib/toast-helpers'
 
+// ============================================================
+// use-tasks-controller.ts — متحكم وحدة المهام
+//
+// منطق الجلب والطفرات: إنشاء/تبديل/نقل/حذف بتحديث تفاؤلي وتراجع
+// عند الفشل، ومنح XP مرة واحدة لكل إكمال عبر مجموعة مفاتيح.
+//
+// المسؤوليات:
+//   1) الجلب + التصفية (scope/فلاتر/بحث) والتحزيم حسب الحالة.
+//   2) طفرات تفاؤلية مع بث rise:instant-update للوحة التحكم وrollback.
+//   3) كشف فتح المهام المحجوبة (dependsOn) ومنع XP المزدوج.
+// ============================================================
+
+// ── القسم: الأنواع — المهمة/المشروع/مدخلات الإنشاء/الخيارات ──────────────────────────────────
+
 export interface SubTask {
   id: string
   title: string
@@ -57,6 +71,8 @@ interface UseTasksControllerOptions {
   searchQuery: string
 }
 
+// ── القسم: الحالة والجلب الأولي ──────────────────────────────────
+
 export function useTasksController({
   scope,
   filterPriority,
@@ -69,6 +85,7 @@ export function useTasksController({
   const [loading, setLoading] = useState(true)
   const [fetchFailed, setFetchFailed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // مفاتيح XP الممنوحة في هذه الجلسة — منح المهمة XP مرة واحدة مهما toggle المستخدم
   const xpAwardedRef = useRef<Set<string>>(new Set())
   const { refreshKey } = useDataRefresh()
 
@@ -94,13 +111,17 @@ export function useTasksController({
     fetchData()
   }, [fetchData, refreshKey])
 
+  // ── القسم: XP والأحداث الفورية وسلسلة الاعتماديات ──────────────────────────────────
+
   const awardXpOnce = useCallback((key: string, amount: number, reason: string) => {
+    // فحص المجموعة ثم الإضافة = منع تكرار (dedup) — الطلب نفسه fire-and-forget
     if (xpAwardedRef.current.has(key)) return
     xpAwardedRef.current.add(key)
     apiPost('/api/rise/earn-xp', { amount, reason }).catch(() => {})
   }, [])
 
   const checkUnblockedTasks = useCallback((completedTaskId: string) => {
+    // مهمة «تُفتح» إذا كانت تعتمد على المنجزة وتحققت كل اعتمادياتها الباقية أيضاً
     const unblocked = tasks.filter((task) => {
       if (!task.dependsOn || task.status === 'done') return false
       const deps = task.dependsOn.split(',').filter(Boolean)
@@ -117,6 +138,7 @@ export function useTasksController({
   }, [tasks])
 
   const dispatchInstant = useCallback((task: Task, nowDone: boolean) => {
+    // فرق العدّادات حسب خانة المهمة: اليوم / بلا تاريخ / متأخرة — تُبث للوحة التحكم
     const detail: Record<string, number | string> = { type: 'task' }
     const today = getToday()
     if (task.dueDate === today) {
@@ -137,6 +159,8 @@ export function useTasksController({
       return !!depTask && depTask.status !== 'done'
     })
   }, [tasks])
+
+  // ── القسم: التصفية والتحزيم (useMemo) ──────────────────────────────────
 
   const scopedTasks = useMemo(
     () => scope === 'mine' ? tasks.filter((task) => !task.projectId) : tasks.filter((task) => !!task.projectId),
@@ -160,9 +184,12 @@ export function useTasksController({
     return groups
   }, [filteredTasks])
 
+  // ── القسم: الطفرات — تبديل/نقل/حذف/مهام فرعية/إنشاء ──────────────────────────────────
+
   const toggleTask = useCallback(async (task: Task) => {
     const isDone = task.status === 'done'
     const newStatus = isDone ? 'todo' : 'done'
+    // تسوية تفاؤلية: تحديث فوري ثم تراجع (rollback) إذا رفض الخادم + جلب مُصالِح
     setTasks((prev) => prev.map((item) => item.id === task.id ? { ...item, status: newStatus } : item))
     if (!isDone) {
       playSound('task-complete')
@@ -267,6 +294,7 @@ export function useTasksController({
         return false
       }
       const result = await res.json().catch(() => ({}))
+      // رد غير متوقع (offline أو بلا معرّف): اعتبره فشلاً — لا «نجاح زائف» للمستخدم
       if (result.offline || (result.success === true && !result.id && !result.requestId)) {
         toast.error('فشل الاتصال بالخادم', { description: 'يرجى إعادة تسجيل الدخول' })
         return false
@@ -293,6 +321,7 @@ export function useTasksController({
     filteredTasks,
     groupedTasks,
     isTaskBlocked,
+    // عدد مهام المشاريع — لعرضه على تبويت «المشاريع» دون جلب إضافي
     projectTasksCount: useMemo(() => tasks.filter((task) => !!task.projectId).length, [tasks]),
     toggleTask,
     moveTask,

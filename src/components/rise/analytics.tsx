@@ -1,5 +1,24 @@
 'use client'
 
+// ============================================================
+// analytics.tsx — وحدة «التحليلات»
+//
+// لوحة قياس شاملة تُجمِّع بيانات أربعة مسارات (لوحة التحكم والعادات
+// والتركيز والصحة) في KPIs ورسوم بيانية ورؤى عربية تلقائية.
+//
+// البنية الداخلية:
+//   1) أنواع وثوابت: واجهات بيانات المسارات، ألوان الرسوم، وترجمة
+//      مفاتيح التلميحات إلى العربية
+//   2) مكونات مساعدة: GlassTooltip (تلميح موحّد للرسوم) و
+//      AnimatedCounter (عدّاد متحرك بـ framer-motion)
+//   3) getGrade: تحويل متوسط الدرجة إلى تقدير حرفي (A+→F)
+//   4) المكوّن الرئيسي: جلب متوازٍ ثم حسابات useMemo لكل رسم ثم
+//      طبقة عرض: بطاقات، تقدير عام، رسوم، ورؤى
+//
+// الرسوم كلها recharts بلون الهوية البنفسجي مع تلميح glass موحّد؛
+// تبديل الفترة يعيد حساب الرسوم محلياً دون إعادة الجلب.
+// ============================================================
+
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
@@ -104,6 +123,8 @@ const ARABIC_LABELS: Record<string, string> = {
   lastWeek: 'الأسبوع الماضي',
 }
 
+// ── مكونات مساعدة: تلميح الرسوم والعدّاد المتحرك ──────────────
+
 function GlassTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey?: string }>; label?: string }) {
   if (!active || !payload?.length) return null
   return (
@@ -173,6 +194,7 @@ export default function Analytics() {
   // Average score for performance grade
   const avgScore = useMemo(() => {
     if (!dashboard?.dailyScores?.length) return 0
+    // نافذة الأيام المعروضة حسب الفترة: 7 / 30 / 90 يوماً
     const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
     const recent = dashboard.dailyScores.slice(-days)
     return recent.length > 0 ? Math.round(recent.reduce((s, d) => s + d.score, 0) / recent.length) : 0
@@ -180,11 +202,14 @@ export default function Analytics() {
 
   const grade = getGrade(avgScore)
 
+  // ── جلب البيانات: أربعة مسارات متوازية تُعاد عند refreshKey ──
+
   const { refreshKey } = useDataRefresh()
 
   useEffect(() => {
     async function load() {
       try {
+        // جلب متوازٍ لأربعة مسارات؛ نجاح كل واحد مستقل والبقية تبقى بحالتها السابقة
         const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
           apiFetch('/api/rise/dashboard'),
           apiFetch('/api/rise/habits'),
@@ -228,6 +253,7 @@ export default function Analytics() {
     const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
     const today = new Date()
     const result: { date: string; rate: number }[] = []
+    // نبني يوماً لكل تاريخ في النافذة (حتى الفارغ = 0%) كي يبقى الخط متصلاً
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(today)
       d.setDate(d.getDate() - i)
@@ -245,6 +271,7 @@ export default function Analytics() {
 
   const focusByDayData = useMemo(() => {
     if (!focus) return []
+    // تجميع دقائق الجلسات المكتملة حسب يوم الأسبوع عبر كامل السجل
     const dayMap: Record<string, number> = {}
     dayNamesAr.forEach((d) => (dayMap[d] = 0))
     focus.sessions
@@ -285,6 +312,7 @@ export default function Analytics() {
     if (!dashboard?.dailyScores?.length) return []
     const latest = dashboard.dailyScores[dashboard.dailyScores.length - 1]
     if (!latest) return []
+    // حد أدنى 1 لكل مجال كي لا تختفي الشرائح الصفرية من دائرة الرسم
     return [
       { name: 'الصباح', value: Math.round(latest.morningScore) || 1 },
       { name: 'المهام', value: Math.round(latest.taskScore) || 1 },
@@ -294,6 +322,8 @@ export default function Analytics() {
       { name: 'اليوميات', value: Math.round(latest.journalScore) || 1 },
     ]
   }, [dashboard])
+
+  // ── إحصاءات مشتقة: الأفضل/الأسوأ، الأرقام القياسية، مقارنة الأسبوع ──
 
   // Best/Worst Day
   const { bestDay, worstDay } = useMemo(() => {
@@ -331,6 +361,7 @@ export default function Analytics() {
 
     // Longest habit streak
     let longestStreak = 0
+    // أطول تتابع يومي لتواريخ الإتمام الفريدة (مرتّبة تصاعدياً)
     if (habits?.logs?.length && habits?.habits?.length) {
       const allDates = [...new Set(habits.logs.filter((l) => l.completed).map((l) => l.date))].sort()
       let streak = 1
@@ -384,9 +415,12 @@ export default function Analytics() {
         { name: 'الأسبوع الماضي', value: Math.round(focusLast / 60 * 10) / 10 },
         { name: 'هذا الأسبوع', value: Math.round(focusThis / 60 * 10) / 10 },
       ],
+      // نسبة التغيّر مقارنةً بمتوسط الأسبوع الماضي (صفر عند غيابه)
       scoreChange: avgLast > 0 ? Math.round(((avgThis - avgLast) / avgLast) * 100) : 0,
     }
   }, [dashboard, focus])
+
+  // ── الرؤى: بطاقات استنتاجية عربية من الإحصاءات الحالية ───────
 
   const insights = useMemo(() => {
     const items: { icon: React.ElementType; text: string; type: 'positive' | 'negative' | 'neutral'; label: string }[] = []
@@ -445,6 +479,8 @@ export default function Analytics() {
   const totalTasks = dashboard?.user.totalTasksDone || 0
   const totalFocusHours = Math.round((dashboard?.user.totalFocusMin || 0) / 60)
   const currentStreak = dashboard?.user.streak || 0
+
+  // ── العرض: skeleton أثناء التحميل ثم الواجهة الكاملة ─────────
 
   if (loading) {
     return (

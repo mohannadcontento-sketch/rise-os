@@ -23,8 +23,24 @@ import { habitLogs } from './habitLogs'
 import { dailyScores } from './dailyScores'
 import { userAchievements } from './userAchievements'
 
+// ============================================================
+// data/index.ts — الواجهة الجماعية لطبقة البيانات (facade)
+//
+// الغرض: نقطة الدخول الوحيدة للبيانات — استيراد '@/lib/data'
+// يصل إلى هذا الملف (لا يوجد data.ts مستقل؛ هذا هو الـ facade).
+//
+// المسؤوليات:
+//   1) تجميع 22 مستودع نطاق (tasks, goals, habits...) في كائن data واحد
+//   2) إعادة تصدير setCurrentAuthToken من core (وضع mock/dev فقط)
+//
+// قرار مهم: نمط facade — المكونات والمسارات تستدعي data.<domain>()
+// ولا تعرف Supabase إطلاقاً؛ تبديل مستودع داخلي لا يكسر المستدعين.
+// ============================================================
+// ── القسم: إعادة تصدير نواة الوصول ─────────────────────
 export { setCurrentAuthToken } from './core'
 
+// ── القسم: كائن الواجهة الجماعية data ─────────────────────
+// كل المستودعات تُجمَّع هنا؛ الاستخدام حصراً عبر data.<domain> (مثل data.tasks)
 export const data = {
   profiles,
   userSettings,

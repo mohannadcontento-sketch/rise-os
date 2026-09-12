@@ -22,18 +22,35 @@
 
 import { createHash } from 'node:crypto'
 
+// ============================================================
+// cloudinary.ts — presign الوسائط وتسليمها عبر CDN
+//
+// الغرض: كل عمليات وسائط المجتمع تمر من هنا — توليد المفاتيح،
+// توقيع الرفع المباشر من المتصفح، وبناء روابط التسليم.
+//
+// المسؤوليات:
+//   1) حلّ الإعداد (env ثم app_config) مع كاش 10 دقائق
+//   2) توليد توقيع SHA-1 للرفع الموقّع (خوارزمية Cloudinary القياسية)
+//   3) بناء روابط تسليم f_auto,q_auto من المفتاح بلا نداء شبكة
+//   4) تحقق/حذف عبر Admin API (best-effort، لا يرمي أبداً)
+//
+// قرار مهم: api_secret لا يغادر الخادم أبداً — المتصفح يرفع مباشرة
+// بتوقيع مؤقت فقط؛ بدون مفاتيح تتراجع كل الدوال بأمان (null/503).
+// ============================================================
 export interface CloudinaryConfig {
   cloudName: string
   apiKey: string
   apiSecret: string
 }
 
+// ── القسم: الإعداد والكاش ─────────────────────
 let cached: { at: number; config: CloudinaryConfig | null } | null = null
 const CACHE_MS = 10 * 60 * 1000
 
 /** تحويلات التسليم: صيغة تلقائية + جودة تلقائية (CDN) */
 const DELIVERY_TRANSFORM = 'f_auto,q_auto'
 
+// ── القسم: حلّ الإعداد (env ثم كاش ثم DB) ─────────────────────
 export async function getCloudinaryConfig(): Promise<CloudinaryConfig | null> {
   // 1) متغيرات البيئة أولًا
   const envCloud = process.env.CLOUDINARY_CLOUD_NAME?.trim()
@@ -52,12 +69,14 @@ export async function getCloudinaryConfig(): Promise<CloudinaryConfig | null> {
   return config
 }
 
+// ── القسم: قراءة الإعداد من app_config ─────────────────────
 async function readFromDb(): Promise<CloudinaryConfig | null> {
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase')
     const admin = await getSupabaseAdmin()
     if (!admin) return null
 
+    // قراءة service_role فقط — RLS بلا policies = fail-closed (نفس نمط turso)
     const { data, error } = await (admin as any)
       .from('app_config')
       .select('key, value')
@@ -85,6 +104,7 @@ async function readFromDb(): Promise<CloudinaryConfig | null> {
   }
 }
 
+// ── القسم: فحوص الحالة ─────────────────────
 /** اختبار الوحدة: إبطال الكاش بعد تحديث المفاتيح */
 export function resetCloudinaryCache(): void {
   cached = null
@@ -108,6 +128,7 @@ export async function cloudinaryStatus(): Promise<{
 
 /** مفتاح كائن: community/<userId>/<uuid>.<ext> (موحّد مع CHECK قاعدة البيانات) */
 export function buildMediaKey(userId: string, _contentType: string, ext: string): string {
+  // crypto.randomUUID إن توفر — وإلا احتياط زمني+عشوائي (بيئات بلا WebCrypto)
   const rand =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -187,6 +208,7 @@ export interface MediaItemDTO {
 export async function signMediaForApi(
   media: { key: string; contentType?: string; bytes?: number }[] | null | undefined,
 ): Promise<MediaItemDTO[] | null> {
+  // null/undefined تبقى كما هي؛ المصفوفة الفارغة تبقى فارغة (حفاظ على شكل الاستجابة)
   if (!media || !Array.isArray(media) || media.length === 0) return media === null || media === undefined ? null : []
   const out: MediaItemDTO[] = []
   for (const m of media) {
@@ -208,6 +230,7 @@ export interface VerifiedMediaInfo {
   bytes: number
 }
 
+// مصادقة HTTP Basic بمفاتيح الحساب — للنداءات الإدارية فقط (تحقق/حذف)
 function adminAuth(cfg: CloudinaryConfig): string {
   return `Basic ${Buffer.from(`${cfg.apiKey}:${cfg.apiSecret}`).toString('base64')}`
 }
@@ -222,12 +245,14 @@ export async function verifyMediaUploads(keys: string[]): Promise<Map<string, Ve
   const cfg = await getCloudinaryConfig()
   if (!cfg || keys.length === 0) return null
   try {
+    // إزالة التكرار — استعلام إداري واحد بعدة public_ids (حد 500)
     const ids = [...new Set(keys.map(publicIdFromKey))]
     const params = new URLSearchParams()
     for (const id of ids) params.append('public_ids[]', id)
     params.set('max_results', '500')
     const res = await fetch(
       `https://api.cloudinary.com/v1_1/${cfg.cloudName}/resources/image/upload?${params.toString()}`,
+      // مهلة 10 ثوانٍ للنداء الإداري — لا يعلّق المسار أبداً (degraded)
       { headers: { Authorization: adminAuth(cfg) }, signal: AbortSignal.timeout(10_000) },
     )
     if (!res.ok) {

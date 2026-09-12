@@ -1,5 +1,23 @@
 'use client'
 
+// ============================================================
+// projects.tsx — وحدة «المشاريع»
+//
+// إدارة المشاريع وربطها بالمهام: شبكة بطاقات ملونة + مشروع مميّز + عرض
+// تفصيلي لكل مشروع بمهامه مصنّفة (للتنفيذ/قيد التنفيذ/مكتمل) وتقدّم محسوب.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: Project/Task + ألوان جاهزة + حالات المهام الثلاث
+//   2) مكونات مساعدة: ProgressRing (توهج فوق ٧٥٪) + FeaturedProject + EmptyState
+//   3) الحالة والتحميل: جلب متوازٍ للمشاريع والمهام عبر Promise.all
+//   4) المشتقات: بحث + مهام المشروع المحدد مجمّعة حسب status
+//   5) الطفرات: حفظ/حذف مشروع + إضافة/تبديل/نقل/حذف مهمة بتفاؤل وتراجع
+//   6) العرض الثلاثي: هياكل تحميل ← عرض تفصيلي (المشروع المحدد) ← شبكة المشاريع
+//
+// التقدّم في الشبكة يُشتق من المهام المكتملة فعلياً ويتراجع لقيمة progress
+// المخزّنة عند غياب المهام؛ والبطاقة المميّة هي الأعلى تقدّماً.
+// ============================================================
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -123,6 +141,7 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
   const radius = Math.max(1, (size - strokeWidth) / 2)
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (progress / 100) * circumference
+  // توهج SVG يُفعّل فوق ٧٥٪ تقدّم — لمسة إنجاز قرب الاكتمال
   const isHighProgress = progress > 75
   const gradientId = `progGrad-${size}-${color.replace('#', '')}`
 
@@ -183,6 +202,7 @@ function ProgressRing({ progress, size = 64, strokeWidth = 5, color }: { progres
   /* ────────────── Team Avatars Component ────────────── */
 
 function TeamAvatars() {
+  // أفاتار زخرفي بأسماء ثابتة — عنصر عرض جمالي وليس أعضاء فريق حقيقيين
   const names = ['أحمد', 'سارة', 'محمد', 'نورة', 'خالد']
   const colors = ['#059669', '#3B82F6', '#F59E0B', '#EC4899', '#8B5CF6']
   return (
@@ -209,6 +229,7 @@ function TeamAvatars() {
 /* ────────────── Featured Project Hero ────────────── */
 
 function FeaturedProject({ project, onClick }: { project: Project; onClick: () => void }) {
+  // عدّادات شكلية (صفر ثابت) — النسبة المعروضة تأتي من progress المخزّن للمشروع
   const taskCount = 0
   const doneCount = 0
   const progress = project.progress
@@ -302,6 +323,8 @@ function EmptyState() {
 /* ────────────── Main Component ────────────── */
 
 export function Projects() {
+  // ── الحالة: المشاريع والمهام ونموذجا الحوارين ──────────────────────
+
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -323,10 +346,13 @@ export function Projects() {
   const [newTaskDueDate, setNewTaskDueDate] = useState('')
   const [taskSubmitting, setTaskSubmitting] = useState(false)
 
+  // ── التحميل: جلب متوازٍ للمشاريع والمهام ──────────────────────
+
   const { refreshKey } = useDataRefresh()
 
   const fetchData = useCallback(async () => {
     try {
+      // جلب متوازٍ: المهام تُجلب كاملة ثم تُفلتر محلياً حسب المشروع المحدد
       const [projRes, taskRes] = await Promise.all([
         apiFetch('/api/rise/projects'),
         apiFetch(`/api/rise/tasks`),
@@ -347,6 +373,8 @@ export function Projects() {
   useEffect(() => {
     fetchData()
   }, [fetchData, refreshKey])
+
+  // ── المشتقات: البحث والتجميع حسب الحالة ──────────────────────
 
   /* ── Computed ── */
   const filteredProjects = useMemo(() => {
@@ -371,6 +399,8 @@ export function Projects() {
     }
     return groups
   }, [projectTasks])
+
+  // ── الطفرات: مشاريع ومهام بتفاؤل وتراجع ──────────────────────
 
   /* ── Mutations ── */
   const openAddDialog = () => {
@@ -423,6 +453,7 @@ export function Projects() {
 
   const deleteProject = async (id: string) => {
     playSound('delete')
+    // لقطة قبل الحذف للتراجع واستعادة التحديد إن فشل الطلب
     const prevProjects = [...projects]
     const prevSelected = selectedProjectId
     setProjects((p) => p.filter((p) => p.id !== id))
@@ -473,6 +504,7 @@ export function Projects() {
   const toggleTask = async (task: Task) => {
     const isDone = task.status === 'done'
     const newStatus = isDone ? 'todo' : 'done'
+    // completedAt يُضبط عند الإنجاز ويُصفّر عند التراجع (تبديل ثنائي الاتجاه)
     const optimistic = { ...task, status: newStatus, completedAt: !isDone ? new Date().toISOString() : null }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? optimistic : t)))
     try {
@@ -527,6 +559,8 @@ export function Projects() {
   const getDoneCountForProject = (projectId: string) => {
     return tasks.filter((t) => t.projectId === projectId && t.status === 'done').length
   }
+
+  // ── العرض: تحميل ← تفصيل المشروع ← شبكة المشاريع ──────────────────────
 
   /* ────────────── Render: Loading ────────────── */
   if (loading) {
@@ -937,6 +971,7 @@ export function Projects() {
 
       {/* Featured Project */}
       {filteredProjects.length > 0 && (() => {
+        // المشروع المميّز = الأعلى تقدّماً من نتائج البحث الحالية
         const featured = filteredProjects.reduce((a, b) => a.progress > b.progress ? a : b, filteredProjects[0])
         return (
           <motion.div variants={itemVariants}>
@@ -959,6 +994,7 @@ export function Projects() {
             {filteredProjects.map((project) => {
               const taskCount = getTaskCountForProject(project.id)
               const doneCount = getDoneCountForProject(project.id)
+              // التقدّم مشتق من المهام الفعلية، والرجوع لقيمة progress المخزّنة عند غيابها
               const calculatedProgress = taskCount > 0 ? Math.round((doneCount / taskCount) * 100) : project.progress
 
               return (

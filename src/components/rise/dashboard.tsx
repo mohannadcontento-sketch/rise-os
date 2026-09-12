@@ -1,5 +1,30 @@
 'use client'
 
+// ============================================================
+// dashboard.tsx — وحدة «لوحة التحكم»
+//
+// الشاشة الرئيسية للمنصة: نظرة واحدة على يوم المستخدم كله —
+// درجة الإنتاجية الموحّدة، KPIs اليوم (صباح/مهام/عادات/تركيز)،
+// المهام المتأخرة والقادمة، العادات، الأهداف، الصحة، الشارات،
+// وجدار التحفيز — والجلب كلّه عبر use-dashboard-data.
+//
+// البنية الداخلية:
+//   1) الأنواع (DashboardData) + أدوات مساعدة: أرقام عربية،
+//      تحويل أيام/أولويات/مزاج، واقتباسات التحفيز
+//   2) مكونات رسم صغيرة قابلة لإعادة الاستخدام: MiniSparkline،
+//      AnimatedNumber، CircularProgress، HorizonDial، Skeleton،
+//      ChartTooltip، SectionHeader، PremiumGlass
+//   3) ProductivityScoreCard — الدرجة الموحّدة + تفصيل أوزانها
+//   4) ودجات مستقلة: GoalDeltaBadge، MotivationalWall،
+//      OnThisDayWidget (مقارنة قبل أسبوع/شهر)
+//   5) Dashboard الرئيسي: جلب → تطبيع → تخطيط متدرّج (ترحيب،
+//      KPIs، شريط المتأخرة، رسم الأسبوع، عمودان، صف سفلي)
+//
+// مبادئ UX: «رقم واحد» — الدرجة تأتي من السيرفر كما هي في كل
+// الواجهة (لا معادلة محلية منافسة)، skeleton قبل المحتوى،
+// وكل الأرقام تُعرض بأرقام عربية.
+// ============================================================
+
 import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
@@ -224,6 +249,8 @@ function getDayLabel(dateStr: string | null | undefined): string {
   try {
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return ''
+    // نقرأ اسم اليوم بمحلي en-US (مفتاح ثابت عبر الأجهزة) ثم نترجمه
+    // عبر جدول ARABIC_DAYS — أضمن من الاعتماد على محلي عربي متغيّر
     const dayEN = d.toLocaleDateString('en-US', { weekday: 'short' })
     return ARABIC_DAYS[dayEN] || dayEN
   } catch {
@@ -444,6 +471,8 @@ function HorizonDial({ completion }: { completion: number }) {
   const hour = now.getHours() + now.getMinutes() / 60
   const dayStart = 5
   const dayEnd = 21
+  // نحوّل الساعة الحالية إلى نسبة t داخل نافذة اليوم (٥ص→٩م) ثم
+  // إلى زاوية على نصف الدائرة لتحديد موضع مؤشر «الآن» على القوس
   const t = Math.min(1, Math.max(0, (hour - dayStart) / (dayEnd - dayStart)))
   const angle = Math.PI * (1 - t)
   const markerX = cx + r * Math.cos(angle)
@@ -814,6 +843,7 @@ function GoalDeltaBadge({ goalId }: { goalId: string }) {
 
         const currentProgress = goal.progress || 0
         // Estimate weekly delta based on goal type and current progress
+        // تقدير تقريبي وليس تسجيلاً تاريخياً فعلياً: ٣٠٪ من التقدم بسقف ١٥
         const estimatedWeeklyDelta = Math.min(currentProgress * 0.3, 15)
         setDelta(estimatedWeeklyDelta > 0 ? Math.round(estimatedWeeklyDelta) : 0)
       } catch {
@@ -859,6 +889,8 @@ function MotivationalWall() {
     } catch { /* ignore */ }
     return new Set()
   })
+  // «شوهدت اليوم» — تُصفَّر تلقائياً مع بداية يوم جديد: نقارن التاريخ
+  // المخزَّن مع مفتاح اليوم، وإن اختلف نبدأ مجموعة جديدة
   const [seenToday, setSeenToday] = useState<Set<number>>(() => {
     try {
       const todayKey = getToday()
@@ -1062,6 +1094,8 @@ function OnThisDayWidget() {
         const lastMonth = new Date(today)
         lastMonth.setMonth(today.getMonth() - 1)
 
+        // نبني تاريخي المقارنة يدوياً بصيغة YYYY-MM-DD (اليوم نفسه قبل
+        // أسبوع وقبل شهر) كما يتوقعها مسار productivity-score
         const lastWeekStr = `${lastWeek.getFullYear()}-${String(lastWeek.getMonth() + 1).padStart(2, '0')}-${String(lastWeek.getDate()).padStart(2, '0')}`
         const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-${String(lastMonth.getDate()).padStart(2, '0')}`
 
@@ -1165,9 +1199,12 @@ function OnThisDayWidget() {
    ══════════════════════════════════════════════════════════════════════ */
 
 export default function Dashboard() {
+  // ── القسم: الجلب والطفرات عبر use-dashboard-data ──────────────
   const { data, loading, error, fromCache, fetchDashboard, movingId, moveOverdueToToday } = useDashboardData()
   const handleMoveOverdueToToday = useCallback(async (ids: string[]) => {
     const failed = await moveOverdueToToday(ids)
+    // undefined = الطلب لم يكتمل ولا نعرض toast (المتحكم عالج الخطأ)،
+    // صفر = نجح نقل الجميع، وأي رقم أكبر = فشل جزئي
     if (failed === undefined) return
     if (failed === 0) {
       toast.success(ids.length === 1 ? 'اتنقلت المهمة ليهاردة 💪' : `اتنقلت ${ids.length} مهام ليهاردة 💪`)
@@ -1186,6 +1223,7 @@ export default function Dashboard() {
     }
   }, [data])
 
+  // ── القسم: حالات التحميل والخطأ (قبل أي بيانات) ──────────────
   if (loading) return <DashboardSkeleton />
 
   if (error || !data) {
@@ -1207,6 +1245,7 @@ export default function Dashboard() {
     )
   }
 
+  // ── القسم: تطبيع بيانات السيرفر وقيم fallback ──────────────
   const user = data.user || { name: 'مستخدم', level: 1, xp: 0, streak: 0, longestStreak: 0, totalFocusMin: 0, totalTasksDone: 0, xpToNextLevel: 100 }
   const today = data.today || { tasksCompleted: 0, tasksTotal: 0, habitsCompleted: 0, habitsTotal: 0, focusMin: 0, morningScore: 0 }
 
@@ -1233,6 +1272,7 @@ export default function Dashboard() {
   const overdueTasks = Array.isArray(data.overdueTasks) ? data.overdueTasks : []
   const greeting = getGreeting()
 
+  // ── القسم: مشتقات العرض — المستوى والشارات والقوائم والاتجاهات ──
   // FIX: Use level from DB (authoritative), don't recalculate
   const levelInfo = {
     level: user.level || 1,
@@ -1285,6 +1325,7 @@ export default function Dashboard() {
   const bestIdx = chartData.reduce((best: number, d: any, i: number) =>
     (d.score || 0) > ((chartData[best] as any)?.score || 0) ? i : best, 0)
 
+  // ── القسم: تخطيط الشاشة — من الترحيب حتى المشاريع ──────────────
   return (
     <motion.div
       className="space-y-6 p-4 lg:p-6"

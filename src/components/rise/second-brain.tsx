@@ -1,5 +1,24 @@
 'use client'
 
+// ============================================================
+// second-brain.tsx — وحدة «الدماغ الثاني»
+//
+// مساحة معرفة شخصية فوق جدول knowledge_items المشترك: تسجيل
+// سريع للأفكار وتنظيمها بأنواع ومجلدات ووسوم مع بحث وعرض شبكي/قائمة.
+//
+// البنية الداخلية:
+//   1) أنواع وإعداد: نموذج KnowledgeItem + typeConfig لثمانية
+//      أنواع + ألوان الوسوم + BRAIN_TYPES (الحد المسموح عرضه)
+//   2) طبقة البيانات: جلب مع تصفية أنواع الدماغ، التقاط سريع،
+//      إضافة/تحرير/حذف/مفضلة
+//   3) مشتقات: فلترة (نوع/مجلد/بحث) وتجميع الوسوم مع العدّ
+//   4) العرض: ترويسة وحوار إضافة، شوهد مؤخراً، فكرة عشوائية،
+//      التقاط سريع، شريط جانبي (أنواع/مجلدات/وسوم)، وبطاقات
+//
+// UX: التقاط سريع بحقل واحد بزر Enter؛ حركة الأنواع بلون
+// الهوية البنفسجي، وحجم الوسم في السحابة يعكس تكراره.
+// ============================================================
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -157,6 +176,8 @@ export default function SecondBrain() {
 
   const { refreshKey } = useDataRefresh()
 
+  // ── الجلب: عناصر الدماغ من جدول المعرفة المشترك ─────────────
+
   const fetchItems = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/rise/knowledge`)
@@ -177,6 +198,8 @@ export default function SecondBrain() {
   useEffect(() => {
     fetchItems()
   }, [fetchItems, refreshKey])
+
+  // ── الطفرات: التقاط سريع وإضافة وتحرير ومفضلة وحذف ──────────
 
   // Quick Capture handler
   const handleQuickCapture = useCallback(async () => {
@@ -216,6 +239,7 @@ export default function SecondBrain() {
         title: newTitle,
         content: newContent,
         folder: newFolder,
+        // الوسوم تُحوَّل من نص مفصول بفواصل إلى JSON قبل الإرسال
         tags: newTags ? JSON.stringify(newTags.split(',').map((t) => t.trim()).filter(Boolean)) : null,
         source: newSource || null,
       })
@@ -280,6 +304,7 @@ export default function SecondBrain() {
   const handleRandomInsight = useCallback(() => {
     if (items.length === 0) return
     let pick = items[Math.floor(Math.random() * items.length)]
+    // تجنّب تكرار نفس العنصر العشوائي عند توفر بديل
     if (randomItem && pick.id === randomItem.id && items.length > 1) {
       pick = items.find(i => i.id !== randomItem.id) || pick
     }
@@ -290,6 +315,7 @@ export default function SecondBrain() {
   // Recently viewed
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([])
   const viewItem = useCallback((id: string) => {
+    // قائمة MRU: الأحدث في المقدمة مع حد أقصى ٥ عناصر
     setRecentlyViewed(prev => [id, ...prev.filter(i => i !== id)].slice(0, 5))
   }, [])
 
@@ -306,6 +332,8 @@ export default function SecondBrain() {
     }
   }
 
+  // ── مشتقات العرض: فلترة النوع/المجلد/البحث وتجميع الوسوم ──
+
   // Filter
   const filtered = items.filter((item) => {
     if (activeType !== 'all' && item.type !== activeType) return false
@@ -318,6 +346,7 @@ export default function SecondBrain() {
   })
 
   // All tags with counts
+  // تُجمَّع الوسوم من كل العناصر مع عدّ التكرار ثم تُرتَّب تنازلياً
   const allTagsWithCount: { tag: string; count: number }[] = []
   items.forEach((item) => {
     if (item.tags) {
@@ -332,6 +361,8 @@ export default function SecondBrain() {
     }
   })
   allTagsWithCount.sort((a, b) => b.count - a.count)
+
+  // ── العرض: ترويسة، التقاط سريع، شريط جانبي، شبكة/قائمة ─────
 
   return (
     <div className="space-y-6">
@@ -427,6 +458,7 @@ export default function SecondBrain() {
               if (!item) return null
               const cfg = typeConfig[item.type] || typeConfig.knowledge
               const Icon = cfg.icon
+              // النقر على الشريحة يعيد ضبط الفلاتر ويبحث بعنوان العنصر
               return (
                 <motion.button
                   key={id}
@@ -619,6 +651,7 @@ export default function SecondBrain() {
                   الوسوم
                 </p>
                 <div className="flex flex-wrap gap-1.5">
+                  {/* حجم الوسم يكبر مع تكراره حتى ٥ مرات */}
                   {allTagsWithCount.map(({ tag, count }, i) => (
                     <motion.button
                       key={tag}
@@ -701,6 +734,7 @@ export default function SecondBrain() {
                 {filtered.map((item, i) => {
                   const cfg = typeConfig[item.type] || typeConfig.knowledge
                   const TypeIcon = cfg.icon
+                  // الوسوم تأتي نصاً JSON أو مصفوفة جاهزة حسب المصدر
                   const tags: string[] = item.tags ? (typeof item.tags === 'string' ? JSON.parse(item.tags) : item.tags) : []
 
                   return (

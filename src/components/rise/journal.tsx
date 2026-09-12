@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// journal.tsx — وحدة «اليوميات»
+//
+// تدوين يومي موجَّه بأسئلة (محتوى، امتنان، انتصارات، تحديات،
+// أفكار، خطة الغد) مع مزاج وطاقة، وبحث في المدخلات السابقة.
+//
+// البنية الداخلية:
+//   1) أنواع وثوابت: نموذج JournalEntry وخرائط ألوان المزاج
+//      (شريط/تدرج/وهج) وألوان حقول النموذج
+//   2) حركات ومكونات مساعدة: variants الفراغات + MoodSparkline
+//      (خط اتجاه SVG لآخر ٧ أيام) وAnimatedNumber
+//   3) المكوّن الرئيسي: جلب يومية اليوم والقائمة، حفظ بتحديث
+//      تفاؤلي، مشتقات (فلترة/إحصاءات/سلسلة/اتجاه المزاج)
+//   4) العرض: إحصاءات، بطاقة مزاج اليوم، نموذج/عرض اليومية،
+//      وقائمة المدخلات السابقة القابلة للتوسيع والبحث
+//
+// UX: تدرج بطاقة المزاج ولون وهج الحقول يتبعان المزاج المختار،
+// والنموذج يتحول تلقائياً إلى عرض بعد الحفظ.
+// ============================================================
+
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
@@ -142,6 +162,7 @@ function MoodSparkline({ moods }: { moods: number[] }) {
   const stepX = (w - pad * 2) / (moods.length - 1)
   const points = moods.map((m, i) => {
     const x = pad + i * stepX
+    // قلب المحور الرأسي: المزاج الأعلى يُرسم أعلى (إحداثيات SVG تبدأ من الأعلى)
     const y = pad + (1 - (m - min) / (max - min)) * (h - pad * 2)
     return `${x},${y}`
   }).join(' ')
@@ -204,6 +225,8 @@ export default function Journal() {
 
   const today = getToday()
 
+  // ── الجلب والحفظ: يومية اليوم والقائمة + تحديث تفاؤلي ────────
+
   /* ─── Fetch ─── */
   const { refreshKey } = useDataRefresh()
 
@@ -213,6 +236,7 @@ export default function Journal() {
       if (res.ok) {
         const json = await res.json()
         setData(json)
+        // عند وجود يومية اليوم يُهيَّأ النموذج منها جاهزاً للتحرير
         if (json.journal) {
           setForm({
             content: json.journal.content || '',
@@ -265,6 +289,7 @@ export default function Journal() {
         toastSaved('اليوميات')
         playSound('save')
         setIsEditing(false)
+        // إعادة الجلب بعد التحديث الفوري لضمان اتساق القائمة والسلسلة
         fetchJournal()
       } else {
         toastError('حفظ اليوميات')
@@ -275,6 +300,8 @@ export default function Journal() {
       setSaving(false)
     }
   }
+
+  // ── مشتقات محسوبة: فلترة وإحصاءات وسلسلة واتجاه المزاج ──────
 
   /* ─── Filtered recent ─── */
   const filteredJournals = useMemo(() => {
@@ -302,6 +329,7 @@ export default function Journal() {
 
     // Calculate streak
     let streak = 0
+    // المشي التنازلي عبر التواريخ: فرق ≤ يوم واحد يمدّ السلسلة (اليوم أو الأمس)
     const sortedDates = journals
       .map((j) => j.date)
       .sort()
@@ -350,6 +378,8 @@ export default function Journal() {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  // ── العرض: skeleton أثناء التحميل ثم واجهة اليوميات الكاملة ──
+
   /* ─── Loading ─── */
   if (loading) {
     return (
@@ -366,6 +396,7 @@ export default function Journal() {
   }
 
   const hasTodayEntry = !!data?.journal
+  // النموذج يظهر عند غياب يومية اليوم أو أثناء التحرير
   const showForm = !hasTodayEntry || isEditing
 
   return (
@@ -535,6 +566,7 @@ export default function Journal() {
                 exit="exit"
               >
               <>
+                {/* ── نموذج اليومية: الأقسام الستة + المزاج والطاقة والوسوم ── */}
                 {/* Paper texture form background */}
                 <div className={cn(
                   "rounded-2xl p-4 -mx-2 space-y-5 noise-bg",
@@ -829,6 +861,7 @@ export default function Journal() {
         </div>
       </motion.div>
 
+      {/* ── المدخلات السابقة: بحث نصي + قائمة قابلة للتوسيع ── */}
       {/* Recent Entries */}
       <motion.div variants={itemVariants}>
         <div className="neo-card card-lift overflow-hidden">

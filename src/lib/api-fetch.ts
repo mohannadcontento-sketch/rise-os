@@ -1,4 +1,23 @@
 import { loadOfflineQueue, saveOfflineQueue, clearOfflineQueueStore } from '@/lib/secure-offline-db'
+// ============================================================
+// api-fetch.ts — عميل HTTP الموحّد للتطبيق
+//
+// الغرض: كل طلبات المتصفح إلى /api/* تمرّ من هنا — لا يستدعي أي
+// مكوّن fetch مباشرة، بل apiFetch/apiGet/apiPost/... فقط.
+//
+// المسؤوليات:
+//   1) إرفاق الجلسة تلقائياً (httpOnly cookie عبر credentials:'include')
+//   2) توليد Idempotency-Key لكل طفرة (منع التكرار الشبكي — 428 بدونه)
+//   3) مهلة 8 ثوانٍ لكل طلب (fail-fast عند الانقطاع)
+//   4) دمج طلبات GET المتزامنة المتطابقة (in-flight dedupe) + micro-cache
+//   5) تجديد الجلسة تلقائياً عند 401 (محاولة واحدة ثم إعادة الطلب)
+//   6) طابور كتابة offline معزول لكل مستخدم مع تدفّق تلقائي عند الاتصال
+//
+// قرارات مهمة: كاش localStorage معطّل عمداً (TTL=0) لمنع البيانات القديمة؛
+// الفشل الشبكي يرجع 408/503 حقيقياً (لا 200 وهمياً) كي لا تمسح الواجهات
+// حالتها؛ الطفرة الفاشلة تُدرج في الطابور وترجع 202؛ نسخة البيانات _v
+// تُرفع بعد كل كتابة ناجحة لتفجير كاش السيرفر serverless متعدد النسخ.
+// ============================================================
 /**
  * apiFetch — centralized fetch utility for Awj API calls.
  * Uses httpOnly cookie authentication in production; legacy token fallback is limited to mock/dev mode.
@@ -8,6 +27,7 @@ import { loadOfflineQueue, saveOfflineQueue, clearOfflineQueueStore } from '@/li
  * All frontend components should use this instead of raw fetch().
  */
 
+// ── القسم: الإعدادات والحالة العامة ─────────────────────────
 // ─── Config ───
 const REQUEST_TIMEOUT_MS = 8000
 const CACHE_TTL_MS = 0 // Disabled — cache causes stale data issues
@@ -21,6 +41,7 @@ function isOnline(): boolean {
   return navigator.onLine !== false
 }
 
+// ── القسم: طبقة الكاش (localStorage) معزولة لكل مستخدم ─────────────────────────
 // ─── Cache layer (localStorage) — scoped per user ───
 const CACHE_PREFIX = 'rise-cache:'
 
@@ -120,6 +141,7 @@ export function clearAllCache(): void {
 
 export { invalidateCache }
 
+// ── القسم: نسخة البيانات _v (تفجير كاش السيرفر) ─────────────────────────
 // ─── Data-version token (cross-instance cache busting) ───
 // Serverless note: the server-side aggregate cache (aggregate-cache.ts) lives
 // in ONE function instance. A write that lands on instance A cannot bust the
@@ -148,6 +170,7 @@ export function bumpDataVersionExport(): void {
   bumpDataVersion()
 }
 
+// ── القسم: دمج طلبات GET + micro-cache ─────────────────────────
 // ─── GET dedupe + micro-cache ───
 // Collapses concurrent identical GETs (module-mount races, write cascades,
 // sidebar+dashboard double-fetch) into ONE network request, and serves
@@ -205,6 +228,7 @@ function resourceOf(url: string): string | undefined {
   return m ? m[1] : undefined
 }
 
+// ── القسم: مساعدات المصادقة وتجديد الجلسة ─────────────────────────
 // ─── Auth helpers ───
 
 function getAuthHeaders(): Record<string, string> {
@@ -291,6 +315,7 @@ function dispatchSessionExpired() {
   window.dispatchEvent(new CustomEvent('rise:session-expired'))
 }
 
+// ── القسم: apiFetch — الطلب الرئيسي ─────────────────────────
 // ─── Main fetch with timeout + cache ───
 
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
@@ -310,6 +335,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     headers.set('Content-Type', 'application/json')
   }
 
+  // طفرة؟ نولّد Idempotency-Key — السيرفر يرفض الطفرات بدونه (428)،
+  // وأي تكرار شبكي بنفس المفتاح يُعدّ replay فلا تتضاعف السجلات.
   const isMutation = !!options.method && options.method !== 'GET'
   const mutationRequestId = isMutation
     ? (headers.get('Idempotency-Key') || cryptoRandomId())
@@ -381,6 +408,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         })
       }
       // For write requests, queue and report 202 Accepted rather than pretending the mutation committed.
+      // طفرة انتهت مهلتها → تُدرج في طابور offline؛ نرجع 202 (لا 200 وهمياً)
+      // حتى لا يعتقد المتحكّم أنها نُفِّذت فعلاً.
       if (options.method && options.method !== 'GET') {
         const requestId = await enqueueRequest(url, options.method, options.body as string | undefined, mutationRequestId)
         return new Response(JSON.stringify({ accepted: !!requestId, queued: !!requestId, requestId }), {
@@ -435,6 +464,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 
   // Invalidate cache on successful POST/PUT/DELETE
+  // كتابة ناجحة: تُنظَّف كل طبقات كاش القراءة ويُبثّ rise:data-changed
+  // (مع resource) ليُعيد كل مكوّن معنيّ جلب بياناته.
   if (response.ok && options.method && options.method !== 'GET') {
     invalidateCache()
     clearGetCaches() // micro-cache + in-flight must never outlive a write
@@ -453,6 +484,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   // FIX: Also try refresh when there's no Authorization header (cookie-based auth).
   // Previously, 401 errors from cookie-only auth never triggered refresh,
   // causing the user to be logged out after JWT expiry.
+  // 401 من مسار API → جرّب تجديد الجلسة مرة واحدة، وإن نجح أعِد الطلب نفسه
   if (response.status === 401 && url.startsWith('/api/')) {
     const refreshed = await tryRefreshToken()
     if (refreshed) {
@@ -524,6 +556,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     // ONE rebuilt Response object — caller #2's .json() still threw
     // "Failed to execute 'json' on 'Response': body stream already read"
     // (the phantom "إعادة المحاولة" screen on first app load, gone on retry).
+    // جسم الشبكة يُقرأ مرة واحدة، ويُبنى لكل متصل Response مستقلة قابلة للقراءة
     const p = doFetch()
       .then(async (res) => {
         let body = ''
@@ -546,6 +579,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   return doFetch()
 }
 
+// ── القسم: أغلفة الراحة (apiGet/apiPost/...) ─────────────────────────
 /**
  * Convenience wrappers
  */
@@ -585,6 +619,7 @@ export function isFromCache(response: Response): boolean {
   return response.headers.get('X-From-Cache') === 'true'
 }
 
+// ── القسم: طابور الكتابة offline ─────────────────────────
 // ─── Offline Write Queue ───
 const QUEUE_KEY = 'rise-offline-queue' // legacy key; never read from it
 const MAX_QUEUE_SIZE = 50
@@ -630,6 +665,7 @@ async function enqueueRequest(
   const userId = getCurrentUserId()
   if (!userId) return null
   const queue = await getQueue(userId)
+  // منع الازدواج: طفرة مطابقة (url+method+body) موجودة في الطابور → نعيد معرّفها
   const existing = queue.find(q => q.url === url && q.method === method && q.body === body)
   if (existing) return existing.id
   if (queue.length >= MAX_QUEUE_SIZE) return null
@@ -646,6 +682,7 @@ function cryptoRandomId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+// سقف المحاولات لكل عنصر قبل إسقاطه نهائياً + قفل يمنع تدفّقين متزامنين للطابور
 const MAX_QUEUE_RETRIES = 20
 let queueFlushPromise: Promise<void> | null = null
 
@@ -661,6 +698,7 @@ async function flushQueue(): Promise<void> {
     const authHeaders = getAuthHeaders()
 
     for (const item of queue) {
+      // عنصر من مستخدم آخر (طابور مشترك سابقاً) — نتخطاه؛ الملكية غير قابلة للإثبات
       if (item.userId !== userId) continue
       try {
         const headers = new Headers(authHeaders)
@@ -701,15 +739,18 @@ async function flushQueue(): Promise<void> {
           }
         }
 
+        // نجاح، أو 409 يعني أن المفتاح نفسه نُفِّذ سابقاً (replay) → العنصر تمّ فعلاً فنحذفه من الطابور
         if (res.ok || res.status === 409 && ['IDEMPOTENCY_CONFLICT', 'IDEMPOTENCY_REPLAY_UNAVAILABLE'].includes((await res.clone().json().catch(() => ({}))).code)) {
           continue
         }
 
+        // 401 بعد فشل التجديد → يبقى في الطابور بلا عدّ محاولات (ينتظر عودة الجلسة)
         if (res.status === 401) {
           remaining.push(item)
           continue
         }
 
+        // سياسة الإعادة: كل فشل آخر يُعاد (retries+1) حتى سقف MAX_QUEUE_RETRIES ثم يُسقط
         if (res.status === 400 || res.status === 404 || res.status === 409 || res.status === 422) {
           if (item.retries >= MAX_QUEUE_RETRIES) continue
         }
@@ -735,6 +776,7 @@ async function flushQueue(): Promise<void> {
   return queueFlushPromise
 }
 
+// مشغّلات التدفق التلقائي: عودة الاتصال (online)، تجديد الجلسة، أو دخول المستخدم
 if (typeof window !== 'undefined') {
   // Never migrate/replay the old global plaintext queue. Ownership is unknowable.
   try { localStorage.removeItem(QUEUE_KEY) } catch { /* ignore */ }

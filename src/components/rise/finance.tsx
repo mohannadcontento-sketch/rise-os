@@ -1,5 +1,30 @@
 'use client'
 
+// ============================================================
+// finance.tsx — وحدة «المالية»
+//
+// تتبع المعاملات الشخصية: دخل/مصروف/ادخار مع ميزانية شهرية
+// لكل فئة (حدود قابلة للتعديل + مؤشر صحة)، هدف ادخار، رسوم
+// (تدفق نقدي، توزيع الفئات، دخل مقابل مصروفات) وسجل معاملات
+// مجمّع حسب النوع — قيم type نفسها عربية في قاعدة البيانات.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: إعدادات الألوان/الأيقونات لكل نوع وفئة
+//      + قائمة الميزانية الافتراضية
+//   2) Finance: حالة السجلات والنموذج والميزانية
+//   3) الجلب والمزامنة: fetchBudgets (دمج حدود السيرفر فوق
+//      الافتراضيات) + fetchFinance مع useDataRefresh
+//   4) الطفرات: handleSave (مع تنبيه أثر الميزانية) و handleDelete
+//   5) مشتقات useMemo: إحصاءات، ميزانية الشهر، تدفق نقدي،
+//      تجميعات الرسوم
+//   6) التخطيط: رأس + نموذج إضافة → ميزانية → بطاقات ملخصة →
+//      هدف الادخار → رسوم → ملخص الشهر → سجل المعاملات
+//
+// مبادئ UX: تحرير الحدود والهدف inline مباشرة (بلا نوافذ)،
+// تنبيه فوري عند تجاوز ميزانية فئة، وأنواع قديمة (استثمار/اشتراك)
+// تُعرض تحت النوع المكافئ بدل الاختفاء.
+// ============================================================
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -83,6 +108,7 @@ interface FinanceData {
 
 // Finance identity = LIME (rule 5); expense = destructive (rule 4 mapping)
 // NOTE: الاستثمار والاشتراكات أُزيلوا بطلب المستخدم — الأنواع: دخل / مصروف / ادخار
+// مفاتيح الخريطة نفسها قيم عربية — تُطابق قيم type في قاعدة البيانات حرفياً
 const TYPE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType; amountColor: string; borderColor: string; dotColor: string; trendValue?: number }> = {
   دخل: { label: 'الدخل', color: 'bg-lime-deep/10 text-lime-deep dark:text-lime', icon: TrendingUp, amountColor: 'text-lime-deep dark:text-lime', borderColor: 'border-s-lime-deep', dotColor: 'bg-lime-deep', trendValue: 12 },
   مصروف: { label: 'المصروفات', color: 'bg-destructive/10 text-destructive', icon: TrendingDown, amountColor: 'text-destructive', borderColor: 'border-s-destructive', dotColor: 'bg-destructive', trendValue: -5 },
@@ -174,6 +200,7 @@ function toArabicNum(n: number | null | undefined | string | object): string {
 /* ────────────── Component ────────────── */
 
 export default function Finance() {
+  // ── القسم: الحالة المحلية — السجلات والنموذج والميزانية ──
   const [data, setData] = useState<FinanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -191,6 +218,7 @@ export default function Finance() {
 
   const { refreshKey } = useDataRefresh()
 
+  // ── القسم: الجلب والمزامنة — الميزانية والسجلات ──
   // Load budgets from API
   const fetchBudgets = useCallback(async () => {
     try {
@@ -202,6 +230,8 @@ export default function Finance() {
           setSavingsGoal(json.savingsGoal)
         }
         if (serverBudgets.length > 0) {
+          // ندمج حدود السيرفر فوق القائمة الافتراضية: نحافظ على الترتيب
+          // والأيقونات ونحدّث الحد فقط لكل فئة موجودة
           const map: Record<string, number> = {}
           serverBudgets.forEach(b => { map[b.category] = b.limit })
           setBudgetCategories(prev =>
@@ -269,6 +299,7 @@ export default function Finance() {
         toastCreated('المعاملة')
         playSound('save')
         // Show budget impact
+        // تنبيه فوري بأثر المصروف على ميزانية فئته — يختفي تلقائياً بعد ٤ ثوانٍ
         if (form.type === 'مصروف' && form.category && form.amount > 0) {
           const budgetItem = budgetData.items.find(b => b.name === form.category)
           if (budgetItem) {
@@ -404,6 +435,7 @@ export default function Finance() {
   }, [data])
 
   /* ─── Monthly Category Sparklines ─── */
+  // تُحسب لكن لا تُستخدم حالياً في أي رسم — متاحة لعرض اتجاه الفئات مستقبلاً
   const categoryMonthlyData = useMemo(() => {
     const records = data?.records || []
     const result: Record<string, number[]> = {}
@@ -450,6 +482,7 @@ export default function Finance() {
     const months: Record<string, { month: string; دخل: number; مصروفات: number }> = {}
     
     // Last 6 months
+    // نُهيّئ الأشهر الستة بأصفار مسبقاً حتى يظهر المحور كاملاً ولو خلت من بيانات
     for (let i = 5; i >= 0; i--) {
       const d = new Date()
       d.setMonth(d.getMonth() - i)
@@ -499,6 +532,7 @@ export default function Finance() {
     )
   }
 
+  // ── القسم: التخطيط — رأس ونموذج ثم ميزانية ثم رسوم ثم سجل ──
   return (
     <motion.div
       variants={containerVariants}
@@ -673,6 +707,7 @@ export default function Finance() {
                   <div className="relative w-8 h-8">
                     <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
                       <circle cx="16" cy="16" r="13" fill="none" className="stroke-primary/10" strokeWidth="3" />
+                      {/* محيط دائرة نصف قطرها ١٣ (2πr) — نستخدمه لقصّ القوس حسب نسبة الصحة */}
                       <motion.circle
                         cx="16"
                         cy="16"

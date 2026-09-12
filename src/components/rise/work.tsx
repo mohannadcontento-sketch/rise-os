@@ -1,5 +1,28 @@
 'use client'
 
+// ============================================================
+// work.tsx — الشغل (جلسات العمل الطويلة)
+//
+// متتبّع جلسة عمل مخطّطة: افتح جلسة بمدة مستهدفة، بدّل بين «شغل»
+// و«استراحة» بساعة حيّة، أنجز مهام من داخل الجلسة، واخرج بملخص
+// جودة وXP — مع سجل الجلسات واستعادة الجارية بعد التحديث.
+//
+// البنية الداخلية:
+//   1) الأنواع والمساعدات: WorkSession وPhase (آلة حالات رباعية:
+//      idle/working/break/completed) وformatter للوقت وملصقات الجودة
+//   2) المكوّن WorkSessions: الوقت يُقاس بمرجع phaseStart ويُجمّع في
+//      activeMs/breakMs، والحالة الحية تُحفظ في user-storage عند كل
+//      تغيير لتنجو الجلسة من إعادة تحميل الصفحة
+//   3) الإجراءات: handleStart/handleToggleBreak/handleToggleTask/
+//      finalizeSession — الإنهاء يرسل PUT بالدقائق والاستراحات
+//      والمهام ويطلق XP
+//   4) شاشتان للعرض: idle (نموذج البدء) وrunning (ساعة + قائمة مهام
+//      + ملاحظات + Dialog الملخص) + WorkHistory أسفل الشاشة
+//
+// مبدأ UX: الانقطاع غير مدمّر (استعادة تلقائية بعد F5)، البدء يتطلب
+// اتصالاً (يفشل مغلقاً بدل ضياع الجلسة وXP)، وصوت عند كل انتقال مرحلة.
+// ============================================================
+
 import { getUserStorage, setUserStorage, removeUserStorage } from '@/lib/user-storage'
 
 
@@ -103,6 +126,7 @@ function qualityLabel(score: number): { label: string; color: string } {
 /* ────────────── Component ────────────── */
 
 export default function WorkSessions() {
+  // ── الحالة: السجل + نموذج البدء + متغيّرات الجلسة الحية + الملخص ──────────────────────────────────
   const [history, setHistory] = useState<WorkSession[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -168,6 +192,8 @@ export default function WorkSessions() {
       const stored = getUserStorage(STORAGE_KEY)
       if (!stored) return
       const s = JSON.parse(stored)
+      // phaseStart يُستعاد بطابعه الزمني المطلق — الزمن المنقضي أثناء إغلاق
+      // الصفحة يُحتسب أيضاً عند العودة (الساعة تُشتق من Date.now())
       setSessionId(s.sessionId)
       setPlannedMin(s.plannedMin)
       setSessionTitle(s.sessionTitle || '')
@@ -209,6 +235,7 @@ export default function WorkSessions() {
     }
   }, [phase])
 
+  // ── القيم الحية: المعروض = المتراكم المحفوظ + المنقضي منذ phaseStart ──────────────────────────────────
   const liveActiveMs = phase === 'working' && phaseStart ? activeMs + (nowTick - phaseStart) : activeMs
   const liveBreakMs = phase === 'break' && phaseStart ? breakMs + (nowTick - phaseStart) : breakMs
   const liveActiveMin = Math.floor(liveActiveMs / 60000)
@@ -294,6 +321,7 @@ export default function WorkSessions() {
   const handleToggleBreak = () => {
     const now = Date.now()
     if (phase === 'working') {
+      // نقطة التحويل: أضف زمن المرحلة المنقضي إلى مجموعها المحفوظ ثم ابدأ مرجعاً جديداً
       setActiveMs((prev) => prev + (phaseStart ? now - phaseStart : 0))
       setPhaseStart(now)
       setPhase('break')
@@ -376,8 +404,11 @@ export default function WorkSessions() {
       const saved = await res.json()
 
       if (finalStatus === 'completed') {
+        // XP = 1.5 لكل دقيقة شغل فعلي + 5 لكل مهمة، بسقف 300 للجلسة
         const xp = Math.min(300, Math.round(finalActiveMin * 1.5) + taskIds.length * 5)
+        // الجودة تُحسب خادمياً في PUT وتُعاد في الاستجابة
         const quality = saved.qualityScore ?? 0
+        // إشعار وXP بأسلوب best-effort: فشلهما لا يُفشل حفظ الجلسة
         notifyWorkComplete(finalActiveMin, quality, xp)
         apiPost('/api/rise/earn-xp', { amount: xp, reason: `work:${plannedMin}min` }).catch(() => {})
         playSound('achievement')
@@ -416,6 +447,7 @@ export default function WorkSessions() {
 
   /* ────────────── Render ────────────── */
 
+  // ── شاشة الخمول (idle): نموذج بدء جلسة جديدة + السجل ──────────────────────────────────
   if (phase === 'idle') {
     return (
       <div className="space-y-6 max-w-2xl mx-auto">

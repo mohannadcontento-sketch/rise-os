@@ -29,7 +29,7 @@ tool-specific pointer files contain no duplicate guidance.
 - **طبقة التحكم**: منطق جلب البيانات/الطفرات للشاشات الكبيرة يُستخرج إلى `src/hooks/use-*-controller.ts`
   أو `use-*-data.ts` (أنماط قائمة: `use-dashboard-data`, `use-tasks-controller`, `use-ambient-sounds`).
   المكون يبقى عرضاً فقط.
-- **طبقة البيانات**: الوصول للبيانات حصراً عبر الواجهة `data.<domain>` من `src/lib/data.ts`
+- **طبقة البيانات**: الوصول للبيانات حصراً عبر الواجهة `data.<domain>` من `src/lib/data/index.ts`
   (facade فوق 25 وحدة نطاق في `src/lib/data/`). لا تستدعِ Supabase من مكونات الواجهة مباشرة.
 - **طلبات API من العميل**: دائماً عبر `apiFetch`/`apiPost` من `src/lib/api-fetch.ts` —
   يضيف الجلسة و`Idempotency-Key` تلقائياً للطفرات.
@@ -52,7 +52,7 @@ src/
 ├── components/rise/          وحدات الأعمال (dashboard, tasks, community...) — 'use client'
 ├── hooks/                    متحكمات مستخرجة (بيانات/طفرات) للوحدات الكبيرة
 ├── lib/
-│   ├── data.ts → data/       الواجهة الجماعية + 25 مستودع نطاق (Supabase RPC)
+│   ├── data/ (index.ts)       الواجهة الجماعية + 25 مستودع نطاق (Supabase RPC)
 │   ├── api-fetch.ts          عميل HTTP موحّد (جلسة + idempotency + إعادة محاولة)
 │   ├── api-auth.ts           requireUser/requireAdmin لمسارات API
 │   ├── supabase.ts           عميل SSR/server، turso.ts المرآة، cloudinary.ts الوسائط

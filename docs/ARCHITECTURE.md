@@ -21,7 +21,7 @@
 ┌────────────────────────▼────────────────────────────────────┐
 │ 3. الأعمال والوصول (Services + Repositories)                 │
 │    src/lib/api-fetch.ts   — عميل HTTP موحّد (جلسة+idempotency)│
-│    src/lib/data.ts → data/ — 25 مستودع نطاق (facade pattern) │
+│    src/lib/data/ (index.ts) — 25 مستودع نطاق (facade pattern) │
 │    src/lib/api-auth.ts    — requireUser/requireAdmin        │
 │    src/lib/{cloudinary,turso,supabase,...}.ts — الخدمات      │
 └────────────────────────┬────────────────────────────────────┘

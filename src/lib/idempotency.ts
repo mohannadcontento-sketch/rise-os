@@ -4,6 +4,18 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { db } from '@/lib/db'
 
 // ============================================================
+// idempotency.ts — منع تكرار تنفيذ الطفرات (Idempotency)
+//
+// يسجّل عقد معالجة لكل Idempotency-Key مع بصمة الطلب (hash للجسم)،
+// ويخزّن الاستجابة النهائية ليعاد بثها عند إعادة المحاولة الشبكية.
+//
+// المسؤوليات:
+//   1) beginIdempotency: طلب جديد أم replay لاستجابة سابقة أم 409 conflict.
+//   2) completeIdempotency: حفظ الاستجابة وتحرير عقد المعالجة.
+//   3) withIdempotency: غلاف جاهز يحيط بمعالج أي مسار طفرة.
+// ============================================================
+
+// ============================================================
 // Server-side mutation idempotency
 // ------------------------------------------------------------
 // The client sends Idempotency-Key for every mutation. This module
@@ -16,7 +28,10 @@ import { db } from '@/lib/db'
 // hardened separately.
 // ============================================================
 
+// ── القسم: الثوابت والأنواع ──────────────────────────────────
+
 const KEY_RE = /^[A-Za-z0-9._:-]{16,200}$/
+// مدة احتكار «قيد المعالجة» 10 دقائق، وعمر سجل الاستجابة 24 ساعة
 const PROCESSING_TTL_MS = 10 * 60 * 1000
 const RECORD_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -44,6 +59,8 @@ function badKeyResponse(message = 'Invalid Idempotency-Key'): NextResponse {
   )
 }
 
+// ── القسم: بصمة الطلب وأدوات تحويل الاستجابة ──────────────────────────────────
+
 function hashRequest(method: string, pathname: string, search: string, body: string): string {
   return crypto
     .createHash('sha256')
@@ -57,6 +74,7 @@ async function requestFingerprint(req: NextRequest): Promise<{ key: string; hash
 
   const method = req.method.toUpperCase()
   const url = new URL(req.url)
+  // clone() يقرأ نسخة من الجسم — الأصل يبقى متاحاً للمعالج الفعلي لاحقاً
   const body = await req.clone().text()
   return {
     key: rawKey,
@@ -70,6 +88,7 @@ function headersFromRow(raw: unknown): Headers {
   const headers = new Headers()
   if (!raw || typeof raw !== 'object') return headers
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    // استثناء set-cookie: إعادة بث كوكيز جلسة قديمة خطر أمني
     if (typeof v === 'string' && k.toLowerCase() !== 'set-cookie') headers.set(k, v)
   }
   return headers
@@ -99,6 +118,8 @@ function responseSnapshot(response: NextResponse): { status: number; body: strin
 async function responseBody(response: NextResponse): Promise<string> {
   return await response.clone().text()
 }
+
+// ── القسم: التخزين عبر Supabase (جدول request_idempotency) ──────────────────────────────────
 
 async function beginSupabase(userId: string, req: NextRequest, fp: Awaited<ReturnType<typeof requestFingerprint>>, persistResponse: boolean): Promise<BeginResult> {
   const admin = await getSupabaseAdmin()
@@ -137,6 +158,7 @@ async function beginSupabase(userId: string, req: NextRequest, fp: Awaited<Retur
     processing_token: processingToken,
   }
 
+  // المحاولة بالـinsert أولاً: فشل التفرد يعني سجلاً موجوداً — نقرأه لنحسم replay أو conflict
   const { data: inserted, error: insertError } = await admin
     .from('request_idempotency')
     .insert(row)
@@ -215,6 +237,8 @@ async function beginSupabase(userId: string, req: NextRequest, fp: Awaited<Retur
   return { kind: 'new', context: { userId, key: fp.key, requestHash: fp.hash, route: fp.route, method: fp.method, persistResponse, processingToken } }
 }
 
+// ── القسم: التخزين المحلي عبر Prisma (بيئة التطوير بلا Supabase) ──────────────────────────────────
+
 async function beginLocal(userId: string, fp: Awaited<ReturnType<typeof requestFingerprint>>, persistResponse: boolean): Promise<BeginResult> {
   const now = new Date()
   const processingToken = crypto.randomBytes(24).toString('hex')
@@ -278,6 +302,8 @@ async function beginLocal(userId: string, fp: Awaited<ReturnType<typeof requestF
   return { kind: 'new', context: { userId, key: fp.key, requestHash: fp.hash, route: fp.route, method: fp.method, persistResponse, processingToken } }
 }
 
+// ── القسم: الواجهة العامة — begin / complete / with ──────────────────────────────────
+
 export async function beginIdempotency(userId: string, req: NextRequest, persistResponse = true): Promise<BeginResult> {
   try {
     const fp = await requestFingerprint(req)
@@ -300,6 +326,7 @@ export async function completeIdempotency(ctx: IdempotencyContext, response: Nex
   if (isSupabaseConfigured()) {
     const admin = await getSupabaseAdmin()
     if (!admin) throw new Error('IDEMPOTENCY_STORE_UNAVAILABLE')
+    // مطابقة processing_token تضمن أن يُكمل فقط مالك عقد المعالجة الحالي (لا عامل متقادم)
     const { error } = await admin
       .from('request_idempotency')
       .update({
@@ -340,6 +367,7 @@ export async function withIdempotency(
 ): Promise<NextResponse> {
   const persistResponse = options.persistResponse !== false
   const result = await beginIdempotency(userId, req, persistResponse)
+  // replay/conflict تُعاد استجابتها كما هي — المعالج لا يُنفَّذ مرة ثانية أبداً
   if (result.kind === 'replay' || result.kind === 'conflict') return result.response
 
   const response = await handler()

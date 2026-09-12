@@ -1,3 +1,14 @@
+// ============================================================
+// gamification.ts — نظام XP والمستويات وشارات الإنجاز
+//
+// دوال نقية بلا حالة: تحويل رصيد XP إلى مستوى ونسبة تقدم داخل
+// المستوى، وتعريف 15 شارة إنجاز تُقيَّم من إحصاءات المستخدم.
+//
+// المسؤوليات:
+//   1) calculateLevel: توزيع XP على مستويات متصاعدة هندسياً (1.35).
+//   2) BADGES: سجل الشارات مع دوال شرط التحقق (BadgeStats).
+// ============================================================
+
 /* ────────────── XP & Level System ────────────── */
 
 export function calculateLevel(xp: number): {
@@ -8,10 +19,12 @@ export function calculateLevel(xp: number): {
 } {
   let level = 1
   let remainingXp = xp
+  // نستهلك تكلفة كل مستوى بالتتابع حتى يقلّ الرصيد عن تكلفة المستوى التالي
   while (remainingXp >= xpForLevel(level)) {
     remainingXp -= xpForLevel(level)
     level++
   }
+  // progress = نسبة الإنجاز داخل المستوى الحالي (0–100) لعرض شريط التقدم
   const needed = xpForLevel(level)
   return {
     level,
@@ -28,6 +41,8 @@ function xpForLevel(level: number): number {
 
 /* ────────────── Badges ────────────── */
 
+// ── القسم: تعريف الشارة وإحصاءات التقييم ──────────────────────────────────
+
 export interface BadgeDef {
   id: string
   name: string
@@ -36,6 +51,7 @@ export interface BadgeDef {
   condition: (stats: BadgeStats) => boolean
 }
 
+// إحصاءات مجمّعة من كل الوحدات — تُمرّر مرة واحدة لتقييم كل الشارات دفعةً واحدة
 export interface BadgeStats {
   totalTasks: number
   streak: number
@@ -44,6 +60,8 @@ export interface BadgeStats {
   totalHabits: number
   journalStreak: number
 }
+
+// ── القسم: سجل الشارات — 15 شارة على 6 محاور (مهام/سلاسل/تركيز/كتب/عادات/يوميات) ──────────────────────────────────
 
 export const BADGES: BadgeDef[] = [
   { id: 'first_task', name: 'البداية', icon: '🌱', desc: 'أكمل أول مهمة', condition: (stats) => stats.totalTasks >= 1 },

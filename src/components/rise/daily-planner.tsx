@@ -1,6 +1,25 @@
 
 'use client'
 
+// ============================================================
+// daily-planner.tsx — وحدة «المخطط اليومي»
+//
+// تخطيط اليوم في ثلاث كتل زمنية (صباح/ظهر/مساء) مع عرضين:
+// «الأقسام» (بطاقات قابلة للطي) و«الجدول الزمني» (ساعات ٦ص–١٠م)،
+// ودمج مهام اليوم المرتبطة من نظام المهام + ملاحظات سريعة محلية.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: الأقسام الثلاثة واقتراحاتها الجاهزة
+//   2) أدوات مساعدة: أرقام عربية، تاريخ اليوم، توليد معرفات
+//   3) مكونات صغيرة: SuggestButton، EmptyState، Skeleton،
+//      PlannerItemRow، SectionCard، TimelineView
+//   4) DailyPlanner الرئيسي: جلب + دمج المهام المرتبطة + طفرات
+//      تفاؤلية (إضافة/تبديل/حذف) + رأس بساعة حية + إحصاءات
+//
+// مبادئ UX: تبديل تفاؤلي فوري مع تراجع عند الفشل، تمييز القسم
+// الحالي حسب الساعة، والملاحظات تُحفظ محلياً بلا خادم.
+// ============================================================
+
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -182,6 +201,7 @@ function getArabicDate() {
   const date = arabicNum(now.getDate())
   const month = monthNames[now.getMonth()]
   const year = arabicNum(now.getFullYear())
+  // \u060C هي الفاصلة العربية «،» — نستخدم escape لتجنب مشاكل الترميز
   return day + '\u060C ' + date + ' ' + month + ' ' + year
 }
 
@@ -191,6 +211,7 @@ function formatHour(h: number): string {
   return `${arabicNum(displayHour)}:٠٠ ${period}`
 }
 
+// معرّف مؤقت للعناصر التفاؤلية — يُستبدل بمعرّف السيرفر عند النجاح
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 7)
 }
@@ -635,6 +656,7 @@ function TimelineView({
   onToggleItem: (id: string) => void
 }) {
   const currentHour = getCurrentHour()
+  // ١٧ ساعة تغطي نافذة اليوم من ٦ صباحاً حتى ١٠ مساءً (22)
   const timelineHours = Array.from({ length: 17 }, (_, i) => i + 6)
 
   // Build a map of hour -> items for that hour
@@ -759,6 +781,7 @@ function TimelineView({
 }
 
 export default function DailyPlanner() {
+  // ── القسم: الحالة المحلية — العناصر واليوم المتفاعلي والساعة ──
   const [items, setItems] = useState<PlannerItem[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
@@ -797,6 +820,7 @@ export default function DailyPlanner() {
   // Linked tasks from the tasks system (with dueTime for today)
   const [linkedTasks, setLinkedTasks] = useState<PlannerItem[]>([])
 
+  // ── القسم: جلب عناصر اليوم والمهام المرتبطة من الـ API ──
   // Fetch items from API
   const fetchItems = useCallback(async () => {
     try {
@@ -876,6 +900,7 @@ export default function DailyPlanner() {
     }
   }, [items, linkedTasks])
 
+  // ── القسم: الطفرات — إضافة/تبديل/حذف (تفاؤلية مع تراجع) ──
   const addItem = useCallback(async (sectionId: string, text: string) => {
     // Optimistic
     const tempId = generateId()
@@ -937,6 +962,7 @@ export default function DailyPlanner() {
 
     if (linkedItem) {
       // For linked tasks, toggle via the tasks API
+      // معرّفات المهام المرتبطة تُسبَق بـ task- لتمييزها عن معرّفات المخطط
       const taskId = id.replace('task-', '')
       setLinkedTasks((prev) =>
         prev.map((i) => (i.id === id ? { ...i, completed: newCompleted } : i))
@@ -991,6 +1017,7 @@ export default function DailyPlanner() {
   }, [items, linkedTasks])
 
   const deleteItem = useCallback(async (id: string) => {
+    // لقطة قبل الحذف تُستعاد إن فشل الطلب (rollback)
     const prev = [...items]
     setItems((p) => p.filter((i) => i.id !== id))
     try {
@@ -1041,6 +1068,7 @@ export default function DailyPlanner() {
     toast.success('تم تحديث الملاحظة')
   }
 
+  // ── القسم: ملخصات العرض — الإحصاءات والساعة العربية ──
   const totalItems = items.length + linkedTasks.length
   const completedItems = items.filter((i) => i.completed).length + linkedTasks.filter((i) => i.completed).length
   const overallProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
@@ -1051,6 +1079,7 @@ export default function DailyPlanner() {
   const currentHour = getCurrentHour()
   const periodLabel = currentHour < 12 ? 'صباحاً' : currentHour < 17 ? 'ظهراً' : 'مساءً'
 
+  // ── القسم: التخطيط — رأس حي ثم عرضان ثم الملاحظات ──
   return (
     <div dir="rtl" className="space-y-6">
       {/* ── Premium Gradient Header with Live Clock ── */}

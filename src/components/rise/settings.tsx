@@ -1,5 +1,27 @@
 'use client'
 
+// ============================================================
+// settings.tsx — وحدة «الإعدادات»
+//
+// مركز التحكم الشخصي: الملف والأفاتار، المظهر، الإشعارات
+// والتذكيرات، الأصوات، الأهداف اليومية، البيانات والخصوصية،
+// والاشتراك — مع منطقة خطر للحذف النهائي. كل قسم بطاقة
+// مستقلة (SectionCard) والأقسام الثقيلة مُستخرجة لملفات مشتركة
+// (SubscriptionSection / PushNotificationsSection).
+//
+// البنية الداخلية:
+//   1) الأنواع + الإعدادات الافتراضية + أدوات حجم التخزين
+//   2) الحالة المحلية: إعدادات user-storage (deep-merge)، أفاتار
+//      من السيرفر، إحصاءات المستخدم، صلاحية إشعارات المتصفح
+//   3) المعالجات: الاسم/الأفاتار، تصدير/استيراد JSON، تغيير كلمة
+//      المرور، خروج شامل، حذف الحساب، حذف كل البيانات
+//   4) التخطيط: بطاقة الملف بعرض كامل → أعمدة Masonry للأقسام
+//      → منطقة الخطر → تذييل الإصدار
+//
+// مبادئ UX: الإعدادات تُحفظ فوراً بلا زر حفظ، والإجراءات المدمّرة
+// تتطلب إعادة إثبات الهوية (كلمة مرور + كلمة تأكيد نصية).
+// ============================================================
+
 import { getUserStorage, setUserStorage, clearUserStorage } from '@/lib/user-storage'
 import { clearSecureUserData } from '@/lib/secure-offline-db'
 
@@ -153,6 +175,7 @@ function formatBytes(bytes: number): string {
 /* ────────────── Component ────────────── */
 
 export default function Settings() {
+  // ── القسم: الحالة المحلية والجلب الأولي (أفاتار/إحصاءات/صلاحية الإشعارات) ──
   const { theme, setTheme } = useTheme()
   const { auth } = useRiseStore()
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
@@ -192,6 +215,7 @@ export default function Settings() {
     } catch { /* ignore */ }
     return defaultSettings
   })
+  // أولوية اسم العرض: مخزن الجلسة (auth) أولاً ثم الاسم المحلي fallback
   const [editName, setEditName] = useState(() => {
     return auth?.userName && auth.userName !== 'مستخدم' ? auth.userName : settings.userName
   })
@@ -202,6 +226,8 @@ export default function Settings() {
 
   // Browser notification permission state (live)
   const [permission, setPermission] = useState<BrowserPermissionState>('unsupported')
+  // نستمع لعودة التركيز للنافذة: المستخدم قد يغيّر صلاحية الإشعارات من
+  // إعدادات المتصفح خارج الصفحة، فنُحدّث الشارة فور عودته
   useEffect(() => {
     setPermission(getBrowserPermissionState())
     const onFocus = () => setPermission(getBrowserPermissionState())
@@ -226,11 +252,13 @@ export default function Settings() {
       .catch(() => {})
   }, [])
 
+  // حفظ تلقائي: كل تغيير في الإعدادات يُخزَّن فوراً — لا يوجد زر «حفظ»
   useEffect(() => {
     setUserStorage(STORAGE_KEY, JSON.stringify(settings))
     setUserStorage(NAME_KEY, settings.userName)
   }, [settings])
 
+  // ── القسم: معالجات الملف الشخصي والبيانات ──────────────
   const updateNotification = (key: string, value: boolean) => {
     setSettings((prev) => ({
       ...prev,
@@ -247,6 +275,7 @@ export default function Settings() {
 
     try {
       await apiPost('/api/rise/user/name', { name: newName })
+      // حدث مخصص: يبثّ الاسم الجديد للقائمة الجانبية وبقية المكونات فوراً
       window.dispatchEvent(new CustomEvent('rise:user-updated'))
     } catch { /* silent */ }
   }
@@ -254,6 +283,7 @@ export default function Settings() {
   const handleSelectAvatar = async (avatar: AvatarItem) => {
     setSelectedAvatar(avatar.id)
     setUserStorage('rise-user-avatar', avatar.id)
+    // نفس النمط: نبثّ حدث تغيّر الأفاتار لكل المكونات المستمِعة
     window.dispatchEvent(new CustomEvent('rise:avatar-changed'))
     setAvatarPickerOpen(false)
     toast.success(`تم اختيار ${avatar.name}`)
@@ -316,6 +346,7 @@ export default function Settings() {
       }
     }
     reader.readAsText(file)
+    // تصفير حقل الملف حتى يمكن اختيار الملف نفسه مرة أخرى لاحقاً
     fileInputRef.current!.value = ''
   }
 
@@ -369,6 +400,8 @@ export default function Settings() {
         return
       }
 
+      // معرّف المستخدم من مفتاح legacy عام (rise-user-info) — خارج نطاق
+      // user-storage المعزول، لذا يُقرأ بـ localStorage مباشرة
       const currentUserId = (() => { try { return JSON.parse(localStorage.getItem('rise-user-info') || '{}').id || '' } catch { return '' } })()
       if (currentUserId) {
         clearUserStorage(currentUserId)
@@ -531,6 +564,7 @@ export default function Settings() {
     unsupported: { label: 'غير مدعومة', className: 'bg-muted text-muted-foreground' },
   }
 
+  // ── القسم: بيانات العرض الثابتة — الثيمات ومجموعات الإشعارات ──
   const themes = [
     {
       value: 'light',
@@ -597,6 +631,7 @@ export default function Settings() {
 
   const storagePercent = storageSize.percent || Math.min(100, Math.round((storageSize.used / storageSize.total) * 100))
 
+  // ── القسم: التخطيط — بطاقة الملف ثم أعمدة Masonry ثم منطقة الخطر ──
   return (
     <div className="space-y-4">
       {/* Profile — full width */}

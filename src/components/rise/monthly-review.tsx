@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// monthly-review.tsx — المراجعة الشهرية
+//
+// استبيان نهاية الشهر: درجة كلية + رادار لخمس فئات حياتية (الصحة/
+// المالية/التعلم/العلاقات/المهنة) + أبرز اللحظات وتخطيط الشهر القادم،
+// مع «ملء تلقائي» يسحب أرقام الشهر من واجهات tasks/focus/habits/journal.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: نموذج MonthlyReview والفئات الافتراضية
+//      وCATEGORY_ICONS لإعادة إرفاق الأيقونات بعد التسلسل
+//   2) AnimatedCounter: عدّاد رقمي متدرّج لبطاقات «الشهر بالأرقام»
+//   3) المكوّن الرئيسي: تهيئة كسولة من user-storage (مراجعة الشهر
+//      الحالي أو نموذج فارغ) → حفظ/إعادة تعيين → handleAutoFill يجلب
+//      4 واجهات بالتوازي → الرسم: رأس سينمائي، رقائق إحصاءات، رادار
+//      Recharts، بطاقات الأقسام، ثم المراجعات السابقة
+//
+// مبدأ UX: الأرقام تُقترح بالملء التلقائي ويبقى القرار للإنسان،
+// والرسالة التحفيزية تُشتق من متوسط الفئات لا من درجة واحدة.
+// ============================================================
+
 import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 
 
@@ -81,6 +101,7 @@ interface AutoFillData {
   avgMood: number
 }
 
+// ── الثوابت: مفتاح التخزين والفئات الخمس الافتراضية ──────────────────────────────────
 const STORAGE_KEY = 'rise-monthly-review'
 
 /* Icon map — used to re-attach icons after localStorage deserialization */
@@ -113,6 +134,7 @@ function hydrateCategories(categories: CategoryReview[]): CategoryReview[] {
 
 const emptyReview = (): MonthlyReview => ({
   id: crypto.randomUUID(),
+  // مفتاح الشهر بصيغة yyyy-MM — نفس البادئة المستخدمة في مطابقة إحصاءات الملء التلقائي
   month: new Date().toISOString().slice(0, 7),
   score: 5,
   wins: '',
@@ -154,6 +176,8 @@ function AnimatedCounter({ value, duration = 1200 }: { value: number; duration?:
 /* ────────────── Component ────────────── */
 
 export default function MonthlyReview() {
+  // تهيئة كسولة من user-storage مع حارس SSR: القائمة الكاملة ومراجعة الشهر
+  // الحالي تُقرآن مرة واحدة قبل أول رسم
   const [allReviews, setAllReviews] = useState<MonthlyReview[]>(() => {
     if (typeof window === 'undefined') return []
     try {
@@ -182,7 +206,9 @@ export default function MonthlyReview() {
   const [autoFillData, setAutoFillData] = useState<AutoFillData | null>(null)
   const [showSaveSuccess, setShowSaveSuccess] = useState(false)
 
+  // ── الحفظ والدوال المحدِّثة للحالة ──────────────────────────────────
   const save = () => {
+    // upsert: تحديث المراجعة الحالية في مكانها، أو إضافتها أعلى القائمة إن كانت جديدة
     const updated = allReviews.some((r) => r.id === review.id)
       ? allReviews.map((r) => (r.id === review.id ? review : r))
       : [review, ...allReviews]
@@ -206,6 +232,7 @@ export default function MonthlyReview() {
     }))
   }
 
+  // ── الملء التلقائي: جلب إحصاءات الشهر من 4 واجهات بالتوازي ──────────────────────────────────
   const handleAutoFill = useCallback(async () => {
     setAutoFilling(true)
     try {
@@ -223,6 +250,7 @@ export default function MonthlyReview() {
       ])
 
       const now = new Date()
+      // بادئة الشهر yyyy-MM — تُطابَق بالبادئة مع dueDate/startedAt/date في كل مجموعة
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
       // Count completed tasks this month
@@ -275,12 +303,14 @@ export default function MonthlyReview() {
     }
   }, [])
 
+  // ── القيم المشتقة للعرض: بيانات الرادار والحراسة من القيم التالفة ──────────────────────────────────
   const radarData = review.categories.map((c) => ({
     category: typeof c.name === 'string' ? c.name : c.id,
     score: typeof c.score === 'number' && !isNaN(c.score) ? c.score : 5,
     fullMark: 10,
   }))
 
+  // حراسة: مراجعات قديمة من التخزين قد تحمل قيماً غير رقمية — تسقط إلى 5
   const safeScore = typeof review.score === 'number' && !isNaN(review.score) ? review.score : 5
   const avgScore = review.categories.length > 0
     ? Math.round(review.categories.reduce((s, c) => s + (typeof c.score === 'number' ? c.score : 5), 0) / review.categories.length)
@@ -288,6 +318,7 @@ export default function MonthlyReview() {
   const motivation = getMotivationalMessage(avgScore)
   const monthName = new Date().toLocaleDateString('ar', { month: 'long', year: 'numeric' })
 
+  // ── الرسم: رأس سينمائي → رقائق → بطاقات → رادار → المراجعات السابقة ──────────────────────────────────
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Cinematic Month Header */}
@@ -447,6 +478,7 @@ export default function MonthlyReview() {
                 <span className="text-xl text-muted-foreground">/ 10</span>
               </div>
               <div className="flex items-center gap-1">
+                {/* شريط درجة تفاعلي: كل مقطع قابل للنقر ويضبط الدرجة مباشرة */}
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
                   <button
                     key={s}
@@ -725,6 +757,7 @@ export default function MonthlyReview() {
             </div>
             <div className="px-5 pb-5">
               <div className="space-y-2 max-h-48 overflow-y-auto">
+                {/* فتح مراجعة سابقة يستدعي hydrateCategories مجدداً — الأيقونات تُفقد عند JSON serialization */}
                 {allReviews
                   .filter((r) => r.id !== review.id)
                   .slice(0, 5)

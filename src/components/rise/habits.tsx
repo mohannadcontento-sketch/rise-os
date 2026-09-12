@@ -1,5 +1,23 @@
 'use client'
 
+// ============================================================
+// habits.tsx — وحدة «تتبع العادات»
+//
+// إدارة العادات اليومية: بطاقة إنجاز اليوم، شبكة عادات اليوم بتبديل تفاؤلي،
+// خريطة حرارة لآخر ٣٠ يوماً، سلاسل مع فترة سماح، وتذكيرات مجدولة.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: Habit/HabitLog + ألوان جاهزة وتسميات التكرار
+//   2) دوال مساعدة: مستويات الحرارة، حساب السلاسل (حالية/أطول بفترة سماح)، آخر ٣٠ يوماً
+//   3) الحالة والتحميل: جلب /api/rise/habits (habits + logs) مع إعادة جلب عند تغيّر اليوم
+//   4) الطفرات: toggleTodayHabit بتفاؤل وتراجع + منح XP مرة لكل (habit+day)، وإضافة/حذف/تذكير
+//   5) المشتقات: إحصاءات مجمعة (useMemo) + بيانات الخريطة الحرارية
+//   6) العرض: شريط أدوات + حوار إضافة + بطاقة البطل + إحصاءات + شبكة اليوم + خريطة الحرارة
+//
+// التبديل لحظي (تفاؤلي) مع إشعار rise:instant-update لتحدّيث لوحة التحكم
+// فوراً وتراجع كامل إذا رفض السيرفر — والسلسلة لا تُصفّر قبل نهاية اليوم.
+// ============================================================
+
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -105,6 +123,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
 /* ────────────── Helpers ────────────── */
 
 function getHeatLevel(completed: boolean, count: number, target: number): number {
+  // مستوى التلوين 0-4 من نسبة count/target (٥٠٪ → 1، ٧٥٪ → 2، ١٠٠٪ → 4)
   if (!completed) return 0
   if (target <= 1) return count > 0 ? 4 : 0
   const ratio = count / target
@@ -214,6 +233,8 @@ function getCompletionRate(logs: HabitLog[], habitId: string): number {
 /* ────────────── Component ────────────── */
 
 export function HabitsView() {
+  // ── الحالة: العادات والسجلات والنموذج وضبط XP ──────────────────────
+
   const [habits, setHabits] = useState<Habit[]>([])
   const [logs, setLogs] = useState<HabitLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -238,6 +259,8 @@ export function HabitsView() {
   const [formTarget, setFormTarget] = useState('1')
 
   const todayStr = getTodayStr()
+
+  // ── التحميل: جلب العادات والسجلات من السيرفر ──────────────────────
 
   const { refreshKey } = useDataRefresh()
   const fetchHabits = useCallback(async () => {
@@ -268,9 +291,12 @@ export function HabitsView() {
     return () => window.removeEventListener('rise:day-changed', handler)
   }, [fetchHabits])
 
+  // ── الطفرات: تبديل وإضافة وحذف وتذكيرات ──────────────────────
+
   /* ---- Toggle today's habit ---- */
   const toggleTodayHabit = useCallback(
     async (habitId: string) => {
+      // التاريخ يُقارن بأول ١٠ خانات فقط لأن السيرفر قد يعيده محمّلاً بالوقت
       const existingLog = logs.find((l) => l.habitId === habitId && String(l.date).slice(0, 10) === todayStr)
       const newCompleted = existingLog ? !existingLog.completed : true
 
@@ -334,6 +360,7 @@ export function HabitsView() {
             )
             notifyHabitComplete(habit.name, streak.current)
           }
+          // المنح عند أول إتمام لليوم فقط — إلغاء التبديل ثم إعادته لا يمنح XP مجدداً
           if (!existingLog) {
             awardXpOnce(`habit-done:${habitId}:${todayStr}`, habit?.xpReward || 15, `habit:${habitId}`)
           }
@@ -436,6 +463,8 @@ export function HabitsView() {
     }
   }, [])
 
+  // ── المشتقات: الإحصاءات المجمعة وبيانات الخريطة الحرارية ──────────────────────
+
   /* ---- Stats ---- */
   const stats = useMemo((): { total: number; todayRate: number; longestStreak: number; currentStreak: number; bestHabit: Habit | null; bestRate: number } => {
     const total = habits.length
@@ -476,6 +505,8 @@ export function HabitsView() {
     const g = d.getDay() // 0=Sun
     return (g + 1) % 7 // shift: Sun→1, Mon→2, ..., Sat→0
   }
+
+  // ── العرض: هياكل التحميل ثم الواجهة الكاملة ──────────────────────
 
   /* ──────────── Render ──────────── */
 
@@ -673,6 +704,7 @@ export function HabitsView() {
                     </linearGradient>
                   </defs>
                   <circle cx={45} cy={45} r={38} fill="none" className="stroke-primary/10" strokeWidth={5} />
+                  {/* إزاحة القوس = المحيط − (نسبة اليوم × المحيط) — رياضيات حلقة SVG */}
                   <motion.circle
                     cx={45} cy={45} r={38} fill="none"
                     stroke="url(#habitScoreRing)"
@@ -1011,6 +1043,7 @@ export function HabitsView() {
                       <div className="overflow-x-auto">
                         <div className="flex gap-0.5 min-w-fit">
                           {/* Day labels */}
+                          {/* تسميات الأيام تُعرض كل صفّين فقط لتخفيف الازدحام */}
                           <div className="flex flex-col gap-0.5 me-1.5">
                             {dayLabels.map((label, di) => (
                               <div
@@ -1025,6 +1058,7 @@ export function HabitsView() {
 
                           {/* Week columns */}
                           {Array.from({ length: 5 }).map((_, weekIdx) => {
+                            // تقسيم آخر ٣٠ يوماً إلى ٥ كتل: كل كتلة أسبوع من ٧ خانات
                             const weekDays = last30Days.filter(
                               (_, i) => Math.floor(i / 7) === weekIdx
                             )

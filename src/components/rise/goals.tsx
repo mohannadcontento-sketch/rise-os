@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// goals.tsx — وحدة «الأهداف»
+//
+// إدارة الأهداف بأربعة أنواع (سنوي/ربعي/شهري/أسبوعي) مع معالم
+// فرعية تُحسب منها نسبة التقدم، ولوحة رؤية وقائمة قابلة للفلترة.
+//
+// البنية الداخلية:
+//   1) أنواع وثوابت: نموذج Goal/Milestone وخرائط ألوان/أيقونات/
+//      تدرجات كل نوع هدف
+//   2) GoalsView: حالة + جلب + طفرات تفاؤلية (تبديل معلم، إضافة
+//      هدف، حذف) مع تراجع كامل عند فشل الطلب
+//   3) طبقة العرض: ترويسة وحوار إضافة، إحصاءات، لوحة رؤية،
+//      تبويبات فلترة، قائمة/حالة فراغ
+//   4) GoalCard: دائرة تقدم SVG بتدرج ووهج + محتوى موسّع (رؤية،
+//      دافع، معالم بخط زمني مع شرارات الاحتفال)
+//
+// UX: كل طفرة تظهر فوراً ثم تُصالَح مع الخادم؛ صوت عند اكتمال
+// الهدف، وموعد الأيام ≤ 7 يُعلَّم عاجلاً بومضة.
+// ============================================================
+
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -171,9 +191,12 @@ export function GoalsView() {
     return { total, completed, avgProgress }
   }, [goals])
 
+  // ── الطفرات: تحديثات تفاؤلية مع تراجع عند الفشل ─────────────
+
   /* ---- Toggle milestone ---- */
   async function toggleMilestone(goalId: string, milestoneId: string) {
     // Check if this toggle will complete the goal
+    // نستبق اكتمال كل المعالم لتشغيل صوت الاحتفال قبل التحديث
     const goal = goals.find((g) => g.id === goalId)
     let willComplete = false
     if (goal) {
@@ -186,6 +209,7 @@ export function GoalsView() {
     }
     if (willComplete) playSound('complete')
 
+    // تحديث تفاؤلي فوري؛ نسبة التقدم تُعاد حسابها من المعالم المكتملة
     setGoals((prev) =>
       prev.map((g) => {
         if (g.id !== goalId) return g
@@ -271,6 +295,7 @@ export function GoalsView() {
   /* ---- Add goal ---- */
   async function handleAddGoal() {
     if (!formTitle.trim()) return
+    // معرّف مؤقت للهدف التفاؤلي يُستبدل عند إعادة الجلب
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
     const optimistic: Goal = {
       id: tempId,
@@ -312,6 +337,7 @@ export function GoalsView() {
 
       const data = await res.json()
       if (data && data.id && data.title) {
+        // إعادة جلب موحّدة تستبدل الهدف المؤقت بالسجل النهائي من الخادم
         triggerRefresh()
       }
       setAddOpen(false)
@@ -328,6 +354,7 @@ export function GoalsView() {
   /* ---- Delete goal ---- */
   async function deleteGoal(id: string) {
     playSound('delete')
+    // لقطة للحالة قبل الحذف للتراجع عنه عند فشل الطلب
     const prev = [...goals]
     setGoals((p) => p.filter((g) => g.id !== id))
     try {
@@ -353,6 +380,8 @@ export function GoalsView() {
     setFormDeadline('')
   }
 
+  // ── أدوات مساعدة: تهيئة النموذج وتنسيق التاريخ والمواعيد ──
+
   /* ---- Helpers ---- */
   function formatDate(dateStr: string) {
     if (!dateStr) return ''
@@ -362,6 +391,7 @@ export function GoalsView() {
 
   function getDeadlineInfo(deadline: string) {
     if (!deadline) return null
+    // عتبة الاستعجال: أسبوع أو أقل (يشمل المنتهي والمنتهي اليوم)
     const now = new Date()
     const end = new Date(deadline)
     const diffMs = end.getTime() - now.getTime()
@@ -603,6 +633,7 @@ export function GoalsView() {
           </motion.div>
         )}
 
+        {/* ── التبويبات والقائمة: فلترة الأنواع + عرض البطاقات أو حالة الفراغ ── */}
         {/* ── Filter Tabs with emerald underline ── */}
         <Tabs
           value={activeType}
@@ -697,6 +728,8 @@ export function GoalsView() {
   )
 }
 
+// ── بطاقة الهدف: دائرة تقدم + محتوى موسّع بخط زمني للمعالم ──
+
 /* ────────────── Goal Card ────────────── */
 
 interface GoalCardProps {
@@ -772,6 +805,7 @@ function GoalCard({
                   </filter>
                 </defs>
               )}
+              {/* محيط الدائرة 2πr يُحوَّل إلى إزاحة strokeDashoffset نسبةً للتقدم */}
               <motion.circle
                 cx="24"
                 cy="24"

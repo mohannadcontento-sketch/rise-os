@@ -1,5 +1,23 @@
 'use client'
 
+// ============================================================
+// morning-routine.tsx — وحدة «الروتين الصباحي»
+//
+// قائمة إنجاز صباحية من ٣ أقسام (حركة/تأمل/نمو) بنظام 20/20/20، مع مؤقت
+// لكل قسم، مؤقت جلسة كلي، سجل آخر ٧ أيام، ومكافأة XP عند الاكتمال.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: بنية الأقسام الثلاثة وعناصرها (id/name/icon/xp) + رسائل التحفيز
+//   2) دوال مساعدة: أرقام عربية، تنسيق المؤقتات، ومفتاح جلسة localStorage معزول بالمستخدم
+//   3) useSectionTimer + مكونات صغيرة: SectionTimer وHistoryChart وRoutineTimeline وCompletionRing وRoutineItemRow
+//   4) المكوّن الرئيسي — الحالة والتأثيرات: استرجاع الجلسة، تغيّر اليوم، إشعار الاكتمال
+//   5) التحميل والحفظ: fetchMorning بحراسة تسلسل + saveToAPI مع منح XP مرة واحدة يومياً
+//   6) العرض: ترويسة شروق + تقدم كلي + Stepper + ٣ بطاقات أقسام + مهام مجدولة + تاريخ + احتفال
+//
+// الصدق في البيانات مبدأ أساسي: لا تاريخ مُصطنع عند الفراغ؛ والحفظ يرسل تاريخ
+// العميل المحلي (إصلاح TZ) ويحرس من رجوع العناصر المكتملة بعد الحفظ.
+// ============================================================
+
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -178,6 +196,7 @@ function arabicNum(n: number): string {
 }
 
 function getSessionStorageKey(): string {
+  // مفتاح مُعزل بمعرّف المستخدم حتى لا تتسرب جلسة صباح بين الحسابات على نفس المتصفح
   try {
     const userInfo = localStorage.getItem('rise-user-info')
     if (userInfo) {
@@ -196,6 +215,7 @@ function useSectionTimer(defaultSeconds: number) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    // التبعية seconds تعيد إنشاء interval كل ثانية — أبسط من إدارة المؤقت يدوياً
     if (isRunning && seconds > 0) {
       intervalRef.current = setInterval(() => {
         setSeconds((prev) => {
@@ -235,6 +255,7 @@ function SectionTimer({
   section: RoutineSection
   timer: ReturnType<typeof useSectionTimer>
 }) {
+  // المؤقت تنازلي: التقدم = 1 − (المتبقي / الافتراضي)
   const progress = 1 - timer.seconds / section.timerDefault
   const isComplete = timer.seconds === 0
 
@@ -325,6 +346,7 @@ function HistoryChart({ logs }: { logs: MorningLog[] }) {
   return (
     <div className="flex items-end gap-2 h-20 px-1">
       {logs.map((log, i) => {
+        // حد أدنى ٤٪ للارتفاع حتى يظل عمود اليوم الصفري مرئياً
         const height = Math.max((log.score / maxScore) * 100, 4)
         const dayLabel = ARABIC_DAYS[new Date(log.date).getDay()]
         const isToday = log.date === getTodayStr()
@@ -522,6 +544,8 @@ function RoutineItemRow({
 /* ────────────── Main Component ────────────── */
 
 export default function MorningRoutine() {
+  // ── الحالة: العناصر المكتملة والسجلات ومؤقت الجلسة ──────────────────────────
+
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const [logs, setLogs] = useState<MorningLog[]>([])
   const [todayLog, setTodayLog] = useState<MorningLog | null>(null)
@@ -546,6 +570,8 @@ export default function MorningRoutine() {
   const growthTimer = useSectionTimer(SECTIONS[2].timerDefault)
 
   const timers = [movementTimer, reflectionTimer, growthTimer]
+
+  // ── المشتقات: النتيجة والخبرة المكتسبة ──────────────────────────
 
   // Calculate score
   const completedCount = completedIds.size
@@ -641,6 +667,8 @@ export default function MorningRoutine() {
     }
   }, [isAllDone, sessionActive])
 
+  // ── التحميل: جلب سجل اليوم + المهام المجدولة (بحراسة التسلسل) ──────────────────────────
+
   const { refreshKey } = useDataRefresh()
 
   // SEQUENCING GUARD: only the LATEST fetch may touch state. Without this,
@@ -721,10 +749,13 @@ export default function MorningRoutine() {
   }, [fetchMorning])
 
   // Generate mock history for last 7 days if no logs
+  // آخر ٧ أيام فقط من السجل الحقيقي — حالة فراغ صادقة دون بيانات مُصطنعة
   const displayLogs = (() => {
     if (logs.length > 0) return logs.slice(-7)
     return [] // honest empty state — no fabricated data
   })()
+
+  // ── الحفظ والتبديل: حفظ فوري لكل تبديل مع منح XP مرة واحدة ──────────────────────────
 
   // Save to API
   const saveToAPI = useCallback(
@@ -791,6 +822,8 @@ export default function MorningRoutine() {
     [saveToAPI]
   )
 
+  // ── العرض: هيكل تحميل ثم الواجهة الكاملة ──────────────────────────
+
   if (loading) {
     return (
       <div dir="rtl" className="space-y-6">
@@ -810,6 +843,7 @@ export default function MorningRoutine() {
   }
 
   // Pick a random motivational message
+  // تدوير حتمي باليوم (وليس عشوائياً) — نفس الرسالة طوال اليوم بلا وميض عند إعادة الرسم
   const motivationalMsg = MOTIVATIONAL_MESSAGES[Math.floor((Date.now() / 86400000) % MOTIVATIONAL_MESSAGES.length)]
 
   return (

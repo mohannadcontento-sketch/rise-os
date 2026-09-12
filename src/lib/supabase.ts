@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 // ============================================================
+// supabase.ts — عميل Supabase للخادم (وضعان: حقيقي/mock)
+//
+// الغرض: المصنع المركزي لكل عملاء Supabase في مسارات API —
+// anon (RLS) / user JWT / admin (service role) + تجزئة مفاتيح API.
+//
+// المسؤوليات:
+//   1) إنشاء عملاء معزولين لكل طلب (لا حالة جلسة مشتركة)
+//   2) أسبقية التوكن: httpOnly cookie ثم Authorization header
+//   3) تجزئة مفاتيح rise_ بـ SHA-256 قبل أي تخزين أو بحث
+//   4) توليد توكن ZhipuAI موقّعاً بـ HMAC لصلاحية ساعة
+//
+// قرارات مهمة: عميل anon هو الافتراضي (RLS يفرض العزل)؛ عميل الإدارة
+// (service role يتجاوز RLS) يُستخدم حصراً في مسارات requireAdmin؛
+// بدون متغيرات البيئة يتحول الملف لوضع mock محلي (Prisma+SQLite).
+// ============================================================
+// ============================================================
 // أوج (Awj) — Supabase client with security fixes (Phase 1)
 // ------------------------------------------------------------
 // Dual-mode: uses real Supabase when env vars present, else
@@ -20,6 +36,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 // Admin email
 export const ADMIN_EMAIL: string = process.env.ADMIN_EMAIL || ''
 
+// ── القسم: فحوص الأدوار والتجهيز ─────────────────
 /**
  * ADMIN ROLE MATCH — تطبيع قيمة الدور قبل المقارنة.
  * كان الفحص `role === 'admin'` حرفياً: "Admin" أو " admin" أو "ادمن"
@@ -41,6 +58,7 @@ export function hasServiceRole(): boolean {
   return !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
 }
 
+// ── القسم: تجزئة مفاتيح API (SHA-256) ─────────────────
 // ============================================================
 // P1#7: API Key Hashing (SHA-256)
 // ============================================================
@@ -50,9 +68,11 @@ export async function hashApiKey(key: string): Promise<string> {
   return crypto.createHash('sha256').update(key).digest('hex')
 }
 
+// ── القسم: العملاء مع تحميل كسول ─────────────────
 // ============================================================
 // Lazy-loaded client cache
 // ============================================================
+// عملاء مفردون (singleton) يُنشؤون مرة واحدة — الحمل الكسول يمنع تكلفة init لكل طلب
 let _anonClient: any = null
 let _adminClient: any = null
 let _sbModule: any = null
@@ -113,6 +133,7 @@ export async function getSupabaseAdmin() {
   return _adminClient
 }
 
+// ── القسم: عميل حسب الطلب getSupabaseWithAuth ─────────────────
 /**
  * P1#1 FIX: Server-side client with user JWT (respects RLS).
  * P1#3: Reads token from httpOnly cookie FIRST, then Authorization header.
@@ -130,6 +151,8 @@ export async function getSupabaseWithAuth(req?: NextRequest) {
   }
 
   // P1#1: If we have a real JWT, use anon client WITH the token (RLS enforced)
+  // توكن JWT حقيقي (ليس مفتاح rise_ وطوله > 50) → عميل anon مع Authorization:
+  // هوية المستخدم محفوظة وRLS يفرض العزل على مستوى الصفوف
   if (token && !token.startsWith('rise_') && token.length > 50) {
     const { createClient } = await loadSupabase()
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -138,6 +161,8 @@ export async function getSupabaseWithAuth(req?: NextRequest) {
   }
 
   // For rise_ API keys — resolve user via admin (hash lookup), then use anon
+  // مفتاح rise_ → عميل الإدارة هنا فقط للبحث بالتجزئة في resolveUserId
+  // (تحديد هوية المالك — لا يعني تجاوز RLS لبيانات المستخدم)
   if (token && token.startsWith('rise_')) {
     return getSupabaseAdmin()
   }
@@ -147,6 +172,7 @@ export async function getSupabaseWithAuth(req?: NextRequest) {
 }
 
 // Legacy compatibility
+// اسم قديم للتوافق — الكود الجديد يستخدم getSupabaseAnon صراحة
 export const getSupabase = getSupabaseAnon
 export function isAdminAvailable(): boolean {
   return hasServiceRole()
@@ -160,6 +186,7 @@ export async function getAdminSb() {
   return getSupabaseAdmin()
 }
 
+// ── القسم: تحليل مفاتيح API إلى مستخدم ─────────────────
 // ============================================================
 // P1#7 FIX: API Key Resolution with SHA-256 hashing
 // ============================================================
@@ -182,6 +209,7 @@ export async function resolveUserId(apiKey: string): Promise<string | null> {
         .maybeSingle()
 
       if ((data as any)?.user_id) {
+        // نحدّث last_used_at (آخر استخدام للمفتاح) ثم نعيد معرّف المالك
         // Update last_used_at
         await admin
           .from('user_api_keys')
@@ -198,6 +226,7 @@ export async function resolveUserId(apiKey: string): Promise<string | null> {
   }
 }
 
+// ── القسم: الوضع المحلي (mock للتطوير فقط) ─────────────────
 // ============================================================
 // Local mock mode (Prisma + SQLite) — development only
 // ============================================================
@@ -219,6 +248,7 @@ async function resolveUserIdLocal(apiKey: string): Promise<string | null> {
 
     // One-time compatibility for old local installations that still contain
     // plaintext keys. New code never writes this form.
+    // توافق مرة واحدة مع مفاتيح نصية قديمة: نرحّلها إلى تجزئة ثم نعيد المستخدم
     const legacyRecord = await (db as any).userApiKey.findUnique({ where: { key: apiKey } })
     if (legacyRecord?.userId) {
       await (db as any).userApiKey.update({
@@ -251,6 +281,7 @@ export async function getDefaultUser() {
   return user
 }
 
+// ── القسم: معالجة أخطاء المسارات ─────────────────
 // ============================================================
 // Error Handling
 // ============================================================
@@ -258,6 +289,7 @@ export function handleRouteError(error: unknown, route: string, hasToken = false
   const msg = error instanceof Error ? error.message : String(error)
   console.error(`[${route}] error:`, msg)
 
+  // طلب موثّق بلا Supabase → وضع mock محلي: 503 برسالة «غير متوفر» أوضح من 500
   if (hasToken && !isSupabaseConfigured()) {
     return NextResponse.json(
       { success: false, error: 'خدمة غير متوفرة حالياً', offline: true },
@@ -271,11 +303,13 @@ export function handleRouteError(error: unknown, route: string, hasToken = false
   )
 }
 
+// ── القسم: توكن ZhipuAI ─────────────────
 // ============================================================
 // ZhipuAI JWT Token
 // ============================================================
 export function generateZhipuToken(): string {
   const apiKey = process.env.BIGMODEL_API_KEY || ''
+  // مفتاح Zhipu بصيغة "id.secret" — نبني JWT قصير الأجل (ساعة) موقّعاً بـ HMAC-SHA256
   const [id, secret] = apiKey.split('.')
   if (!id || !secret) return apiKey
 

@@ -3,6 +3,18 @@ import { apiFetch, apiPut, isFromCache } from '@/lib/api-fetch'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { useToday } from '@/hooks/use-today'
 
+// ============================================================
+// use-dashboard-data.ts — متحكم بيانات لوحة التحكم
+//
+// يجلب /api/rise/dashboard بتاريخ اليوم عبر كاش apiFetch، ويتلقى
+// تحديثات فورية لعدّادات اليوم عبر rise:instant-update بلا إعادة جلب.
+//
+// المسؤوليات:
+//   1) جلب متزامن واحد (fetchingRef) مع طلب معلّق واحد كحد أقصى.
+//   2) مزامنة عدّادات اليوم لحظياً من طفرات الوحدات الأخرى.
+//   3) نقل المهام المتأخرة إلى اليوم (PUT متتابعة + عدّ الفشل).
+// ============================================================
+
 export interface DashboardData {
   productivityScore?: number
   journalStreak?: number
@@ -22,11 +34,14 @@ export interface DashboardData {
   projects: any[]
 }
 
+// ── القسم: الـ hook — الحالة والجلب ──────────────────────────────────
+
 export function useDashboardData() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
+  // حارس تزامن: منع جلبين متوازيين — الطلب الثاني يسجّل معلقاً وينفّذ بعد الأول
   const fetchingRef = useRef(false)
   const pendingRefreshRef = useRef(false)
   const todayDate = useToday()
@@ -50,6 +65,7 @@ export function useDashboardData() {
     } finally {
       setLoading(false)
       fetchingRef.current = false
+      // حدث تحديث وصل أثناء الجلب؟ نفّذه الآن بعد انتهاء الجلب الحالي
       if (pendingRefreshRef.current) {
         pendingRefreshRef.current = false
         void fetchDashboard()
@@ -57,8 +73,12 @@ export function useDashboardData() {
     }
   }, [todayDate])
 
+  // ── القسم: محفزات إعادة الجلب (data-changed / day-changed) ──────────────────────────────────
+
   const { refreshKey } = useDataRefresh()
 
+  // الجلب عند الوصول وعند كل عدّ تحديث — اليوم الجديد يغيّر todayDate
+  // فيولّد fetchDashboard جديداً ويجلب تاريخ اليوم الصحيح تلقائياً
   useEffect(() => {
     void fetchDashboard()
   }, [fetchDashboard, refreshKey])
@@ -72,6 +92,7 @@ export function useDashboardData() {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail ?? {}
+      // تسوية تفاؤلية للعدّادات فقط — Math.max(0,..) يمنع النزول تحت الصفر عند سباق أحداث
       setData((prev) => {
         if (!prev?.today) return prev
         const today = { ...prev.today }
@@ -90,11 +111,14 @@ export function useDashboardData() {
     return () => window.removeEventListener('rise:instant-update', handler)
   }, [])
 
+  // ── القسم: نقل المهام المتأخرة إلى اليوم ──────────────────────────────────
+
   const [movingId, setMovingId] = useState<string | null>(null)
   const moveOverdueToToday = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return
     setMovingId(ids.join(','))
     let failed = 0
+    // PUT متتابعة (لا دفعية) لعدّ الإخفاقات بدقة — ثم جلب نهائي موحّد
     for (const id of ids) {
       try {
         const res = await apiPut('/api/rise/tasks', { id, dueDate: todayDate })

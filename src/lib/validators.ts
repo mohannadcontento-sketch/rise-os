@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 
+// ============================================================
+// validators.ts — التحقق المركزي من المدخلات (zod)
+//
+// مخططات zod الموحّدة لكل مسارات API الحساسة + مساعد parseBody
+// يوحّد شكل استجابة الخطأ 400 عبر المشروع بأكمله.
+//
+// المسؤوليات:
+//   1) تعريف مخططات التحقق للمسارات الحساسة (auth/الحساب/الاشتراكات/push/المجتمع).
+//   2) parseBody: تحليل جسم الطلب وإرجاع استجابة 400 جاهزة عند أول خطأ تحقق.
+// ============================================================
+
 /**
  * التحقق المركزي من المدخلات الحساسة — المرحلة 01 (Audit وتنظيف المشروع)
  * الهدف: مصدر واحد لمخططات zod للمدخلات الحساسة بدل فحوص يدوية مبعثرة.
@@ -10,6 +21,7 @@ import { z } from 'zod'
 
 // ─── أنواع أساسية ───
 
+// تسوية البريد (trim + toLowerCase) قبل التحقق حتى لا تتعدد نسخ العنوان نفسه
 export const emailSchema = z
   .string()
   .trim()
@@ -81,6 +93,7 @@ export const updatePasswordSchema = z
     (v) => !!v.currentPassword || v.newPassword,
     { message: 'بيانات غير صالحة' }
   )
+  // رفض الجديدة إن طابقت الحالية — شرط flow الإعدادات فقط (إعادة إثبات الهوية)
   .refine(
     (v) => !v.currentPassword || v.currentPassword !== v.newPassword,
     { message: 'كلمة المرور الجديدة مطابقة للحالية' }
@@ -142,6 +155,7 @@ export const adminSubscriptionActionSchema = z
       .optional(),
     reason: z.string().trim().min(3, 'سبب الرفض مطلوب').max(200, 'السبب أطول من 200 حرف').optional(),
   })
+  // حقول مشروطة بالإجراء: كل action يفرز حقوله الإلزامية (رفض الطلب الناقص مبكراً)
   .refine((v) => (v.action === 'approve' ? !!v.requestId : true), {
     message: 'requestId مطلوب للاعتماد',
   })
@@ -184,6 +198,7 @@ export const pushUnsubscribeSchema = z
     id: z.string().uuid('معرّف الجهاز غير صالح').optional(),
     endpoint: z.string().trim().startsWith('https://', 'عنوان الاشتراك غير صالح').max(2048).optional(),
   })
+  // يكفي أحد المعرّفين: id (من قائمة الأجهزة) أو endpoint (لجهازنا الحالي)
   .refine((v) => !!v.id || !!v.endpoint, { message: 'مطلوب معرّف الجهاز أو عنوان الاشتراك' })
 
 /**
@@ -225,6 +240,7 @@ export async function parseBody<T>(
       response: NextResponse.json({ error: 'جسم الطلب غير صالح' }, { status: 400 }),
     }
   }
+  // safeParse لا يرمي استثناءً — نعيد أول رسالة تحقق فقط (بنمط بقية المسارات)
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     return {
@@ -242,6 +258,8 @@ export async function parseBody<T>(
 // المرحلة 07 — المجتمع (community validators)
 // ============================================================
 
+// ── القسم: منشورات وتعليقات وتفاعلات وبلاغات المجتمع ──────────────────────────────────
+
 export const communityPostCreateSchema = z.object({
   title: z.string().trim().min(3, 'العنوان قصير جدًا (3 أحرف على الأقل)').max(200, 'العنوان طويل جدًا (200 حرف كحد أقصى)'),
   body: z.string().trim().min(1, 'المحتوى مطلوب').max(10000, 'المحتوى طويل جدًا (10000 حرف كحد أقصى)'),
@@ -256,6 +274,7 @@ export const communityPostCreateSchema = z.object({
 export const communityPostUpdateSchema = z.object({
   title: z.string().trim().min(3, 'العنوان قصير جدًا (3 أحرف على الأقل)').max(200, 'العنوان طويل جدًا (200 حرف كحد أقصى)').optional(),
   body: z.string().trim().min(1, 'المحتوى مطلوب').max(10000, 'المحتوى طويل جدًا (10000 حرف كحد أقصى)').optional(),
+  // تحديث جزئي: يجب إرسال title أو body على الأقل وإلا فالطلب بلا أثر
 }).refine((v) => v.title !== undefined || v.body !== undefined, { message: 'لا يوجد ما يُحدّث' })
 
 export const communityCommentCreateSchema = z.object({
@@ -295,6 +314,8 @@ export const communityMediaPresignSchema = z.object({
     .min(1, 'حجم غير صالح')
     .max(8388608, 'الصورة أكبر من 8MB — صغّرها وأعد المحاولة'),
 })
+
+// ── القسم: إجراءات الإشراف والإدارة (discriminatedUnion على action) ──────────────────────────────────
 
 export const communityModerateSchema = z.discriminatedUnion('action', [
   z.object({

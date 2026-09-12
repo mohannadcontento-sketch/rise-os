@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// calendar.tsx — التقويم (عرض شهري موحّد)
+//
+// تقويم شهري واحد يجمع كل نشاط المستخدم: المهام (نقاط ملونة حسب
+// الإنجاز والأولوية) وسجلات العادات واليوميات وجلسات التركيز — نقرة
+// اليوم تفتح لوحة تفاصيله، وبغياب الاختيار تظهر مهام اليوم والقادمة.
+//
+// البنية الداخلية:
+//   1) الأنواع والمساعدات: نماذج Task/HabitLog/Journal/Focus +
+//      خريطتا الأولوية (ألوان/تسميات) وأسماء أيام الأسبوع
+//   2) fetchAllData: جلب 4 واجهات بالتوازي مع عزل خطأ كل استجابة
+//   3) مذكرات useMemo: شبكة أيام الشهر، إحصاءات الشهر، خريطة مؤشرات
+//      الأيام، وتجميع المهام حسب التاريخ
+//   4) الرسم: رأس + شريط إحصاءات + شبكة التقويم (تنقل شهري بانزلاق
+//      موجّه) + لوحة اليوم المحدد + قوائم اليوم والقادم
+//
+// مبدأ UX: كل البيانات تُجلب مرة واحدة وتُشتق محلياً — التنقل بين
+// الأشهر لا يطلق أي طلب شبكة؛ والأسبوع يبدأ الأحد (RTL).
+// ============================================================
+
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -115,6 +135,7 @@ export default function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [slideDirection, setSlideDirection] = useState<1 | -1>(1)
 
+  // ── تحميل البيانات: 4 واجهات بالتوازي مع عزل الأخطاء ──────────────────────────────────
   const fetchAllData = useCallback(async () => {
     try {
       const [tasksRes, habitsRes, journalRes, focusRes] = await Promise.all([
@@ -126,6 +147,7 @@ export default function CalendarView() {
 
       let tasksData: any = null, habitsData: any = null, journalData: any = null, focusData: any = null
 
+      // كل استجابة معزولة بـ try/catch مستقل — فشل واجهة واحدة يبقي البقية تعمل
       try { if (!tasksRes.ok) throw new Error(); tasksData = await tasksRes.json() } catch { /* ignore */ }
       try { if (!habitsRes.ok) throw new Error(); habitsData = await habitsRes.json() } catch { /* ignore */ }
       try { if (!journalRes.ok) throw new Error(); journalData = await journalRes.json() } catch { /* ignore */ }
@@ -151,6 +173,7 @@ export default function CalendarView() {
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth)
     const monthEnd = endOfMonth(monthStart)
+    // weekStartsOn: 0 = الأحد؛ وتُكمَّل الشبكة بأيام من الشهرين المجاورين
     const calStart = startOfWeek(monthStart, { weekStartsOn: 0 })
     const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 })
 
@@ -220,6 +243,7 @@ export default function CalendarView() {
     return map
   }, [tasks])
 
+  // ── دوال الوصول: بيانات تاريخٍ معيّن من المجموعات المحسوبة ──────────────────────────────────
   const getTasksForDate = (date: Date) => {
     const key = format(date, 'yyyy-MM-dd')
     return tasksByDate[key] || []
@@ -253,6 +277,7 @@ export default function CalendarView() {
     .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
     .slice(0, 5)
 
+  // ── التنقل بين الأشهر: يضبط اتجاه الانزلاق قبل تغيير الشهر ──────────────────────────────────
   const goToToday = () => {
     setSlideDirection(new Date() < currentMonth ? -1 : 1)
     setCurrentMonth(new Date())
@@ -268,6 +293,7 @@ export default function CalendarView() {
     setCurrentMonth((prev) => addMonths(prev, 1))
   }
 
+  // ── الرسم: رأس → إحصاءات → الشبكة → اللوحة الجانبية ──────────────────────────────────
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -312,6 +338,7 @@ export default function CalendarView() {
         <div className="flex-1 min-w-0">
           <div className="neo-card card-lift p-4 sm:p-5">
             {/* Month Navigation */}
+              {/* RTL: السهم الأيمن يعود للشهر السابق والأيسر يتقدم — معكوسة عن LTR */}
               <div className="flex items-center justify-between mb-6">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
@@ -353,6 +380,7 @@ export default function CalendarView() {
 
               {/* Day Cells with slide animation */}
               <AnimatePresence mode="wait" initial={false}>
+                {/* مفتاح لكل شهر يجعل AnimatePresence يستبدل الشبكة بانزلاقة واحدة */}
                 <motion.div
                   key={currentMonth.toISOString().slice(0, 7)}
                   initial={{ opacity: 0, x: slideDirection * 30 }}
@@ -369,6 +397,7 @@ export default function CalendarView() {
                     const isTodayDate = isToday(day)
                     const indicators = dayIndicators[dayKey]
 
+                    // نقر يوم محدد مرة أخرى = إلغاء التحديد (toggle)
                     return (
                       <motion.button
                         key={i}

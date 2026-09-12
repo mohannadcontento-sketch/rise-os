@@ -27,16 +27,33 @@
 
 import { createClient, type Client } from '@libsql/client'
 
+// ============================================================
+// turso.ts — عميل Turso (libSQL): مرآة قراءة بيانات المجتمع
+//
+// الغرض: مصنع عميل libSQL للخادم — كل وصول لمزامنة المجتمع
+// (community-sync.ts) يمر عبر getTursoClient().
+//
+// المسؤوليات:
+//   1) حلّ الإعداد من env ثم جدول app_config (كاش 10 دقائق)
+//   2) إنشاء عميل مفرد وإعادة استخدامه ما دام url ثابتاً
+//   3) null آمن عند غياب الإعداد (fail-open — لا شيء ينكسر)
+//
+// قرار مهم: dual-write مع fail-open — كتابة Supabase أولاً ثم
+// المزامنة للمرآة؛ غياب Turso يعطّل المزامنة فقط لا التطبيق.
+// ============================================================
 interface TursoConfig {
   url: string
   token: string
 }
 
+// ── القسم: حالة الكاش الداخلية ─────────────────────
+// كاش الإعداد والعميل — يبطل بعد 10 دقائق أو عبر resetTursoCache
 let cachedCfg: { at: number; cfg: TursoConfig | null } | null = null
 let cachedClient: Client | null = null
 let cacheUrl: string | null = null
 const CACHE_MS = 10 * 60 * 1000
 
+// ── القسم: حلّ الإعداد (env ثم كاش ثم DB) ─────────────────────
 export async function isTursoConfigured(): Promise<boolean> {
   return (await resolveTursoConfig()) !== null
 }
@@ -57,12 +74,14 @@ async function resolveTursoConfig(): Promise<TursoConfig | null> {
   return cfg
 }
 
+// ── القسم: قراءة الإعداد من app_config ─────────────────────
 async function readFromDb(): Promise<TursoConfig | null> {
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase')
     const admin = await getSupabaseAdmin()
     if (!admin) return null
 
+    // قراءة service_role فقط: RLS بلا policies على app_config = fail-closed
     const { data, error } = await (admin as any)
       .from('app_config')
       .select('key, value')
@@ -84,6 +103,7 @@ async function readFromDb(): Promise<TursoConfig | null> {
   }
 }
 
+// ── القسم: العميل المفرد وحالة الربط ─────────────────────
 /** اختبار الوحدة: إبطال الكاش بعد تحديث المفاتيح */
 export function resetTursoCache(): void {
   cachedCfg = null
@@ -95,6 +115,7 @@ export function resetTursoCache(): void {
 export async function getTursoClient(): Promise<Client | null> {
   const cfg = await resolveTursoConfig()
   if (!cfg) return null
+  // نعيد استخدام العميل نفسه ما لم يتغير url — لا اتصالات جديدة بلا داعٍ
   if (!cachedClient || cacheUrl !== cfg.url) {
     cachedClient = createClient({
       url: cfg.url,
@@ -115,6 +136,7 @@ export async function tursoStatus(): Promise<{
   let host: string | null = null
   if (cfg) {
     try {
+      // نعرض المضيف فقط (لا الرمز السري)؛ فشل التحليل (صيغة file:) → local-file
       host = new URL(cfg.url).host || cfg.url.replace(/^[a-z]+:\/\//, '').split('/')[0] || 'local-file'
     } catch {
       host = 'local-file'
@@ -123,6 +145,7 @@ export async function tursoStatus(): Promise<{
   return {
     configured: !!cfg,
     host,
+    // TURSO_READ_MODE غير مفعّل عمداً — القراءة من Supabase حتى التحقق من المزامنة
     readMode: process.env.TURSO_READ_MODE === 'true',
   }
 }

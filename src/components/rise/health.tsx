@@ -1,5 +1,23 @@
 'use client'
 
+// ============================================================
+// health.tsx — وحدة «الصحة»
+//
+// تتبع المؤشرات اليومية: نوم وجودته، ماء، خطوات، سعرات، وزن، مزاج وطاقة
+// وتمارين — مع درجة صحة محسوبة، مقارنة أسبوعية، ورسوم لآخر ١٤ يوماً.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: HealthLog + تسميات المزاج/الطاقة/الجودة + EMPTY_LOG
+//   2) AnimatedCounter: عدّاد متحرك يحدّث DOM مباشرة عبر framer-motion
+//   3) الحالة والتحميل: نموذج اليوم + جلب /api/rise/health مع حراسة التعديلات الجارية
+//   4) الحفظ: زر يدوي + حفظ تلقائي مؤجّل (900ms) بمرايا refs تتجنب الـ stale closure
+//   5) المشتقات: بيانات رسوم ١٤ يوماً + درجة الصحة + مقارنة أسبوعية + تحليلات
+//   6) العرض: بطاقة الدرجة + قائمة اليوم + شبكة 2×3 + تمارين + وزن + تابات الرسوم
+//
+// مبدأ UX: كل تعديل يُحفظ تلقائياً ولا يُداس فوقه بجلب خلفي (CLOBBER GUARD)،
+// وحالة الفراغ صادقة — لا رسوم فارغة مملوءة بأصفار.
+// ============================================================
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
@@ -113,6 +131,7 @@ const EMPTY_LOG = {
 /* ────────────── Animated Counter ────────────── */
 
 function AnimatedCounter({ target }: { target: number }) {
+  // العدّاد يكتب النص مباشرة في DOM عبر ref — بلا إعادة رسم المكوّن كل إطار
   const mv = useMotionValue(0)
   const display = useTransform(mv, v => Math.round(v))
   const ref = useRef<HTMLSpanElement>(null)
@@ -132,6 +151,8 @@ function AnimatedCounter({ target }: { target: number }) {
 /* ────────────── Component ────────────── */
 
 export default function Health() {
+  // ── الحالة: نموذج اليوم + مرايا refs للحفظ التلقائي ──────────────────────
+
   const [data, setData] = useState<HealthData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -156,6 +177,9 @@ export default function Health() {
   // (stale closure sent notes as '' — the exact "no save" symptom).
   const notesRef = useRef(exerciseNotes)
   notesRef.current = exerciseNotes
+
+  // ── التحميل: جلب سجلات الصحة مع حراسة التعديلات الجارية ──────────────────────
+
   /* ─── Fetch ─── */
   const { refreshKey } = useDataRefresh()
 
@@ -195,6 +219,8 @@ export default function Health() {
   useEffect(() => {
     fetchHealth()
   }, [fetchHealth, refreshKey])
+
+  // ── الحفظ: زر يدوي + حفظ تلقائي مؤجّل (900ms) ──────────────────────
 
   /* ─── Save ─── */
   const persistForm = useCallback(async (payload: Record<string, unknown>) => {
@@ -239,6 +265,8 @@ export default function Health() {
     scheduleAutoSave()
   }
 
+  // ── المشتقات: بيانات الرسوم والدرجات والتحليلات ──────────────────────
+
   /* ─── Chart Data ─── */
   const last14 = useMemo(() => {
     const days: { date: string; label: string }[] = []
@@ -255,6 +283,7 @@ export default function Health() {
   }, [])
 
   const logsMap = useMemo(() => {
+    // فهرس تاريخ→سجل لتقاطع سريع (O(1)) مع أيام آخر ١٤ يوماً
     const map: Record<string, HealthLog> = {}
     ;(data?.logs || []).forEach((l) => {
       map[l.date] = l
@@ -313,6 +342,7 @@ export default function Health() {
   )
 
   const weightChartData = useMemo(() => {
+    // آخر ٣٠ قياساً غير فارغ مرتبة زمنياً — الأيام بلا وزن تُتخطى كلياً
     const weightLogs = (data?.logs || [])
       .filter((l) => l.weight && l.weight > 0)
       .sort((a, b) => a.date.localeCompare(b.date))
@@ -326,6 +356,7 @@ export default function Health() {
   /* ─── Health Score ─── */
   const healthScore = useMemo(() => {
     const log = data?.todayLog
+    // بلا سجل لليوم: درجة محايدة ٥٠ بدلاً من صفر يائس
     if (!log) return 50
     let score = 0
     // Sleep (0-25)
@@ -347,6 +378,7 @@ export default function Health() {
 
   /* ─── Weekly Comparison ─── */
   const weeklyComparison = useMemo(() => {
+    // نافذتان متجاورتان: آخر ٧ أيام مقابل الأيام ٧→١٤ السابقة
     const logs = data?.logs || []
     const today = new Date()
     const thisWeekLogs = logs.filter(l => {
@@ -403,6 +435,8 @@ export default function Health() {
     fontSize: '12px',
     direction: 'rtl' as const,
   }
+
+  // ── العرض: هيكل التحميل ثم الواجهة الكاملة ──────────────────────
 
   /* ─── Loading ─── */
   if (loading) {
@@ -504,6 +538,7 @@ export default function Health() {
           </div>
           <div className="space-y-4">
             {/* Water glasses as clickable icons */}
+            {/* النقر على الكوب i: يملأ حتى i+1، أو يفرّغ حتى i إن كان ممتلئاً بعده */}
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground">الماء (هدف: ٨ أكواب)</p>
               <div className="flex items-center gap-2 flex-wrap">

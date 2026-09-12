@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// tasks.tsx — وحدة «المهام»
+//
+// إدارة المهام بثلاثة عروض: قائمة (مع سحب وإفلات لإعادة الترتيب)،
+// لوحة كانبان (أعمدة الحالة الثلاث)، وتقويم شهري — مع مهام فرعية،
+// تبعيات تُقفل المهمة حتى إتمام ما قبلها، وربط بالمشاريع وXP.
+// كل الجلب والطفرات في use-tasks-controller (هذا الملف عرض فقط).
+//
+// البنية الداخلية:
+//   1) ثوابت العرض: أنيميشن + ألوان الأولويات (حد/نقطة/شارة)
+//   2) AnimatedCounter — عدّ رقمي تناظري
+//   3) Tasks: حالة الواجهة (عرض/فلاتر/نموذج) + المتحكم + إنشاء
+//   4) دوال رسم: renderTaskItem (القائمة) و renderBoardCard (اللوحة)
+//   5) العرض الرئيسي: لافتة فشل الجلب → شريط الأدوات → فلاتر
+//      → إحصاءات → الحالات الثلاث للعرض + طبقة موبايل للتوسيع
+//
+// مبادئ UX: سحب بعتبة ٨px كي لا يتعارض مع النقر، المحظورة
+// (تبعيات غير مكتملة) تُعرض بقفل بدل إخفاء، والفلاتر سريعة التصفير.
+// ============================================================
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -141,6 +161,7 @@ function AnimatedCounter({ target, className }: { target: number; className?: st
     const animate = () => {
       const elapsed = Date.now() - startTimeRef.current
       const progress = Math.min(elapsed / 800, 1)
+      // تخفيف cubic ease-out: يبدأ سريعاً ثم يتباطأ نحو القيمة النهائية
       const eased = 1 - Math.pow(1 - progress, 3)
       setCount(Math.round(eased * target))
       if (progress < 1) rafRef.current = requestAnimationFrame(animate)
@@ -187,6 +208,7 @@ function toArabicDigits(n: number): string {
 /* ────────────── Component ────────────── */
 
 export function Tasks() {
+  // ── القسم: حالة الواجهة — العرض والفلاتر ونموذج الإضافة ──
   const [view, setView] = useState<ViewType>('list')
   const [addOpen, setAddOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -204,6 +226,7 @@ export function Tasks() {
   const [formDependsOn, setFormDependsOn] = useState<string[]>([])
   const [calendarMonth, setCalendarMonth] = useState(new Date())
 
+  // ── القسم: المتحكم — جلب وطفرات المهام عبر use-tasks-controller ──
   const {
     tasks,
     projects,
@@ -223,6 +246,7 @@ export function Tasks() {
     createTask: createTaskController,
   } = useTasksController({ scope, filterPriority, filterProject, filterStatus, searchQuery })
 
+  // ── القسم: إنشاء المهمة — الإرسال ثم تصفير النموذج ──
   const createTask = async () => {
     const success = await createTaskController({
       title: formTitle,
@@ -248,6 +272,7 @@ export function Tasks() {
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(calendarMonth)
     const monthEnd = endOfMonth(calendarMonth)
+    // weekStartsOn: 6 — الأسبوع العربي يبدأ السبت (يطابق رؤوس الأعمدة أدناه)
     const start = startOfWeek(monthStart, { weekStartsOn: 6 })
     const end = startOfWeek(monthEnd, { weekStartsOn: 6 })
     // Go to end of that week
@@ -271,6 +296,7 @@ export function Tasks() {
 
   /* ── Drag & Drop state ── */
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  // عتبة ٨ بكسل تميّز السحب الحقيقي عن النقر العادي على المهمة
   const dragSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -295,6 +321,8 @@ export function Tasks() {
     const reordered = arrayMove(statusTasks, oldIndex, newIndex)
     const updates = reordered.map((t, i) => ({ id: t.id, order: i }))
 
+    // نرسل تحديث الترتيب لكل مهام الحالة دفعة واحدة —
+    // وأي فشل يستدعي fetchData لإعادة المزامنة من السيرفر
     try {
       const results = await Promise.all(updates.map((u) =>
         apiPut('/api/rise/tasks', u)
@@ -316,6 +344,7 @@ export function Tasks() {
     const isDone = task.status === 'done'
     const completedSubs = task.subtasks.filter((s) => s.completed).length
     const blocked = isTaskBlocked(task)
+    // التبعيات تُخزَّن كسلسلة معرّفات مفصولة بفواصل — نحلّلها لعرض أسماء المهام
     const depNames = task.dependsOn
       ? task.dependsOn.split(',').filter(Boolean).map((id) => tasks.find((t) => t.id === id)?.title).filter(Boolean)
       : []
@@ -499,6 +528,7 @@ export function Tasks() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {/* نقل دائري: ينتقل للحالة التالية بالترتيب (todo → in_progress → done) */}
                   <DropdownMenuItem
                     onClick={() => {
                       const nextIdx = (STATUSES.indexOf(task.status as typeof STATUSES[number]) + 1) % STATUSES.length

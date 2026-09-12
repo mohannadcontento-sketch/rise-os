@@ -1,5 +1,26 @@
 'use client'
 
+// ============================================================
+// weekly-review.tsx — المراجعة الأسبوعية
+//
+// مساءلة نهاية الأسبوع: درجة كلية + نصوص (ما سار جيداً/ما يُحسَّن/
+// الدروس) + أرقام قابلة للتعبئة التلقائية + ثلاثة أهداف + تخطيط
+// الأسبوع القادم، مع رادار SVG يدوي يلخّص المحاور الخمسة.
+//
+// البنية الداخلية:
+//   1) الأنواع والدوال: نموذج WeeklyReview وemptyReview ورسائل
+//      تحفيزية تتدرج مع الدرجة (getMotivationalMessage)
+//   2) المكوّن: تهيئة كسولة من user-storage (مراجعة الأسبوع =
+//      weekStart خلال آخر 7 أيام) + دوال تحديث لكل قسم + ملء تلقائي
+//      من واجهتي tasks وfocus
+//   3) الرسم: confetti عند الحفظ → بطاقة الدرجة → أقسام المراجعة
+//      والأرقام والأهداف والأسبوع القادم → رادار SVG → رسالة
+//      تحفيزية → المراجعات السابقة
+//
+// مبدأ UX: مساءلة خفيفة مركّزة بدل استبيان طويل — الأرقام تُقترح
+// آلياً وتبقى قابلة للتعديل اليدوي، والاحتفال لحظة الحفظ.
+// ============================================================
+
 import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 
 
@@ -64,10 +85,12 @@ interface WeeklyReview {
   }
 }
 
+// ── التخزين: مفتاح user-storage والقالب الفارغ للمراجعة الجديدة ──────────────────────────────────
 const STORAGE_KEY = 'rise-weekly-review'
 
 const emptyReview = (): WeeklyReview => ({
   id: crypto.randomUUID(),
+  // weekStart يُخزَّن ليُطابَق لاحقاً بنافذة الأسبوع المتحركة (آخر 7 أيام)
   weekStart: getToday(),
   review: { wentWell: '', improved: '', lessons: '' },
   numbers: { tasksCompleted: 0, focusHours: 0, pagesRead: 0, habitsRate: 50 },
@@ -95,6 +118,7 @@ export default function WeeklyReview() {
       const stored = getUserStorage(STORAGE_KEY)
       if (stored) {
         const parsed: WeeklyReview[] = JSON.parse(stored)
+        // نافذة أسبوع متحركة: أقرب weekStart خلال آخر 7 أيام — لا تقويم ISO صارم
         const thisWeek = parsed.find((r) => {
           const diff = Math.abs(new Date(r.weekStart).getTime() - new Date().getTime())
           return diff < 7 * 24 * 60 * 60 * 1000
@@ -119,6 +143,7 @@ export default function WeeklyReview() {
   const weekRange = (() => {
     const now = new Date()
     const dayOfWeek = now.getDay()
+    // الأسبوع يبدأ الأحد (getDay() = 0): نطرح رقم اليوم للوصول إلى بداية الأسبوع
     const start = new Date(now)
     start.setDate(now.getDate() - dayOfWeek)
     const end = new Date(start)
@@ -129,7 +154,9 @@ export default function WeeklyReview() {
     }
   })()
 
+  // ── الحفظ والدوال المحدِّثة لأقسام النموذج ──────────────────────────────────
   const save = () => {
+    // upsert: تحديث المراجعة الحالية في مكانها، أو إضافتها أعلى القائمة
     const updated = allReviews.some((r) => r.id === review.id)
       ? allReviews.map((r) => (r.id === review.id ? review : r))
       : [review, ...allReviews]
@@ -183,6 +210,7 @@ export default function WeeklyReview() {
     })
   }
 
+  // ── الملء التلقائي: مهام وساعات تركيز آخر 7 أيام ──────────────────────────────────
   // Auto-Fill Data
   const handleAutoFill = async () => {
     setIsAutoFilling(true)
@@ -228,6 +256,7 @@ export default function WeeklyReview() {
     }
   }
 
+  // ── القيم المشتقة للعرض: التقدم والرسالة التحفيزية ──────────────────────────────────
   const achievedCount = review.goals.items.filter((g) => g.achieved).length
   const overallProgress = Math.round(
     (achievedCount / review.goals.items.length) * 100
@@ -245,6 +274,7 @@ export default function WeeklyReview() {
     return 'استثنائي'
   }
 
+  // ── الرسم: احتفال → درجة → أقسام → رادار → تحفيز → السابقة ──────────────────────────────────
   return (
     <div className="space-y-6 max-w-3xl mx-auto relative">
       {/* Confetti Animation */}
@@ -493,6 +523,7 @@ export default function WeeklyReview() {
                         transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 + i * 0.05 }}
                       />
                     </div>
+                    {/* حقل تعديل يدوي: سلسلة ternary تربط كل بطاقة بحقلها الصحيح في numbers */}
                     {/* Keep input for editing */}
                     <Input
                       type="number"
@@ -633,6 +664,7 @@ export default function WeeklyReview() {
                     }).join(' ')
                     return <polygon key={i} points={points} fill="none" stroke="#94A3B8" strokeWidth="0.5" opacity="0.3" />
                   })}
+                  {/* مضلع البيانات: القيم الخمس تُطبَّع (val/max) ثم تُحوَّل إلى إحداثيات قطبية */}
                   {/* Data polygon */}
                   <motion.polygon
                     points={[

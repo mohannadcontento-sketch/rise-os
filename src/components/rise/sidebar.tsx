@@ -1,5 +1,27 @@
 'use client'
 
+// ============================================================
+// sidebar.tsx — الشريط الجانبي (التنقل الرئيسي)
+//
+// قلب التنقل في أوج: 23 وحدة داخل 5 مجموعات أكورديون (يومك/التنفيذ/
+// النمو/المجتمع/المال والمراجعة) + لوحة تحكم مثبّتة + إعدادات، وبطاقة
+// مستخدم (أفاتار + مستوى + XP) في الأسفل تفتح الإعدادات.
+//
+// البنية الداخلية:
+//   1) بنية التنقل: navGroups + ADMIN_GROUP (للأدمن فقط) ومساعد mi
+//      الذي يسحب الأيقونة والتسمية من مصدر واحد مشترك
+//   2) مخزن فتح/طي المجموعات: external store يدوي (navOpenCache) فوق
+//      localStorage — يُقرأ عبر useSyncExternalStore ويُكتب أمرياً
+//      بلا setState داخل effect، ويبقى محفوظاً بين الجلسات
+//   3) NavButton: صف تنقّل واحد مشترك — أيقونة ملونة عند التفعيل
+//   4) Sidebar: الحالة من store + effects (أفاتار/Escape/ملاحظات
+//      سريعة/جلب المستخدم) + الرسم: رأس → تنقل → ملاحظات → بطاقة
+//
+// مبادئ UX: هدوء بصري وتجميع منطقي — مجموعة الوحدة النشطة تُفتح
+// تلقائياً (حتى بعد قفزة ⌘K)، Escape يُغلق الشريط على الجوال،
+// والأفاتار مفتاح ثيم (تدرّج + SVG) وليس صورة.
+// ============================================================
+
 import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 
 
@@ -37,6 +59,7 @@ function mi(id: string): { glyph: RiseGlyph; hue: RiseHue; label: string } {
   }
 }
 
+// ── خريطة التنقل: 5 مجموعات + مجموعة الأدمن الشرطية ──────────────────────────────────
 /**
  * SIDEBAR v3 — regrouped, collapsible, and visually calm.
  * 23 modules live in 5 tidy accordion cards + pinned dashboard + settings.
@@ -125,9 +148,11 @@ let navOpenCache: string[] | null = null
 const navOpenListeners = new Set<() => void>()
 
 function navOpenRead(): string[] {
+  // قراءة كسولة: أول استدعاء يحمّل من localStorage ويملأ الكاش، والبقية من الذاكرة
   if (navOpenCache === null) {
     let next: string[] = ['today']
     try {
+      // تفضيل UI عام: يُستخدم localStorage مباشرة (لا getUserStorage) لأنه ليس بيانات مستخدم
       const raw = localStorage.getItem(NAV_OPEN_KEY)
       if (raw) next = JSON.parse(raw)
     } catch { /* keep default */ }
@@ -137,6 +162,7 @@ function navOpenRead(): string[] {
 }
 
 function navOpenWrite(next: string[]) {
+  // الكتابة أمرية: تحديث الكاش ثم إخطار كل المشتركين (نمط external store)
   navOpenCache = next
   try { localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(next)) } catch { /* ignore */ }
   navOpenListeners.forEach((l) => l())
@@ -149,6 +175,7 @@ function navOpenSubscribe(l: () => void) {
 
 const DEFAULT_OPEN_GROUPS = ['today']
 
+// ── أداة عرض: تحويل الأرقام إلى العربية الشرقية (٠-٩) ──────────────────────────────────
 function toArabicNum(n: number | null | undefined | string | object): string {
   if (n == null || n === undefined || typeof n === 'object') return '٠'
   const num = typeof n === 'string' ? parseFloat(n) : n
@@ -194,6 +221,7 @@ function NavButton({
   )
 }
 
+// ── المكوّن الرئيسي: الحالة والـ effects والرسم ──────────────────────────────────
 export function Sidebar() {
   const { activeModule, setActiveModule, sidebarOpen, setSidebarOpen, user, setUser, auth } = useRiseStore()
   const [notesExpanded, setNotesExpanded] = useState(false)
@@ -211,6 +239,7 @@ export function Sidebar() {
   const openGroups = useSyncExternalStore(
     navOpenSubscribe,
     () => navOpenRead(),
+    // getServerSnapshot يعيد ['today'] ثابتاً — يمنع اختلاف الترطيب بين الخادم والعميل
     () => DEFAULT_OPEN_GROUPS
   )
   const toggleGroup = useCallback((id: string) => {
@@ -232,6 +261,7 @@ export function Sidebar() {
   }, [activeModule])
 
   // Listen for avatar changes
+  // الإعدادات تبثّ rise:avatar-changed بعد الحفظ — الشريط يعيد قراءة المفتاح بلا إعادة تحميل
   useEffect(() => {
     const handler = () => {
       try {
@@ -252,6 +282,7 @@ export function Sidebar() {
   }, [setSidebarOpen])
 
   // Auto-save quick notes
+  // حفظ مؤجّل (debounce): كل ضغطة تُلغي المؤقّت السابق وتعيد الجدولة
   useEffect(() => {
     const timer = setTimeout(() => {
       setUserStorage('rise-quick-notes', quickNotes)
@@ -307,6 +338,7 @@ export function Sidebar() {
     setActiveModule(id)
   }, [setActiveModule])
 
+  // ── الرسم: غطاء الجوال → الشريط (رأس/تنقل/ملاحظات/بطاقة المستخدم) ──────────────────────────────────
   return (
     <>
       {/* Mobile overlay */}
@@ -318,6 +350,7 @@ export function Sidebar() {
       )}
 
       {/* Sidebar */}
+      {/* RTL: الشريط مثبّت من اليمين — الإخفاء بإزاحة translateX(100%)، وعلى الشاشات الكبيرة يصبح ثابتاً في التخطيط */}
       <aside
         className={cn(
           'fixed top-0 right-0 z-[60] h-full w-[17.5rem] sm:w-72 bg-sidebar border-l border-sidebar-border',
@@ -518,6 +551,8 @@ export function Sidebar() {
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-l from-transparent via-sidebar-border to-transparent" />
           <div className="glass rounded-xl p-2.5 border border-white/10 dark:border-white/5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-colors group-hover/user:bg-white/[0.04]">
             <div className="flex items-center gap-2.5">
+              {/* الأفاتار مفتاح ثيم من AVATARS (24 ثيماً): يُعرض كتدرّج + SVG —
+                  القيمة المخزّنة ليست رابط صورة فلا تُمرَّر لـ img src */}
               {selectedAvatar && AVATARS.find(a => a.id === selectedAvatar) ? (
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center shadow-md shadow-gold/20 overflow-hidden shrink-0"

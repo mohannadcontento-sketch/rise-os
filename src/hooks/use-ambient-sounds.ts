@@ -3,6 +3,20 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { getUserStorage } from '@/lib/user-storage'
 
+// ============================================================
+// use-ambient-sounds.ts — أصوات الخلفية لجلسات العمل العميق
+//
+// يشغّل أصواتاً محيطية متكررة (loop) عبر HTMLAudioElement مع تلاشي
+// تدريجي fadeIn/fadeOut، ويقرأ مستوى الصوت من تخزين المستخدم المعزول.
+//
+// المسؤوليات:
+//   1) startSound/stopSound: دورة حياة صوت واحد بتلاشي حجم تدريجي.
+//   2) مزامنة مستوى الصوت عند تغيّر الإعدادات أثناء التشغيل.
+//   3) تنظيف كل المؤقتات والعناصر عند unmount.
+// ============================================================
+
+// ── القسم: كتالوج الأصوات الثمانية (label → ملف mp3) ──────────────────────────────────
+
 const AMBIENT_SOUNDS = [
   { label: 'ضوء القمر', file: '/sounds/moonlight-sonata.mp3' },
   { label: 'مطر', file: '/sounds/rain.mp3' },
@@ -34,6 +48,8 @@ interface ActiveSound {
   fadeOutInterval: ReturnType<typeof setInterval> | null
 }
 
+// ── القسم: الـ hook — تشغيل/إيقاف مع التلاشي ──────────────────────────────────
+
 export function useAmbientSounds() {
   const audioMapRef = useRef<Map<string, ActiveSound>>(new Map())
 
@@ -44,6 +60,7 @@ export function useAmbientSounds() {
       return
     }
 
+    // صوت يعمل بنفس الاسم؟ أوقفه وابدأ نظيفاً — إعادة التشغيل لا تتراكم عناصر
     const existing = audioMapRef.current.get(label)
     if (existing) {
       if (existing.fadeInInterval) clearInterval(existing.fadeInInterval)
@@ -58,6 +75,7 @@ export function useAmbientSounds() {
       audio.preload = 'auto'
       audio.volume = 0
       const settings = readSoundSettings()
+      // المحيطية أخفض من إعداد المستخدم (0.55) حتى لا تطغى على صوت الجلسة
       const targetVolume = Math.min(1, Math.max(0, settings.soundVolume * 0.55))
       const playPromise = audio.play()
       if (playPromise && typeof playPromise.catch === 'function') {
@@ -67,6 +85,7 @@ export function useAmbientSounds() {
         })
       }
 
+      // تلاشي دخول: 20 خطوة × 50ms = ثانية واحدة صعوداً إلى المستوى الهدف
       const fadeSteps = 20
       const fadeStepMs = 50
       const stepSize = targetVolume / fadeSteps
@@ -94,6 +113,7 @@ export function useAmbientSounds() {
     if (entry.fadeInInterval) { clearInterval(entry.fadeInInterval); entry.fadeInInterval = null }
     if (entry.fadeOutInterval) { clearInterval(entry.fadeOutInterval); entry.fadeOutInterval = null }
 
+    // تلاشي خروج: 16 خطوة × 50ms ثم تحرير المورد كاملاً (pause + src='' + load)
     const startVolume = entry.audio.volume
     const fadeSteps = 16
     const fadeStepMs = 50
@@ -111,6 +131,8 @@ export function useAmbientSounds() {
     }, fadeStepMs)
   }, [])
 
+  // ── القسم: مزامنة مستوى الصوت والتنظيف ──────────────────────────────────
+
   useEffect(() => {
     const handler = () => {
       const { soundVolume } = readSoundSettings()
@@ -124,6 +146,7 @@ export function useAmbientSounds() {
     }
     window.addEventListener('storage', handler)
     window.addEventListener('rise-settings-changed', handler)
+    // شبكة أمان دورية: تغيّر الإعدادات قد لا يبث حدثاً في كل البيئات
     const interval = setInterval(handler, 2000)
     return () => {
       window.removeEventListener('storage', handler)

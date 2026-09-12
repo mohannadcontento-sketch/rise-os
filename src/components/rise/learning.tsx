@@ -1,5 +1,23 @@
 'use client'
 
+// ============================================================
+// learning.tsx — وحدة «التعلم»
+//
+// مركز تتبع المسار التعليمي: أهداف التعلّم، الدورات (تقدم + شهادات)،
+// المهارات بمستويات 1-5 (رادار + شجرة + بطاقات)، وسجل تعلّم يومي بالدقائق.
+//
+// البنية الداخلية:
+//   1) الأنواع والثوابت: نماذج الأقسام الأربعة + لوحتا ألوان المهارات (Tailwind للبطاقات، hex للرسوم)
+//   2) مكونات مساعدة: EmptyState + ProgressRing (حلقة SVG بدوران معكوس للـ RTL)
+//   3) الحالة والتحميل: جلب واحد من /api/rise/knowledge?type=learning وتوزيع العناصر حسب type
+//   4) الطفرات: إضافة/تحديث/حذف لكل قسم بتفاؤل محلي (temp-) ثم مصالحة بمعرّف السيرفر
+//   5) المشتقات: إحصاءات الملخص + سلسلة أيام التعلّم + بيانات رادار المهارات
+//   6) العرض: ترويسة + بطاقات إحصاءات + تابات + أربعة أقسام داخل AnimatePresence
+//
+// كل الكيانات صفوف في جدول knowledge_items الموحّد؛ التفاصيل (progress/level/
+// platform/minutes) تُسلسَل JSON في tags — أي تحديث يعيد كتابة الحقل كاملاً.
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch, apiPost, apiPut, apiDelete } from '@/lib/api-fetch'
@@ -204,6 +222,8 @@ export default function Learning() {
   const [editingSkill, setEditingSkill] = useState<string | null>(null)
   const [editSkillName, setEditSkillName] = useState('')
 
+  // ── التحميل: جلب بيانات التعلّم من السيرفر مرة واحدة ──────────────────────────────
+
   // FIX: Load from server API ONCE on mount (no more infinite refresh loops).
   // Each action (add/update/delete) makes a targeted API call and updates local state.
   useEffect(() => {
@@ -214,6 +234,7 @@ export default function Learning() {
         if (res.ok) {
           const result = await res.json()
           const items = result.items || []
+          // الجدول الموحّد knowledge_items: نفصل العناصر حسب type ثم نفكّ tags JSON لكل نموذج
           const goals = items
             .filter((i: any) => i.type === 'learning-goal')
             .map((i: any) => {
@@ -232,6 +253,7 @@ export default function Learning() {
             .map((i: any) => {
               const meta = safeParseTags(i.tags)
               const progress = typeof meta.progress === 'number' ? meta.progress : 0
+              // إن غاب status من tags نستنتجه من قيمة progress نفسها
               return {
                 id: i.id,
                 name: i.title,
@@ -277,6 +299,8 @@ export default function Learning() {
     loadFromServer()
     return () => { cancelled = true }
   }, [])
+
+  // ── الطفرات: أهداف التعلّم (تفاؤل + تراجع) ──────────────────────────────
 
   // Each action below makes ONE targeted API call (create / update / delete)
   // and updates local state optimistically with the server-returned id.
@@ -349,6 +373,8 @@ export default function Learning() {
     }
   }
 
+  // ── الطفرات: الدورات ──────────────────────────────
+
   const addCourse = async () => {
     if (!newCourseName.trim()) return
     const name = newCourseName.trim()
@@ -420,6 +446,7 @@ export default function Learning() {
   }
 
   const toggleCertificate = (id: string) => {
+    // tags يُعاد كتابته كاملاً (platform/progress/status مع الشهادة) كي لا تضيع بقية الحقول
     setData((prev) => {
       const next = prev.courses.map((c) =>
         c.id === id ? { ...c, certificate: !c.certificate } : c
@@ -448,10 +475,13 @@ export default function Learning() {
     }
   }
 
+  // ── الطفرات: المهارات ──────────────────────────────
+
   const addSkill = async () => {
     if (!newSkillName.trim()) return
     const name = newSkillName.trim()
     const level = newSkillLevel
+    // colorIdx يُخزَّن مع المهارة حتى يبقى لونها ثابتاً بعد إعادة التحميل
     const colorIdx = data.skills.length
     const color = skillGradientColors[colorIdx % skillGradientColors.length]
     const tempId = `temp-${Date.now()}`
@@ -527,6 +557,8 @@ export default function Learning() {
     }
   }
 
+  // ── الطفرات: سجل التعلّم ──────────────────────────────
+
   const addLog = async () => {
     if (!newLogContent.trim()) return
     const content = newLogContent.trim()
@@ -595,6 +627,8 @@ export default function Learning() {
     }
   }
 
+  // ── المشتقات: إحصاءات + سلسلة أيام التعلّم + بيانات الرادار ──────────────────────────────
+
   const totalMinutes = data.logs.reduce((sum, l) => sum + l.minutesSpent, 0)
   const totalHours = Math.round(totalMinutes / 60)
   const activeGoals = data.goals.filter((g) => g.status === 'active').length
@@ -603,6 +637,7 @@ export default function Learning() {
   // Learning streak
   const learningStreak = (() => {
     if (data.logs.length === 0) return 0
+    // تواريخ فريدة تنازلياً ثم عدّ الأيام المتتالية التي لا يتجاوز فارقها يوماً واحداً
     const dates = [...new Set(data.logs.map(l => l.date))].sort((a, b) => b.localeCompare(a))
     let streak = 1
     for (let i = 1; i < dates.length; i++) {
@@ -620,6 +655,8 @@ export default function Learning() {
     fullMark: 5,
     fill: skillDotColors[i % skillDotColors.length],
   }))
+
+  // ── العرض: ترويسة + إحصاءات + أقسام تُبدَّل بالتابات ──────────────────────────────
 
   return (
     <div dir="rtl" className="space-y-6">
@@ -1005,6 +1042,7 @@ export default function Learning() {
                             {/* Connecting lines */}
                             {data.skills.map((skill, i) => {
                               if (i === 0) return null
+                              // توزيع العقد بمسافات متساوية على مسار أفقي بعرض 480px
                               const prevX = 60 + (i - 1) * (480 / Math.max(data.skills.length - 1, 1))
                               const currX = 60 + i * (480 / Math.max(data.skills.length - 1, 1))
                               return (
@@ -1022,6 +1060,7 @@ export default function Learning() {
                             {data.skills.map((skill, i) => {
                               const x = 60 + i * (480 / Math.max(data.skills.length - 1, 1))
                               const nodeColor = skillDotColors[i % skillDotColors.length]
+                              // نصف قطر العقدة يكبر مع مستوى المهارة (مع حماية من قيم غير رقمية)
                               const radius = Math.max(1, 12 + (skill.level || 0) * 3)
                               return (
                                 <motion.g
