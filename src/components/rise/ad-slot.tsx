@@ -74,11 +74,31 @@ let scriptPromise: Promise<void> | null = null
 /** تحميل adsbygoogle.js مرة واحدة عند أول slot مرئي فعلي */
 function loadAdSenseScript(clientId: string): Promise<void> {
   if (scriptPromise) return scriptPromise
+  const src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${clientId}`
   scriptPromise = new Promise<void>((resolve, reject) => {
+    // layout.tsx يضع السكربت في <head> أصلاً (وسم تحقق Google الذي
+    // يقرأه الزاحف من الـHTML الخام) — إن وجدناه نعتمد عليه ولا
+    // ننشئ نسخة ثانية: التحميل المزدوج يسبب تحذير «Tag already
+    // loaded» من AdSense ويهدر نطاق الطلبات.
+    const existing = Array.from(
+      document.querySelectorAll('script[src]'),
+    ).find((el) => (el as HTMLScriptElement).src === src) as
+      | HTMLScriptElement
+      | undefined
+    if (existing) {
+      // اكتمل تنفيذه؟ (التنفيذ يسبق حدث load — ففحص العامود هنا
+      // يغطي سباق «الحدث طار قبل تركيب المستمع»)
+      if (window.adsbygoogle) return resolve()
+      existing.addEventListener('load', () => resolve())
+      existing.addEventListener('error', () =>
+        reject(new Error('adsbygoogle.js failed')),
+      )
+      return
+    }
     const s = document.createElement('script')
     s.async = true
     s.crossOrigin = 'anonymous'
-    s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${clientId}`
+    s.src = src
     s.onload = () => resolve()
     s.onerror = () => reject(new Error('adsbygoogle.js failed'))
     document.head.appendChild(s)

@@ -54,7 +54,7 @@ export interface AdsConfig {
 // ── القسم: الثوابت والافتراضات ─────────────────────
 
 /** مُعرّف ناشر AdSense — سلمّه المالك 13/9/2026 (عام بحكم التصميم) */
-const DEFAULT_ADSENSE_CLIENT_ID = 'ca-pub-7322285983808380'
+export const DEFAULT_ADSENSE_CLIENT_ID = 'ca-pub-7322285983808380'
 
 /** أماكن الإعلانات الثابتة والمحدودة (مبدأ «ثابتة ومحدودة») */
 export const AD_PLACEMENTS: Record<AdPlacementId, { labelAr: string; moduleHint: string }> = {

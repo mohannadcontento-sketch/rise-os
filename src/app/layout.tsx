@@ -9,6 +9,7 @@ import { QueryProvider } from "@/components/query-provider";
 import { PerformanceMonitor } from "@/components/performance-monitor";
 import { ErrorCapture } from "@/components/error-capture";
 import { AuthProvider } from "@/components/auth-provider";
+import { DEFAULT_ADSENSE_CLIENT_ID } from "@/lib/ads/config";
 
 // ============================================================
 // app/layout.tsx — الجذر العام للتطبيق كله
@@ -89,6 +90,24 @@ export default async function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="أوج" />
         <meta name="description" content="أوج — نظام حياتك الشخصي المتكامل، يعمل بدون إنترنت" />
+        {/* المرحلة 09 (Ads): وسْم التحقق الرسمي لملكية الموقع في لوحة
+            AdSense — google-adsense-account هو الأسلوب الموثّق من Google
+            ويُقرأ من الـHTML الخام (لا يتأثر بـCSP إطلاقًا). */}
+        <meta name="google-adsense-account" content={DEFAULT_ADSENSE_CLIENT_ID} />
+        {/* المرحلة 09 (Ads): سكربت AdSense في <head> كما تطلبه لوحة Google
+            حرفيًا (snippet الصق الكود بين head و/head). الزاحف يقرأ الـHTML
+            الخام فقط — التحميل الديناميكي من ad-slot وحده لا يُحتسب
+            تحققًا. هنا: async (لا يحجب الرسم) + nonce يمرّ عبر
+            strict-dynamic بدون تخفيف؛ ad-slot يكتشف وجوده فلا يحمّله
+            مرتين. ملاحظة للمالك: لا تفعّل «الإعلانات التلقائية» من لوحة
+            AdSense — الوحدات اليدوية (slots) تحترم بوابة الخطة الخادمية
+            (Free فقط)، والتلقائية لا تفرّق بين Free وPlus/Max. */}
+        <script
+          async
+          nonce={nonce}
+          crossOrigin="anonymous"
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${DEFAULT_ADSENSE_CLIENT_ID}`}
+        />
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider

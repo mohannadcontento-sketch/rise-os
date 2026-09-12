@@ -1,0 +1,5 @@
+# ads.txt — IAB Authorized Digital Sellers (المرحلة 09)
+# يمنع بيع مخزوننا عبر بائعين غير مصرّح لهم ويحل تحذير «ads.txt غير موجود»
+# في لوحة AdSense. مُعرّف الناشر: ca-pub-7322285983808380
+# المرجع: https://support.google.com/adsense/answer/12171612
+google.com, pub-7322285983808380, DIRECT, f08c47fec0942fa0
