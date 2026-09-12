@@ -44,7 +44,10 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  // scripts/ = أدوات تطوير/تحقق محلية (browser tests, repro, smoke)
+  // لا تُشحن للإنتاج — تُستثنى من lint الإنتاج لأنها تستخدم
+  // require() والأنماط الديناميكية عمداً.
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "scripts/**"]
 }];
 
 export default eslintConfig;

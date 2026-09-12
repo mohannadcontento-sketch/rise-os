@@ -162,11 +162,21 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Goals ---
+    // المواعيد نسبية من اليوم (كانت مثبتة على 2025-12-31 فتبدو
+    // متأخرة دائماً): ربع سنوي = +90 يوماً، سنوي = +365 يوماً —
+    // البيانات التجريبية تبقى واقعية مهما مَرّ الوقت.
+    const daysFromToday = (n: number): string => {
+      const d = new Date()
+      d.setDate(d.getDate() + n)
+      return d.toISOString().split('T')[0]
+    }
+    const quarterDeadline = daysFromToday(90)
+    const annualDeadline = daysFromToday(365)
     const goalData = [
-      { title: 'إكمال كتاب الإنتاجية', vision: 'نشر كتاب يغيّر حياة الناس', why: 'للمساهمة في نشر المعرفة', type: 'quarterly', progress: 35, deadline: '2025-12-31' },
-      { title: 'الوصول لمستوى 10', vision: 'بناء نظام حياة متكامل', why: 'للتحول لشخص أفضل', type: 'annual', progress: 70, deadline: '2025-12-31' },
-      { title: 'قراءة 24 كتاب', vision: 'قراءة كتابين شهرياً', why: 'للتطور المستمر', type: 'annual', progress: 45, deadline: '2025-12-31' },
-      { title: 'تسجيل 500 ساعة عمل عميق', vision: 'إتقان التركيز العميق', why: 'لزيادة الإنتاجية', type: 'annual', progress: 65, deadline: '2025-12-31' },
+      { title: 'إكمال كتاب الإنتاجية', vision: 'نشر كتاب يغيّر حياة الناس', why: 'للمساهمة في نشر المعرفة', type: 'quarterly', progress: 35, deadline: quarterDeadline },
+      { title: 'الوصول لمستوى 10', vision: 'بناء نظام حياة متكامل', why: 'للتحول لشخص أفضل', type: 'annual', progress: 70, deadline: annualDeadline },
+      { title: 'قراءة 24 كتاب', vision: 'قراءة كتابين شهرياً', why: 'للتطور المستمر', type: 'annual', progress: 45, deadline: annualDeadline },
+      { title: 'تسجيل 500 ساعة عمل عميق', vision: 'إتقان التركيز العميق', why: 'لزيادة الإنتاجية', type: 'annual', progress: 65, deadline: annualDeadline },
     ]
 
     const createdGoals: any[] = []

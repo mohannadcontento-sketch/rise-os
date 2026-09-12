@@ -18,8 +18,8 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 //        البيانات (المرحلة 04)؛ عند بلوغه يرد 402 LIMIT_REACHED
 //        مع الاستخدام ليعرض العميل ترقية الخطة.
 // إشعارات: notifyUser بالنجاح/الفشل (dedup + صلاحية 30 يوماً)
-//        وفشلها لا يفسد التنزيل؛ وعند أي استثناء يُرد ملف
-//        fallback صالح (بلا 500) حفاظاً على تجربة التنزيل.
+//        وفشلها لا يفسد التنزيل؛ وعند أي استثناء يُرد 500
+//        صريحاً (الفشل الصادق) — لا ملف وهمي يوهم بنجاح التنزيل.
 // ============================================================
 
 export const dynamic = 'force-dynamic'
@@ -238,7 +238,8 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
     console.error('Export error:', error)
 
     // المرحلة 05: إشعار فشل العملية (high) — يوثّق الفشل الحقيقي
-    // للمستخدم حتى لو رجعنا ملف fallback لعدم كسر التنزيل.
+    // للمستخدم في مركز الإشعارات، بالتوازي مع رد 500 الذي يعرض
+    // toast الخطأ في الواجهة فوراً.
     try {
       if (userId) {
         const admin = await getSupabaseAdmin()
@@ -253,39 +254,14 @@ if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخو
       }
     } catch { /* silent */ }
 
-    // Return a minimal valid export file as fallback
-    const fallbackData = {
-      metadata: {
-        application: 'أوج',
-        version: '1.0.0',
-        exportDate: new Date().toISOString(),
-        description: 'نسخة احتياطية شاملة من بيانات أوج',
-        note: 'وضع العرض التوضيحي - لا توجد بيانات حقيقية',
-      },
-      المستخدم: { الاسم: 'مستخدم أوج', المستوى: 1, الخبرة: 0, السلسلة: 0, أطول_سلسلة: 0, إجمالي_تركيز_دقائق: 0, إجمالي_مهام_مكتملة: 0 },
-      المهام: [],
-      المشاريع: [],
-      الأهداف: [],
-      العادات: [],
-      سجلات_العادات: [],
-      اليوميات: [],
-      جلسات_التركيز: [],
-      السجلات_الصحية: [],
-      السجلات_المالية: [],
-      الكتب: [],
-      عناصر_المعرفة: [],
-      سجلات_الصباح: [],
-      الدرجات_اليومية: [],
-      الإنجازات: [],
-    }
-    const dateStr = new Date().toISOString().split('T')[0]
-    const jsonStr = JSON.stringify(fallbackData, null, 2)
-    return new NextResponse(jsonStr, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="awj-export-${dateStr}.json"`,
-      },
-    })
+    // ── فشل صادق بدل ملف وهمي ──
+    // سابقاً: كان يُرد 200 مع ملف fallback فارغ فيظن المستخدم أن
+    // التنزيل نجح ويكتشف لاحقاً أن ملفه بلا بيانات. الآن: 500 واضح
+    // والعميل (settings.tsx handleExportData) يلتقط !res.ok ويرمي
+    // خطأ فيظهر toast الفشل الصحيح.
+    return NextResponse.json(
+      { error: 'فشل تصدير البيانات — حاول مرة أخرى بعد قليل' },
+      { status: 500 }
+    )
   }
 }

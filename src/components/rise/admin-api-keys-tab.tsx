@@ -150,7 +150,6 @@ export function ApiKeysTab() {
                   <TableHead className="text-start">المستخدم</TableHead>
                   <TableHead className="text-start hidden sm:table-cell">البريد</TableHead>
                   <TableHead className="text-start hidden md:table-cell">آخر استخدام</TableHead>
-                  <TableHead className="text-start hidden lg:table-cell">الاستخدام</TableHead>
                   <TableHead className="text-center w-[80px]">إجراءات</TableHead>
                 </TableRow>
               </TableHeader>
@@ -183,11 +182,6 @@ export function ApiKeysTab() {
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                       {timeAgo(key.lastUsed)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <span className="pill pill-muted text-[11px]" dir="ltr">
-                        <span className="num">{toArabicNum(key.usageCount)}</span>
-                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       <Button

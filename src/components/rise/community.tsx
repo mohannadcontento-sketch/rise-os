@@ -92,7 +92,7 @@ function Avatar({ name, src, size = 36 }: { name: string; src?: string | null; s
   const initials = (name || '؟').trim().slice(0, 1)
   if (src && isImageUrl(src)) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
+       
       <img src={src} alt={name} width={size} height={size} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />
     )
   }
@@ -572,7 +572,7 @@ export default function CommunityModule() {
                       {detail.media.map((m, i) => (
                         <div key={m.key || i} className="rounded-xl overflow-hidden border bg-muted">
                           {m.url ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
+                             
                             <img src={m.url} alt={`صورة ${i + 1}`} className="w-full max-h-96 object-cover" loading="lazy" />
                           ) : (
                             <div className="h-24 grid place-items-center text-muted-foreground/50 gap-1">
@@ -825,7 +825,7 @@ export default function CommunityModule() {
             <div className="flex gap-2 flex-wrap">
               {attachments.map((a) => (
                 <div key={a.localUrl} className="relative w-20 h-20 rounded-xl overflow-hidden border bg-muted shrink-0 group/att">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img src={a.localUrl} alt="مرفق" className="w-full h-full object-cover" />
                   {a.uploading && (
                     <div className="absolute inset-0 grid place-items-center bg-background/60">
@@ -891,7 +891,7 @@ export default function CommunityModule() {
                   <div className="flex items-center gap-2 mt-2">
                     <div className="w-24 h-16 rounded-lg overflow-hidden border bg-muted shrink-0">
                       {p.media[0]?.url ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
+                         
                         <img src={p.media[0].url} alt="صورة المنشور" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full grid place-items-center text-muted-foreground/50">

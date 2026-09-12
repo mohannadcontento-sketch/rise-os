@@ -81,7 +81,6 @@ export async function GET(request: NextRequest) {
         keyPreview: (k.key_hash || '').slice(0, 8) || '—',
         createdAt: k.created_at,
         lastUsedAt: k.last_used_at || null,
-        usageCount: 0,
       }
     })
 

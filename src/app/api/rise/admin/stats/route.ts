@@ -1,7 +1,6 @@
 import { requireAdmin } from "@/lib/audit";
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
-import { setCurrentAuthToken } from '@/lib/data'
 
 // ============================================================
 // /api/rise/admin/stats — الإدارة (إحصائيات اللوحة)
@@ -14,8 +13,10 @@ import { setCurrentAuthToken } from '@/lib/data'
 // المسار محمي: requireAdmin — يعدّ بيانات جميع المستخدمين.
 // الطرق: GET — JSON الإحصائيات؛ عند غياب Supabase أو أي فشل
 //        يرد 200 بأصفار حتى لا تنهار اللوحة (بلا 500).
-// ملاحظات: يربط التوكن يدوياً (setCurrentAuthToken) لطبقة
-// البيانات، والعدّ عبر count+head (بلا جلب صفوف كاملة).
+// ملاحظات: كل الاستعلامات عبر عميل الأدمن (service_role) مباشرة
+// فلا حاجة لربط توكن المستخدم (setCurrentAuthToken)؛ العدّ عبر
+// count+head (بلا جلب صفوف كاملة)، وإجمالي التخزين/الذكاء من
+// SUM عمودي user_storage.storage_used و user_ai_usage.total_used.
 // ============================================================
 
 export const dynamic = 'force-dynamic'
@@ -27,9 +28,6 @@ export async function GET(request: NextRequest) {
     if (!adminId) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
-
-    // Set auth token for data layer
-    setCurrentAuthToken(request.headers.get('Authorization')?.replace('Bearer ', ''))
 
     // If no Supabase, return empty stats
     if (!isSupabaseConfigured()) {
@@ -153,6 +151,27 @@ export async function GET(request: NextRequest) {
       countTable('milestones'),
     ])
 
+    // ── إجماليات حقيقية (كانت مثبتة على 0 سابقاً) ──
+    // التخزين: مجموع user_storage.storage_used (بايت) لكل المستخدمين.
+    // الذكاء: مجموع user_ai_usage.total_used (استدعاءات تراكمية).
+    // فشل أي منهما = 0 (بلا 500) — نفس فلسفة countTable أعلاه.
+    let totalStorageUsed = 0
+    let totalAiUsed = 0
+    try {
+      const { data: storageRows } = await sb
+        .from('user_storage')
+        .select('storage_used')
+      totalStorageUsed = (storageRows ?? []).reduce(
+        (sum: number, r: any) => sum + (r.storage_used ?? 0), 0)
+    } catch { /* ignore */ }
+    try {
+      const { data: aiRows } = await sb
+        .from('user_ai_usage')
+        .select('total_used')
+      totalAiUsed = (aiRows ?? []).reduce(
+        (sum: number, r: any) => sum + (r.total_used ?? 0), 0)
+    } catch { /* ignore */ }
+
     // Recent activity
     const recentActivity: { time: string; action: string; user: string }[] = []
 
@@ -228,8 +247,8 @@ export async function GET(request: NextRequest) {
       totalHabits,
       totalJournals,
       totalGoals,
-      totalStorageUsed: 0,
-      totalAiUsed: 0,
+      totalStorageUsed,
+      totalAiUsed,
       userGrowth,
       tableCounts,
       recentActivity: recentActivity.slice(0, 15),

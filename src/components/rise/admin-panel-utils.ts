@@ -57,7 +57,6 @@ export interface ApiKeyInfo {
   keyPreview: string
   createdAt: string
   lastUsed: string | null
-  usageCount: number
 }
 
 export function toArabicNum(n: number | null | undefined): string {
