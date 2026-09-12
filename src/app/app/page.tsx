@@ -49,6 +49,8 @@ import { apiPost, apiGet, clearAllCache } from '@/lib/api-fetch'
 import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 import { ThemeToggle } from '@/components/rise/neo'
 import { GlassNav } from '@/components/rise/glass-nav'
+// المرحلة 09: الـAdSlot الموحّد — كسول مثل باقي الوحدات (حزمة منفصلة)
+const AdSlot = lazy(() => import('@/components/rise/ad-slot').then(m => ({ default: m.AdSlot })))
 
 // Keyboard shortcuts hook — lightweight, can be eagerly imported
 import { useKeyboardShortcuts } from '@/components/rise/keyboard-shortcuts'
@@ -106,6 +108,16 @@ const Community = lazy(() => import('@/components/rise/community').then(m => ({ 
 // ── القسم: خريطة الوحدات moduleComponents ──────────────────────────────────
 // خريطة MODULES: كل ModuleId يُحل إلى مكونه الكسول — تحميل كل وحدة في chunk
 // منفصل عند أول فتح لها فقط (مع Suspense أدناه) هو مفتاح سرعة أول زيارة لـ /app.
+
+// ── القسم: مواضع الإعلانات (المرحلة 09 — ثابتة ومحدودة) ─────────────────
+// مبدأ الخطة: لا إعلان داخل تجربة حساسة أو شاشة مزدحمة — المواضع
+// الثلاثة المعتمدة فقط (home/community/tasks)، وكل ما عداها بلا إعلان.
+// القرار النهائي (Free فقط + التشغيل/الإيقاف) يصدر من /api/rise/ads.
+const AD_MODULE_MAP: Partial<Record<ModuleId, 'home' | 'community' | 'tasks'>> = {
+  dashboard: 'home',
+  community: 'community',
+  tasks: 'tasks',
+}
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
   'dashboard': Dashboard,
   'morning': MorningRoutine,
@@ -544,6 +556,15 @@ export default function AwjApp() {
                   <ActiveComponent />
                 </ModuleErrorBoundary>
               </Suspense>
+
+              {/* المرحلة 09: موضع الإعلان الوحيد في الصفحة (سقف 1) —
+                  بعد محتوى الوحدة وليس داخلها، وبوابة الخادم تقرر العرض.
+                  المواضع خارج AD_MODULE_MAP (يوميات/صحة/مالية…) بلا إعلان. */}
+              {AD_MODULE_MAP[activeModule] && (
+                <Suspense fallback={null}>
+                  <AdSlot placement={AD_MODULE_MAP[activeModule]!} />
+                </Suspense>
+              )}
             </div>
         </div>
       </main>

@@ -141,13 +141,18 @@ function setSecurityHeaders(res: NextResponse, nonce: string): NextResponse {
   }
 
   const isDev = process.env.NODE_ENV === 'development'
+  // المرحلة 09 (Ads): نطاقات AdSense مطلوبة لعرض وحدات الإعلانات —
+  // script-src لا يحتاجها (strict-dynamic يوثّق أي سكربت ننشئه من الحزمة
+  // الموثوقة وذريتها)، لكن الإطارات (frame-src) وطلبات القياس
+  // (connect-src) تُقيّد نصياً. img-src مفتوح https: أصلاً.
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https: blob:",
-    "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn https://api.cloudinary.com wss://*.supabase.co https://*.upstash.io",
+    "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn https://api.cloudinary.com wss://*.supabase.co https://*.upstash.io https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://www.google.com",
+    "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
@@ -211,7 +216,8 @@ export async function middleware(req: NextRequest) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https: blob:",
-    "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn https://api.cloudinary.com wss://*.supabase.co https://*.upstash.io",
+    "connect-src 'self' https://*.supabase.co https://api.bigmodel.cn https://api.cloudinary.com wss://*.supabase.co https://*.upstash.io https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://www.google.com",
+    "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
