@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 
 // ============================================================
 // ADMIN PRO: account suspension with a small per-instance cache.
@@ -25,7 +25,15 @@ export async function isUserSuspended(userId: string): Promise<boolean> {
 
   try {
     const admin = await getSupabaseAdmin()
-    if (!admin) throw new Error('Suspension check unavailable: Supabase admin client is not configured')
+    if (!admin) {
+      // وضع mock المحلي (بلا Supabase): لا جدول profiles أصلًا ولا
+      // إيقاف — رجّع false بدل الرمي، وإلا انغلقت كل مسارات
+      // /api/rise في التطوير المحلي. الإنتاج المُهيأ يملك العميل
+      // الإداري دائمًا فلا يمر من هنا — والناقص الإعداد (مهيأ بلا
+      // مفتاح خدمة) يبقى مغلقًا بالرمي أسفلًا.
+      if (!isSupabaseConfigured()) return false
+      throw new Error('Suspension check unavailable: Supabase admin client is not configured')
+    }
 
     const { data, error } = await (admin as any)
       .from('profiles')

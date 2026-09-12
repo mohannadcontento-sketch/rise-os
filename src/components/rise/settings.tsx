@@ -100,6 +100,7 @@ import { BellToggle } from '@/components/rise/kit-v2'
 import { SectionCard } from '@/components/rise/settings-section-card'
 import { SubscriptionSection } from '@/components/rise/subscription-section'
 import { PushNotificationsSection } from '@/components/rise/push-notifications-section'
+import { McpSection } from '@/components/rise/mcp-section'
 import {
   getBrowserPermissionState,
   requestBrowserPermission,
@@ -813,6 +814,14 @@ export default function Settings() {
         className="break-inside-avoid mb-4"
       >
         <PushNotificationsSection />
+      </motion.div>
+      {/* ربط MCP (عميل AI خارجي) — المرحلة 10 */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="break-inside-avoid mb-4"
+      >
+        <McpSection />
       </motion.div>
       {/* الحساب والأمان — المرحلة 03 */}
       <motion.div
