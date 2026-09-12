@@ -8,7 +8,8 @@
 //
 // البنية الداخلية:
 //   1) الأنواع والثوابت: بنية الأقسام الثلاثة وعناصرها (id/name/icon/xp) + رسائل التحفيز
-//   2) دوال مساعدة: أرقام عربية، تنسيق المؤقتات، ومفتاح جلسة localStorage معزول بالمستخدم
+//   2) دوال مساعدة: أرقام عربية، تنسيق المؤقتات، وجلسة الصباح المحفوظة
+//      عبر user-storage المعزول بمعرّف المستخدم
 //   3) useSectionTimer + مكونات صغيرة: SectionTimer وHistoryChart وRoutineTimeline وCompletionRing وRoutineItemRow
 //   4) المكوّن الرئيسي — الحالة والتأثيرات: استرجاع الجلسة، تغيّر اليوم، إشعار الاكتمال
 //   5) التحميل والحفظ: fetchMorning بحراسة تسلسل + saveToAPI مع منح XP مرة واحدة يومياً
@@ -19,6 +20,7 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { getUserStorage, setUserStorage, removeUserStorage } from '@/lib/user-storage'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun,
@@ -195,17 +197,9 @@ function arabicNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => digits[parseInt(d)])
 }
 
-function getSessionStorageKey(): string {
-  // مفتاح مُعزل بمعرّف المستخدم حتى لا تتسرب جلسة صباح بين الحسابات على نفس المتصفح
-  try {
-    const userInfo = localStorage.getItem('rise-user-info')
-    if (userInfo) {
-      const info = JSON.parse(userInfo)
-      if (info.id) return `rise-morning-session-${info.id}`
-    }
-  } catch { /* ignore */ }
-  return 'rise-morning-session-default'
-}
+// مفتاح جلسة الصباح في user-storage (معزول تلقائياً بمعرّف المستخدم
+// عبر rise-user:<id>:...) — نفس اصطلاح بقية الوحدات
+const MORNING_SESSION_KEY = 'rise-morning-session'
 
 /* ────────────── Timer Hook ────────────── */
 
@@ -600,10 +594,10 @@ export default function MorningRoutine() {
     }
   }, [sessionActive, sessionStartTime])
 
-  // Restore session from localStorage + listen for auth changes
+  // Restore session + listen for auth changes — عبر user-storage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(getSessionStorageKey())
+      const stored = getUserStorage(MORNING_SESSION_KEY)
       if (stored) {
         const startTime = parseInt(stored)
         const today = getToday()
@@ -613,13 +607,13 @@ export default function MorningRoutine() {
           setSessionStartTime(startTime)
           setElapsedMs(Date.now() - startTime)
         } else {
-          localStorage.removeItem(getSessionStorageKey())
+          removeUserStorage(MORNING_SESSION_KEY)
         }
       }
     } catch { /* ignore */ }
 
     const handleSessionChange = () => {
-      localStorage.removeItem(getSessionStorageKey())
+      removeUserStorage(MORNING_SESSION_KEY)
       setSessionActive(false)
       setSessionStartTime(null)
       setElapsedMs(0)
@@ -643,12 +637,12 @@ export default function MorningRoutine() {
     setSessionActive(true)
     setSessionStartTime(now)
     setElapsedMs(0)
-    localStorage.setItem(getSessionStorageKey(), String(now))
+    setUserStorage(MORNING_SESSION_KEY, String(now))
   }
 
   const handleStopMorning = () => {
     if (sessionIntervalRef.current) clearInterval(sessionIntervalRef.current)
-    localStorage.removeItem(getSessionStorageKey())
+    removeUserStorage(MORNING_SESSION_KEY)
     setSessionActive(false)
     // Don't reset elapsedMs so user can see final time briefly
     setTimeout(() => {
@@ -661,7 +655,7 @@ export default function MorningRoutine() {
   useEffect(() => {
     if (isAllDone && sessionActive) {
       if (sessionIntervalRef.current) clearInterval(sessionIntervalRef.current)
-      localStorage.removeItem(getSessionStorageKey())
+      removeUserStorage(MORNING_SESSION_KEY)
       setSessionActive(false)
       // Keep elapsed time visible
     }

@@ -434,23 +434,6 @@ export default function Finance() {
     ]
   }, [data])
 
-  /* ─── Monthly Category Sparklines ─── */
-  // تُحسب لكن لا تُستخدم حالياً في أي رسم — متاحة لعرض اتجاه الفئات مستقبلاً
-  const categoryMonthlyData = useMemo(() => {
-    const records = data?.records || []
-    const result: Record<string, number[]> = {}
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date()
-      d.setMonth(d.getMonth() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      records.filter(r => r.type === 'مصروف' && r.date.startsWith(key)).forEach(r => {
-        if (!result[r.category]) result[r.category] = []
-        result[r.category].push(r.amount)
-      })
-    }
-    return result
-  }, [data])
-
   /* ─── Grouped Records ─── */
   const groupedRecords = useMemo(() => {
     const records = data?.records || []
