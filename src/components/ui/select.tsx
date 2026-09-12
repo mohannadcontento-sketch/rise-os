@@ -6,6 +6,13 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/select.tsx — قائمة اختيار (Radix Select)
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function Select({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {

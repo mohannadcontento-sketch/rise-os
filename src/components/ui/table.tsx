@@ -4,6 +4,13 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/table.tsx — جدول بيانات منسّق
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div

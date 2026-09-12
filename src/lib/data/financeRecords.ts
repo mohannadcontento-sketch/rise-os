@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/financeRecords.ts — مستودع «المالية»
+//
+// معاملات المستخدم على finance_records: قائمة بالأحدث أولاً،
+// إنشاء، وحذف — بلا تحديث (التعديل من الواجهة = حذف ثم إنشاء).
+// كل عملية مقيدة بـ user_id (RLS + فلتر صريح).
+// ============================================================
+
 export const financeRecords = {
     async list(userId: string) {
       const client = await sb()

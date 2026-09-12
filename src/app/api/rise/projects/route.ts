@@ -4,6 +4,19 @@ import { data } from '@/lib/data'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/projects — المشاريع
+//
+// CRUD كامل لمشاريع المستخدم (اسم، وصف، لون، تقدم، حالة) عبر
+// data.projects — وتربط بها المهام من مسار المهام لاحقاً.
+//
+// المسار محمي: requireUser — مشاريع شخصية معزولة بـ RLS.
+// الطرق: GET — كل المشاريع. POST — مشروع جديد. PUT — تحديث
+//        (المعرّف في الجسم). DELETE ?id= — حذف.
+// Idempotency-Key: مطلوب لكل طفرة (withIdempotency)، وبعد
+// كل كتابة bustAggregateCache (لوحة التحكم تجمع المشاريع).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

@@ -6,6 +6,25 @@ import crypto from 'crypto'
 import { withIdempotency } from '@/lib/idempotency'
 import { checkEntitlement } from '@/lib/billing/entitlements'
 
+// ============================================================
+// /api/rise/mcp/key — تكامل MCP (مفتاح Bearer الشخصي)
+//
+// يصدر مفتاح API للمستخدم لمصادقة عميل MCP خارجي (مثل ربط
+// ChatGPT بأوج): يُولَّد عشوائياً (rise_ + 32 محرفاً hex)
+// ويُخزَّن هاشه فقط في user_api_keys — المفتاح الخام يُعاد
+// مرة واحدة عند الإنشاء ولا يُستعاد بعدها أبداً.
+//
+// المسار محمي: requireUser — مفاتيح المستخدم نفسه فقط.
+// الطرق: POST — إصدار مفتاح جديد (يرد { apiKey } مرة واحدة).
+//        GET — بيانات المفتاح الأخير فقط (مقنَّع، hasKey،
+//        آخر استخدام) — السر لا يُعاد أبداً.
+//        DELETE — إبطال كل مفاتيح المستخدم.
+// check_entitlement: 'mcp.key' — متاح لخطة ماكس فقط؛ دونها
+//        يرد 403 PLAN_REQUIRED (المرحلة 04).
+// Idempotency-Key: مطلوب (withIdempotency مع persistResponse:
+//        false — الاستجابة سر لا يُخزَّن مع المفتاح).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 function generateApiKey(): string {

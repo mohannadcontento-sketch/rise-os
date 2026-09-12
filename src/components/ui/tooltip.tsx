@@ -5,6 +5,13 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/tooltip.tsx — تلميح معلومات (Radix Tooltip)
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function TooltipProvider({
   delayDuration = 0,
   ...props

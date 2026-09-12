@@ -1,5 +1,34 @@
 "use client";
 
+// ============================================================
+// kit-v2.tsx — مكتبة عناصر UI التفاعلية (Kit v2)
+//
+// عناصر شخصية منقولة من مراجع التصميم المعتمدة ومصبوبة على
+// نظام رموز Neo (globals.css) فتتكيف نهار/ليل تلقائيًا:
+// RainbowCheckbox (مهام/مشاريع/صحة/مالية/مراجعات)، BellToggle
+// (تذكيرات العادات والإعدادات)، ComicButton (CTA صفحة الهبوط)،
+// ActivityRing و HeartbeatChart (الصحة والداشبورد وصفحة
+// الهبوط)، BoltBadge (شارات XP).
+//
+// البنية الداخلية:
+//   1) RainbowCheckbox — input مخفي peer مع توهج قوس قزح
+//      متماثل عند التحديد (RTL-safe)
+//   2) BellToggle — زر switch (role/aria-checked) بمحرفي جرس
+//      SVG متقاطعين: محرف وجرس مصمت
+//   3) ComicButton — نغمات lime/rose/ink بحدود سميكة وظل
+//      إزاحة صلب (--comic-shadow) يتحرك مع hover/active
+//   4) ActivityRing — حلقة SVG بتدرج خطي و strokeDashoffset
+//      انتقالي (0.8s spring-like) + توهج ليلي حسب الدرجة
+//   5) HeartbeatChart — أعمدة وردية متدرجة + خط متوسط منقط
+//      + نقطة عائمة على القمة + ملخص sr-only
+//   6) BoltBadge — برق SVG + قيمة num وظل comic
+//
+// مبادئ UX/تقنية: إيقاف انتشار النقر في RainbowCheckbox يمنع
+// التبديل المزدوج داخل أب قابل للنقر (جذر إصلاح TASK 25)؛
+// الأرقام بخط num؛ العناصر الزخرفية aria-hidden والدلالة
+// النصية عبر aria-label/role المناسب.
+// ============================================================
+
 /**
  * أوج (Awj) — Kit v2: components ported from the user's latest reference batch
  * ---------------------------------------------------------------- them all re-skinned to the Neo token system:

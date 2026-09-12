@@ -4,6 +4,14 @@ import { useEffect } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
+// ============================================================
+// app/error.tsx — حدود أخطاء مقاطع المسارات
+//
+// يلتقط أخطاء أي صفحة تحت الجذر (عدا layout نفسه — تلك مسؤولية
+// global-error) ويعرض بطاقة عربية مع زر إعادة المحاولة reset.
+// الخطأ يُسجَّل هنا إضافة إلى الالتقاط المركزي في error-capture.
+// ============================================================
+
 export default function Error({
   error,
   reset,

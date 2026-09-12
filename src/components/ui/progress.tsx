@@ -5,6 +5,13 @@ import * as ProgressPrimitive from "@radix-ui/react-progress"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/progress.tsx — شريط تقدم (Radix Progress)
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function Progress({
   className,
   value,

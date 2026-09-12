@@ -6,6 +6,13 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/dropdown-menu.tsx — قائمة منسدلة (Radix DropdownMenu)
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function DropdownMenu({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {

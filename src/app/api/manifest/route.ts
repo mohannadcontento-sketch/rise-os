@@ -1,5 +1,18 @@
 import { NextResponse } from 'next/server'
 
+// ============================================================
+// /api/manifest — بيان PWA (واجهة التثبيت)
+//
+// يقدّم manifest.json ديناميكياً بدل الملف الثابت في /public:
+// الثابت كان يعطّل إعادة توجيه Vercel SSO لغياب رؤوس CORS،
+// والمسار الديناميكي يضبطها صراحة مع كل استجابة.
+//
+// المسار عام: مورد تثبيت عام لا يتطلب جلسة.
+// الطرق: GET — بيان عربي RTL (أيقونات + اختصارات) مع كاش
+//        ساعة وstale-while-revalidate يوماً.
+//        OPTIONS — preflight لـ CORS (204).
+// ============================================================
+
 /**
  * Serves the PWA manifest.json with proper CORS headers.
  * This fixes Vercel SSO redirect CORS issues that occur with static /public/manifest.json.

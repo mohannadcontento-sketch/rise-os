@@ -4,6 +4,25 @@ import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/work — «الشغل» (جلسات العمل الطويلة)
+//
+// كتل عمل ممتدة (مثل «5 ساعات شغل») مقابل مؤقت العمل العميق
+// البومودوري: يتتبع المخطط مقابل الفعلي، الاستراحات (سجل
+// مراتها)، والمهام المنجزة، ويحسب درجة جودة 0–100 عند الإتمام
+// (45% مدة + 35% تركيز + 20% إنجاز).
+//
+// المسار محمي: requireUser — جلسات شخصية معزولة بـ RLS.
+// الطرق: GET — آخر 50 جلسة.
+//        POST — بدء جلسة (plannedMin حتى 24 ساعة).
+//        PUT — تحديث مباشر (activeMin، استراحات، مهام...)
+//        أو إتمام (status=completed → qualityScore +
+//        completedAt يُحسبان في المسار).
+// zod: WorkCreate/UpdateSchema بنمط strict — أي حقل زائد
+//        في الجسم يُرفض بـ 400.
+// Idempotency-Key: مطلوب لكل طفرة (withIdempotency).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 /**

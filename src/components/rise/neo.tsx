@@ -1,5 +1,35 @@
 "use client";
 
+// ============================================================
+// neo.tsx — مكتبة Neo الأساسية (عناصر عرض وقياس)
+//
+// المكتبة المشتركة الأولى في نظام Neo (رموز WCAG-AA في
+// globals.css)؛ تُستورد في الداشبورد والمهام والمشاريع والعادات
+// والروتين الصباحي وصفحة الهبوط: SparkBars (رسم مصغّر)،
+// Pill/LiveBadge، KpiTile (بلاطة VOLT)، MetricCard (بطاقة
+// FORGE)، Stepper (خطوات رأسية)، ThemeToggle (مفتاح
+// نهار/ليل)، NeoField (غلاف حقول النماذج).
+//
+// البنية الداخلية:
+//   1) SparkBars — أعمدة بنغمات (mist/lime/rose/forest/mixed)
+//      وتأخير أنيميشن متدرج وشريط تمييز (أعلى قيمة افتراضيًا)
+//   2) Pill / LiveBadge — شارات نصية ونقطة «مباشر» نابضة
+//   3) KpiTile — eyebrow + قيمة num كبيرة + delta pill
+//      (اتجاه أعلى/أدنى) + spark اختياري
+//   4) MetricCard — نسختا paper/forest بقيمة mono ضخمة
+//      وأعمدة chunky قابلة للتمييز
+//   5) Stepper — دوائر مكتمل/نشط/معلق مع وصلات وaria-current
+//      وPill حالة («مكتمل»/«الآن»)
+//   6) ThemeToggle — مفتاح متحرك sun/moon مع نجوم وسحب
+//      وأشعة (CSS keyframes، role=switch)
+//   7) NeoField — تسمية بأيقونة + تلميح + علامة إلزامية
+//
+// مبادئ UX/تقنية: حلول RTL/LTR مزدوجة (ltr:left / rtl:right)
+// في كل المواضع المطلقة؛ ThemeToggle يؤخر قراءة الثيم إلى rAF
+// بعد التركيب تفاديًا لاختلاف الترطيب ويلبي قاعدة
+// setState-in-effect؛ الرسوم aria-hidden والدلالة على الأب.
+// ============================================================
+
 /**
  * أوج (Awj) — Neo component library
  * Design language ported from the approved reference components:

@@ -4,6 +4,21 @@ import { requireAdmin, logAudit } from '@/lib/audit'
 import { withIdempotency } from '@/lib/idempotency'
 import { parseBody, storageLimitSchema } from '@/lib/validators'
 
+// ============================================================
+// /api/rise/admin/storage — الإدارة (حدود التخزين)
+//
+// يعدّل حد التخزين المخصص لمستخدم معين (جدول user_storage) من
+// تاب التخزين في لوحة الإدارة — الحصة المسموحة لحسابه عند
+// رفع الوسائط وغيرها.
+//
+// المسار محمي: requireAdmin — يغيّر حصص حسابات المستخدمين.
+// الطرق: PUT { userId, storageLimit } — يعيد { success } أو
+//        403 / 400 / 500.
+// zod: storageLimitSchema عبر parseBody.
+// Idempotency-Key: مطلوب (withIdempotency)، وlogAudit يسجل
+// العملية ('update-storage-limit') في سجل التدقيق.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 /**

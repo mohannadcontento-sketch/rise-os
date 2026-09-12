@@ -3,6 +3,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, isSupabaseConfigured } from '@/lib/supabase'
 import { setCurrentAuthToken } from '@/lib/data'
 
+// ============================================================
+// /api/rise/admin/stats — الإدارة (إحصائيات اللوحة)
+//
+// يغذي بطاقات ورسوم لوحة الإدارة: إجمالي المستخدمين، النشطون
+// خلال 7 أيام (تقييمات daily_scores كمؤشر بديل)، منحنى النمو
+// التراكمي 30 يوماً، عدّادات 11 جدول أعمال، وآخر الأنشطة
+// (مهام ويوميات مع أسماء أصحابها من profiles).
+//
+// المسار محمي: requireAdmin — يعدّ بيانات جميع المستخدمين.
+// الطرق: GET — JSON الإحصائيات؛ عند غياب Supabase أو أي فشل
+//        يرد 200 بأصفار حتى لا تنهار اللوحة (بلا 500).
+// ملاحظات: يربط التوكن يدوياً (setCurrentAuthToken) لطبقة
+// البيانات، والعدّ عبر count+head (بلا جلب صفوف كاملة).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {

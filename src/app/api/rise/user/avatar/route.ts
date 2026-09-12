@@ -6,6 +6,20 @@ import { AVATARS } from '@/lib/avatars'
 import { parseBody, avatarIdSchema } from '@/lib/validators'
 import { tursoUpsertMember } from '@/lib/community-sync'
 
+// ============================================================
+// /api/rise/user/avatar — الإعدادات (الصورة الرمزية)
+//
+// يحدّث أفاتار المستخدم في profiles بمفتاح ثيم من AVATARS
+// (24 ثيماً مثل ocean-3 — قيمة المفتاح لا رابط صورة)، ثم
+// يزامن لقطة العضو العام في مرآة Turso (fire-and-forget).
+//
+// المسار محمي: requireUser — الملف الشخصي للمستخدم نفسه.
+// الطرق: POST { avatar } — يعيد { success, avatar } أو 400
+//        (معرّف ثيم غير موجود ضمن AVATARS) / 401 / 500.
+// zod: avatarIdSchema عبر parseBody.
+// Idempotency-Key: مطلوب (withIdempotency).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {

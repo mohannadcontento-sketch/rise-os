@@ -4,6 +4,22 @@ import { data } from '@/lib/data'
 import { withAggregateCache } from '@/lib/aggregate-cache'
 import { taskCompletedDay, getTodayCairo, calculateXpForLevel } from '@/lib/rise-utils'
 
+// ============================================================
+// /api/rise/dashboard/summary — لوحة التحكم (ملخص اليوم)
+//
+// نقطة فرعية من تفكيك لوحة التحكم (P2#3): ملف المستخدم
+// (المستوى، الخبرة، السلسلة، الإجماليات) + عدّادات إنجاز اليوم
+// للمهام والعادات، مقيدة بيوم القاهرة الذي يرسله العميل (?date=).
+//
+// المسار محمي: requireUser — ملف شخصي وبيانات يومية.
+// الطرق: GET ?date&_v — يعيد { user, today } أو 401/500.
+// كاش: withAggregateCache بمفتاح agg:<user>:summary:<date>:v<_v>
+//        — معلمة _v من api-fetch تُبطل الكاش بعد الكتابات.
+// ملاحظات: جلب واحد متوازٍ (profile مع البيانات في Promise.all)،
+// والمهام المكملة بلا موعد تُحسب في يوم إكمالها بالقاهرة
+// (taskCompletedDay) لا بتقطيع UTC الخام.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 async function computeSummary(userId: string, date: string) {

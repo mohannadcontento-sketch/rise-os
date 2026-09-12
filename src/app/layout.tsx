@@ -10,6 +10,16 @@ import { PerformanceMonitor } from "@/components/performance-monitor";
 import { ErrorCapture } from "@/components/error-capture";
 import { AuthProvider } from "@/components/auth-provider";
 
+// ============================================================
+// app/layout.tsx — الجذر العام للتطبيق كله
+//
+// يضبط lang="ar" وdir="rtl" ويحمّل الهوية البصرية (globals.css:
+// Tajawal/El Messiri + الوضعان الليلي والنهاري المختلفان)، ثم
+// يثبّت سلسلة المزودات: ThemeProvider → QueryProvider (كاش مشفّر)
+// → AuthProvider (استعادة الجلسة) → PWAInit + ErrorCapture +
+// PerformanceMonitor. الـmanifest ديناميكي من /api/manifest.
+// ============================================================
+
 export const metadata: Metadata = {
   title: "أوج | awj.life — امتلك صباحك. امتلك حياتك.",
   description: "أوج — نظام حياتك الشخصي المتكامل: إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم. يعمل بدون إنترنت!",

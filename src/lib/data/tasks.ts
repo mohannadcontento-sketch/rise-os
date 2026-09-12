@@ -2,6 +2,17 @@ import { sb, toSnake, toCamel } from './core'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { db } from '@/lib/db'
 
+// ============================================================
+// data/tasks.ts — مستودع «المهام»
+//
+// المهام + الفرعيات + ربط المشاريع: list يجلب الثلاثة (جلبان
+// متوازيان ثم .in للفرعيات — نمط مدعوم في الوضعين). الإنشاء
+// والتحديث ذريان: في Supabase عبر RPC create/update_task_with_
+// subtasks (المهمة وفرعياتها معاً أو لا شيء)، وفي dev المحلي
+// بنفس الضمان عبر معاملة Prisma $transaction. إتمام المهمة
+// يختم completedAt تلقائياً (ويمسحه عند العودة لغير done).
+// ============================================================
+
 export const tasks = {
     async list(userId: string) {
       const client = await sb()

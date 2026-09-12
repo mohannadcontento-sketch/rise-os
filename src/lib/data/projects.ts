@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/projects.ts — مستودع «المشاريع»
+//
+// CRUD قياسي على projects: قائمة بالأحدث، إنشاء، تحديث، حذف —
+// كل عملية بفلتر user_id صريح فوق RLS. المهام ترتبط عبر
+// project_id ويعيدها مستودع tasks مضمنة مع كل مهمة.
+// ============================================================
+
 export const projects = {
     async list(userId: string) {
       const client = await sb()

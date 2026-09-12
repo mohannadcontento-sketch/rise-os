@@ -1,4 +1,24 @@
 'use client'
+
+// ============================================================
+// module-error-boundary.tsx — حاجز أخطاء الوحدات
+//
+// Class Boundary يغلّف كل وحدة تُحمَّل lazy في مُوجِّه الوحدات
+// (src/app/app/page.tsx) — مثل Onboarding ووحدات MODULES —
+// حتى لا يُسقط انهيار وحدة واحدة التطبيق كله؛ اسم الوحدة
+// يُمرَّر عبر moduleName فيظهر في رسالة الخطأ وسجل console.
+//
+// البنية الداخلية:
+//   1) getDerivedStateFromError / componentDidCatch — التقاط
+//      الخطأ وتسجيله مع اسم الوحدة
+//   2) handleRetry — تصفير الحالة فيُعاد عرض الأبناء
+//   3) render — بطاقة زجاجية RTL: تنبيه + زر «إعادة المحاولة»
+//
+// مبادئ UX/تقنية: نص الرسالة عربي مع dir="rtl" صريح داخل
+// بطاقة max-w-sm متمركزة؛ لا حالة إعادة محاولة كاملة — فقط
+// إعادة عرض الأبناء (المؤثرات تعيد تشغيل نفسها).
+// ============================================================
+
 import { Component, type ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'

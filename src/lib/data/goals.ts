@@ -2,6 +2,16 @@ import { sb, toSnake, toCamel } from './core'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { db } from '@/lib/db'
 
+// ============================================================
+// data/goals.ts — مستودع «الأهداف»
+//
+// أهداف المستخدم ومحطاتها: list يجلب كل هدف مع محطاته مرتبة،
+// وaddMilestone/toggleMilestone يتحققان من الملكية أولاً. قلب
+// المحطة في Supabase ذري عبر RPC toggle_goal_milestone_atomic
+// (يعيد حساب progress داخل المعاملة نفسها)؛ وفي وضع dev
+// المحلي (Prisma/SQLite) المنطق ذاته بمعاملة $transaction.
+// ============================================================
+
 export const goals = {
     async list(userId: string) {
       const client = await sb()

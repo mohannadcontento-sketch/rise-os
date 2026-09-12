@@ -3,6 +3,21 @@ import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { isoToCairoDate } from '@/lib/rise-utils'
 
+// ============================================================
+// /api/rise/dashboard/weekly-chart — لوحة التحكم (منحنى الأسبوع)
+//
+// نقطة فرعية من تفكيك لوحة التحكم (P2#3): درجات آخر 7 أيام من
+// daily_scores لتغذية الرسم البياني الأسبوعي، مع تعبئة الأيام
+// الناقصة بأصفار ليظهر المنحنى متصلاً بلا فجوات.
+//
+// المسار محمي: requireUser — درجات شخصية.
+// الطرق: GET — يعيد { scores } × 7 أيام: { date, score,
+//        morningScore, taskScore, habitScore, focusScore }.
+// ملاحظة: نافذة الأسبوع تُبنى بأيام القاهرة المحلية
+//        (isoToCairoDate) — كانت UTC فتُسمّى الأيام خطأ
+//        بين منتصف الليل والفجر بتوقيت القاهرة.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 /**

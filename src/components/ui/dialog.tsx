@@ -6,6 +6,13 @@ import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/dialog.tsx — حوار عام (Radix Dialog)
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {

@@ -17,6 +17,14 @@ function Command({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
+
+// ============================================================
+// ui/command.tsx — لوحة أوامر cmdk
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
   return (
     <CommandPrimitive
       data-slot="command"

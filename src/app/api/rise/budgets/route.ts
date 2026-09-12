@@ -3,6 +3,21 @@ import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/budgets — المالية (حدود الميزانية وهدف الادخار)
+//
+// يخزن إعدادات وحدة المالية الخاصة بالمستخدم نفسه كعنصرَي
+// knowledge من نوعَي 'budget-config' (حدود الفئات JSON) و
+// 'savings-goal' (هدف ادخار رقمي) — بلا جدول مخصص.
+//
+// المسار محمي: requireUser — بيانات مالية شخصية معزولة بـ RLS.
+// الطرق: GET — يعيد { budgets, savingsGoal } مع no-store.
+//        PUT { budgets } أو { savingsGoal } — يكتب أحدهما
+//        (upsertByType) ويعيد القيمة المحفوظة.
+// Idempotency-Key: مطلوب لـ PUT (withIdempotency).
+// ملاحظة: كل الاستجابات بلا كاش (no-cache, no-store).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

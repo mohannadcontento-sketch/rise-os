@@ -1,6 +1,29 @@
 import { format, startOfDay, startOfWeek, startOfMonth, subDays, eachDayOfInterval } from 'date-fns'
 import { ar } from 'date-fns/locale'
 
+// ============================================================
+// rise-utils.ts — أدوات العرض والتقويم المشتركة
+//
+// أدوات نقية تستهلكها معظم وحدات العرض ومسارات API: تواريخ آمنة ضد
+// انزياح UTC (اليوم المحلي وتقسيم أيام القاهرة)، تنسيق عربي، منحنى
+// الخبرة، حساب السلسلة من النشاط، خرائط تسميات الأولوية/الحالة/نوع
+// الهدف، ومحوّلات آمنة للقيم (safeNum/safeStr/toArabicNum/safeCharAt).
+//
+// المسؤوليات:
+//   1) هوية اليوم الموثوقة: getToday/toLocalDateStr بتقويم المتصفح
+//      (لا toISOString)، وisoToCairoDate/getTodayCairo لتقسيم
+//      timestamps المخزّنة UTC على أيام القاهرة عبر Intl.
+//   2) toArabicNum: أرقام الواجهة تُعرض بالأرقام العربية الشرقية
+//      (٠-٩) مهما كان نوع المدخل أو سوءه.
+//   3) computeStreakFromActivity: السلسلة الحية من أيام النشاط مع
+//      سماح يوم واحد وسقف أمان 3650 يوماً وحساب ظهرٍ مقاوم DST.
+//   4) نطاقات جاهزة (أسبوع يبدأ السبت/شهر/30 يوماً) وgetGreeting
+//      وcalculateXpForLevel (معامل 1.35) وgetHeatLevel.
+//
+// حدود: دوال نقية بلا React ولا I/O — ليست مصدر بيانات؛ ودوال
+// التنسيق تفشل بلطف فتعيد المدخل الأصلي بدل الرمي.
+// ============================================================
+
 export function getToday(): string {
   // FIX: Use LOCAL date (not UTC) so "today" changes at midnight local time.
   // In Egypt (UTC+2), UTC midnight is 2am local time — tasks created at 00:30

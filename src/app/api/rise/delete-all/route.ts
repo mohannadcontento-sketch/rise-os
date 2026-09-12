@@ -5,6 +5,23 @@ import { bustAggregateCache } from '@/lib/aggregate-cache'
 import { withIdempotency } from '@/lib/idempotency'
 import { parseBody, deleteAllSchema } from '@/lib/validators'
 
+// ============================================================
+// /api/rise/delete-all — الإعدادات (منطقة الخطر: حذف كل البيانات)
+//
+// يمسح بيانات المستخدم بالكامل عبر RPC delete_user_data_atomic —
+// معاملة واحدة تشمل التبعيات (المهام الفرعية، المحطات) وإعادة
+// ضبط الاستخدام؛ لا حذف جزئي ممكن. لا يُنفَّذ إلا بعد إعادة
+// إدخال البريد وكلمة المرور على عميل Supabase معزول.
+//
+// المسار محمي: requireUser + إعادة مصادقة إلزامية بالكلمة —
+// يمنع مسحاً خبيثاً بجلسة مسروقة (403 عند عدم التطابق).
+// الطرق: DELETE { email, password } — يعيد { success, deleted }
+//        (عدد الصفوف) أو 403/500/503.
+// zod: deleteAllSchema عبر parseBody.
+// Idempotency-Key: مطلوب (withIdempotency)، وبعد النجاح
+// bustAggregateCache يُبطل كاشات المستخدم فوراً.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 /**

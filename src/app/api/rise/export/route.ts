@@ -5,6 +5,23 @@ import { consumeUsage, limitReachedResponse } from '@/lib/billing/entitlements'
 import { notifyUser, exportDoneMessage, exportFailedMessage } from '@/lib/notifications-service'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
+// ============================================================
+// /api/rise/export — الإعدادات (تصدير نسخة احتياطية)
+//
+// يجمع بيانات المستخدم من 15 مستودعاً دفعة واحدة (Promise.all)
+// ويسلّمها ملف JSON عربي المفاتيح جاهزاً للتنزيل
+// (awj-export-<التاريخ>.json) — خلف زر «تصدير بياناتي».
+//
+// المسار محمي: requireUser — تصدير البيانات الشخصية كاملة.
+// الطرق: GET — يعيد الملف كمرفق تنزيل، أو 401.
+// consume_usage: 'export.data' — حد تصدير مفروض في قاعدة
+//        البيانات (المرحلة 04)؛ عند بلوغه يرد 402 LIMIT_REACHED
+//        مع الاستخدام ليعرض العميل ترقية الخطة.
+// إشعارات: notifyUser بالنجاح/الفشل (dedup + صلاحية 30 يوماً)
+//        وفشلها لا يفسد التنزيل؛ وعند أي استثناء يُرد ملف
+//        fallback صالح (بلا 500) حفاظاً على تجربة التنزيل.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

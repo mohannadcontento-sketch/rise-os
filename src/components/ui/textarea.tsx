@@ -2,6 +2,13 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/textarea.tsx — مربع نص متعدد الأسطر
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (
     <textarea

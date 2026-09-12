@@ -3,6 +3,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/admin/api-keys — الإدارة (مفاتيح API الشخصية)
+//
+// يغذي تاب «API Keys» في لوحة الإدارة: يسرد مفاتيح جميع
+// المستخدمين (مع الاسم والبريد من profiles) ويتيح إبطال أي
+// مفتاح فوراً — مفاتيح Bearer التي يستخدمها تكامل MCP.
+//
+// المسار محمي: requireAdmin — يمسح مفاتيح كل المستخدمين
+// (403 لغير الأدمن).
+// الطرق: GET — آخر 100 مفتاح (المعرّف، الاسم، المالك، معاينة
+//        غير سرية، آخر استخدام).
+//        DELETE ?id= — إبطال المفتاح وحذفه من user_api_keys.
+// أمان: عمود key الخام لا يُستعلم أبداً — فقط key_hash، وتُعرض
+//        منه معاينة 8 محارف غير قابلة للاستنتاج.
+// Idempotency-Key: مطلوب لـ DELETE (withIdempotency).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 // GET: List all API keys with user info

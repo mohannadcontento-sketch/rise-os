@@ -37,6 +37,10 @@ tool-specific pointer files contain no duplicate guidance.
   `src/lib/api-auth.ts` (يضبط جلسة Supabase + السياق). مسارات الإدارة تستخدم `requireAdmin`.
 - **تخزين المتصفح**: ممنوع `localStorage` مباشرة — استخدم `getUserStorage`/`setUserStorage`
   من `src/lib/user-storage.ts` (يعزل قيم المستخدم ببادئة معرّفه).
+  استثناءان مقصودان فقط: (1) `rise-user-info` — كاش هوية الجلسة الذي يشتق منه
+  user-storage معرف المستخدم نفسه (تديره auth-provider/login-page حصراً)؛
+  (2) حالة الجهاز البحتة مثل `rise-pwa-dismissed` (كتم بطاقة التثبيت 24 ساعة —
+  التثبيت مفهوم per-device لا per-user).
 - **الأفاتار**: قيمة الأفاتار في قاعدة البيانات **مفتاح ثيم** (مثل `ocean-3`) من
   `src/lib/avatars.tsx` (24 ثيماً)، وليست رابط صورة. اعرضها بتدرّج+SVG كما في `community.tsx`
   — لا تمررها أبداً كـ `<img src>` (سبب 404 سابقاً).

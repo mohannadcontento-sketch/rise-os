@@ -1,5 +1,33 @@
 'use client'
 
+// ============================================================
+// onboarding.tsx — جولة الترحيب الأولى
+//
+// حوار تعريفي يُعرض مرة واحدة لأول دخول بعد المصادقة (مفتاح
+// user-storage المعزول: onboarding-done بنطاق rise-user:<id>)؛
+// يُركَّب في مُوجِّه الوحدات
+// داخل ModuleErrorBoundary فلا يُسقط انهياره التطبيق. 4 خطوات:
+// ترحيب شخصي بإحصاءات سريعة → «يومك مع أوج» (خط زمني لأربع
+// محطات) → استكشاف الوحدات (شبكة أيقونات RiseIcon) → نصائح
+// سريعة وبدء.
+//
+// البنية الداخلية:
+//   1) useOnboarding — كشف أول ظهور + dismissOnboarding
+//   2) stepThemes / stepTitles — شريط علوي متدرج بلون وأيقونة
+//      مختلفة لكل خطوة
+//   3) الخطوات: WelcomeStep / DayJourneyStep / ModulesStep /
+//      QuickTipsStep (LayersIcon غلاف محلي لتجنب تكرار الاستيراد)
+//   4) Onboarding الرئيسي — شريط تقدم علوي + نقاط تنقل قابلة
+//      للنقر + أزرار سابق/تالي/تخطي + أسهم الكيبورد (RTL:
+//      اليسار يتقدم)
+//
+// مبادئ UX/تقنية: DialogTitle/DialogDescription بـ sr-only
+// يتحدثان باسم الخطوة الحالية (a11y)؛ الظهور مؤجل 400ms بعد
+// الجلسة وhasShownRef يمنع التكرار في نفس التركيب؛ الإغلاق
+// بأي طريق (تخطي/آخر خطوة/Escape) يسجل المفتاح ويعرض toast
+// ترحيب؛ الأرقام بخط num وdir=ltr.
+// ============================================================
+
 /**
  * Onboarding v2 — شاشة تعريف غنية أول ما تدخل (طلب المستخدم: "طورها جدا وحسن شكلها").
  * 5 خطوات: ترحيب شخصي → يومك (الرحلة اليومية) → الوحدات → قاعدة المعارف والتحفيز → نصائح وبدء.
@@ -16,6 +44,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useRiseStore } from '@/store/app-store'
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { toast } from 'sonner'
 import { RiseIcon, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
 import {
@@ -42,7 +71,7 @@ import {
    Constants
    ═══════════════════════════════════════════════════════ */
 
-const STORAGE_KEY = 'rise-onboarding-done'
+const STORAGE_KEY = 'onboarding-done' // عبر user-storage المعزول (نطاق rise-user:<id>)
 const TOTAL_STEPS = 4
 
 /* ═══════════════════════════════════════════════════════
@@ -52,14 +81,16 @@ const TOTAL_STEPS = 4
 export function useOnboarding() {
   const auth = useRiseStore((s) => s.auth)
 
+  // تخزين معزول للمستخدم (user-storage) — جهاز مشترك بحسابين يرى كل
+  // حساب الترحيب مرة واحدة خاصة به؛ القراءة تُرفض بلا جلسة أصلاً.
   const showOnboarding = (() => {
     if (typeof window === 'undefined') return false
     if (!auth) return false
-    return !localStorage.getItem(STORAGE_KEY)
+    return !getUserStorage(STORAGE_KEY)
   })()
 
   const dismissOnboarding = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, '1')
+    setUserStorage(STORAGE_KEY, '1')
   }, [])
 
   return { showOnboarding, dismissOnboarding }
@@ -424,14 +455,14 @@ export default function Onboarding() {
   useEffect(() => {
     if (hasShownRef.current || !auth) return
     hasShownRef.current = true
-    if (!localStorage.getItem(STORAGE_KEY)) {
+    if (!getUserStorage(STORAGE_KEY)) {
       const timer = setTimeout(() => setOpen(true), 400)
       return () => clearTimeout(timer)
     }
   }, [auth])
 
   const handleDismiss = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, '1')
+    setUserStorage(STORAGE_KEY, '1')
     setOpen(false)
     toast.success('مرحباً بك! ابدأ استكشاف أوج 🚀')
   }, [])

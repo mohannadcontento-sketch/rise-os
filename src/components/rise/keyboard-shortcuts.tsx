@@ -1,5 +1,28 @@
 'use client'
 
+// ============================================================
+// keyboard-shortcuts.tsx — اختصارات لوحة المفاتيح
+//
+// طبقتان تُستخدمان من مُوجِّه الوحدات (app/page.tsx):
+// useKeyboardShortcuts — مستمع keydown عام على النافذة — و
+// KeyboardShortcutsDialog — نافذة المساعدة التفاعلية التي تُفتح
+// بـ Ctrl+/ أو بحدث rise-open-shortcuts. التنفيذ يمر حصرًا عبر
+// setActiveModule (zustand) و setTheme (next-themes) — بلا جلب.
+//
+// البنية الداخلية:
+//   1) تعريفات الاختصارات بثلاث فئات: تنقل (Ctrl+1..9 و Ctrl+0
+//      و Ctrl+M) / إجراءات (Ctrl+N) / عرض (Ctrl+D و Ctrl+/ و Esc)
+//   2) KeyBadge — شارات kbd مع تحويل Ctrl→⌃ و Escape→Esc
+//   3) KeyboardShortcutsDialog — الأقسام الثلاثة ملوّنة، وكل
+//      صف قابل للنقر فينفّذ الاختصار نفسه
+//   4) useKeyboardShortcuts — التنفيذ الفعلي عند الضغط
+//
+// مبادئ UX/تقنية: Escape لا يُعاد بثه اصطناعيًا (نوافذ Radix
+// تغلق نفسها — الإعادة القديمة سببت recursion)؛ يعمل مع Ctrl
+// و⌘ معًا ويمنع السلوك الافتراضي للمفاتيح المعالجة؛ مفاتيح
+// الوحدات مرتبة بترتيب الشريط الجانبي نفسه.
+// ============================================================
+
 import { useEffect, useCallback, useState } from 'react'
 import {
   Keyboard,

@@ -2,6 +2,13 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// ============================================================
+// ui/card.tsx — بطاقة المحتوى القياسية
+//
+// عنصر shadcn/ui (Radix) مولَّد عبر CLI ومشترك عبر المشروع؛
+// إعادة التوليد تطمس التعديلات المحلية — خصّص عبر cn/variants.
+// ============================================================
+
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

@@ -1,5 +1,14 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/knowledgeItems.ts — مستودع «عناصر المعرفة»
+//
+// يخدم وحدتي «التعلم» و«الدماغ الثاني» من جدول knowledge_items
+// موحّد (الحقل type هو الفاصل): CRUD عام + upsertByType أحادي
+// الصف مع معالجة سباق كتابة متزامنة (إعادة قراءة الصف الفائز
+// والتحديث عليه بدل الفشل).
+// ============================================================
+
 export const knowledgeItems = {
     async getByType(userId: string, type: string) {
       const client = await sb()

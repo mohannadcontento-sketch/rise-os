@@ -5,6 +5,25 @@ import { pickAllowed } from '@/lib/sanitize'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/goals — الأهداف (أهداف + محطات)
+//
+// واجهة كاملة لأهداف المستخدم: إنشاء هدف (رؤية، نوع، موعد
+// نهائي) مع محطات جزئية، تحديث التقدم، قلب حالة المحطات،
+// والحذف — كل العمليات عبر data.goals بتمرير userId (عزل RLS).
+//
+// المسار محمي: requireUser — أهداف شخصية.
+// الطرق: GET — كل الأهداف مع محطاتها.
+//        POST — هدف جديد، أو محطة على هدف قائم
+//        ({ goalId, milestoneTitle }).
+//        PUT — تحديث هدف، أو قلب محطة ({ milestoneId,
+//        completed }). معرّف غير صالح يرد 400 لا 500.
+//        DELETE ?id= — حذف الهدف.
+// Idempotency-Key: مطلوب لكل طفرة (withIdempotency) وبعدها
+// bustAggregateCache. الحقول بقائمة بيضاء (pickAllowed) —
+// حقول عميلة قديمة تُقصى كي لا تكسر الكتابة.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

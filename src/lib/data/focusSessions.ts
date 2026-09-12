@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/focusSessions.ts — مستودع «العمل العميق»
+//
+// جلسات التركيز: list (آخر 50) وcreate/update مع تحقق ملكية
+// المهمة المرتبطة taskId قبل أي كتابة — لا يمكن تسجيل جلسة
+// على مهمة مستخدم آخر حتى لو انتُحل معرفها.
+// ============================================================
+
 export const focusSessions = {
     async list(userId: string, limit = 50) {
       const client = await sb()

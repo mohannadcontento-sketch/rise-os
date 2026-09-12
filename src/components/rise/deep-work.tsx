@@ -1,5 +1,37 @@
 'use client'
 
+// ============================================================
+// deep-work.tsx — وحدة «العمل العميق»
+//
+// جلسات تركيز بمؤقت دائري: بومودورو ٢٥ أو عميق ٥٠/٩٠/١٢٠ أو
+// مخصص ١-٤٨٠ دقيقة، مع أصوات محيطية Web Audio، «منطقة تركيز»
+// ملء الشاشة أثناء التشغيل، ملاحظات سريعة محفوظة محليًا، ربط
+// الجلسة المكتملة بمهمة (dialog)، وإحصاءات وسجل ورسم ١٤ يومًا
+// (recharts). منطق المؤقت كله في use-focus-timer والأصوات في
+// use-ambient-sounds — هذا الملف عرض + حفظ عبر apiFetch/apiPost
+// /apiPut (لا يعرف Supabase).
+//
+// البنية الداخلية:
+//   1) الأنواع: FocusSession / FocusData / TaskOption
+//   2) الثوابت: خيارات المدد، الأصوات المحيطية (8)، حركات
+//      framer-motion، اقتباسات التحفيز
+//   3) أدوات مساعدة: اقتباس الجلسة (حسب عدد الجلسات) + تنسيق
+//      الوقت + تسمية المدة
+//   4) DeepWork: جلب الجلسات + حفظها (completed أو جزئي)
+//      + ربط المهمة + XP (earn-xp) + فور قائمة المزامنة عبر
+//      رأس X-Offline-Queued
+//   5) الرسم: مؤقت SVG متدرج يتحول بنفسجي→ذهبي→أحمر مع
+//      التقدم، حلقة نبض خارجية، انفجار احتفالي، موجات
+//      الأصوات النشطة، BarChart للتركيز اليومي
+//
+// مبادئ UX/تقنية: المؤقت timestamp-based فلا يزيغ في خلفية
+// التبويب و يُستعاد عند التحميل؛ تجاوز 50%/80% من التقدم يغيّر
+// لون الحلقة والتوهج؛ الإنهاء المبكر يحفظ الجلسة غير المكتملة
+// بالدقائق الفعلية؛ الملاحظات تُحفظ debounce 500ms في
+// user-storage؛ حفظ offline يُصفّ في طابور apiFetch مع toast
+// «سيتم المزامنة لاحقًا».
+// ============================================================
+
 import { getUserStorage, setUserStorage, removeUserStorage } from '@/lib/user-storage'
 import { useAmbientSounds } from '@/hooks/use-ambient-sounds'
 import { useFocusTimer } from '@/hooks/use-focus-timer'
@@ -76,6 +108,8 @@ import {
 import { getToday, toLocalDateStr } from '@/lib/rise-utils'
 import { RiseIcon } from '@/components/rise/icons'
 
+// ─── القسم: الأنواع ─────────────────────────────
+
 /* ────────────── Types ────────────── */
 
 interface FocusSession {
@@ -98,6 +132,8 @@ interface TaskOption {
   title: string
   priority: string
 }
+
+// ─── القسم: الثوابت (المدد والأصوات المحيطية) ─────────────────────────────
 
 /* ────────────── Constants ────────────── */
 
@@ -125,6 +161,8 @@ const AMBIENT_SOUND_URLS: Record<string, string> = Object.fromEntries(
   AMBIENT_SOUNDS.map((s) => [s.label, s.file])
 )
 
+// ─── القسم: حركات framer-motion ─────────────────────────────
+
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
@@ -138,6 +176,8 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 }
 
+// ─── القسم: اقتباسات التحفيز ─────────────────────────────
+
 const FOCUS_QUOTES = [
   '« التركيز هو القدرة على قول «لا» لمئات الأفكار الجيدة. » — ستيف جوبز',
   '« العمق هو الشيء النادر والقيم في عالمنا السطحي. » — كال نيوبورت',
@@ -148,6 +188,8 @@ const FOCUS_QUOTES = [
   '« كل جلسة تركيز تبني مساراً أعصبياً أقوى نحو التميز. »',
   '« الأشخاص الناجحون لا يفعلون أشياء مختلفة — إنهم يفعلون الأشياء بشكل مختلف. »',
 ]
+
+// ─── القسم: أدوات مساعدة ─────────────────────────────
 
 /* ────────────── Helper ────────────── */
 
@@ -165,6 +207,8 @@ function formatTime(totalSeconds: number): string {
 function getDurationLabel(min: number): string {
   return DURATION_OPTIONS.find((d) => d.value === min)?.label || `${min} دقيقة`
 }
+
+// ─── القسم: المكون الرئيسي DeepWork ─────────────────────────────
 
 /* ────────────── Component ────────────── */
 

@@ -1,5 +1,12 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/morningLogs.ts — مستودع «الروتين الصباحي»
+//
+// تقييم خطوات الصباح: list لتواريخ محددة وupsert ذري على
+// (user_id, date) — يوم واحد = سجل واحد يُستبدل كاملاً.
+// ============================================================
+
 export const morningLogs = {
     async list(userId: string, dates: string[]) {
       const client = await sb()

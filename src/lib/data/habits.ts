@@ -1,5 +1,14 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/habits.ts — مستودع «العادات»
+//
+// CRUD العادات + سجلات آخر 30 يوماً مدمجة داخل list (تجميع
+// خريطة habit→logs). toggleLog ذري: upsert على (habit_id, date)
+// بعد التحقق أن العادة ملك للمستخدم — يحصّن ضد النقر المتزامن
+// وضد انتحال معرف غريب.
+// ============================================================
+
 export const habits = {
     async list(userId: string) {
       const client = await sb()

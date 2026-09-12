@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// pwa.tsx — أدوات PWA: التثبيت ووضع التطبيق وحالة الاتصال
+//
+// يخدم حياة التطبيق مثبَّتاً: كشف وضع standalone، وبطاقة اقتراح
+// التثبيت (PWAInstallPrompt تُحمّل كسولاً في app/app/page.tsx)، وشارة
+// حالة الاتصال داخل الوضع المثبّت فقط.
+//
+// المسؤوليات:
+//   1) isStandaloneMode/useIsStandalone: كشف وضع PWA عبر media query
+//      + navigator.standalone بحراسة SSR واستماع للتغيّر.
+//   2) PWAInstallPrompt: التقاط beforeinstallprompt وإظهار البطاقة
+//      بعد 3 ثوانٍ، مع كتم 24 ساعة بعد الإغلاق وإخفاء دائم بعد
+//      التثبيت الفعلي.
+//   3) ConnectionStatus: مؤشر متصل/غير متصل يظهر في standalone فقط.
+//
+// حدود: OfflineBanner معطّل عمداً (يعيد null) بطلب المستخدم؛
+// الإشعارات خارج النطاق (push-notifications.ts)، وكتم بطاقة التثبيت
+// يُكتب في localStorage مباشرة (طابع زمني فقط، لا بيانات مستخدم).
+// ============================================================
+
 import { useState, useEffect } from 'react'
 import { Zap, Download, Wifi, WifiOff, X, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'

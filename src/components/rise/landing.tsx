@@ -1,5 +1,30 @@
 "use client";
 
+// ============================================================
+// landing.tsx — صفحة الهبوط العامة (/)
+//
+// واجهة التسويق لغير المسجلين، مبنية كلها من مكونات المنتج
+// الحقيقية (KpiTile و ActivityRing و HeartbeatChart و
+// RainbowCheckbox و BoltBadge و ComicButton و RiseIcon و
+// ThemeToggle) فيتذوق الزائر مظهر التطبيق الفعلي نهارًا وليلًا
+// قبل الدخول؛ الدخول عبر router.push('/app') من أزرار CTA.
+//
+// البنية الداخلية:
+//   1) Reveal — ظهور عند التمرير (IntersectionObserver مرة
+//      واحدة) مع تأخير متدرج
+//   2) LandingNav — شريط زجاجي يتصلب بعد 12px تمرير
+//   3) Hero + HeroMock — نموذج منتج «حي» (KPI + عادات +
+//      حلقة + heartbeat) مع شارات طافية XP و toast نجاح
+//   4) Stats → Features (6 أعمدة) → ModulesMarquee (شريط
+//      لا نهائي dir=ltr برقائق rtl) → WhatItDoes (تدفق
+//      يومي من 4 خطوات + 8 بطاقات وحدات) → Steps (3) →
+//      FAQ (details/summary أصلية) → FinalCta + Footer
+//
+// مبادئ UX/تقنية: reveal-on-scroll بسعة انتقال transitionDelay؛
+// محتوى HeroMock كله aria-hidden (زخرفي)؛ روابط أقسام داخلية
+// سلسة (#features/#modules/#how/#faq)؛ التمرير passive.
+// ============================================================
+
 /**
  * أوج (Awj) — Landing Page (Neo design language)
  * ------------------------------------------------------------

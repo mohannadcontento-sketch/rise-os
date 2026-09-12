@@ -1,5 +1,12 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/userAchievements.ts — مستودع «شارات الإنجاز»
+//
+// شارات XP المكتسبة: list + create عبر upsert على
+// (user_id, badge_id) — إعادة منح الشارة تستبدلها ولا تكررها.
+// ============================================================
+
 export const userAchievements = {
     async list(userId: string) {
       const client = await sb()

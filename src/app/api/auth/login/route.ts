@@ -4,6 +4,22 @@ import { createSupabaseIsolatedClient, getSupabaseAdmin, isSupabaseConfigured, i
 import { setAuthCookies } from '@/lib/cookie-auth'
 import { isMockAuthEnabled } from '@/lib/mock-auth'
 
+// ============================================================
+// /api/auth/login — المصادقة (تسجيل الدخول)
+//
+// بوابة الدخول الرئيسية للمنصة: يتحقق من البريد وكلمة المرور
+// عبر Supabase Auth، ثم يفحص ملف profiles من جانب الخادم
+// (الدور، الأفاتار، حالة الإيقاف) قبل منح كوكيز الجلسة httpOnly.
+//
+// المسار عام بالضرورة: لا جلسة قبله — هو من ينشئها.
+// الطرق: POST — يعيد { user } مع كوكيز الجلسة، أو 401 (بيانات
+//        خاطئة) / 403 (بريد غير مؤكد) / 423 (حساب موقوف)
+//        / 503 (تعذر التحقق من حالة الحساب).
+// zod: LoginSchema — بريد صالح + كلمة مرور ≥ 8 محارف.
+// ملاحظات: دون Supabase يعمل وضع mock المحلي (isMockAuthEnabled)،
+// وأي فشل في التحقق من الملف يغلق الباب (fail-closed 503).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 // P1#5: Zod validation

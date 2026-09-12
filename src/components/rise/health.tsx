@@ -185,7 +185,9 @@ export default function Health() {
 
   const fetchHealth = useCallback(async () => {
     try {
-      const res = await apiFetch(`/api/rise/health`)
+      // نرسل تاريخنا المحلي (القاهرة) — السيرفر يحدد «سجل اليوم» به
+      // (نمط morning) بدل ساعته UTC التي تتأخر ساعتين عن منتصف الليل.
+      const res = await apiFetch(`/api/rise/health?date=${getToday()}`)
       if (res.ok) {
         const json = await res.json()
         setData(json)

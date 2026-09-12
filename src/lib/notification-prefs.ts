@@ -1,4 +1,26 @@
 import { getUserStorage } from '@/lib/user-storage'
+
+// ============================================================
+// notification-prefs.ts — تفضيلات الإشعارات وبوابتها
+//
+// المصدر الوحيد لمفاتيح تفعيل الإشعارات (rise-settings.notifications
+// عبر user-storage المعزول) إضافة إلى مساعدات إذن المتصفح وإطلاق
+// Notification. تمرّ عبرها كل دوال notify* وReminderEngine قبل أي
+// إشعار فعلي — المفاتيح المخزنة كانت زخرفية قبل هذه البوابة.
+//
+// المسؤوليات:
+//   1) getNotificationPrefs/isNotificationEnabled: دمج المخزون مع
+//      الافتراضيات (كلها مفعّلة) بحراسة SSR وتسامح مع JSON تالف.
+//   2) getBrowserPermissionState/requestBrowserPermission: حالة
+//      الإذن وطلبه مرة واحدة فقط (granted لا يُطلب مجدداً).
+//   3) showBrowserNotification + isQuietHours: إطلاق مشروط — يُخفت
+//      إذا كان التبويب مركّزاً أو ضمن ساعات الهدوء 23:00–07:00،
+//      وforce (ما جدّده المستخدم بنفسه) يتجاوز الشرطين.
+//
+// حدود: إشعارات المتصفح المحلية فقط — Web Push وتعدد الأجهزة في
+// push-notifications.ts، ومركز الإشعارات الداخلي مستقل عنها.
+// ============================================================
+
 /**
  * Notification preferences — single source of truth.
  *

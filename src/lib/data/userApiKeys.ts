@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/userApiKeys.ts — مستودع «مفاتيح MCP»
+//
+// مفاتيح Bearer لواجهة MCP: يُخزَّن key_hash فقط — السر الخام
+// لا يمر على قاعدة البيانات إطلاقاً ويُعاد للمستخدم مرة واحدة
+// عند الإنشاء (انظر /api/rise/mcp/key). removeAll للمسح الكامل.
+// ============================================================
+
 export const userApiKeys = {
     async create(userId: string, keyHash: string, name = 'MCP Key') {
       const client = await sb()

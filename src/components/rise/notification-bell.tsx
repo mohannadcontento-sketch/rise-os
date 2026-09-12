@@ -1,5 +1,34 @@
 'use client'
 
+// ============================================================
+// notification-bell.tsx — جرس الإشعارات (رأس التطبيق)
+//
+// جرس يُحمَّل lazy من مُوجِّه الوحدات ويظهر في الرأس: شارة غير
+// المقروء + لوحة إشعارات (popover بجوار الجرس في الشاشات
+// الكبيرة، ورقة fixed inset-x-3 في الموبايل) تعرض آخر
+// الإشعارات مع تحديد كمقروء/حذف/مسح الكل. النقر على إشعار
+// يبثّ rise:navigate (actionUrl) و«عرض كل الإشعارات» يبثّ
+// awj:open-notifications لفتح الدرج الكامل. الجلب والطفرات
+// عبر apiGet/apiPut/apiDelete من /api/rise/notifications.
+//
+// البنية الداخلية:
+//   1) تطبيع read/isRead + خرائط ألوان وأيقونات حسب النوع
+//      (task/habit/subscription/usage/...)
+//   2) fetchNotifications (القائمة كاملة) و fetchBadgeCount
+//      (mode=count خفيف) مع منع التزامن بمراجع
+//   3) جلب أولي عند تغير refreshKey (useDataRefresh) +
+//      استطلاع 30s واللوحة مفتوحة و300s وهي مغلقة، مع تخطي
+//      التبويب المخفي وإعادة الجلب عند العودة (visibilitychange)
+//   4) الطفرات: markAsRead / markAllAsRead (RPC {all:true}
+//      مع fallback إلى ids) / delete / clearAll + طلب صلاحية
+//      المتصفح عند الحالة default
+//
+// مبادئ UX/تقنية: الإشعار الجديد يشغّل صوتًا ويهزّ الجرس 600ms
+// ويطلق إشعار متصفح فقط حين التبويب بلا تركيز (مع fallback
+// عبر SW postMessage)؛ الطفرات متفائلة (تحديث الحالة ثم
+// الطلب بصمت)؛ إغلاق بالنقر الخارجي أو Escape.
+// ============================================================
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, BellRing, CheckCheck, Trash2, X, BellOff } from 'lucide-react'

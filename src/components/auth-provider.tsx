@@ -1,5 +1,25 @@
 'use client'
 
+// ============================================================
+// auth-provider.tsx — مزوّد الجلسة (طبقة التطبيق)
+//
+// يُركَّب مرة واحدة في layout الجذر (src/app/layout.tsx): يستعيد
+// الجلسة من /api/auth/session عند الإقلاع ويكتبها في store
+// (zustand)، ثم يبقى منصتًا لحدثَي rise:session-expired (تسجيل
+// خروج كامل) و rise:auth-refreshed (تجديد بيانات المستخدم)،
+// ويبثّ rise:user-authenticated بعد كل استعادة أو تجديد ناجح.
+//
+// البنية الداخلية:
+//   1) clearClientAuthMetadata — يمسح بيانات الجلسة المحلية
+//      (rise-auth / rise-user-info ومفاتيح sb-*auth-token)
+//   2) AuthProvider — restore() + مستمعا النافذة + تنظيف
+//      المستمعات والمرجع mounted عند التفكيك
+//
+// مبادئ UX/تقنية: فشل الشبكة العابر لا يُسقط جلسة قائمة في
+// الذاكرة (catch صامت)، بينما 401/403 أو استجابة بلا مستخدم
+// تعني انتهاء الجلسة: مسح كامل + logout.
+// ============================================================
+
 import { useEffect } from 'react'
 import { useRiseStore } from '@/store/app-store'
 

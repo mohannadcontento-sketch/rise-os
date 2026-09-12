@@ -12,6 +12,23 @@
  */
 import { toast } from 'sonner'
 
+// ============================================================
+// toast-helpers.ts — توست العمليات الموحّد
+//
+// أغلفة قصيرة فوق sonner لنجاح الحفظ/الإنشاء/الحذف وفشل العمليات،
+// تفرض موضعاً واحداً (top-center) ومدداً ثابتة (نجاح ثانيتان / خطأ
+// 3 ثوانٍ) وصياغة عربية موحدة — فتبقى ردود أفعال الوحدات (tasks/
+// goals/health/...) متسقة بلا نصوص مبعثرة.
+//
+// المسؤوليات:
+//   1) toastSaved/toastCreated/toastDeleted: إشعار نجاح مختصر
+//      يقبل اسم الكيان اختيارياً.
+//   2) toastError: مع وصف اختياري للسبب ومدة أطول للقراءة.
+//
+// حدود: عرض فقط — لا تقرر سياسة الأخطاء ولا تعيد المحاولة ولا
+// تسجّل شيئاً.
+// ============================================================
+
 /** Show a success toast after saving data */
 export function toastSaved(entity?: string): void {
   toast.success(entity ? `تم حفظ ${entity}` : 'تم الحفظ', {
@@ -44,4 +61,3 @@ export function toastError(action?: string, description?: string): void {
     position: 'top-center',
   })
 }
-// Trigger redeployment: Sun Aug  2 18:38:52 UTC 2026

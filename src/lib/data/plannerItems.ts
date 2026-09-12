@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/plannerItems.ts — مستودع «المخطط اليومي»
+//
+// كتل اليوم (section × order): list ليوم بعينه مرتبة بالقسم
+// ثم الترتيب، وcreate/update/remove مقيدة بالملكية. المسار
+// /api/rise/planner يضيف فوقها مهام اليوم المجدولة (linkedTasks).
+// ============================================================
+
 export const plannerItems = {
     async list(userId: string, date: string) {
       const client = await sb()

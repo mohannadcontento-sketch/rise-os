@@ -3,6 +3,22 @@ import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/knowledge — الدماغ الثاني (عناصر المعرفة)
+//
+// عناصر معرفة المستخدم (ملاحظات، موارد، إشارات مرجعية...) في
+// جدول knowledge_items المشترك: GET يفلتر بأنواع الدماغ وحدها
+// (BRAIN_TYPES) كي لا تتسرب صفوف وحدات أخرى (learning-*
+// للتعلم، budget-config للمالية) إلى قائمة الدماغ والبحث.
+//
+// المسار محمي: requireUser — ملاحظات شخصية معزولة بـ RLS.
+// الطرق: GET [?type=] — عناصر الدماغ، أو عناصر تبدأ ببادئة
+//        نوع مطلوبة (هكذا تجلب وحدة التعلم صفوفها).
+//        POST / PUT / DELETE ?id= — إنشاء وتحديث وحذف عنصر،
+//        مع قصّ حقول الخدمة (id, createdAt, userId...).
+// Idempotency-Key: مطلوب لكل طفرة (withIdempotency).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

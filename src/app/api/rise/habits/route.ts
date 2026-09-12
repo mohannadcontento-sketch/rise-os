@@ -5,6 +5,24 @@ import { pickAllowed } from '@/lib/sanitize'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/habits — العادات (تعريفها + سجلاتها اليومية)
+//
+// إدارة عادات المستخدم مع تتبع يومي: GET يفصل العادات عن
+// سجلاتها في استجابتين (habits + logs مسطَّحة)، وPUT يميّز
+// تحديث العادة نفسها من قلب سجل يومها في زر التقفي.
+//
+// المسار محمي: requireUser — بيانات شخصية معزولة بـ RLS.
+// الطرق: GET — { habits, logs }.
+//        POST — عادة جديدة (اسم، تكرار، هدف يومي، XP...).
+//        PUT — تحديث عادة، أو قلب سجل يوم ({ habitId, date,
+//        completed, count }).
+//        DELETE ?id= — حذف العادة.
+// Idempotency-Key: مطلوب لكل طفرة (withIdempotency) +
+// bustAggregateCache. الحقول بقائمة بيضاء (pickAllowed) —
+// عميل قديم بحقول مهجورة (مثل target_days) لا يكسر الكتابة.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

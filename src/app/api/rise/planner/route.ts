@@ -2,8 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/api-auth'
 import { data } from '@/lib/data'
 import { pickAllowed } from '@/lib/sanitize'
-import { getToday } from '@/lib/rise-utils'
+import { getTodayCairo } from '@/lib/rise-utils'
 import { withIdempotency } from '@/lib/idempotency'
+
+// ============================================================
+// /api/rise/planner — المخطط اليومي (كتل اليوم)
+//
+// عناصر كتل اليوم (صباح/ظهر/مساء) بترتيبها داخل القسم، ويجلب
+// بجانبها مهام اليوم ذات الوقت المحدد (linkedTasks) مصنَّفة
+// حسب ساعتها — فيبدو الجدول موحّداً رغم مصدرين منفصلين.
+//
+// المسار محمي: requireUser — بيانات شخصية معزولة بـ RLS.
+// الطرق: GET ?date — { items, linkedTasks } لليوم المطلوب
+//        (المهام الملغاة مستثناة والمكتملة تظهر مشطوبة).
+//        POST — عنصر جديد في نهاية قسمه (order متسلسل).
+//        PUT — تحديث عنصر (نص، وقت، إتمام، ترتيب)؛ معرّف
+//        غير صالح يرد 400.
+//        DELETE ?id= — حذف العنصر.
+// Idempotency-Key: مطلوب لكل طفرة. الحقول بقائمة بيضاء
+// (pickAllowed) — حقول عميلة قديمة (مثل blocks) تُقصى.
+// ============================================================
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +31,9 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
 
     const { searchParams } = new URL(req.url)
-    const date = searchParams.get('date') || getToday()
+    // العميل يرسل ?date= (تاريخه المحلي) دائماً؛ البديل Cairo-safe
+    // لا getToday — ساعة الخادم UTC فتنزلق لليوم التالي بعد 02:00 صباحاً.
+    const date = searchParams.get('date') || getTodayCairo()
 
     const [items, allTasks] = await Promise.all([
       data.plannerItems.list(userId, date),

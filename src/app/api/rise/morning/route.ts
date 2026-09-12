@@ -6,6 +6,24 @@ import { pickAllowed } from '@/lib/sanitize'
 import { bustAggregateCache } from '@/lib/aggregate-cache'
 import { withIdempotency } from '@/lib/idempotency'
 
+// ============================================================
+// /api/rise/morning — الروتين الصباحي (سجل يومي)
+//
+// سجل يومي واحد لكل تاريخ (upsert): درجة الصباح، العناصر
+// المكتملة، وقت البدء والإتمام — يغذي قائمة خطوات الصباح
+// في وحدة الروتين الصباحي.
+//
+// المسار محمي: requireUser — بيانات شخصية.
+// الطرق: GET ?date — { logs, todayLog } لآخر 30 يوماً؛ تاريخ
+//        القاهرة مرجع عند غياب المعلمة (ساعة الخادم UTC
+//        فـ«اليوم» الخادمي كان بالأمس قبل الفجر).
+//        POST { date?, ...حقول } — upsert سجل اليوم.
+// Idempotency-Key: مطلوب للـPOST + bustAggregateCache.
+// تعقيم: pickAllowed (score, completedItems, totalItems,
+//        startedAt, completedAt)؛ جسم فارغ بعد التصفية يرد
+//        400 واضحاً (المهمة 24) بدل 500 غامض.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {

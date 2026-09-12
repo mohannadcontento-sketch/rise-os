@@ -4,6 +4,21 @@ import { createSupabaseIsolatedClient, isSupabaseConfigured } from '@/lib/supaba
 import { setAuthCookies } from '@/lib/cookie-auth'
 import { isMockAuthEnabled } from '@/lib/mock-auth'
 
+// ============================================================
+// /api/auth/signup — المصادقة (إنشاء حساب جديد)
+//
+// يسجل حساباً جديداً عبر Supabase Auth (الاسم يُخزن في
+// user_metadata)، ويرد إما بجلسة فورية (كوكيز httpOnly) أو
+// بطلب تأكيد البريد حسب إعدادات المشروع على Supabase.
+//
+// المسار عام بالضرورة: لا جلسة قبل إنشاء الحساب.
+// الطرق: POST — يعيد { user } + كوكيز، أو { needsConfirmation }،
+//        أو 409 (بريد مسجل) / 400 (بيانات) / 500 / 503.
+// zod: SignupSchema — بريد + كلمة مرور ≥ 8 + اسم اختياري.
+// أمان: isAdmin يُعاد false دائماً — منح دور الإدارة يتم خارج
+// النطاق يدوياً، لا عبر التسجيل الذاتي. دون Supabase: mock.
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 // P1#5: Zod validation + P1#11: password min 8 (was 6)

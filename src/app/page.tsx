@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import LandingPage from "@/components/rise/landing";
 
+// ============================================================
+// app/page.tsx — نقطة الدخول الجذر (/)
+//
+// صفحة الهبوط العامة بلا جلسة: تعرض LandingPage فقط — الوحدات
+// الحقيقية خلف /app بمصادقة. الـmetadata هنا هو بطاقة المشاركة
+// (OG) العربية للموقع كله.
+// ============================================================
+
 export const metadata: Metadata = {
   title: "أوج | awj.life — امتلك صباحك. امتلك حياتك.",
   description:

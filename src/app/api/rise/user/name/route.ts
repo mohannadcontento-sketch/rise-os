@@ -5,6 +5,20 @@ import { withIdempotency } from '@/lib/idempotency'
 import { parseBody, userNameSchema } from '@/lib/validators'
 import { tursoUpsertMember } from '@/lib/community-sync'
 
+// ============================================================
+// /api/rise/user/name — الإعدادات (اسم العرض)
+//
+// يحدّث اسم المستخدم في profiles بعد تقليم الفراغات، ثم
+// يزامن لقطة العضو العام في مرآة Turso (fire-and-forget)
+// ليظهر الاسم الجديد في المجتمع فوراً.
+//
+// المسار محمي: requireUser — الملف الشخصي للمستخدم نفسه.
+// الطرق: POST { name } — يعيد { name } بعد التقليم، أو 400
+//        (فراغ/تجاوز طول) / 401 / 500.
+// zod: userNameSchema عبر parseBody.
+// Idempotency-Key: مطلوب (withIdempotency).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {

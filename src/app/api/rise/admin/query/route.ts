@@ -4,6 +4,23 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { withIdempotency } from '@/lib/idempotency'
 import { z } from 'zod'
 
+// ============================================================
+// /api/rise/admin/query — الإدارة (استعلامات قراءة مقيدة)
+//
+// نافذة قراءة إدارية محصورة: لا SQL حر — فقط استعلامات مسماة
+// في allowlist (عدّادات الجداول، المستخدمون الجدد، سجل التدقيق،
+// الأخطاء الحديثة، ملخص التخزين) تنفَّذ عبر RPC admin_read داخل
+// قاعدة البيانات، مع تمرير p_admin_user_id ليتحقق الدور هناك.
+//
+// المسار محمي: requireAdmin — يقرأ بيانات عبر كل الحسابات (403
+// لغير الأدمن).
+// الطرق: POST { queryId, limit? } — يعيد { columns, rows } من
+//        الـRPC، أو 400 (استعلام غير مسموح) / 503 / 500.
+// zod: QuerySchema — queryId ضمن enum مسموح + limit عدد صحيح
+//        بين 1 و500 (افتراضي 100).
+// Idempotency-Key: مطلوب (withIdempotency).
+// ============================================================
+
 export const dynamic = 'force-dynamic'
 
 const QuerySchema = z.object({

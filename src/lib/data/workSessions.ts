@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/workSessions.ts — مستودع «جلسات الشغل»
+//
+// جلسات العمل الطويلة لوحدة work: list (آخر 50) + get +
+// create + update — درجة جودة الجلسة تُحسب عند الإتمام
+// (45/35/20) وتُمرَّر ضمن body. كل عملية مقيدة بالملكية.
+// ============================================================
+
 export const workSessions = {
     async list(userId: string, limit = 50) {
       const client = await sb()

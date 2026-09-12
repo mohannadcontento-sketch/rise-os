@@ -1,3 +1,23 @@
+// ============================================================
+// admin-panel-utils.ts — أدوات لوحة الإدارة (مشتركة)
+//
+// أنواع وتنسيقات مشتركة بين تبويبات لوحة الإدارة وملحقاتها
+// (admin-panel و admin-users-tab / system-stats / api-keys /
+// overview / database / health-errors / audit / broadcast):
+// بطاقة مستخدم، إحصاءات النظام، ومفتاح API. وحدة .ts نقية
+// بلا React — عرض فقط ولا وصول لبيانات هنا.
+//
+// البنية الداخلية:
+//   1) الأنواع: AdminUser / SystemStats / ApiKeyInfo
+//   2) toArabicNum — أرقام هندية-عربية لعرض الواجهة
+//   3) formatBytes / formatDate / formatDateTime — تنسيق حجم
+//      وتاريخ (ar-EG)
+//   4) timeAgo (عربية) + timeAgoEn (إنجليزية لرسائل السجل)
+//
+// مبادئ تقنية: كل دالة تتسامح مع null/undefined وتعيد قيمة
+// آمنة ('٠' / '—') بدل الانهيار، وكل تاريخ يُنسَّق داخل try/catch.
+// ============================================================
+
 export interface AdminUser {
   id: string
   email: string | null

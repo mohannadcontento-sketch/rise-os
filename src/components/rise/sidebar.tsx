@@ -136,7 +136,7 @@ const ADMIN_GROUP: NavGroup = {
   items: [{ id: 'admin-panel', ...mi('admin-panel') }],
 }
 
-const NAV_OPEN_KEY = 'rise-nav-open-groups'
+const NAV_OPEN_KEY = 'nav-open-groups' // نطاق user-storage: rise-user:<id>:nav-open-groups
 
 /**
  * External store for the persisted open-groups — read via useSyncExternalStore
@@ -148,12 +148,13 @@ let navOpenCache: string[] | null = null
 const navOpenListeners = new Set<() => void>()
 
 function navOpenRead(): string[] {
-  // قراءة كسولة: أول استدعاء يحمّل من localStorage ويملأ الكاش، والبقية من الذاكرة
+  // قراءة كسولة: أول استدعاء يحمّل من التخزين المعزول ويملأ الكاش، والبقية من الذاكرة
   if (navOpenCache === null) {
     let next: string[] = ['today']
     try {
-      // تفضيل UI عام: يُستخدم localStorage مباشرة (لا getUserStorage) لأنه ليس بيانات مستخدم
-      const raw = localStorage.getItem(NAV_OPEN_KEY)
+      // تفضيل UI معزول للمستخدم (getUserStorage) — جهاز مشترك لا يشارك
+      // حالة توسيع الأقسام بين الحسابات؛ بلا جلسة يُرفض ويعود الافتراضي.
+      const raw = getUserStorage(NAV_OPEN_KEY)
       if (raw) next = JSON.parse(raw)
     } catch { /* keep default */ }
     navOpenCache = next
@@ -164,7 +165,7 @@ function navOpenRead(): string[] {
 function navOpenWrite(next: string[]) {
   // الكتابة أمرية: تحديث الكاش ثم إخطار كل المشتركين (نمط external store)
   navOpenCache = next
-  try { localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  try { setUserStorage(NAV_OPEN_KEY, JSON.stringify(next)) } catch { /* ignore */ }
   navOpenListeners.forEach((l) => l())
 }
 

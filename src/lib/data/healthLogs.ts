@@ -1,5 +1,13 @@
 import { sb, toSnake, toCamel } from './core'
 
+// ============================================================
+// data/healthLogs.ts — مستودع «الصحة»
+//
+// قياسات اليوم الواحد (نوم/طاقة/...): list لتواريخ محددة
+// وupsert ذري على (user_id, date) — قياس واحد لكل يوم يستبدل
+// السابق ولا يتراكم.
+// ============================================================
+
 export const healthLogs = {
     async list(userId: string, dates: string[]) {
       const client = await sb()
