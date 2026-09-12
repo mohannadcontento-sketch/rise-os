@@ -129,6 +129,13 @@ export function McpSection() {
   const endpointUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/api/rise/mcp/call` : '/api/rise/mcp/call'
 
+  // نقطة Supabase البديلة (Edge Function — مستقلة عن Vercel):
+  // NEXT_PUBLIC_* آمنة للعميل بنيويًا (نفس مفتاح anon العام)؛
+  // تظهر فقط لو ضُبط متغير البيئة، مع تنويه أنها تنشط بنشر المالك
+  const edgeEndpointUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/mcp`
+    : null
+
   const copyText = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -298,9 +305,9 @@ export function McpSection() {
 
               {guideOpen && (
                 <div className="px-4 pb-4 space-y-3 border-t border-white/10 dark:border-white/5 pt-3">
-                  {/* النقطة */}
+                  {/* النقطة — الافتراضية (تطبيق أوج) */}
                   <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-muted-foreground">عنوان الخادم (URL)</p>
+                    <p className="text-[10px] font-semibold text-muted-foreground">عنوان الخادم (URL) — تطبيق أوج</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 min-w-0 text-[11px] font-mono bg-card rounded-lg px-3 py-2 truncate border border-white/10" dir="ltr">
                         {endpointUrl}
@@ -310,6 +317,27 @@ export function McpSection() {
                       </Button>
                     </div>
                   </div>
+
+                  {/* النقطة — Supabase (بديل مستقل عن Vercel) */}
+                  {edgeEndpointUrl && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-muted-foreground">
+                        عنوان بديل (Supabase) — يستضيفه سيرفر أوج على Supabase نفسها
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 min-w-0 text-[11px] font-mono bg-card rounded-lg px-3 py-2 truncate border border-white/10" dir="ltr">
+                          {edgeEndpointUrl}
+                        </code>
+                        <Button size="sm" variant="outline" onClick={() => copyText(edgeEndpointUrl, 'عنوان Supabase')}>
+                          <Copy className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        النقطتان تشتركان في نفس المفتاح والأدوات والحدود — استخدم أيّهما في عميل MCP،
+                        والبديل يعمل حتى أثناء نشر تحديثات تطبيق أوج.
+                      </p>
+                    </div>
+                  )}
 
                   {/* المصادقة */}
                   <div className="space-y-1">

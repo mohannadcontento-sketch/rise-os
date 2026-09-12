@@ -42,6 +42,7 @@
     "mini-services",
     "skills",
     "tests",
-    "scripts"
+    "scripts",
+    "supabase"
   ]
 }

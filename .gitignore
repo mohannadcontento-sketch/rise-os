@@ -88,3 +88,4 @@ test-results/
 extracted/
 shots/
 scripts/
+deno.lock
