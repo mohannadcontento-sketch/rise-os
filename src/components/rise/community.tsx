@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { AVATARS } from '@/lib/avatars'
 import { useRiseStore } from '@/store/app-store'
 import {
   fetchCommunityFeed,
@@ -78,12 +79,36 @@ function RichText({ text }: { text: string }) {
   )
 }
 
+// FIX (2026-09-12 hotfix): قيمة الأفاتار قد تكون مفتاح ثيم (مثل "ocean-3") وليست رابط صورة —
+// تمريرها كـ <img src> كان يسبب 404 لكل عضو ضبط أفاتاره من نافذة «اختر صورتك الرمزية».
+// الآن: رابط صورة حقيقي → <img>، مفتاح ثيم → نفس تدرّج+SVG المستخدم في الشريط الجانبي/الإعدادات،
+// وأي قيمة أخرى → دائرة الحرف الأول (كما كان).
+function isImageUrl(v: string | null | undefined): boolean {
+  if (!v) return false
+  return /^(https?:)?\/\//i.test(v) || v.startsWith('data:') || v.startsWith('blob:') || v.startsWith('/')
+}
+
 function Avatar({ name, src, size = 36 }: { name: string; src?: string | null; size?: number }) {
   const initials = (name || '؟').trim().slice(0, 1)
-  return src ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={name} width={size} height={size} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />
-  ) : (
+  if (src && isImageUrl(src)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={name} width={size} height={size} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />
+    )
+  }
+  const themed = src ? AVATARS.find(a => a.id === src) : undefined
+  if (themed) {
+    return (
+      <div
+        aria-label={name}
+        className="rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+        style={{ width: size, height: size, ...themed.style }}
+      >
+        <span style={{ transform: `scale(${Math.min(1, size / 40)})` }}>{themed.svg}</span>
+      </div>
+    )
+  }
+  return (
     <div
       className="rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center shrink-0"
       style={{ width: size, height: size, fontSize: size * 0.42 }}
