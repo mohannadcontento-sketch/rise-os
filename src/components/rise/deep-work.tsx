@@ -2,6 +2,7 @@
 
 import { getUserStorage, setUserStorage, removeUserStorage } from '@/lib/user-storage'
 import { useAmbientSounds } from '@/hooks/use-ambient-sounds'
+import { useFocusTimer } from '@/hooks/use-focus-timer'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -172,14 +173,27 @@ export default function DeepWork() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Timer state
-  const [selectedDuration, setSelectedDuration] = useState(25)
-  const [customDuration, setCustomDuration] = useState('')
-  const [timeRemaining, setTimeRemaining] = useState(25 * 60)
-  const [isRunning, setIsRunning] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
-  const [sessionCompleted, setSessionCompleted] = useState(false)
-  const [sessionStartTime, setSessionStartTime] = useState<string | null>(null)
+  // Timer state — الاستعادة والنبض والتحكم كلها في use-focus-timer
+  // (timestamp-based: البقاء في خلفية التبويب لا يزيغ الوقت)
+  const {
+    selectedDuration, customDuration, timeRemaining,
+    isRunning, isPaused, sessionCompleted, sessionStartTime, celebrateKey,
+    setCustomDuration, setSessionCompleted, setSessionStartTime, setTimeRemaining,
+    start: timerStart, pause: timerPause, resume: timerResume,
+    reset: timerReset, stop: timerStop,
+    durationSelect: timerDurationSelect, customDurationSet: timerCustomDurationSet,
+    elapsedMin: timerElapsedMin,
+  } = useFocusTimer({
+    start: () => playSound('click'),
+    pause: () => playSound('toggle'),
+    resume: () => playSound('click'),
+    reset: () => playSound('click'),
+    navigate: () => playSound('navigate'),
+    complete: () => {
+      playSound('timer-done')
+      setTimeout(() => playSound('achievement'), 400)
+    },
+  })
   const QUICK_NOTES_KEY = 'rise-deep-work-quick-notes'
   const [sessionNotes, setSessionNotes] = useState(() => {
     if (typeof window === 'undefined') return ''
@@ -198,7 +212,7 @@ export default function DeepWork() {
       setNotesSaved(true)
     }, 500)
   }
-  const [celebrateKey, setCelebrateKey] = useState(0)
+  // celebrateKey يعيش داخل use-focus-timer (يتزايد عند كل اكتمال)
 
   // Ambient sounds (real Web Audio)
   const [activeSounds, setActiveSounds] = useState<Set<string>>(new Set())
@@ -217,9 +231,7 @@ export default function DeepWork() {
   const [linkingTask, setLinkingTask] = useState(false)
   const [lastSessionId, setLastSessionId] = useState<string | null>(null)
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const endTimeRef = useRef<number | null>(null)
-  const FOCUS_TIMER_STORAGE_KEY = 'rise-focus-timer-state'
+  // intervalRef/endTimeRef و مفتاح التخزين — داخل use-focus-timer
 
   /* ─── Fetch ─── */
   const fetchSessions = useCallback(async () => {
@@ -240,76 +252,8 @@ export default function DeepWork() {
     fetchSessions()
   }, [fetchSessions])
 
-  /* ─── Restore timer state on mount ─── */
-  useEffect(() => {
-    try {
-      const stored = getUserStorage(FOCUS_TIMER_STORAGE_KEY)
-      if (stored) {
-        const state = JSON.parse(stored)
-        if (state.endTime && state.endTime > Date.now()) {
-          // Timer still running
-          const remaining = Math.max(0, Math.floor((state.endTime - Date.now()) / 1000))
-          setSelectedDuration(state.duration)
-          setTimeRemaining(remaining)
-          setSessionStartTime(state.startedAt)
-          setIsRunning(true)
-          setIsPaused(false)
-          endTimeRef.current = state.endTime
-        } else if (state.endTime && state.endTime <= Date.now() && (Date.now() - state.endTime) < 5 * 60 * 1000) {
-          // Completed while away
-          setTimeRemaining(0)
-          setSessionCompleted(true)
-          setSessionStartTime(state.startedAt)
-          setSelectedDuration(state.duration)
-          removeUserStorage(FOCUS_TIMER_STORAGE_KEY)
-        }
-      }
-    } catch { /* ignore */ }
-  }, [])
+  // استعادة المؤقت عند التحميل + منطق النبض (timestamp-based) — انتقلا إلى use-focus-timer
 
-  /* ─── Timer Logic (timestamp-based) ─── */
-  useEffect(() => {
-    if (isRunning && !isPaused) {
-      if (!endTimeRef.current) {
-        endTimeRef.current = Date.now() + timeRemaining * 1000
-      }
-
-      // Save state to localStorage
-      try {
-        setUserStorage(FOCUS_TIMER_STORAGE_KEY, JSON.stringify({
-          endTime: endTimeRef.current,
-          duration: selectedDuration,
-          startedAt: sessionStartTime,
-        }))
-      } catch { /* ignore */ }
-
-      intervalRef.current = setInterval(() => {
-        const remaining = Math.max(0, Math.floor((endTimeRef.current! - Date.now()) / 1000))
-        setTimeRemaining(remaining)
-
-        if (remaining <= 0) {
-          clearInterval(intervalRef.current!)
-          intervalRef.current = null
-          endTimeRef.current = null
-          setIsRunning(false)
-          setIsPaused(false)
-          setSessionCompleted(true)
-          setCelebrateKey((k) => k + 1)
-          playSound('timer-done')
-          setTimeout(() => playSound('achievement'), 400)
-          try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
-        }
-      }, 200)
-    } else {
-      if (!isRunning && !sessionCompleted) {
-        try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
-      }
-    }
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [isRunning, isPaused, selectedDuration, sessionStartTime])
 
   /* ─── Save Session ─── */
   const saveSession = async (completed: boolean) => {
@@ -412,84 +356,26 @@ export default function DeepWork() {
     }
   }
 
-  /* ─── Controls ─── */
-  const handleStart = () => {
-    if (!sessionStartTime) {
-      setSessionStartTime(new Date().toISOString())
-    }
-    endTimeRef.current = null // Will be recalculated in the effect
-    setIsRunning(true)
-    setIsPaused(false)
-    setSessionCompleted(false)
-    playSound('click')
-  }
-
-  const handlePause = () => {
-    endTimeRef.current = Date.now() + timeRemaining * 1000
-    setIsPaused(true)
-    playSound('toggle')
-  }
-
-  const handleResume = () => {
-    endTimeRef.current = Date.now() + timeRemaining * 1000
-    setIsPaused(false)
-    playSound('click')
-  }
-
-  const handleReset = () => {
-    setIsRunning(false)
-    setIsPaused(false)
-    setSessionCompleted(false)
-    setTimeRemaining(selectedDuration * 60)
-    setSessionStartTime(null)
-    endTimeRef.current = null
-    try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
-    playSound('click')
-  }
+  /* ─── Controls ── أزرار المؤقت تُفوّض إلى use-focus-timer (الأصوات عبر أحداثه) ── */
+  const handleStart = timerStart
+  const handlePause = timerPause
+  const handleResume = timerResume
+  const handleReset = timerReset
 
   const handleStop = () => {
-    setIsRunning(false)
-    setIsPaused(false)
-    endTimeRef.current = null
-    try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
-    const elapsedMin = Math.round((selectedDuration * 60 - timeRemaining) / 60)
-    if (elapsedMin > 0) {
+    // الدقائق المنقضية تُحسب قبل التصفير (نفس ترتيب السلوك الأصلي)
+    const elapsed = timerElapsedMin()
+    timerStop()
+    if (elapsed > 0) {
       saveSession(false)
       playSound('save')
     } else {
       playSound('click')
     }
-    setTimeRemaining(selectedDuration * 60)
-    setSessionStartTime(null)
   }
 
-  const handleDurationSelect = (min: number) => {
-    if (isRunning) return
-    if (min === 0) {
-      // Custom duration — show input
-      setSelectedDuration(0)
-      return
-    }
-    setSelectedDuration(min)
-    setTimeRemaining(min * 60)
-    setSessionCompleted(false)
-    setSessionStartTime(null)
-    endTimeRef.current = null
-    try { removeUserStorage(FOCUS_TIMER_STORAGE_KEY) } catch { /* ignore */ }
-    playSound('navigate')
-  }
-
-  const handleCustomDurationSet = () => {
-    const min = parseInt(customDuration, 10)
-    if (min && min > 0 && min <= 480) {
-      setSelectedDuration(min)
-      setTimeRemaining(min * 60)
-      setSessionCompleted(false)
-      setSessionStartTime(null)
-      setCustomDuration('')
-      playSound('navigate')
-    }
-  }
+  const handleDurationSelect = timerDurationSelect
+  const handleCustomDurationSet = timerCustomDurationSet
 
   const toggleSound = (label: string) => {
     const isActive = activeSounds.has(label)
