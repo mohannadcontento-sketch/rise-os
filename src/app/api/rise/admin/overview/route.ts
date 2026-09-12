@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/audit'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { setCurrentAuthToken } from '@/lib/data'
+import { tursoStatus } from '@/lib/turso'
+import { cloudinaryStatus } from '@/lib/cloudinary'
 
 export const dynamic = 'force-dynamic'
 
 // ADMIN PRO — Overview / Command Center endpoint.
 // One round trip feeding the default admin tab: KPIs, activity,
-// error trend, latest audit entries and latest signups.
+// error trend, latest audit entries, latest signups, and the
+// status of the two satellite services (Turso mirror + Cloudinary
+// media — المرحلة 07) so their health is observable from the panel.
 
 function daysAgoISO(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString()
@@ -22,7 +25,6 @@ export async function GET(request: NextRequest) {
     if (!adminId) {
       return NextResponse.json({ error: 'غير مصرح - أدمن فقط' }, { status: 403 })
     }
-    setCurrentAuthToken(request.headers.get('Authorization')?.replace('Bearer ', ''))
 
     const admin = await getSupabaseAdmin()
     if (!admin) {
@@ -102,6 +104,14 @@ export async function GET(request: NextRequest) {
       countTable('tasks'), countTable('habits'), countTable('journals'), countTable('focus_sessions'),
     ])
 
+    // ── المرحلة 07: حالة الخدمات الفضائية (Turso + Cloudinary) ──
+    // كلاهما fail-open: فشل الاستعلام يظهر «غير مهيأ» بلا 500 —
+    // اللوحة لا تنهار لو تعطلت طبقة المرآة أو الوسائط.
+    const [turso, cloudinary] = await Promise.all([
+      tursoStatus().catch(() => ({ configured: false, host: null, readMode: false })),
+      cloudinaryStatus().catch(() => ({ configured: false, cloudName: null })),
+    ])
+
     return NextResponse.json({
       kpis: {
         usersTotal,
@@ -116,6 +126,7 @@ export async function GET(request: NextRequest) {
       errors7d,
       recentSignups,
       recentAudit,
+      services: { turso, cloudinary },
       dbLatencyMs: Date.now() - t0,
     })
   } catch (error) {

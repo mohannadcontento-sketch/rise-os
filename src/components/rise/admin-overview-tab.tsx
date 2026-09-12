@@ -20,6 +20,8 @@ import {
   Shield,
   RefreshCw,
   AlertTriangle,
+  Database,
+  ImageIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StatsSkeleton } from './admin-shared'
@@ -46,6 +48,11 @@ interface OverviewData {
   errors7d: { date: string; count: number }[]
   recentSignups: { id: string; name: string; email: string; createdAt: string; role: string; suspended: boolean }[]
   recentAudit: { id: string; adminId: string; action: string; detail: string; createdAt: string }[]
+  // المرحلة 07 — حالة الطبقتين الفضائيتين (fail-open من المسار)
+  services: {
+    turso: { configured: boolean; host: string | null; readMode: boolean }
+    cloudinary: { configured: boolean; cloudName: string | null }
+  }
   dbLatencyMs: number
 }
 
@@ -69,7 +76,16 @@ export function OverviewTab({ onBroadcast }: { onBroadcast: () => void }) {
     setLoading(true)
     try {
       const res = await apiFetch('/api/rise/admin/overview')
-      if (res.ok) setData(await res.json())
+      if (res.ok) {
+        const body = await res.json()
+        // توافق خلفي: نشرات أقدم من قسم services ترى «غير مهيأ»
+        // بدل الانهيار — الحقل اختياري على مستوى الشبكة.
+        body.services ??= {
+          turso: { configured: false, host: null, readMode: false },
+          cloudinary: { configured: false, cloudName: null },
+        }
+        setData(body)
+      }
     } catch { /* silent */ }
     finally { setLoading(false) }
   }, [])
@@ -104,6 +120,39 @@ export function OverviewTab({ onBroadcast }: { onBroadcast: () => void }) {
         <span className="text-[10px] text-muted-foreground ms-auto">
           قاعدة البيانات {toArabicNum(data.dbLatencyMs)} م.ث · تحديث تلقائي كل ٩٠ ث
         </span>
+      </div>
+
+      {/* ── المرحلة 07: حالة الخدمات (Turso + Cloudinary) ── */}
+      {/* fail-open: «غير مهيأ» لا يعني عطلاً — يعني غير مُعد فقط */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="neo-card p-3 flex items-center gap-3">
+          <Database className={cn('w-4 h-4 shrink-0', data.services.turso.configured ? 'text-forest' : 'text-muted-foreground')} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold">مرآة Turso</p>
+            <p className="text-[10px] text-muted-foreground truncate" dir="ltr">
+              {data.services.turso.configured
+                ? `${data.services.turso.host ?? '—'}${data.services.turso.readMode ? ' · قراءة مفعّلة' : ' · مزامنة فقط'}`
+                : 'غير مهيأة — المزامنة معطلة بأمان'}
+            </p>
+          </div>
+          <span className={cn('pill text-[10px] ms-auto shrink-0', data.services.turso.configured ? 'bg-forest/10 text-forest' : 'bg-muted text-muted-foreground')}>
+            {data.services.turso.configured ? 'نشطة' : 'بلا مرآة'}
+          </span>
+        </div>
+        <div className="neo-card p-3 flex items-center gap-3">
+          <ImageIcon className={cn('w-4 h-4 shrink-0', data.services.cloudinary.configured ? 'text-forest' : 'text-muted-foreground')} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold">وسائط Cloudinary</p>
+            <p className="text-[10px] text-muted-foreground truncate" dir="ltr">
+              {data.services.cloudinary.configured
+                ? data.services.cloudinary.cloudName ?? '—'
+                : 'غير مهيأة — رفع المجتمع معطّل'}
+            </p>
+          </div>
+          <span className={cn('pill text-[10px] ms-auto shrink-0', data.services.cloudinary.configured ? 'bg-forest/10 text-forest' : 'bg-muted text-muted-foreground')}>
+            {data.services.cloudinary.configured ? 'نشطة' : 'بلا رفع'}
+          </span>
+        </div>
       </div>
 
       {/* ── KPI grid ── */}
