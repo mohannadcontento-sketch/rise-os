@@ -115,7 +115,9 @@ export async function dispatchPushForNotification(notificationId: string): Promi
       title: String(gate.title ?? 'أوج'),
       body: String(gate.body ?? ''),
       icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      // شارة أحادية (96×96 أبيض على شفاف) — أندرويد يعرضها في شريط
+      // الحالة؛ الأيقونة الملونة كانت تظهر مربعاً مزدحماً مبتوراً.
+      badge: '/badge-96.png',
       tag: `awj-${gate.notification_id}`,
       url: deepLinkFor(gate.action_url, gate.notification_id),
     })

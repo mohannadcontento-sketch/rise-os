@@ -1,4 +1,5 @@
 {
+  "id": "/app",
   "name": "أوج | awj.life — نظام حياتك الشخصي",
   "short_name": "أوج",
   "description": "نظام تشغيل الحياة الشامل - إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم.",
@@ -40,17 +41,17 @@
   "shortcuts": [
     {
       "name": "المهام",
-      "url": "/?module=tasks",
+      "url": "/app?module=tasks",
       "description": "فتح المهام مباشرة"
     },
     {
       "name": "اليوميات",
-      "url": "/?module=journal",
+      "url": "/app?module=journal",
       "description": "كتابة يومية جديدة"
     },
     {
       "name": "قاعدة المعارف",
-      "url": "/?module=ai-coach",
+      "url": "/app?module=brain",
       "description": "تصفح قاعدة المعارف"
     }
   ]

@@ -344,6 +344,31 @@ export default function AwjApp() {
     return () => window.removeEventListener('rise:navigate', handler)
   }, [setActiveModule])
 
+  // ── Deep-links: ?module= و ?notification= من خارج الصفحة ──────────────
+  // مصدران: (1) اختصارات PWA وروابط إشعارات Push تفتح /app?module=<id>
+  // (كامل إعادة تحميل المستند من sw.js) — نحوّلها هنا إلى نفس آلية
+  // rise:navigate فنحصل على validation الوحدة + دعم community?post مجانًا.
+  // (2) جلسة سابقة خزّنها pwa-init (rise-start-module) — شبكة أمان
+  // لرحلات مرّت فيها الوحدة بلا معامل رابط (مثل تسجيل الدخول).
+  // ملاحظة ترتيب: هذا التأثير بعد معالج rise:navigate عمداً — المستمع
+  // مسجّل قبله فيفس التحويل المباشر (effects تُنفَّذ بترتيب الإعلان).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const requested = params.get('module')
+    if (requested) {
+      window.dispatchEvent(new CustomEvent('rise:navigate', { detail: requested }))
+      return
+    }
+    try {
+      const stored = sessionStorage.getItem('rise-start-module')
+      if (stored) {
+        sessionStorage.removeItem('rise-start-module')
+        window.dispatchEvent(new CustomEvent('rise:navigate', { detail: stored }))
+      }
+    } catch { /* sessionStorage محجوب — تجاهل */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /* ── Global search ── */
   const handleSearchQuery = useCallback((query: string) => {
     setSearchQuery(query)

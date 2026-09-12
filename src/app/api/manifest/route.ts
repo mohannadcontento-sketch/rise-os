@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server'
  */
 export async function GET() {
   const manifest = {
+    id: "/app",
     name: "أوج | awj.life — نظام حياتك الشخصي",
     short_name: "أوج",
     description: "نظام تشغيل الحياة الشامل - إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم.",
@@ -60,17 +61,17 @@ export async function GET() {
     shortcuts: [
       {
         name: "المهام",
-        url: "/app",
+        url: "/app?module=tasks",
         description: "فتح المهام مباشرة",
       },
       {
         name: "اليوميات",
-        url: "/app",
+        url: "/app?module=journal",
         description: "كتابة يومية جديدة",
       },
       {
         name: "قاعدة المعارف",
-        url: "/app",
+        url: "/app?module=brain",
         description: "تصفح قاعدة المعارف",
       },
     ],

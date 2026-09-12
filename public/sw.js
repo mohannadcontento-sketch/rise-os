@@ -1,14 +1,25 @@
-// أوج (Awj) Service Worker
-// Handles push notifications, background sync, and cache for PWA
+// أوج (Awj) Service Worker v5
+// Handles push notifications, offline fallback for navigations, and cache for PWA
+//
+// v5 changes (PWA/Push enhancement pass):
+//   • Navigations get a dedicated network-first strategy with a cache
+//     fallback and, as a last resort, the /offline page (pre-cached at
+//     install) — the browser's bare "no internet" error is gone.
+//   • Push badge switched to /badge-96.png (monochrome sun — Android
+//     status-bar badge; the colored app icon rendered as a cramped box).
+//   • notificationclick: navigate + focus chained safely (navigate can
+//     reject on exotic URLs; focus must still win).
 
-const CACHE_NAME = 'awj-v4'
-// TASK 25: bumped to v3 — drops ALL legacy API cache entries (they carry no
-// freshness timestamp and must never be served as offline fallback).
-const API_CACHE_NAME = 'awj-api-v4'
+const CACHE_NAME = 'awj-v5'
+// TASK 25 (kept): API cache must never serve legacy entries lacking a
+// freshness timestamp — they must never be an offline fallback.
+const API_CACHE_NAME = 'awj-api-v5'
 const STATIC_ASSETS = [
   '/app',
+  '/offline',
   '/icon-192.png',
   '/icon-512.png',
+  '/badge-96.png',
 ]
 
 // Install — cache static assets
@@ -44,6 +55,28 @@ self.addEventListener('fetch', (event) => {
 
   // Skip external requests
   if (url.origin !== self.location.origin) return
+
+  // ── Navigations (page loads): network-first with /offline fallback ──
+  // A navigation failing while offline used to surface the browser's raw
+  // error page. Order: network → cached page → /offline (pre-cached).
+  // API responses keep their own guarded strategy below.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Cache successful navigations (e.g. /app) for offline reuse.
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          }
+          return response
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) => cached || caches.match('/offline'))
+        )
+    )
+    return
+  }
 
   // ── API calls: NETWORK-FIRST (was stale-while-revalidate) ──
   // The old SWR strategy served the cached (stale) response FIRST and
@@ -125,7 +158,7 @@ self.addEventListener('fetch', (event) => {
 
 // Push event — show notification
 self.addEventListener('push', (event) => {
-  let data = { title: 'أوج', body: '', icon: '/icon-192.png', badge: '/icon-192.png', tag: '', url: '' }
+  let data = { title: 'أوج', body: '', icon: '/icon-192.png', badge: '/badge-96.png', tag: '', url: '' }
 
   try {
     data = { ...data, ...event.data?.json() }
@@ -151,22 +184,26 @@ self.addEventListener('push', (event) => {
   )
 })
 
-// Notification click — focus or open the app
+// Notification click — focus or open the app at the deep link
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const urlToOpen = event.notification.data?.url || '/app'
+  const urlToOpen = new URL(event.notification.data?.url || '/app', self.location.origin).href
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if available
+      // Focus an existing window and navigate it to the deep link.
+      // client.navigate() can reject (exotic/cross-origin target) — focus
+      // must still win, so the chain always falls back to client.focus().
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(urlToOpen)
-          return client.focus()
+          return client
+            .navigate(urlToOpen)
+            .then(() => client.focus())
+            .catch(() => client.focus())
         }
       }
-      // Open new window
+      // No window — open one at the deep link.
       return self.clients.openWindow(urlToOpen)
     })
   )
@@ -183,7 +220,7 @@ self.addEventListener('message', (event) => {
     self.registration.showNotification(title || 'أوج', {
       body: body || '',
       icon: icon || '/icon-192.png',
-      badge: badge || '/icon-192.png',
+      badge: badge || '/badge-96.png',
       tag: tag || `awj-${Date.now()}`,
       vibrate: [100, 50, 100],
       dir: 'rtl',
