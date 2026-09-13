@@ -49,6 +49,7 @@ export function PublicFooter() {
         >
           <Link href="/" className="text-muted-foreground transition-colors hover:text-foreground">الرئيسية</Link>
           <Link href="/pricing" className="text-muted-foreground transition-colors hover:text-foreground">الأسعار</Link>
+          <Link href="/features" className="text-muted-foreground transition-colors hover:text-foreground">المميزات</Link>
           <Link href="/privacy" className="text-muted-foreground transition-colors hover:text-foreground">الخصوصية</Link>
           <Link href="/terms" className="text-muted-foreground transition-colors hover:text-foreground">الشروط</Link>
           <Link href="/community-guidelines" className="text-muted-foreground transition-colors hover:text-foreground">إرشادات المجتمع</Link>
