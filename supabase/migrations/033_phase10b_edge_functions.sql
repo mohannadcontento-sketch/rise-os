@@ -120,8 +120,11 @@ BEGIN
     body := '{}'::jsonb
   );$cmd$;
 
-  -- إعادة الجدولة نظيفة (idempotent)
-  PERFORM cron.unschedule('awj-push-dispatch-sweep');
+  -- إعادة الجدولة نظيفة (idempotent): cron.unschedule يرمي خطأ
+  -- إذا لم توجد الوظيفة (مسار التفعيل الأول) — فنفحص الوجود أولًا
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'awj-push-dispatch-sweep') THEN
+    PERFORM cron.unschedule('awj-push-dispatch-sweep');
+  END IF;
   PERFORM cron.schedule(
     'awj-push-dispatch-sweep',
     '*/2 * * * *',
