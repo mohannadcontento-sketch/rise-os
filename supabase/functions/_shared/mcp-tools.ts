@@ -1,18 +1,23 @@
 // ============================================================
-// mcp-tools.ts — سجل أدوات MCP لخادم Supabase Edge (v2.0 موسّعة)
+// mcp-tools.ts — سجل أدوات MCP لخادم Supabase Edge (v3.0 — كل الأقسام)
 //
 // النسخة الأصيلة (Deno) الثمانية محفوظة حرفيًا كما هي، وأضيفت
-// عليها أدوات تغطي بقية الموقع — كلها على مخطط قاعدة البيانات
+// عليها أدوات تغطي الموقع كاملًا — كلها على مخطط قاعدة البيانات
 // الإنتاجي الفعلي (tasks/journals/goals/habits/habit_logs/
 // notifications/community_*/user_subscriptions/usage_daily/
-// profiles/user_api_keys):
+// profiles/user_api_keys + v3.0: books/knowledge_items/
+// finance_records/health_logs/morning_logs/focus_sessions/
+// work_sessions/planner_items/user_achievements/user_settings):
 //   • كل استعلام يفرض ملكية user_id صراحة (العميل يعمل بمفتاح
 //     service_role الذي يتجاوز RLS — الملكية مسؤولية ندائنا)
 //   • الكتابة الذرية عبر نفس دوال التطبيق: create/update_
 //     task_with_subtasks و create_goal_with_milestones
+//   • التعلم (learning-*) والدماغ الثاني يتشاركان جدول
+//     knowledge_items — نفس عزل الأنواع الذي يفرضه مسار الموقع
+//     (BRAIN_TYPES للدماغ، بادئة learning- لوحدة التعلم)
+//   • السجلات اليومية (صحة/صباح) upsert على (user_id, date)
+//     — نفس قيد التفرد المفروض في هجرة 005
 //   • الحذف متاح صراحةً لمالك المفتاح لكنه يتطلب confirm:true
-//   • المجتمع: إعجاب/تعليق عبر الجداول الأصلية (العدادات
-//     تُحدَّث بالتريجرات الجاهزة trg_community_recount)
 //   • Validation يدوي strict (بلا zod — بيئة Deno بلا تبعيات):
 //     أي حقل غير معروف يُرفض، نفس صيغة خطأ المسار «path: رسالة»
 //
@@ -85,6 +90,30 @@ function habitStreak(logs: { date: string; completed: boolean }[], today: string
     cursor = lastNDates(cursor, 2)[1]
   }
   return streak
+}
+
+/** أنواع «الدماغ الثاني» (مطابقة BRAIN_TYPES في مسار knowledge) —
+ * knowledge_items جدول مشترك: وحدة التعلم تخزن learning-* والمالية
+ * تخزن config خاصًا بها؛ هذه القائمة تعزل صفوف الدماغ وحدها */
+const BRAIN_TYPES = [
+  'note', 'project', 'knowledge', 'idea', 'resource',
+  'bookmark', 'inspiration', 'research', 'design_ref',
+]
+
+/** قراءة عمود tags ككائن JSON بأمان (وحدة التعلم تخزن حالتها فيه) */
+function safeTags(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'string' || !raw.trim()) return {}
+  try {
+    const v: unknown = JSON.parse(raw)
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** تقريب رقم إلى خانة عشرية واحدة (نسب التقدم والمجاميع) */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10
 }
 
 /** فحص كائن الوسائط strict: يرفض أي مفتاح غير معروف */
@@ -931,18 +960,26 @@ export const MCP_TOOLS: McpTool[] = [
       return ok({ limit: a.limit, fromDate: a.fromDate, toDate: a.toDate })
     },
     async execute(db, userId, args) {
+      // فترات التاريخ: نستعلم بحد واحد (gte) ثم نفلتر الحد الآخر في
+      // الكود — خريطة الفلاتر لا تقبل مفتاح date مرتين في استعلام واحد
       const filters: Record<string, string> = { user_id: `eq.${userId}` }
       if (args.fromDate) filters.date = `gte.${args.fromDate}`
-      if (args.toDate) filters.date = `lte.${args.toDate}`
+      else if (args.toDate) filters.date = `lte.${args.toDate}`
       const rows = ((await db.select('journals', {
         select: 'id,date,content,mood,energy,created_at',
         filters,
         order: ['date.desc'],
-        limit: args.limit ?? 10,
+        limit: 200,
       })) ?? []) as any[]
+      const inRange = rows.filter(
+        (j) =>
+          (!args.fromDate || String(j.date) >= args.fromDate) &&
+          (!args.toDate || String(j.date) <= args.toDate),
+      )
+      const sliced = inRange.slice(0, args.limit ?? 10)
       return {
-        summary: `${rows.length} مدخل يوميات`,
-        entries: rows.map((j) => ({
+        summary: `${sliced.length} مدخل يوميات`,
+        entries: sliced.map((j) => ({
           date: String(j.date),
           id: j.id,
           excerpt: (j.content ?? '').slice(0, 140),
@@ -2061,7 +2098,7 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'search_everything',
     title: 'بحث شامل',
     kind: 'read',
-    description: 'بحث واحد في مهامك وأهدافك وعاداتك ويومياتك (العناوين والنصوص) — مثل «دوّر على كلمة تقرير».',
+    description: 'بحث واحد في كل بياناتك: المهام والأهداف والعادات واليوميات والكتب وملاحظات المعرفة والمخطط والحركة المالية — مثل «دوّر على كلمة تقرير».',
     inputSchema: {
       type: 'object',
       properties: {
@@ -2086,7 +2123,7 @@ export const MCP_TOOLS: McpTool[] = [
     async execute(db, userId, args) {
       const q = args.query
       const like = `ilike.%${q}%`
-      const [tasks, goals, habits, journals] = await Promise.all([
+      const [tasks, goals, habits, journals, books, knowledge, planner, finance] = await Promise.all([
         (db.select('tasks', {
           select: 'id,title,description,status',
           filters: { user_id: `eq.${userId}`, title: like },
@@ -2107,8 +2144,30 @@ export const MCP_TOOLS: McpTool[] = [
           filters: { user_id: `eq.${userId}`, content: like },
           limit: args.limit,
         }) as Promise<any[]>).catch(() => []),
+        (db.select('books', {
+          select: 'id,title,author,status',
+          filters: { user_id: `eq.${userId}`, title: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+        (db.select('knowledge_items', {
+          select: 'id,type,title',
+          filters: { user_id: `eq.${userId}`, title: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+        (db.select('planner_items', {
+          select: 'id,date,section,title',
+          filters: { user_id: `eq.${userId}`, title: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+        (db.select('finance_records', {
+          select: 'id,type,description,amount,date',
+          filters: { user_id: `eq.${userId}`, description: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
       ])
-      const total = tasks.length + goals.length + habits.length + journals.length
+      const total =
+        tasks.length + goals.length + habits.length + journals.length +
+        books.length + knowledge.length + planner.length + finance.length
       return {
         summary: total ? `وُجدت ${total} نتيجة لكلمة «${q}»` : `لا نتائج لكلمة «${q}»`,
         tasks: (tasks as any[]).map((t) => ({ id: t.id, title: t.title, status: t.status })),
@@ -2118,9 +2177,2343 @@ export const MCP_TOOLS: McpTool[] = [
           date: String(j.date),
           excerpt: (j.content ?? '').slice(0, 120),
         })),
+        books: (books as any[]).map((b) => ({ id: b.id, title: b.title, author: b.author ?? null, status: b.status })),
+        knowledgeItems: (knowledge as any[]).map((k) => ({ id: k.id, title: k.title, type: k.type })),
+        plannerItems: (planner as any[]).map((p) => ({ id: p.id, title: p.title, date: String(p.date), section: p.section })),
+        financeRecords: (finance as any[]).map((f) => ({ id: f.id, description: f.description, amount: f.amount, type: f.type, date: String(f.date) })),
       }
     },
   },
+
+  // ═══════════ v3.0 — القراءة (books) ═══════════
+
+  // 41) ── list_books ─────────────────────────────
+  {
+    name: 'list_books',
+    title: 'عرض مكتبة القراءة',
+    kind: 'read',
+    description:
+      'يعرض مكتبة قراءة المستخدم (كتب/مقالات/دورات/فيديوهات) مع الحالة والتقدم — مثل «إيه الكتب اللي قاريها دلوقتي؟». استخدم get_book للتفاصيل الكاملة.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['reading', 'completed', 'want_to_read', 'paused'],
+          description: 'تصفية اختيارية بالحالة (قيد القراءة/مكتمل/أريد قراءته/متوقف)',
+        },
+        type: {
+          type: 'string',
+          enum: ['book', 'article', 'course', 'video'],
+          description: 'تصفية اختيارية بالنوع',
+        },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'أقصى عدد عناصر يُعاد (افتراضي 50)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['status', 'type', 'limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.status !== undefined && !['reading', 'completed', 'want_to_read', 'paused'].includes(String(a.status))) {
+        return bad('status: قيمة غير صالحة — المتاح: reading, completed, want_to_read, paused')
+      }
+      if (a.type !== undefined && !['book', 'article', 'course', 'video'].includes(String(a.type))) {
+        return bad('type: قيمة غير صالحة — المتاح: book, article, course, video')
+      }
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100)) {
+        return bad('limit: عدد صحيح بين 1 و100')
+      }
+      return ok({ status: a.status as string | undefined, type: a.type as string | undefined, limit: a.limit as number | undefined })
+    },
+    async execute(db, userId, args) {
+      const all = ((await db.select('books', {
+        filters: { user_id: `eq.${userId}` },
+        order: ['updated_at.desc'],
+        limit: 200,
+      })) ?? []) as any[]
+      const counts: Record<string, number> = { reading: 0, completed: 0, want_to_read: 0, paused: 0 }
+      for (const b of all) if (counts[b.status] !== undefined) counts[b.status]++
+      const filtered = all.filter(
+        (b) => (!args.status || b.status === args.status) && (!args.type || b.type === args.type),
+      )
+      const sliced = filtered.slice(0, args.limit ?? 50)
+      return {
+        summary: `مكتبتك: ${all.length} عنصرًا (قيد القراءة ${counts.reading}، مكتمل ${counts.completed}، للقراءة لاحقًا ${counts.want_to_read})${args.status ? ` — مرشح: ${args.status}` : ''}`,
+        counts,
+        books: sliced.map((b) => ({
+          id: b.id,
+          title: b.title,
+          author: b.author ?? null,
+          type: b.type ?? 'book',
+          status: b.status ?? 'reading',
+          progress: round1(b.progress ?? 0),
+          currentPage: b.current_page ?? 0,
+          totalPages: b.total_pages ?? null,
+          rating: b.rating ?? null,
+        })),
+      }
+    },
+  },
+
+  // 42) ── get_book ─────────────────────────────
+  {
+    name: 'get_book',
+    title: 'تفاصيل عنصر قراءة',
+    kind: 'read',
+    description: 'التفاصيل الكاملة لعنصر قراءة (الملاحظات، الاقتباسات المميزة، الاقتباس المفضل، التقييم، تواريخ البدء والإتمام).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bookId: { type: 'string', minLength: 1, description: 'معرّف العنصر (من list_books)' },
+      },
+      required: ['bookId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['bookId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.bookId !== 'string' || a.bookId.length < 1) return bad('bookId: المعرّف مطلوب')
+      return ok({ bookId: a.bookId })
+    },
+    async execute(db, userId, args) {
+      const b = (await db.maybeSingle('books', {
+        filters: { id: `eq.${args.bookId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!b) throw new Error('الكتاب غير موجود أو لا تملكه')
+      return {
+        summary: `«${b.title}» — ${b.status ?? 'reading'} (${round1(b.progress ?? 0)}%)`,
+        book: {
+          id: b.id,
+          title: b.title,
+          author: b.author ?? null,
+          type: b.type ?? 'book',
+          status: b.status ?? 'reading',
+          progress: round1(b.progress ?? 0),
+          currentPage: b.current_page ?? 0,
+          totalPages: b.total_pages ?? null,
+          rating: b.rating ?? null,
+          notes: b.notes ?? null,
+          highlights: b.highlights ?? null,
+          favoriteQuote: b.favorite_quote ?? null,
+          coverUrl: b.cover_url ?? null,
+          startDate: b.start_date ?? null,
+          endDate: b.end_date ?? null,
+        },
+      }
+    },
+  },
+
+  // 43) ── create_book ─────────────────────────────
+  {
+    name: 'create_book',
+    title: 'إضافة عنصر قراءة',
+    kind: 'write',
+    description: 'يضيف عنصرًا لمكتبة القراءة — مثل «ضيف كتاب العادات الذرية 320 صفحة لقايمة اللي هقراها». التقدم يُحسب تلقائيًا من الصفحات.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 300, description: 'العنوان (مطلوب)' },
+        author: { type: 'string', maxLength: 200, description: 'المؤلف' },
+        type: { type: 'string', enum: ['book', 'article', 'course', 'video'], description: 'النوع (افتراضي book)' },
+        status: {
+          type: 'string',
+          enum: ['reading', 'completed', 'want_to_read', 'want-to-read', 'paused'],
+          description: 'الحالة (افتراضي reading)',
+        },
+        totalPages: { type: 'integer', minimum: 1, maximum: 1000000, description: 'إجمالي الصفحات/الدقائق' },
+        currentPage: { type: 'integer', minimum: 0, maximum: 1000000, description: 'الصفحة الحالية' },
+        rating: { type: 'integer', minimum: 0, maximum: 5, description: 'التقييم 0–5' },
+        notes: { type: 'string', maxLength: 20000, description: 'ملاحظات' },
+        favoriteQuote: { type: 'string', maxLength: 5000, description: 'اقتباس مفضل' },
+        highlights: { type: 'string', maxLength: 50000, description: 'اقتباسات مميزة' },
+      },
+      required: ['title'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['title', 'author', 'type', 'status', 'totalPages', 'currentPage', 'rating', 'notes', 'favoriteQuote', 'highlights'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.title !== 'string' || a.title.trim().length < 1 || a.title.length > 300) {
+        return bad('title: العنوان مطلوب (1–300 محرف)')
+      }
+      if (a.author !== undefined && (typeof a.author !== 'string' || a.author.length > 200)) {
+        return bad('author: حتى 200 محرف')
+      }
+      if (a.type !== undefined && !['book', 'article', 'course', 'video'].includes(String(a.type))) {
+        return bad('type: قيمة غير صالحة — المتاح: book, article, course, video')
+      }
+      const STATUSES = ['reading', 'completed', 'want_to_read', 'want-to-read', 'paused']
+      if (a.status !== undefined && !STATUSES.includes(String(a.status))) {
+        return bad('status: قيمة غير صالحة — المتاح: reading, completed, want_to_read, paused')
+      }
+      for (const [f, min, max] of [['totalPages', 1, 1000000], ['currentPage', 0, 1000000], ['rating', 0, 5]] as [string, number, number][]) {
+        if (a[f] !== undefined && (!Number.isInteger(a[f]) || (a[f] as number) < min || (a[f] as number) > max)) {
+          return bad(`${f}: عدد صحيح بين ${min} و${max}`)
+        }
+      }
+      if (a.currentPage !== undefined && a.totalPages !== undefined && (a.currentPage as number) > (a.totalPages as number)) {
+        return bad('currentPage: لا يمكن أن تتجاوز totalPages')
+      }
+      for (const [f, max] of [['notes', 20000], ['favoriteQuote', 5000], ['highlights', 50000]] as [string, number][]) {
+        if (a[f] !== undefined && (typeof a[f] !== 'string' || (a[f] as string).length > max)) {
+          return bad(`${f}: نص حتى ${max} محرف`)
+        }
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      // «want-to-read» صيغة واجهة قديمة — المخزن الدائم want_to_read
+      const status = args.status === 'want-to-read' ? 'want_to_read' : (args.status ?? 'reading')
+      const today = todayCairo()
+      let progress = 0
+      if (args.totalPages && args.currentPage) {
+        progress = round1((args.currentPage / args.totalPages) * 100)
+      }
+      const row: Record<string, unknown> = {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        title: args.title,
+        author: args.author ?? null,
+        type: args.type ?? 'book',
+        status,
+        current_page: args.currentPage ?? 0,
+        total_pages: args.totalPages ?? null,
+        notes: args.notes ?? null,
+        highlights: args.highlights ?? null,
+        favorite_quote: args.favoriteQuote ?? null,
+        rating: args.rating ?? null,
+        progress,
+      }
+      // البدء اليوم افتراضيًا عند القراءة/الإتمام (نفس عرف واجهة الموقع)
+      if (status === 'reading' || status === 'completed') row.start_date = today
+      if (status === 'completed') {
+        row.end_date = today
+        row.progress = 100
+      }
+      const book = (await db.upsert('books', row, 'id')) as any
+      return {
+        summary: `أُضيف «${args.title}» لمكتبة القراءة (${status === 'want_to_read' ? 'أريد قراءته' : status === 'reading' ? 'قيد القراءة' : status === 'completed' ? 'مكتمل' : 'متوقف'})`,
+        created: true,
+        book: {
+          id: book?.id ?? row.id,
+          title: args.title,
+          status,
+          progress: row.progress as number,
+          totalPages: args.totalPages ?? null,
+        },
+      }
+    },
+  },
+
+  // 44) ── update_book ─────────────────────────────
+  {
+    name: 'update_book',
+    title: 'تحديث عنصر قراءة',
+    kind: 'write',
+    description: 'تحديث عنصر قراءة (الصفحة الحالية/الحالة/التقييم/الملاحظات/الاقتباسات). التقدم يُحسب تلقائيًا من الصفحات، وإتمام الحالة يختم تاريخ الإتمام اليوم — مثل «وصلت صفحة 120 في العادات الذرية».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bookId: { type: 'string', minLength: 1, description: 'معرّف العنصر (مطلوب)' },
+        status: {
+          type: 'string',
+          enum: ['reading', 'completed', 'want_to_read', 'want-to-read', 'paused'],
+          description: 'الحالة الجديدة',
+        },
+        currentPage: { type: 'integer', minimum: 0, maximum: 1000000, description: 'الصفحة الحالية' },
+        totalPages: { type: 'integer', minimum: 1, maximum: 1000000, description: 'إجمالي الصفحات' },
+        rating: { type: 'integer', minimum: 0, maximum: 5, description: 'التقييم 0–5' },
+        progress: { type: 'number', minimum: 0, maximum: 100, description: 'نسبة التقدم (تُحسب تلقائيًا عند غيابها)' },
+        notes: { type: 'string', maxLength: 20000, description: 'ملاحظات' },
+        highlights: { type: 'string', maxLength: 50000, description: 'اقتباسات مميزة' },
+        favoriteQuote: { type: 'string', maxLength: 5000, description: 'اقتباس مفضل' },
+      },
+      required: ['bookId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['bookId', 'status', 'currentPage', 'totalPages', 'rating', 'progress', 'notes', 'highlights', 'favoriteQuote'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.bookId !== 'string' || a.bookId.length < 1) return bad('bookId: المعرّف مطلوب')
+      const STATUSES = ['reading', 'completed', 'want_to_read', 'want-to-read', 'paused']
+      if (a.status !== undefined && !STATUSES.includes(String(a.status))) {
+        return bad('status: قيمة غير صالحة — المتاح: reading, completed, want_to_read, paused')
+      }
+      for (const [f, min, max] of [['currentPage', 0, 1000000], ['totalPages', 1, 1000000], ['rating', 0, 5]] as [string, number, number][]) {
+        if (a[f] !== undefined && (!Number.isInteger(a[f]) || (a[f] as number) < min || (a[f] as number) > max)) {
+          return bad(`${f}: عدد صحيح بين ${min} و${max}`)
+        }
+      }
+      if (a.progress !== undefined && (typeof a.progress !== 'number' || (a.progress as number) < 0 || (a.progress as number) > 100)) {
+        return bad('progress: رقم بين 0 و100')
+      }
+      for (const [f, max] of [['notes', 20000], ['highlights', 50000], ['favoriteQuote', 5000]] as [string, number][]) {
+        if (a[f] !== undefined && (typeof a[f] !== 'string' || (a[f] as string).length > max)) {
+          return bad(`${f}: نص حتى ${max} محرف`)
+        }
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const current = (await db.maybeSingle('books', {
+        select: 'id,title,status,current_page,total_pages,progress,start_date,end_date',
+        filters: { id: `eq.${args.bookId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!current) throw new Error('الكتاب غير موجود أو لا تملكه')
+
+      const patch: Record<string, unknown> = {}
+      if (args.status !== undefined) patch.status = args.status === 'want-to-read' ? 'want_to_read' : args.status
+      if (args.currentPage !== undefined) patch.current_page = args.currentPage
+      if (args.totalPages !== undefined) patch.total_pages = args.totalPages
+      if (args.rating !== undefined) patch.rating = args.rating
+      if (args.progress !== undefined) patch.progress = args.progress
+      if (args.notes !== undefined) patch.notes = args.notes
+      if (args.highlights !== undefined) patch.highlights = args.highlights
+      if (args.favoriteQuote !== undefined) patch.favorite_quote = args.favoriteQuote
+
+      // التقدم الذكي من الصفحات عند غياب نسبة صريحة
+      const nextPage = args.currentPage ?? current.current_page ?? 0
+      const nextTotal = args.totalPages ?? current.total_pages ?? null
+      if (args.progress === undefined && nextTotal && Number(nextTotal) > 0) {
+        patch.progress = round1(Math.min(100, (Number(nextPage) / Number(nextTotal)) * 100))
+      }
+      const nextStatus = (patch.status as string) ?? current.status ?? 'reading'
+      if (nextStatus === 'completed') {
+        if (!current.end_date) patch.end_date = todayCairo()
+        if (args.progress === undefined && patch.progress === undefined) patch.progress = 100
+      }
+      if (nextStatus === 'reading' && !current.start_date) patch.start_date = todayCairo()
+
+      if (Object.keys(patch).length === 0) {
+        throw new Error('لا حقول للتحديث — مرر حقلًا واحدًا على الأقل (status/currentPage/rating/…)')
+      }
+      await db.patch('books', { id: `eq.${args.bookId}`, user_id: `eq.${userId}` }, patch)
+      const updated = (await db.maybeSingle('books', {
+        filters: { id: `eq.${args.bookId}`, user_id: `eq.${userId}` },
+      })) as any
+      return {
+        summary: `حُدّث «${updated?.title ?? current.title}» — ${nextStatus} (${round1(updated?.progress ?? 0)}%)`,
+        updated: true,
+        book: {
+          id: args.bookId,
+          status: nextStatus,
+          progress: round1(updated?.progress ?? 0),
+          currentPage: updated?.current_page ?? null,
+          totalPages: updated?.total_pages ?? null,
+        },
+      }
+    },
+  },
+
+  // 45) ── delete_book ─────────────────────────────
+  {
+    name: 'delete_book',
+    title: 'حذف عنصر قراءة',
+    kind: 'write',
+    description: 'حذف عنصر نهائيًا من مكتبة القراءة. يتطلب confirm:true صراحةً — مثل: «امسحلي الكتاب ده خالص، متأكد».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bookId: { type: 'string', minLength: 1, description: 'معرّف العنصر' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['bookId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['bookId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.bookId !== 'string' || a.bookId.length < 1) return bad('bookId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ bookId: a.bookId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('books', {
+        select: 'id,title',
+        filters: { id: `eq.${args.bookId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('الكتاب غير موجود أو لا تملكه')
+      await db.delete('books', { id: `eq.${args.bookId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذف «${(owned as any).title}» من المكتبة نهائيًا`, deleted: true }
+    },
+  },
+
+  // 46) ── reading_summary ─────────────────────────────
+  {
+    name: 'reading_summary',
+    title: 'ملخص القراءة',
+    kind: 'read',
+    description: 'إحصائيات مكتبة القراءة: المكتمل، الجاري، الصفحات المقروءة، متوسط التقييم، ما أُتم هذا العام — مثل «إيه أخبار قراءتي؟».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const all = ((await db.select('books', {
+        filters: { user_id: `eq.${userId}` },
+        limit: 500,
+      })) ?? []) as any[]
+      const year = todayCairo().slice(0, 4)
+      const completed = all.filter((b) => b.status === 'completed')
+      const reading = all.filter((b) => b.status === 'reading')
+      const rated = all.filter((b) => typeof b.rating === 'number' && b.rating > 0)
+      const pagesRead = all.reduce((s, b) => s + Number(b.current_page ?? 0), 0)
+      return {
+        summary: `قرأت ${completed.length} عنصرًا كاملًا وتقرأ حاليًا ${reading.length}${pagesRead ? ` (${pagesRead} صفحة إجمالًا)` : ''}`,
+        totalItems: all.length,
+        completed: completed.length,
+        completedThisYear: completed.filter((b) => String(b.end_date ?? '').startsWith(year)).length,
+        reading: reading.length,
+        wantToRead: all.filter((b) => b.status === 'want_to_read').length,
+        paused: all.filter((b) => b.status === 'paused').length,
+        pagesRead,
+        averageRating: rated.length ? round1(rated.reduce((s, b) => s + Number(b.rating ?? 0), 0) / rated.length) : null,
+        currentlyReading: reading.slice(0, 5).map((b) => ({
+          id: b.id,
+          title: b.title,
+          progress: round1(b.progress ?? 0),
+        })),
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — التعلم (knowledge_items: learning-*) ═══════════
+  // وحدة التعلم بالموقع تخزن أهدافها ودوراتها ومهاراتها وسجلها في
+  // جدول knowledge_items المشترك: type يبدأ بـ learning- والحالة في
+  // عمود tags كـ JSON — هذه الأدوات تتبع نفس العقد حرفيًا.
+
+  // 47) ── list_learning ─────────────────────────────
+  {
+    name: 'list_learning',
+    title: 'لوحة التعلم',
+    kind: 'read',
+    description: 'يعرض أهداف التعلم والدورات والمهارات وسجل جلسات التعلم مع دقائق التعلم — مثل «فين واصل في التعلم؟».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const rows = ((await db.select('knowledge_items', {
+        select: 'id,type,title,content,tags,created_at,updated_at',
+        filters: { user_id: `eq.${userId}`, type: 'ilike.learning-%' },
+        order: ['created_at.desc'],
+        limit: 300,
+      })) ?? []) as any[]
+      const goals: any[] = []
+      const courses: any[] = []
+      const skills: any[] = []
+      const logs: any[] = []
+      for (const row of rows) {
+        const meta = safeTags(row.tags)
+        if (row.type === 'learning-goal') {
+          goals.push({
+            id: row.id,
+            title: row.title,
+            description: (row.content ?? '') || null,
+            progress: typeof meta.progress === 'number' ? meta.progress : 0,
+            status: typeof meta.status === 'string' ? meta.status : 'active',
+          })
+        } else if (row.type === 'learning-course') {
+          courses.push({
+            id: row.id,
+            name: row.title,
+            platform: typeof meta.platform === 'string' && meta.platform ? meta.platform : null,
+            progress: typeof meta.progress === 'number' ? meta.progress : 0,
+            status: typeof meta.status === 'string' ? meta.status : 'not_started',
+            certificate: meta.certificate === true,
+          })
+        } else if (row.type === 'learning-skill') {
+          skills.push({
+            id: row.id,
+            name: row.title,
+            level: typeof meta.level === 'number' ? meta.level : 1,
+          })
+        } else if (row.type === 'learning-log') {
+          logs.push({
+            id: row.id,
+            date: typeof meta.date === 'string' ? meta.date : String(row.created_at).slice(0, 10),
+            minutes: typeof meta.minutes === 'number' ? meta.minutes : 0,
+            excerpt: (row.content ?? '').slice(0, 140),
+          })
+        }
+      }
+      const weekAgo = lastNDates(todayCairo(), 8)[7]
+      const totalMinutes = logs.reduce((s, l) => s + Number(l.minutes), 0)
+      const weekMinutes = logs.filter((l) => l.date >= weekAgo).reduce((s, l) => s + Number(l.minutes), 0)
+      const activeGoals = goals.filter((g) => g.status === 'active').length
+      const activeCourses = courses.filter((c) => c.status !== 'completed').length
+      return {
+        summary: `التعلم: ${activeGoals} هدفًا نشطًا، ${activeCourses} دورة جارية، ${totalMinutes} دقيقة إجمالًا (${weekMinutes} هذا الأسبوع)`,
+        goals,
+        courses,
+        skills,
+        logs: logs.slice(0, 10),
+        stats: { totalMinutes, weekMinutes, activeGoals, activeCourses },
+      }
+    },
+  },
+
+  // 48) ── create_learning_goal ─────────────────────────────
+  {
+    name: 'create_learning_goal',
+    title: 'هدف تعلم جديد',
+    kind: 'write',
+    description: 'ينشئ هدف تعلم — مثل «سجللي هدف تعلم إتقان الإنجليزية بمستوى C1».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 150, description: 'اسم الهدف (مطلوب)' },
+        description: { type: 'string', maxLength: 2000, description: 'وصف الهدف' },
+      },
+      required: ['title'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['title', 'description'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.title !== 'string' || a.title.trim().length < 1 || a.title.length > 150) {
+        return bad('title: الاسم مطلوب (1–150 محرفًا)')
+      }
+      if (a.description !== undefined && (typeof a.description !== 'string' || a.description.length > 2000)) {
+        return bad('description: حتى 2000 محرف')
+      }
+      return ok({ title: a.title, description: a.description as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const item = (await db.upsert('knowledge_items', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: 'learning-goal',
+        title: args.title,
+        content: args.description ?? '',
+        tags: JSON.stringify({ progress: 0, status: 'active' }),
+      }, 'id')) as any
+      return {
+        summary: `أُنشئ هدف التعلم «${args.title}»`,
+        created: true,
+        goal: { id: item?.id ?? null, title: args.title, progress: 0, status: 'active' },
+      }
+    },
+  },
+
+  // 49) ── create_learning_course ─────────────────────────────
+  {
+    name: 'create_learning_course',
+    title: 'دورة تعلم جديدة',
+    kind: 'write',
+    description: 'يضيف دورة/مصدر تعلم — مثل «ضيف دورة Deno من Udemmy».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 150, description: 'اسم الدورة (مطلوب)' },
+        platform: { type: 'string', maxLength: 100, description: 'المنصة (Udemy/Coursera/YouTube…)' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['name', 'platform'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.name !== 'string' || a.name.trim().length < 1 || a.name.length > 150) {
+        return bad('name: الاسم مطلوب (1–150 محرفًا)')
+      }
+      if (a.platform !== undefined && (typeof a.platform !== 'string' || a.platform.length > 100)) {
+        return bad('platform: حتى 100 محرف')
+      }
+      return ok({ name: a.name, platform: a.platform as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const item = (await db.upsert('knowledge_items', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: 'learning-course',
+        title: args.name,
+        content: '',
+        tags: JSON.stringify({ platform: args.platform ?? '', progress: 0, status: 'not_started', certificate: false }),
+      }, 'id')) as any
+      return {
+        summary: `أُضيفت الدورة «${args.name}»${args.platform ? ` (${args.platform})` : ''}`,
+        created: true,
+        course: { id: item?.id ?? null, name: args.name, platform: args.platform ?? null, progress: 0, status: 'not_started' },
+      }
+    },
+  },
+
+  // 50) ── create_learning_skill ─────────────────────────────
+  {
+    name: 'create_learning_skill',
+    title: 'مهارة جديدة',
+    kind: 'write',
+    description: 'يضيف مهارة يتدرب عليها المستخدم بمستوى مبدئي — مثل «ضيف مهارة الكتابة الإبداعية مستوى 2».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 100, description: 'اسم المهارة (مطلوب)' },
+        level: { type: 'integer', minimum: 1, maximum: 10, description: 'المستوى المبدئي 1–10 (افتراضي 1)' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['name', 'level'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.name !== 'string' || a.name.trim().length < 1 || a.name.length > 100) {
+        return bad('name: الاسم مطلوب (1–100 محرف)')
+      }
+      if (a.level !== undefined && (!Number.isInteger(a.level) || (a.level as number) < 1 || (a.level as number) > 10)) {
+        return bad('level: عدد صحيح بين 1 و10')
+      }
+      return ok({ name: a.name, level: (a.level ?? 1) as number })
+    },
+    async execute(db, userId, args) {
+      const item = (await db.upsert('knowledge_items', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: 'learning-skill',
+        title: args.name,
+        content: '',
+        tags: JSON.stringify({ level: args.level, colorIdx: Math.floor(Math.random() * 8) }),
+      }, 'id')) as any
+      return {
+        summary: `أُضيفت المهارة «${args.name}» (مستوى ${args.level})`,
+        created: true,
+        skill: { id: item?.id ?? null, name: args.name, level: args.level },
+      }
+    },
+  },
+
+  // 51) ── update_learning_progress ─────────────────────────────
+  {
+    name: 'update_learning_progress',
+    title: 'تحديث تقدم التعلم',
+    kind: 'write',
+    description: 'يحدّث نسبة تقدم هدف تعلم أو دورة (0–100) — الحالة تُضبط تلقائيًا (not_started→in_progress→completed). مثل «وصلت 80% في دورة Deno».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', minLength: 1, description: 'معرّف الهدف أو الدورة (من list_learning)' },
+        progress: { type: 'integer', minimum: 0, maximum: 100, description: 'نسبة التقدم الجديدة (مطلوب)' },
+      },
+      required: ['itemId', 'progress'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['itemId', 'progress'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.itemId !== 'string' || a.itemId.length < 1) return bad('itemId: المعرّف مطلوب')
+      if (!Number.isInteger(a.progress) || (a.progress as number) < 0 || (a.progress as number) > 100) {
+        return bad('progress: عدد صحيح بين 0 و100')
+      }
+      return ok({ itemId: a.itemId, progress: a.progress as number })
+    },
+    async execute(db, userId, args) {
+      const row = (await db.maybeSingle('knowledge_items', {
+        select: 'id,type,title,tags',
+        filters: { id: `eq.${args.itemId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!row) throw new Error('العنصر غير موجود أو لا تملكه')
+      if (row.type !== 'learning-goal' && row.type !== 'learning-course') {
+        throw new Error('هذا العنصر ليس هدفًا أو دورة تعلم — استخدم update_knowledge_note للملاحظات')
+      }
+      const meta = safeTags(row.tags)
+      const status =
+        row.type === 'learning-goal'
+          ? args.progress >= 100 ? 'completed' : 'active'
+          : args.progress >= 100 ? 'completed' : args.progress > 0 ? 'in_progress' : 'not_started'
+      // نحافظ على باقي مفاتيح الحالة (platform/certificate/…) كما هي
+      const nextTags = JSON.stringify({ ...meta, progress: args.progress, status })
+      await db.patch('knowledge_items', { id: `eq.${args.itemId}`, user_id: `eq.${userId}` }, { tags: nextTags })
+      return {
+        summary: `«${row.title}» — التقدم ${typeof meta.progress === 'number' ? meta.progress : 0} ← ${args.progress} (${status})`,
+        updated: true,
+        itemId: args.itemId,
+        progress: args.progress,
+        status,
+      }
+    },
+  },
+
+  // 52) ── log_learning_session ─────────────────────────────
+  {
+    name: 'log_learning_session',
+    title: 'تسجيل جلسة تعلم',
+    kind: 'write',
+    description: 'يسجل ما تعلمه اليوم ومدته — مثل «سجللي جلسة تعلم 45 دقيقة راجعت فيها درس المتغيرات».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', minLength: 1, maxLength: 2000, description: 'ما تعلمته (مطلوب)' },
+        minutes: { type: 'integer', minimum: 0, maximum: 600, description: 'مدة الجلسة بالدقائق' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+      },
+      required: ['content'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['content', 'minutes', 'date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.content !== 'string' || a.content.trim().length < 1 || a.content.length > 2000) {
+        return bad('content: ما تعلمته مطلوب (حتى 2000 محرف)')
+      }
+      if (a.minutes !== undefined && (!Number.isInteger(a.minutes) || (a.minutes as number) < 0 || (a.minutes as number) > 600)) {
+        return bad('minutes: عدد صحيح بين 0 و600')
+      }
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      return ok({ content: a.content, minutes: a.minutes as number | undefined, date: a.date as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const date = args.date ?? todayCairo()
+      const minutes = args.minutes ?? 0
+      const item = (await db.upsert('knowledge_items', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: 'learning-log',
+        title: 'سجل تعلم',
+        content: args.content,
+        tags: JSON.stringify({ minutes, date }),
+      }, 'id')) as any
+      return {
+        summary: `سُجلت جلسة تعلم بتاريخ ${date}${minutes ? ` (${minutes} دقيقة)` : ''}`,
+        saved: true,
+        log: { id: item?.id ?? null, date, minutes },
+      }
+    },
+  },
+
+  // 53) ── delete_learning_item ─────────────────────────────
+  {
+    name: 'delete_learning_item',
+    title: 'حذف عنصر تعلم',
+    kind: 'write',
+    description: 'حذف هدف/دورة/مهارة/سجل تعلم نهائيًا. يتطلب confirm:true صراحةً — مثل: «امسحلي الدورة دي، متأكد».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', minLength: 1, description: 'معرّف عنصر التعلم (من list_learning)' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['itemId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['itemId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.itemId !== 'string' || a.itemId.length < 1) return bad('itemId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ itemId: a.itemId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const row = (await db.maybeSingle('knowledge_items', {
+        select: 'id,type,title',
+        filters: { id: `eq.${args.itemId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!row) throw new Error('العنصر غير موجود أو لا تملكه')
+      if (!String(row.type ?? '').startsWith('learning-')) {
+        throw new Error('هذا العنصر ليس من وحدة التعلم — استخدم delete_knowledge_item لملاحظات الدماغ')
+      }
+      await db.delete('knowledge_items', { id: `eq.${args.itemId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذف «${row.title}» من وحدة التعلم نهائيًا`, deleted: true }
+    },
+  },
+
+  // ═══════════ v3.0 — الدماغ الثاني (knowledge_items) ═══════════
+  // «الدماغ الثاني»: ملاحظات وأفكار وموارد المستخدم. الجدول مشترك
+  // مع وحدة التعلم والمالية — الأدوات هنا تلتزم قائمة BRAIN_TYPES
+  // حصرًا (نفس عزل مسار /api/rise/knowledge بالموقع).
+
+  // 54) ── list_knowledge ─────────────────────────────
+  {
+    name: 'list_knowledge',
+    title: 'عرض الدماغ الثاني',
+    kind: 'read',
+    description: 'يعرض عناصر «الدماغ الثاني» (ملاحظات/أفكار/موارد/إشارات مرجعية/ملهمات) مع فلترة بالنوع أو المجلد أو المفضلة أو البحث في العناوين.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['note', 'project', 'knowledge', 'idea', 'resource', 'bookmark', 'inspiration', 'research', 'design_ref'],
+          description: 'تصفية بالنوع',
+        },
+        folder: { type: 'string', maxLength: 100, description: 'تصفية بالمجلد' },
+        favorite: { type: 'boolean', description: 'المفضلة فقط' },
+        query: { type: 'string', minLength: 2, maxLength: 100, description: 'بحث في العنوان' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'أقصى عدد (افتراضي 50)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['type', 'folder', 'favorite', 'query', 'limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.type !== undefined && !BRAIN_TYPES.includes(String(a.type) as never)) {
+        return bad(`type: قيمة غير صالحة — المتاح: ${BRAIN_TYPES.join(', ')}`)
+      }
+      if (a.folder !== undefined && (typeof a.folder !== 'string' || a.folder.length > 100)) {
+        return bad('folder: حتى 100 محرف')
+      }
+      if (a.favorite !== undefined && typeof a.favorite !== 'boolean') {
+        return bad('favorite: قيمة منطقية (true/false)')
+      }
+      if (a.query !== undefined && (typeof a.query !== 'string' || a.query.trim().length < 2 || a.query.length > 100)) {
+        return bad('query: نص البحث (2–100 محرف)')
+      }
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100)) {
+        return bad('limit: عدد صحيح بين 1 و100')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const filters: Record<string, string> = { user_id: `eq.${userId}` }
+      if (args.folder) filters.folder = `eq.${args.folder}`
+      if (args.favorite) filters.is_favorite = 'eq.true'
+      if (args.query) filters.title = `ilike.%${args.query}%`
+      const rows = ((await db.select('knowledge_items', {
+        select: 'id,type,title,content,folder,tags,is_favorite,updated_at',
+        filters,
+        order: ['updated_at.desc'],
+        limit: 200,
+      })) ?? []) as any[]
+      // عزل أنواع الدماغ عن صفوف وحدات أخرى (نفس منطق مسار الموقع)
+      const brainSet = new Set<string>(BRAIN_TYPES)
+      const filtered = rows.filter((r) => (args.type ? r.type === args.type : brainSet.has(String(r.type ?? ''))))
+      const sliced = filtered.slice(0, args.limit ?? 50)
+      return {
+        summary: `${sliced.length} عنصر معرفة${args.folder ? ` (مجلد: ${args.folder})` : ''}${args.query ? ` — بحث: «${args.query}»` : ''}`,
+        items: sliced.map((r) => ({
+          id: r.id,
+          type: r.type,
+          title: r.title,
+          excerpt: (r.content ?? '').slice(0, 140),
+          folder: r.folder ?? null,
+          tags: r.tags ?? null,
+          isFavorite: r.is_favorite === true,
+        })),
+      }
+    },
+  },
+
+  // 55) ── create_knowledge_note ─────────────────────────────
+  {
+    name: 'create_knowledge_note',
+    title: 'حفظ ملاحظة',
+    kind: 'write',
+    description: 'يحفظ عنصرًا في الدماغ الثاني — مثل «احفظلي ملاحظة: فكرة تطبيق لتتبع القراءة، في مجلد الأفكار».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 300, description: 'العنوان (مطلوب)' },
+        content: { type: 'string', maxLength: 50000, description: 'المحتوى' },
+        type: {
+          type: 'string',
+          enum: ['note', 'project', 'knowledge', 'idea', 'resource', 'bookmark', 'inspiration', 'research', 'design_ref'],
+          description: 'النوع (افتراضي note)',
+        },
+        folder: { type: 'string', maxLength: 100, description: 'المجلد' },
+        tags: { type: 'string', maxLength: 500, description: 'وسوم نصية' },
+        source: { type: 'string', maxLength: 500, description: 'المصدر (رابط/كتاب…)' },
+      },
+      required: ['title'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['title', 'content', 'type', 'folder', 'tags', 'source'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.title !== 'string' || a.title.trim().length < 1 || a.title.length > 300) {
+        return bad('title: العنوان مطلوب (1–300 محرف)')
+      }
+      if (a.content !== undefined && (typeof a.content !== 'string' || a.content.length > 50000)) {
+        return bad('content: حتى 50000 محرف')
+      }
+      if (a.type !== undefined && !BRAIN_TYPES.includes(String(a.type) as never)) {
+        return bad(`type: قيمة غير صالحة — المتاح: ${BRAIN_TYPES.join(', ')}`)
+      }
+      for (const [f, max] of [['folder', 100], ['tags', 500], ['source', 500]] as [string, number][]) {
+        if (a[f] !== undefined && (typeof a[f] !== 'string' || (a[f] as string).length > max)) {
+          return bad(`${f}: حتى ${max} محرف`)
+        }
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const item = (await db.upsert('knowledge_items', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type: args.type ?? 'note',
+        title: args.title,
+        content: args.content ?? '',
+        folder: args.folder ?? null,
+        tags: args.tags ?? null,
+        source: args.source ?? null,
+        is_favorite: false,
+      }, 'id')) as any
+      return {
+        summary: `حُفظ «${args.title}» في الدماغ الثاني${args.folder ? ` (مجلد ${args.folder})` : ''}`,
+        created: true,
+        item: { id: item?.id ?? null, title: args.title, type: args.type ?? 'note' },
+      }
+    },
+  },
+
+  // 56) ── update_knowledge_note ─────────────────────────────
+  {
+    name: 'update_knowledge_note',
+    title: 'تحديث ملاحظة',
+    kind: 'write',
+    description: 'تحديث عنصر في الدماغ الثاني (العنوان/المحتوى/المجلد/الوسوم/المصدر/المفضلة) — مثل «خلي الملاحظة دي مفضلة».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', minLength: 1, description: 'معرّف العنصر (من list_knowledge)' },
+        title: { type: 'string', minLength: 1, maxLength: 300, description: 'العنوان' },
+        content: { type: 'string', maxLength: 50000, description: 'المحتوى' },
+        folder: { type: 'string', maxLength: 100, description: 'المجلد' },
+        tags: { type: 'string', maxLength: 500, description: 'وسوم نصية' },
+        source: { type: 'string', maxLength: 500, description: 'المصدر' },
+        isFavorite: { type: 'boolean', description: 'إضافة/إزالة من المفضلة' },
+      },
+      required: ['itemId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['itemId', 'title', 'content', 'folder', 'tags', 'source', 'isFavorite'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.itemId !== 'string' || a.itemId.length < 1) return bad('itemId: المعرّف مطلوب')
+      if (a.title !== undefined && (typeof a.title !== 'string' || a.title.trim().length < 1 || a.title.length > 300)) {
+        return bad('title: العنوان (1–300 محرف)')
+      }
+      if (a.content !== undefined && (typeof a.content !== 'string' || a.content.length > 50000)) {
+        return bad('content: حتى 50000 محرف')
+      }
+      if (a.isFavorite !== undefined && typeof a.isFavorite !== 'boolean') {
+        return bad('isFavorite: قيمة منطقية (true/false)')
+      }
+      for (const [f, max] of [['folder', 100], ['tags', 500], ['source', 500]] as [string, number][]) {
+        if (a[f] !== undefined && (typeof a[f] !== 'string' || (a[f] as string).length > max)) {
+          return bad(`${f}: حتى ${max} محرف`)
+        }
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const row = (await db.maybeSingle('knowledge_items', {
+        select: 'id,type,title',
+        filters: { id: `eq.${args.itemId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!row) throw new Error('العنصر غير موجود أو لا تملكه')
+      if (!BRAIN_TYPES.includes(String(row.type) as never)) {
+        throw new Error('هذا العنصر من وحدة أخرى (تعلم/مالية) — استخدم أدوات وحدته')
+      }
+      const patch: Record<string, unknown> = {}
+      if (args.title !== undefined) patch.title = args.title
+      if (args.content !== undefined) patch.content = args.content
+      if (args.folder !== undefined) patch.folder = args.folder
+      if (args.tags !== undefined) patch.tags = args.tags
+      if (args.source !== undefined) patch.source = args.source
+      if (args.isFavorite !== undefined) patch.is_favorite = args.isFavorite
+      if (Object.keys(patch).length === 0) {
+        throw new Error('لا حقول للتحديث — مرر حقلًا واحدًا على الأقل')
+      }
+      await db.patch('knowledge_items', { id: `eq.${args.itemId}`, user_id: `eq.${userId}` }, patch)
+      return {
+        summary: `حُدّث «${args.title ?? row.title}» في الدماغ الثاني (${Object.keys(patch).join(', ')})`,
+        updated: true,
+        itemId: args.itemId,
+      }
+    },
+  },
+
+  // 57) ── delete_knowledge_item ─────────────────────────────
+  {
+    name: 'delete_knowledge_item',
+    title: 'حذف ملاحظة',
+    kind: 'write',
+    description: 'حذف عنصر من الدماغ الثاني نهائيًا. يتطلب confirm:true صراحةً — مثل: «امسحلي الملاحظة دي خالص».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', minLength: 1, description: 'معرّف العنصر (من list_knowledge)' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['itemId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['itemId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.itemId !== 'string' || a.itemId.length < 1) return bad('itemId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ itemId: a.itemId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const row = (await db.maybeSingle('knowledge_items', {
+        select: 'id,type,title',
+        filters: { id: `eq.${args.itemId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!row) throw new Error('العنصر غير موجود أو لا تملكه')
+      if (!BRAIN_TYPES.includes(String(row.type) as never)) {
+        throw new Error('هذا العنصر من وحدة أخرى (تعلم/مالية) — استخدم أدوات وحدته')
+      }
+      await db.delete('knowledge_items', { id: `eq.${args.itemId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذف «${row.title}» من الدماغ الثاني نهائيًا`, deleted: true }
+    },
+  },
+
+  // ═══════════ v3.0 — المالية (finance_records) ═══════════
+  // نفس عقد مسار الموقع: النوع يُخزن كما أرسله التطبيق — income/
+  // expense/ادخار (وقد توجد قيم عربية قديمة دخل/مصروف نغطيها في
+  // الفلترة والتجميع).
+
+  // 58) ── list_finance_records ─────────────────────────────
+  {
+    name: 'list_finance_records',
+    title: 'عرض الحركة المالية',
+    kind: 'read',
+    description: 'يعرض سجلات الدخل والمصروف والادخار مع مجاميعها — مثل «وريلي مصاريفي آخر أسبوع».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['income', 'expense', 'savings'], description: 'تصفية بالنوع' },
+        fromDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'من تاريخ (اختياري)' },
+        toDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'إلى تاريخ (اختياري)' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'أقصى عدد (افتراضي 50)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['type', 'fromDate', 'toDate', 'limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.type !== undefined && !['income', 'expense', 'savings'].includes(String(a.type))) {
+        return bad('type: قيمة غير صالحة — المتاح: income, expense, savings')
+      }
+      if (a.fromDate !== undefined && !DATE_RE.test(String(a.fromDate))) return bad('fromDate: YYYY-MM-DD')
+      if (a.toDate !== undefined && !DATE_RE.test(String(a.toDate))) return bad('toDate: YYYY-MM-DD')
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100)) {
+        return bad('limit: عدد صحيح بين 1 و100')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const filters: Record<string, string> = { user_id: `eq.${userId}` }
+      // حد واحد في الاستعلام (gte أو lte) والحد الآخر يُفلتر في الكود
+      if (args.fromDate) filters.date = `gte.${args.fromDate}`
+      else if (args.toDate) filters.date = `lte.${args.toDate}`
+      // النوع قد يكون مخزنًا عربيًا أو إنجليزيًا — or() تغطي القيمتين
+      if (args.type === 'income') filters.or = '(type.eq.income,type.eq.دخل)'
+      else if (args.type === 'expense') filters.or = '(type.eq.expense,type.eq.مصروف)'
+      else if (args.type === 'savings') filters.type = 'eq.ادخار'
+      const rows = ((await db.select('finance_records', {
+        filters,
+        order: ['date.desc'],
+        limit: 200,
+      })) ?? []) as any[]
+      const inRange = rows.filter(
+        (r) =>
+          (!args.fromDate || String(r.date) >= args.fromDate) &&
+          (!args.toDate || String(r.date) <= args.toDate),
+      )
+      const isIncome = (t: unknown) => t === 'income' || t === 'دخل'
+      const isExpense = (t: unknown) => t === 'expense' || t === 'مصروف'
+      const sum = (pred: (t: unknown) => boolean) =>
+        round1(inRange.filter((r) => pred(r.type)).reduce((s, r) => s + Number(r.amount ?? 0), 0))
+      const income = sum(isIncome)
+      const expense = sum(isExpense)
+      const savings = sum((t) => t === 'ادخار')
+      const sliced = inRange.slice(0, args.limit ?? 50)
+      return {
+        summary: `${inRange.length} سجلًا — دخل ${income}، مصروف ${expense}${savings ? `، ادخار ${savings}` : ''}`,
+        totals: { income, expense, savings },
+        records: sliced.map((r) => ({
+          id: r.id,
+          type: isIncome(r.type) ? 'income' : isExpense(r.type) ? 'expense' : 'savings',
+          category: r.category ?? null,
+          description: r.description,
+          amount: r.amount,
+          date: String(r.date),
+          recurring: r.recurring === true,
+        })),
+      }
+    },
+  },
+
+  // 59) ── create_finance_record ─────────────────────────────
+  {
+    name: 'create_finance_record',
+    title: 'تسجيل حركة مالية',
+    kind: 'write',
+    description: 'يسجل دخلًا أو مصروفًا أو ادخارًا — مثل «سجللي مصروف 150 جنيه تسوق النهاردة».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['income', 'expense', 'savings', 'دخل', 'مصروف', 'ادخار'],
+          description: 'النوع (مطلوب) — savings = ادخار',
+        },
+        amount: { type: 'number', exclusiveMinimum: 0, maximum: 999999999, description: 'المبلغ (مطلوب)' },
+        description: { type: 'string', minLength: 1, maxLength: 500, description: 'الوصف (مطلوب)' },
+        category: { type: 'string', maxLength: 100, description: 'التصنيف (تسوق/طعام/مواصلات…)' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+        recurring: { type: 'boolean', description: 'حركة متكررة؟' },
+      },
+      required: ['type', 'amount', 'description'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['type', 'amount', 'description', 'category', 'date', 'recurring'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      const TYPES = ['income', 'expense', 'savings', 'دخل', 'مصروف', 'ادخار']
+      if (a.type === undefined || !TYPES.includes(String(a.type))) {
+        return bad('type: النوع مطلوب — المتاح: income, expense, savings (أو دخل/مصروف/ادخار)')
+      }
+      if (typeof a.amount !== 'number' || !(a.amount > 0) || a.amount > 999999999) {
+        return bad('amount: المبلغ مطلوب (رقم موجب حتى 999999999)')
+      }
+      if (typeof a.description !== 'string' || a.description.trim().length < 1 || a.description.length > 500) {
+        return bad('description: الوصف مطلوب (حتى 500 محرف)')
+      }
+      if (a.category !== undefined && (typeof a.category !== 'string' || a.category.length > 100)) {
+        return bad('category: حتى 100 محرف')
+      }
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      if (a.recurring !== undefined && typeof a.recurring !== 'boolean') {
+        return bad('recurring: قيمة منطقية (true/false)')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const date = args.date ?? todayCairo()
+      // توحيد الكتابة العربية مع المخزن الإنجليزي (ادخار يبقى كما هو — عرف الموقع)
+      const type =
+        args.type === 'دخل' ? 'income' : args.type === 'مصروف' ? 'expense' : args.type === 'savings' ? 'ادخار' : args.type
+      const record = (await db.upsert('finance_records', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        type,
+        category: args.category ?? null,
+        description: args.description,
+        amount: args.amount,
+        date,
+        recurring: args.recurring ?? false,
+      }, 'id')) as any
+      const label = type === 'income' ? 'دخل' : type === 'expense' ? 'مصروف' : 'ادخار'
+      return {
+        summary: `سُجل ${label} بمبلغ ${args.amount} — ${args.description} (${date})`,
+        saved: true,
+        record: { id: record?.id ?? null, type, amount: args.amount, date, description: args.description },
+      }
+    },
+  },
+
+  // 60) ── delete_finance_record ─────────────────────────────
+  {
+    name: 'delete_finance_record',
+    title: 'حذف حركة مالية',
+    kind: 'write',
+    description: 'حذف سجل مالي نهائيًا. يتطلب confirm:true صراحةً — مثل: «امسحلي الحركة دي، متأكد».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        recordId: { type: 'string', minLength: 1, description: 'معرّف السجل (من list_finance_records)' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['recordId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['recordId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.recordId !== 'string' || a.recordId.length < 1) return bad('recordId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ recordId: a.recordId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('finance_records', {
+        select: 'id,description,amount',
+        filters: { id: `eq.${args.recordId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('السجل غير موجود أو لا تملكه')
+      await db.delete('finance_records', { id: `eq.${args.recordId}`, user_id: `eq.${userId}` })
+      const rec = owned as any
+      return { summary: `حُذف السجل «${rec.description}» (${rec.amount}) نهائيًا`, deleted: true }
+    },
+  },
+
+  // 61) ── finance_summary ─────────────────────────────
+  {
+    name: 'finance_summary',
+    title: 'ملخص مالي',
+    kind: 'read',
+    description: 'ملخص شهر كامل: الدخل والمصروف والادخار والصافي وأعلى تصنيفات المصروف — مثل «إيه وضعي المالي الشهر ده؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        month: { type: 'string', pattern: '^\\d{4}-\\d{2}$', description: 'الشهر YYYY-MM (افتراضي الشهر الحالي)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['month'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.month !== undefined && !/^\d{4}-\d{2}$/.test(String(a.month))) {
+        return bad('month: الشهر بصيغة YYYY-MM')
+      }
+      return ok({ month: a.month as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const month = args.month ?? todayCairo().slice(0, 7)
+      const [y, m] = month.split('-').map(Number)
+      const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+      const endBound = `${month}-${String(lastDay).padStart(2, '0')}`
+      const rows = ((await db.select('finance_records', {
+        filters: { user_id: `eq.${userId}`, date: `gte.${month}-01` },
+        order: ['date.asc'],
+        limit: 500,
+      })) ?? []) as any[]
+      const inMonth = rows.filter((r) => String(r.date) <= endBound)
+      const isIncome = (t: unknown) => t === 'income' || t === 'دخل'
+      const isExpense = (t: unknown) => t === 'expense' || t === 'مصروف'
+      const income = round1(inMonth.filter((r) => isIncome(r.type)).reduce((s, r) => s + Number(r.amount ?? 0), 0))
+      const expense = round1(inMonth.filter((r) => isExpense(r.type)).reduce((s, r) => s + Number(r.amount ?? 0), 0))
+      const savings = round1(inMonth.filter((r) => r.type === 'ادخار').reduce((s, r) => s + Number(r.amount ?? 0), 0))
+      const byCategory: Record<string, number> = {}
+      for (const r of inMonth) {
+        if (isExpense(r.type) && r.category) {
+          byCategory[r.category] = round1((byCategory[r.category] ?? 0) + Number(r.amount ?? 0))
+        }
+      }
+      const topCategories = Object.entries(byCategory)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, total]) => ({ name, total }))
+      return {
+        summary: `${month}: دخل ${income} / مصروف ${expense}${savings ? ` / ادخار ${savings}` : ''} — الصافي ${round1(income - expense - savings)}`,
+        month,
+        totals: { income, expense, savings, net: round1(income - expense - savings) },
+        recordsCount: inMonth.length,
+        topExpenseCategories: topCategories,
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — الصحة (health_logs) ═══════════
+  // سجل يومي واحد لكل تاريخ (upsert على user_id,date — قيد التفرد
+  // في هجرة 005). نفس حقول مسار الصحة بالموقع.
+
+  // 62) ── get_health_log ─────────────────────────────
+  {
+    name: 'get_health_log',
+    title: 'سجل صحة يوم',
+    kind: 'read',
+    description: 'قياسات يوم واحد (نوم/ماء/خطوات/سعرات/وزن/مزاج/طاقة/تمرين) — مثل «نمت قد إيه النهاردة؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      return ok({ date: a.date as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const date = args.date ?? todayCairo()
+      const row = (await db.maybeSingle('health_logs', {
+        filters: { user_id: `eq.${userId}`, date: `eq.${date}` },
+      })) as any
+      if (!row) return { summary: `لا سجل صحي بتاريخ ${date}`, date, log: null }
+      return {
+        summary: `صحة ${date}: نوم ${row.sleep_hours ?? '—'} س، ماء ${row.water_glasses ?? '—'} كوب، خطوات ${row.steps ?? '—'}`,
+        date,
+        log: {
+          sleepHours: row.sleep_hours ?? null,
+          sleepQuality: row.sleep_quality ?? null,
+          waterGlasses: row.water_glasses ?? null,
+          steps: row.steps ?? null,
+          calories: row.calories ?? null,
+          weight: row.weight ?? null,
+          mood: row.mood ?? null,
+          energy: row.energy ?? null,
+          exerciseType: row.exercise_type ?? null,
+          exerciseMin: row.exercise_min ?? null,
+          exerciseNote: row.exercise_note ?? null,
+        },
+      }
+    },
+  },
+
+  // 63) ── log_health ─────────────────────────────
+  {
+    name: 'log_health',
+    title: 'تسجيل قياسات صحية',
+    kind: 'write',
+    description: 'يسجل/يحدّث قياسات يوم (سجل واحد لكل يوم — التحديث يدمج الحقول المرسلة فقط) — مثل «سجللي إني شربت 6 كواب ومشيت 8000 خطوة النهاردة».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+        sleepHours: { type: 'number', minimum: 0, maximum: 24, description: 'ساعات النوم' },
+        sleepQuality: { type: 'integer', minimum: 1, maximum: 5, description: 'جودة النوم 1–5' },
+        waterGlasses: { type: 'integer', minimum: 0, maximum: 50, description: 'أكواب الماء' },
+        steps: { type: 'integer', minimum: 0, maximum: 300000, description: 'الخطوات' },
+        calories: { type: 'integer', minimum: 0, maximum: 50000, description: 'السعرات' },
+        weight: { type: 'number', minimum: 20, maximum: 500, description: 'الوزن (كجم)' },
+        mood: { type: 'integer', minimum: 1, maximum: 5, description: 'المزاج 1–5' },
+        energy: { type: 'integer', minimum: 1, maximum: 5, description: 'الطاقة 1–5' },
+        exerciseType: { type: 'string', maxLength: 100, description: 'نوع التمرين' },
+        exerciseMin: { type: 'integer', minimum: 0, maximum: 600, description: 'دقائق التمرين' },
+        exerciseNote: { type: 'string', maxLength: 1000, description: 'ملاحظات التمرين' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const known = ['date', 'sleepHours', 'sleepQuality', 'waterGlasses', 'steps', 'calories', 'weight', 'mood', 'energy', 'exerciseType', 'exerciseMin', 'exerciseNote']
+      const r = rejectUnknown(args, known)
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      const NUM_RANGES: [string, number, number, boolean][] = [
+        ['sleepHours', 0, 24, false],
+        ['sleepQuality', 1, 5, true],
+        ['waterGlasses', 0, 50, true],
+        ['steps', 0, 300000, true],
+        ['calories', 0, 50000, true],
+        ['weight', 20, 500, false],
+        ['mood', 1, 5, true],
+        ['energy', 1, 5, true],
+        ['exerciseMin', 0, 600, true],
+      ]
+      for (const [f, min, max, int] of NUM_RANGES) {
+        if (a[f] !== undefined) {
+          const v = a[f] as number
+          const badNum = typeof v !== 'number' || v < min || v > max || (int && !Number.isInteger(v))
+          if (badNum) return bad(`${f}: ${int ? 'عدد صحيح' : 'رقم'} بين ${min} و${max}`)
+        }
+      }
+      for (const [f, max] of [['exerciseType', 100], ['exerciseNote', 1000]] as [string, number][]) {
+        if (a[f] !== undefined && (typeof a[f] !== 'string' || (a[f] as string).length > max)) {
+          return bad(`${f}: حتى ${max} محرف`)
+        }
+      }
+      const { date: _d, ...fields } = a
+      if (Object.values(fields).every((v) => v === undefined)) {
+        return bad('مطلوب قياس واحد على الأقل (sleepHours/waterGlasses/steps/…)')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const { date: dateArg, ...fields } = args as Record<string, unknown>
+      const date = (dateArg as string) ?? todayCairo()
+      const SNAKE: Record<string, string> = {
+        sleepHours: 'sleep_hours',
+        sleepQuality: 'sleep_quality',
+        waterGlasses: 'water_glasses',
+        exerciseType: 'exercise_type',
+        exerciseMin: 'exercise_min',
+        exerciseNote: 'exercise_note',
+      }
+      const snake: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        snake[SNAKE[k] ?? k] = v
+      }
+      // upsert ذري على (user_id, date): قياس واحد لكل يوم والدمج جزئي
+      const saved = (await db.upsert('health_logs', { user_id: userId, date, ...snake }, 'user_id,date')) as any
+      return {
+        summary: `حُفظ سجل صحة ${date} (${Object.keys(fields).join(', ')})`,
+        saved: true,
+        date,
+        fields: Object.keys(fields),
+        log: saved
+          ? {
+              sleepHours: saved.sleep_hours ?? null,
+              waterGlasses: saved.water_glasses ?? null,
+              steps: saved.steps ?? null,
+            }
+          : null,
+      }
+    },
+  },
+
+  // 64) ── list_health_logs ─────────────────────────────
+  {
+    name: 'list_health_logs',
+    title: 'سجلات الصحة',
+    kind: 'read',
+    description: 'سجلات آخر أيام مع متوسطات (نوم/ماء/خطوات/مزاج/طاقة) — مثل «إيه متوسط نومي آخر أسبوع؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 1, maximum: 30, description: 'عدد الأيام (افتراضي 7)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['days'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.days !== undefined && (!Number.isInteger(a.days) || (a.days as number) < 1 || (a.days as number) > 30)) {
+        return bad('days: عدد صحيح بين 1 و30')
+      }
+      return ok({ days: a.days as number | undefined })
+    },
+    async execute(db, userId, args) {
+      const n = args.days ?? 7
+      const dates = lastNDates(todayCairo(), n)
+      const rows = ((await db.select('health_logs', {
+        filters: { user_id: `eq.${userId}`, date: `gte.${dates[dates.length - 1]}` },
+        order: ['date.desc'],
+        limit: 100,
+      })) ?? []) as any[]
+      const avg = (key: string): number | null => {
+        const vals = rows.map((r) => Number(r[key])).filter((v) => Number.isFinite(v) && v > 0)
+        return vals.length ? round1(vals.reduce((s, v) => s + v, 0) / vals.length) : null
+      }
+      return {
+        summary: rows.length
+          ? `${rows.length} سجل صحي — متوسط النوم ${avg('sleep_hours') ?? '—'} س، الماء ${avg('water_glasses') ?? '—'} كوب، الخطوات ${avg('steps') ?? '—'}`
+          : `لا سجلات صحية في آخر ${n} أيام`,
+        daysRequested: n,
+        daysLogged: rows.length,
+        averages: {
+          sleepHours: avg('sleep_hours'),
+          waterGlasses: avg('water_glasses'),
+          steps: avg('steps'),
+          mood: avg('mood'),
+          energy: avg('energy'),
+        },
+        logs: rows.map((r) => ({
+          date: String(r.date),
+          sleepHours: r.sleep_hours ?? null,
+          waterGlasses: r.water_glasses ?? null,
+          steps: r.steps ?? null,
+          mood: r.mood ?? null,
+          energy: r.energy ?? null,
+          exerciseMin: r.exercise_min ?? null,
+        })),
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — روتين الصباح (morning_logs) ═══════════
+
+  // 65) ── get_morning_log ─────────────────────────────
+  {
+    name: 'get_morning_log',
+    title: 'سجل صباح يوم',
+    kind: 'read',
+    description: 'درجة روتين الصباح ليوم وخطواته المكتملة — مثل «صباحي النهاردة كان إيه؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      return ok({ date: a.date as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const date = args.date ?? todayCairo()
+      const row = (await db.maybeSingle('morning_logs', {
+        filters: { user_id: `eq.${userId}`, date: `eq.${date}` },
+      })) as any
+      if (!row) return { summary: `لا سجل صباح بتاريخ ${date}`, date, log: null }
+      let completed: string[] = []
+      try {
+        const parsed: unknown = JSON.parse(row.completed_items ?? '[]')
+        if (Array.isArray(parsed)) completed = parsed.map(String)
+      } catch { /* completed_items تالف — نعرضه فارغًا */ }
+      return {
+        summary: `صباح ${date}: درجة ${round1(row.score ?? 0)} — ${completed.length}/${row.total_items ?? completed.length} خطوة`,
+        date,
+        log: {
+          score: round1(row.score ?? 0),
+          completedItems: completed,
+          totalItems: row.total_items ?? null,
+          startedAt: row.started_at ?? null,
+          completedAt: row.completed_at ?? null,
+        },
+      }
+    },
+  },
+
+  // 66) ── log_morning ─────────────────────────────
+  {
+    name: 'log_morning',
+    title: 'تسجيل روتين الصباح',
+    kind: 'write',
+    description: 'يسجل/يحدّث روتين صباح يوم (الدرجة والخطوات المكتملة) — سجل واحد لكل يوم. مثل «سجللي إني خلصت 3 خطوات من روتين الصباح».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+        score: { type: 'number', minimum: 0, maximum: 100, description: 'درجة الصباح 0–100' },
+        completedItems: {
+          type: 'array',
+          maxItems: 50,
+          items: { type: 'string', maxLength: 100 },
+          description: 'أسماء/معرّفات الخطوات المكتملة',
+        },
+        totalItems: { type: 'integer', minimum: 0, maximum: 100, description: 'إجمالي خطوات الروتين' },
+        completed: { type: 'boolean', description: 'أُتم الروتين بالكامل؟ (يختم وقت الإتمام)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['date', 'score', 'completedItems', 'totalItems', 'completed'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      if (a.score !== undefined && (typeof a.score !== 'number' || (a.score as number) < 0 || (a.score as number) > 100)) {
+        return bad('score: رقم بين 0 و100')
+      }
+      if (a.completedItems !== undefined) {
+        if (!Array.isArray(a.completedItems) || (a.completedItems as unknown[]).length > 50) {
+          return bad('completedItems: مصفوفة حتى 50 عنصرًا')
+        }
+        for (const it of a.completedItems as unknown[]) {
+          if (typeof it !== 'string' || it.length > 100) {
+            return bad('completedItems.?: نص حتى 100 محرف لكل خطوة')
+          }
+        }
+      }
+      if (a.totalItems !== undefined && (!Number.isInteger(a.totalItems) || (a.totalItems as number) < 0 || (a.totalItems as number) > 100)) {
+        return bad('totalItems: عدد صحيح بين 0 و100')
+      }
+      if (a.completed !== undefined && typeof a.completed !== 'boolean') {
+        return bad('completed: قيمة منطقية (true/false)')
+      }
+      const { date: _d, ...fields } = a
+      if (Object.values(fields).every((v) => v === undefined)) {
+        return bad('مطلوب حقل واحد على الأقل (score/completedItems/totalItems/completed)')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const { date: dateArg, ...fields } = args as Record<string, unknown>
+      const date = (dateArg as string) ?? todayCairo()
+      // total_items بلا افتراضي في القاعدة — نضمنه عند إنشاء أول سجل
+      const existing = await db.maybeSingle('morning_logs', {
+        select: 'id,total_items',
+        filters: { user_id: `eq.${userId}`, date: `eq.${date}` },
+      })
+      const row: Record<string, unknown> = { user_id: userId, date }
+      if (fields.score !== undefined) row.score = fields.score
+      if (fields.completedItems !== undefined) {
+        row.completed_items = JSON.stringify(fields.completedItems)
+      }
+      if (fields.totalItems !== undefined) row.total_items = fields.totalItems
+      if (!existing && fields.totalItems === undefined) {
+        row.total_items = Array.isArray(fields.completedItems) ? (fields.completedItems as unknown[]).length : 0
+      }
+      if (fields.completed === true) row.completed_at = new Date().toISOString()
+      const saved = (await db.upsert('morning_logs', row, 'user_id,date')) as any
+      return {
+        summary: `سُجل روتين الصباح ${date}${fields.score !== undefined ? ` بدرجة ${fields.score}` : ''}`,
+        saved: true,
+        date,
+        log: saved
+          ? {
+              score: round1(saved.score ?? 0),
+              totalItems: saved.total_items ?? null,
+            }
+          : null,
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — التركيز (focus_sessions) ═══════════
+
+  // 67) ── list_focus_sessions ─────────────────────────────
+  {
+    name: 'list_focus_sessions',
+    title: 'جلسات التركيز',
+    kind: 'read',
+    description: 'آخر جلسات التركيز (بومودورو/عمل عميق) مع إجمالي الدقائق — مثل «ركزت قد إيه الأسبوع ده؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 50, description: 'أقصى عدد جلسات (افتراضي 10)' },
+        days: { type: 'integer', minimum: 1, maximum: 30, description: 'نطاق الإحصائيات بالأيام (افتراضي 7)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['limit', 'days'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 50)) {
+        return bad('limit: عدد صحيح بين 1 و50')
+      }
+      if (a.days !== undefined && (!Number.isInteger(a.days) || (a.days as number) < 1 || (a.days as number) > 30)) {
+        return bad('days: عدد صحيح بين 1 و30')
+      }
+      return ok({ limit: a.limit as number | undefined, days: a.days as number | undefined })
+    },
+    async execute(db, userId, args) {
+      const days = args.days ?? 7
+      const since = new Date(Date.now() - (days - 1) * 86400000).toISOString()
+      const rows = ((await db.select('focus_sessions', {
+        filters: { user_id: `eq.${userId}`, started_at: `gte.${since}` },
+        order: ['started_at.desc'],
+        limit: args.limit ?? 10,
+      })) ?? []) as any[]
+      const totalActual = rows.reduce((s, r) => s + Number(r.actual_min ?? 0), 0)
+      const totalPlanned = rows.reduce((s, r) => s + Number(r.duration ?? 0), 0)
+      return {
+        summary: rows.length
+          ? `${rows.length} جلسة تركيز في آخر ${days} أيام — ${totalActual} دقيقة فعلية (المخطط ${totalPlanned})`
+          : `لا جلسات تركيز في آخر ${days} أيام`,
+        stats: { sessions: rows.length, actualMinutes: totalActual, plannedMinutes: totalPlanned },
+        sessions: rows.map((r) => ({
+          id: r.id,
+          type: r.type ?? 'pomodoro',
+          duration: r.duration,
+          actualMin: r.actual_min ?? 0,
+          completed: r.completed === true,
+          taskId: r.task_id ?? null,
+          notes: r.notes ?? null,
+          startedAt: r.started_at,
+        })),
+      }
+    },
+  },
+
+  // 68) ── log_focus_session ─────────────────────────────
+  {
+    name: 'log_focus_session',
+    title: 'تسجيل جلسة تركيز',
+    kind: 'write',
+    description: 'يسجل جلسة تركيز منجزة (بومودورو/عمل عميق) — مثل «سجللي جلسة تركيز 50 دقيقة على مشروع الإطلاق».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        duration: { type: 'integer', minimum: 1, maximum: 480, description: 'المدة المخططة بالدقائق (مطلوب)' },
+        actualMin: { type: 'integer', minimum: 0, maximum: 480, description: 'الدقائق الفعلية (افتراضي = duration)' },
+        type: { type: 'string', maxLength: 50, description: 'النوع (افتراضي pomodoro)' },
+        taskId: { type: 'string', description: 'معرّف مهمة مرتبطة (اختياري — يجب أن تملكها)' },
+        notes: { type: 'string', maxLength: 1000, description: 'ملاحظات' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'تاريخ الجلسة (افتراضي اليوم)' },
+        completed: { type: 'boolean', description: 'أُتمت الجلسة؟ (افتراضي true)' },
+      },
+      required: ['duration'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['duration', 'actualMin', 'type', 'taskId', 'notes', 'date', 'completed'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (!Number.isInteger(a.duration) || (a.duration as number) < 1 || (a.duration as number) > 480) {
+        return bad('duration: عدد صحيح بين 1 و480')
+      }
+      if (a.actualMin !== undefined && (!Number.isInteger(a.actualMin) || (a.actualMin as number) < 0 || (a.actualMin as number) > 480)) {
+        return bad('actualMin: عدد صحيح بين 0 و480')
+      }
+      if (a.type !== undefined && (typeof a.type !== 'string' || a.type.length > 50)) {
+        return bad('type: حتى 50 محرف')
+      }
+      if (a.taskId !== undefined && typeof a.taskId !== 'string') return bad('taskId: نص')
+      if (a.notes !== undefined && (typeof a.notes !== 'string' || a.notes.length > 1000)) {
+        return bad('notes: حتى 1000 محرف')
+      }
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      if (a.completed !== undefined && typeof a.completed !== 'boolean') {
+        return bad('completed: قيمة منطقية (true/false)')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      // ملكية المهمة المرتبطة تُفحص أولًا (نفس عقد مسار focus بالموقع)
+      if (args.taskId) {
+        const task = await db.maybeSingle('tasks', {
+          select: 'id',
+          filters: { id: `eq.${args.taskId}`, user_id: `eq.${userId}` },
+        })
+        if (!task) throw new Error('المهمة المرتبطة غير موجودة أو لا تملكها')
+      }
+      const completed = args.completed ?? true
+      const now = new Date().toISOString()
+      // تاريخ مخصص: نحافظ على وقت اليوم الحالي مع تاريخ الجلسة
+      const startedAt = args.date
+        ? `${args.date}T${now.slice(11, 19)}Z`
+        : now
+      const session = (await db.upsert('focus_sessions', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        duration: args.duration,
+        actual_min: args.actualMin ?? args.duration,
+        type: args.type ?? 'pomodoro',
+        notes: args.notes ?? null,
+        task_id: args.taskId ?? null,
+        completed,
+        started_at: startedAt,
+        completed_at: completed ? now : null,
+      }, 'id')) as any
+      return {
+        summary: `سُجلت جلسة تركيز ${args.actualMin ?? args.duration} دقيقة${args.taskId ? ' (مرتبطة بمهمة)' : ''}`,
+        saved: true,
+        session: { id: session?.id ?? null, duration: args.duration, actualMin: args.actualMin ?? args.duration, completed, startedAt },
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — الشغل (work_sessions) ═══════════
+
+  // 69) ── list_work_sessions ─────────────────────────────
+  {
+    name: 'list_work_sessions',
+    title: 'جلسات الشغل',
+    kind: 'read',
+    description: 'آخر جلسات الشغل الطويلة (المخطط/الفعلي/الراحة/جودة الجلسة) — مثل «جلسات الشغل بتاعتي آخر فترة».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 50, description: 'أقصى عدد جلسات (افتراضي 10)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 50)) {
+        return bad('limit: عدد صحيح بين 1 و50')
+      }
+      return ok({ limit: a.limit as number | undefined })
+    },
+    async execute(db, userId, args) {
+      const rows = ((await db.select('work_sessions', {
+        filters: { user_id: `eq.${userId}` },
+        order: ['started_at.desc'],
+        limit: args.limit ?? 10,
+      })) ?? []) as any[]
+      const totalActive = rows.reduce((s, r) => s + Number(r.active_min ?? 0), 0)
+      const scored = rows.filter((r) => typeof r.quality_score === 'number')
+      return {
+        summary: rows.length
+          ? `${rows.length} جلسة شغل — ${totalActive} دقيقة عمل فعلية${scored.length ? `، متوسط الجودة ${round1(scored.reduce((s, r) => s + Number(r.quality_score), 0) / scored.length)}` : ''}`
+          : 'لا جلسات شغل بعد',
+        stats: {
+          sessions: rows.length,
+          activeMinutes: totalActive,
+          averageQuality: scored.length ? round1(scored.reduce((s, r) => s + Number(r.quality_score), 0) / scored.length) : null,
+        },
+        sessions: rows.map((r) => ({
+          id: r.id,
+          title: r.title ?? null,
+          plannedMin: r.planned_min,
+          activeMin: r.active_min ?? 0,
+          breakMin: r.break_min ?? 0,
+          tasksCompleted: r.tasks_completed ?? 0,
+          qualityScore: r.quality_score ?? null,
+          status: r.status ?? 'completed',
+          startedAt: r.started_at,
+        })),
+      }
+    },
+  },
+
+  // 70) ── log_work_session ─────────────────────────────
+  {
+    name: 'log_work_session',
+    title: 'تسجيل جلسة شغل',
+    kind: 'write',
+    description: 'يسجل جلسة شغل (كتلة عمل طويلة بساعات) — مثل «سجللي جلسة شغل 4 ساعات كتبت فيها 3 مهام».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plannedMin: { type: 'integer', minimum: 1, maximum: 600, description: 'المدة المخططة بالدقائق (مطلوب)' },
+        title: { type: 'string', maxLength: 200, description: 'عنوان الجلسة' },
+        activeMin: { type: 'integer', minimum: 0, maximum: 600, description: 'دقائق العمل الفعلية' },
+        breakMin: { type: 'integer', minimum: 0, maximum: 600, description: 'دقائق الراحة' },
+        tasksCompleted: { type: 'integer', minimum: 0, maximum: 200, description: 'عدد المهام المنجزة' },
+        qualityScore: { type: 'integer', minimum: 0, maximum: 100, description: 'جودة الجلسة 0–100' },
+        notes: { type: 'string', maxLength: 2000, description: 'ملاحظات' },
+        status: {
+          type: 'string',
+          enum: ['active', 'paused', 'completed', 'cancelled'],
+          description: 'الحالة (افتراضي completed)',
+        },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'تاريخ الجلسة (افتراضي اليوم)' },
+      },
+      required: ['plannedMin'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['plannedMin', 'title', 'activeMin', 'breakMin', 'tasksCompleted', 'qualityScore', 'notes', 'status', 'date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      for (const [f, min, max] of [['plannedMin', 1, 600], ['activeMin', 0, 600], ['breakMin', 0, 600], ['tasksCompleted', 0, 200], ['qualityScore', 0, 100]] as [string, number, number][]) {
+        if (a[f] !== undefined && (!Number.isInteger(a[f]) || (a[f] as number) < min || (a[f] as number) > max)) {
+          return bad(`${f}: عدد صحيح بين ${min} و${max}`)
+        }
+      }
+      if (a.title !== undefined && (typeof a.title !== 'string' || a.title.length > 200)) {
+        return bad('title: حتى 200 محرف')
+      }
+      if (a.notes !== undefined && (typeof a.notes !== 'string' || a.notes.length > 2000)) {
+        return bad('notes: حتى 2000 محرف')
+      }
+      if (a.status !== undefined && !['active', 'paused', 'completed', 'cancelled'].includes(String(a.status))) {
+        return bad('status: قيمة غير صالحة — المتاح: active, paused, completed, cancelled')
+      }
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const now = new Date().toISOString()
+      const status = args.status ?? 'completed'
+      const startedAt = args.date ? `${args.date}T${now.slice(11, 19)}Z` : now
+      const session = (await db.upsert('work_sessions', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        title: args.title ?? null,
+        planned_min: args.plannedMin,
+        active_min: args.activeMin ?? 0,
+        break_min: args.breakMin ?? 0,
+        breaks_count: 0,
+        tasks_completed: args.tasksCompleted ?? 0,
+        quality_score: args.qualityScore ?? null,
+        notes: args.notes ?? null,
+        status,
+        started_at: startedAt,
+        completed_at: status === 'completed' || status === 'cancelled' ? now : null,
+      }, 'id')) as any
+      return {
+        summary: `سُجلت جلسة شغل ${args.plannedMin} دقيقة مخططة${args.activeMin !== undefined ? ` (${args.activeMin} فعلية)` : ''}`,
+        saved: true,
+        session: { id: session?.id ?? null, plannedMin: args.plannedMin, activeMin: args.activeMin ?? 0, status },
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — المخطط اليومي (planner_items) ═══════════
+  // القراءة عبر get_today_plan الموجودة أعلاه — هنا الكتابة فقط:
+  // إنشاء بترتيب تسلسلي داخل قسمه (نفس منطق مسار planner).
+
+  // 71) ── create_planner_item ─────────────────────────────
+  {
+    name: 'create_planner_item',
+    title: 'إضافة بند للمخطط',
+    kind: 'write',
+    description: 'يضيف بندًا لكتل اليوم (صباح/ظهر/مساء/شغل) في نهاية قسمه — مثل «ضيف بند «مراجعة الدرس» الصبح 8».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 200, description: 'نص البند (مطلوب)' },
+        section: { type: 'string', minLength: 1, maxLength: 30, description: 'القسم: morning/noon/evening/work (مطلوب)' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+        time: { type: 'string', description: 'الوقت HH:MM (اختياري)' },
+      },
+      required: ['title', 'section'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['title', 'section', 'date', 'time'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.title !== 'string' || a.title.trim().length < 1 || a.title.length > 200) {
+        return bad('title: نص البند مطلوب (1–200 محرف)')
+      }
+      if (typeof a.section !== 'string' || a.section.trim().length < 1 || a.section.length > 30) {
+        return bad('section: القسم مطلوب (morning/noon/evening/work)')
+      }
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      if (a.time !== undefined && !TIME_RE.test(String(a.time))) return bad('time: الوقت يجب أن يكون HH:MM')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const date = args.date ?? todayCairo()
+      // الترتيب التسلسلي داخل القسم (نفس حساب مسار planner بالموقع)
+      const existing = ((await db.select('planner_items', {
+        select: 'id,section,"order"',
+        filters: { user_id: `eq.${userId}`, date: `eq.${date}` },
+      })) ?? []) as any[]
+      const maxOrder = existing
+        .filter((i) => i.section === args.section)
+        .reduce((max, i) => Math.max(max, Number(i.order ?? 0)), -1)
+      const item = (await db.upsert('planner_items', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        date,
+        section: args.section,
+        time: args.time ?? null,
+        title: args.title,
+        completed: false,
+        order: maxOrder + 1,
+      }, 'id')) as any
+      return {
+        summary: `أُضيف «${args.title}» لقسم ${args.section} في مخطط ${date}`,
+        created: true,
+        item: { id: item?.id ?? null, title: args.title, section: args.section, date, order: maxOrder + 1 },
+      }
+    },
+  },
+
+  // 72) ── update_planner_item ─────────────────────────────
+  {
+    name: 'update_planner_item',
+    title: 'تحديث بند مخطط',
+    kind: 'write',
+    description: 'تحديث بند في المخطط (النص/الوقت/الإتمام/القسم/الترتيب) — مثل «خلصت بند المخطط ده».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', minLength: 1, description: 'معرّف البند (من get_today_plan)' },
+        title: { type: 'string', minLength: 1, maxLength: 200, description: 'النص' },
+        completed: { type: 'boolean', description: 'تم الإنجاز؟' },
+        time: { type: 'string', description: 'الوقت HH:MM' },
+        section: { type: 'string', minLength: 1, maxLength: 30, description: 'القسم' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ' },
+        order: { type: 'integer', minimum: 0, maximum: 99, description: 'الترتيب داخل القسم' },
+      },
+      required: ['itemId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['itemId', 'title', 'completed', 'time', 'section', 'date', 'order'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.itemId !== 'string' || a.itemId.length < 1) return bad('itemId: المعرّف مطلوب')
+      if (a.title !== undefined && (typeof a.title !== 'string' || a.title.trim().length < 1 || a.title.length > 200)) {
+        return bad('title: النص (1–200 محرف)')
+      }
+      if (a.completed !== undefined && typeof a.completed !== 'boolean') {
+        return bad('completed: قيمة منطقية (true/false)')
+      }
+      if (a.time !== undefined && !TIME_RE.test(String(a.time))) return bad('time: الوقت يجب أن يكون HH:MM')
+      if (a.section !== undefined && (typeof a.section !== 'string' || a.section.trim().length < 1 || a.section.length > 30)) {
+        return bad('section: القسم (حتى 30 محرف)')
+      }
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: التاريخ يجب أن يكون YYYY-MM-DD')
+      if (a.order !== undefined && (!Number.isInteger(a.order) || (a.order as number) < 0 || (a.order as number) > 99)) {
+        return bad('order: عدد صحيح بين 0 و99')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('planner_items', {
+        select: 'id,title',
+        filters: { id: `eq.${args.itemId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('البند غير موجود أو لا تملكه')
+      const patch: Record<string, unknown> = {}
+      if (args.title !== undefined) patch.title = args.title
+      if (args.completed !== undefined) patch.completed = args.completed
+      if (args.time !== undefined) patch.time = args.time
+      if (args.section !== undefined) patch.section = args.section
+      if (args.date !== undefined) patch.date = args.date
+      if (args.order !== undefined) patch.order = args.order
+      if (Object.keys(patch).length === 0) {
+        throw new Error('لا حقول للتحديث — مرر حقلًا واحدًا على الأقل')
+      }
+      await db.patch('planner_items', { id: `eq.${args.itemId}`, user_id: `eq.${userId}` }, patch)
+      return {
+        summary: `حُدّث بند المخطط «${args.title ?? (owned as any).title}»${args.completed !== undefined ? ` (${args.completed ? 'منجز' : 'غير منجز'})` : ''}`,
+        updated: true,
+        itemId: args.itemId,
+      }
+    },
+  },
+
+  // 73) ── delete_planner_item ─────────────────────────────
+  {
+    name: 'delete_planner_item',
+    title: 'حذف بند مخطط',
+    kind: 'write',
+    description: 'حذف بند من المخطط نهائيًا. يتطلب confirm:true صراحةً.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', minLength: 1, description: 'معرّف البند' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['itemId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['itemId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.itemId !== 'string' || a.itemId.length < 1) return bad('itemId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ itemId: a.itemId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('planner_items', {
+        select: 'id,title',
+        filters: { id: `eq.${args.itemId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('البند غير موجود أو لا تملكه')
+      await db.delete('planner_items', { id: `eq.${args.itemId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذف «${(owned as any).title}» من المخطط نهائيًا`, deleted: true }
+    },
+  },
+
+  // ═══════════ v3.0 — المشاريع (projects) ═══════════
+  // القراءة عبر list_projects الموجودة — هنا بقية العمليات.
+
+  // 74) ── create_project ─────────────────────────────
+  {
+    name: 'create_project',
+    title: 'إنشاء مشروع',
+    kind: 'write',
+    description: 'ينشئ مشروعًا جديدًا لتنظيم المهام — مثل «اعملي مشروع «تطوير الموقع» باللون الأزرق».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 200, description: 'اسم المشروع (مطلوب)' },
+        description: { type: 'string', maxLength: 2000, description: 'الوصف' },
+        color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', description: 'اللون بصيغة #RRGGBB (افتراضي #059669)' },
+        icon: { type: 'string', maxLength: 50, description: 'أيقونة' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['name', 'description', 'color', 'icon'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.name !== 'string' || a.name.trim().length < 1 || a.name.length > 200) {
+        return bad('name: الاسم مطلوب (1–200 محرف)')
+      }
+      if (a.description !== undefined && (typeof a.description !== 'string' || a.description.length > 2000)) {
+        return bad('description: حتى 2000 محرف')
+      }
+      if (a.color !== undefined && (typeof a.color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(a.color))) {
+        return bad('color: لون بصيغة #RRGGBB مثل #059669')
+      }
+      if (a.icon !== undefined && (typeof a.icon !== 'string' || a.icon.length > 50)) {
+        return bad('icon: حتى 50 محرف')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const project = (await db.upsert('projects', {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        name: args.name,
+        description: args.description ?? null,
+        color: args.color ?? '#059669',
+        icon: args.icon ?? null,
+        progress: 0,
+        status: 'active',
+      }, 'id')) as any
+      return {
+        summary: `أُنشئ المشروع «${args.name}»`,
+        created: true,
+        project: { id: project?.id ?? null, name: args.name, status: 'active', progress: 0 },
+      }
+    },
+  },
+
+  // 75) ── update_project ─────────────────────────────
+  {
+    name: 'update_project',
+    title: 'تحديث مشروع',
+    kind: 'write',
+    description: 'تحديث مشروع (الاسم/الوصف/اللون/التقدم/الحالة) — مثل «المشروع ده خلص، حدّث تقدمه 100».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', minLength: 1, description: 'معرّف المشروع (من list_projects)' },
+        name: { type: 'string', minLength: 1, maxLength: 200, description: 'الاسم' },
+        description: { type: 'string', maxLength: 2000, description: 'الوصف' },
+        color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', description: 'اللون #RRGGBB' },
+        icon: { type: 'string', maxLength: 50, description: 'أيقونة' },
+        progress: { type: 'number', minimum: 0, maximum: 100, description: 'نسبة التقدم' },
+        status: { type: 'string', maxLength: 30, description: 'الحالة (active/completed/archived…)' },
+      },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['projectId', 'name', 'description', 'color', 'icon', 'progress', 'status'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.projectId !== 'string' || a.projectId.length < 1) return bad('projectId: المعرّف مطلوب')
+      if (a.name !== undefined && (typeof a.name !== 'string' || a.name.trim().length < 1 || a.name.length > 200)) {
+        return bad('name: الاسم (1–200 محرف)')
+      }
+      if (a.description !== undefined && (typeof a.description !== 'string' || a.description.length > 2000)) {
+        return bad('description: حتى 2000 محرف')
+      }
+      if (a.color !== undefined && (typeof a.color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(a.color))) {
+        return bad('color: لون بصيغة #RRGGBB')
+      }
+      if (a.icon !== undefined && (typeof a.icon !== 'string' || a.icon.length > 50)) {
+        return bad('icon: حتى 50 محرف')
+      }
+      if (a.progress !== undefined && (typeof a.progress !== 'number' || (a.progress as number) < 0 || (a.progress as number) > 100)) {
+        return bad('progress: رقم بين 0 و100')
+      }
+      if (a.status !== undefined && (typeof a.status !== 'string' || a.status.length > 30)) {
+        return bad('status: حتى 30 محرف')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('projects', {
+        select: 'id,name',
+        filters: { id: `eq.${args.projectId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('المشروع غير موجود أو لا تملكه')
+      const patch: Record<string, unknown> = {}
+      if (args.name !== undefined) patch.name = args.name
+      if (args.description !== undefined) patch.description = args.description
+      if (args.color !== undefined) patch.color = args.color
+      if (args.icon !== undefined) patch.icon = args.icon
+      if (args.progress !== undefined) patch.progress = args.progress
+      if (args.status !== undefined) patch.status = args.status
+      if (Object.keys(patch).length === 0) {
+        throw new Error('لا حقول للتحديث — مرر حقلًا واحدًا على الأقل')
+      }
+      await db.patch('projects', { id: `eq.${args.projectId}`, user_id: `eq.${userId}` }, patch)
+      return {
+        summary: `حُدّث المشروع «${args.name ?? (owned as any).name}» (${Object.keys(patch).join(', ')})`,
+        updated: true,
+        projectId: args.projectId,
+      }
+    },
+  },
+
+  // 76) ── delete_project ─────────────────────────────
+  {
+    name: 'delete_project',
+    title: 'حذف مشروع',
+    kind: 'write',
+    description: 'حذف مشروع نهائيًا — المهام المرتبطة لا تُحذف بل تنفصل عنه (تظل في قائمتك). يتطلب confirm:true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', minLength: 1, description: 'معرّف المشروع' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['projectId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['projectId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.projectId !== 'string' || a.projectId.length < 1) return bad('projectId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ projectId: a.projectId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('projects', {
+        select: 'id,name',
+        filters: { id: `eq.${args.projectId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('المشروع غير موجود أو لا تملكه')
+      await db.delete('projects', { id: `eq.${args.projectId}`, user_id: `eq.${userId}` })
+      return {
+        summary: `حُذف المشروع «${(owned as any).name}» نهائيًا — مهامه تنفصل عنه وتبقى في قائمتك`,
+        deleted: true,
+      }
+    },
+  },
+
+  // ═══════════ v3.0 — الإنجازات والإعدادات ═══════════
+
+  // 77) ── list_achievements ─────────────────────────────
+  {
+    name: 'list_achievements',
+    title: 'وسامي الإنجازات',
+    kind: 'read',
+    description: 'كل وسوم الإنجازات التي كسبها المستخدم (الاسم/الأيقونة/الوصف/تاريخ الكسب) — مثل «إيه الإنجازات اللي جبتها؟».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const rows = ((await db.select('user_achievements', {
+        filters: { user_id: `eq.${userId}` },
+        order: ['earned_at.desc'],
+        limit: 100,
+      })) ?? []) as any[]
+      return {
+        summary: rows.length ? `${rows.length} وسام إنجاز` : 'لا وسوم بعد — استمر!',
+        count: rows.length,
+        badges: rows.map((b) => ({
+          id: b.badge_id,
+          name: b.badge_name,
+          icon: b.badge_icon ?? null,
+          description: b.badge_desc ?? null,
+          earnedAt: b.earned_at,
+        })),
+      }
+    },
+  },
+
+  // 78) ── get_settings ─────────────────────────────
+  {
+    name: 'get_settings',
+    title: 'إعداداتي',
+    kind: 'read',
+    description: 'إعدادات المستخدم (وقت الصحيان والنوم، مدة التركيز، أهداف الماء والقراءة والتمرين الأسبوعية).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const row = (await db.maybeSingle('user_settings', {
+        filters: { user_id: `eq.${userId}` },
+      })) as any
+      if (!row) {
+        return {
+          summary: 'الإعدادات بالقيم الافتراضية (لم تُخصَّص بعد)',
+          settings: {
+            theme: 'system', language: 'ar', wakeUpTime: '06:00', sleepTime: '22:00',
+            focusDuration: 50, dailyWaterGoal: 8, dailyReadingGoal: 30, weeklyExerciseGoal: 5, notifications: true,
+          },
+          customized: false,
+        }
+      }
+      return {
+        summary: `الصحيان ${row.wake_up_time ?? '06:00'}، النوم ${row.sleep_time ?? '22:00'}، تركيز ${row.focus_duration ?? 50} دقيقة`,
+        settings: {
+          theme: row.theme ?? 'system',
+          language: row.language ?? 'ar',
+          wakeUpTime: row.wake_up_time ?? '06:00',
+          sleepTime: row.sleep_time ?? '22:00',
+          focusDuration: row.focus_duration ?? 50,
+          dailyWaterGoal: row.daily_water_goal ?? 8,
+          dailyReadingGoal: row.daily_reading_goal ?? 30,
+          weeklyExerciseGoal: row.weekly_exercise_goal ?? 5,
+          notifications: row.notifications !== false,
+        },
+        customized: true,
+      }
+    },
+  },
+
+  // 79) ── update_settings ─────────────────────────────
+  {
+    name: 'update_settings',
+    title: 'تحديث الإعدادات',
+    kind: 'write',
+    description: 'يحدّث إعدادات المستخدم (وقت الصحيان/النوم، مدة التركيز، أهداف الماء/القراءة/التمرين) — مثل «ظبطلي وقت الصحيان 5:30».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        wakeUpTime: { type: 'string', description: 'وقت الصحيان HH:MM' },
+        sleepTime: { type: 'string', description: 'وقت النوم HH:MM' },
+        focusDuration: { type: 'integer', minimum: 5, maximum: 180, description: 'مدة التركيز بالدقائق' },
+        dailyWaterGoal: { type: 'integer', minimum: 1, maximum: 50, description: 'هدف أكواب الماء اليومي' },
+        dailyReadingGoal: { type: 'integer', minimum: 1, maximum: 600, description: 'هدف دقائق القراءة اليومي' },
+        weeklyExerciseGoal: { type: 'integer', minimum: 1, maximum: 21, description: 'هدف مرات التمرين الأسبوعي' },
+        notifications: { type: 'boolean', description: 'تفعيل الإشعارات' },
+        theme: { type: 'string', enum: ['system', 'light', 'dark'], description: 'المظهر' },
+        language: { type: 'string', enum: ['ar', 'en'], description: 'اللغة' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['wakeUpTime', 'sleepTime', 'focusDuration', 'dailyWaterGoal', 'dailyReadingGoal', 'weeklyExerciseGoal', 'notifications', 'theme', 'language'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.wakeUpTime !== undefined && !TIME_RE.test(String(a.wakeUpTime))) return bad('wakeUpTime: الوقت يجب أن يكون HH:MM')
+      if (a.sleepTime !== undefined && !TIME_RE.test(String(a.sleepTime))) return bad('sleepTime: الوقت يجب أن يكون HH:MM')
+      for (const [f, min, max] of [['focusDuration', 5, 180], ['dailyWaterGoal', 1, 50], ['dailyReadingGoal', 1, 600], ['weeklyExerciseGoal', 1, 21]] as [string, number, number][]) {
+        if (a[f] !== undefined && (!Number.isInteger(a[f]) || (a[f] as number) < min || (a[f] as number) > max)) {
+          return bad(`${f}: عدد صحيح بين ${min} و${max}`)
+        }
+      }
+      if (a.notifications !== undefined && typeof a.notifications !== 'boolean') {
+        return bad('notifications: قيمة منطقية (true/false)')
+      }
+      if (a.theme !== undefined && !['system', 'light', 'dark'].includes(String(a.theme))) {
+        return bad('theme: المتاح: system, light, dark')
+      }
+      if (a.language !== undefined && !['ar', 'en'].includes(String(a.language))) {
+        return bad('language: المتاح: ar, en')
+      }
+      if (Object.values(a).every((v) => v === undefined)) {
+        return bad('مطلوب إعداد واحد على الأقل')
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const existing = await db.maybeSingle('user_settings', {
+        select: 'id',
+        filters: { user_id: `eq.${userId}` },
+      })
+      const SNAKE: Record<string, string> = {
+        wakeUpTime: 'wake_up_time',
+        sleepTime: 'sleep_time',
+        focusDuration: 'focus_duration',
+        dailyWaterGoal: 'daily_water_goal',
+        dailyReadingGoal: 'daily_reading_goal',
+        weeklyExerciseGoal: 'weekly_exercise_goal',
+      }
+      const snake: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
+        if (v === undefined) continue
+        snake[SNAKE[k] ?? k] = v
+      }
+      if (existing) {
+        await db.patch('user_settings', { user_id: `eq.${userId}` }, snake)
+      } else {
+        // أول تخصيص: نزرع صف الإعدادات كاملًا بالقيم الافتراضية + التعديلات
+        await db.upsert('user_settings', {
+          id: crypto.randomUUID(),
+          user_id: userId,
+          theme: snake.theme ?? 'system',
+          language: snake.language ?? 'ar',
+          wake_up_time: snake.wake_up_time ?? '06:00',
+          sleep_time: snake.sleep_time ?? '22:00',
+          focus_duration: snake.focus_duration ?? 50,
+          daily_water_goal: snake.daily_water_goal ?? 8,
+          daily_reading_goal: snake.daily_reading_goal ?? 30,
+          weekly_exercise_goal: snake.weekly_exercise_goal ?? 5,
+          notifications: snake.notifications ?? true,
+          ...snake,
+        }, 'id')
+      }
+      return {
+        summary: `حُدّثت الإعدادات (${Object.keys(args as Record<string, unknown>).join(', ')})`,
+        updated: true,
+        fields: Object.keys(args as Record<string, unknown>),
+      }
+    },
+  },
+
 ]
 
 /** خريطة بحث سريعة بالاسم */
