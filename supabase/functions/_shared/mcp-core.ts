@@ -126,6 +126,14 @@ export interface McpServerDeps {
    * (السلوك التاريخي نفسه — الاختبارات القديمة لا تتغير).
    */
   oauthTokenVerifier?: (token: string) => Promise<AuthOutcome>
+  /**
+   * رابط بيانات المورد المحمي (RFC 9728) — يُحقن من index.ts
+   * (${issuer}/.well-known/oauth-protected-resource). يُستخدم في
+   * ترويسة WWW-Authenticate عند 401 كي يكتشف عملاء MCP الصارمون
+   * (المواصفة 2025-06-18: resource_metadata=…) مسار الاكتشاف
+   * بلا تخمين. غيابه = الصيغة القديمة realm فقط (سلوك تاريخي).
+   */
+  protectedResourceUrl?: string
 }
 
 export interface McpHttpRequest {
@@ -265,6 +273,7 @@ export class McpServer {
   private limiter: RateLimiter
   private audit: (entry: AuditEntry) => Promise<void>
   private oauthTokenVerifier: ((token: string) => Promise<AuthOutcome>) | null
+  private protectedResourceUrl: string | null
 
   constructor(deps: McpServerDeps) {
     this.db = new Postgrest({
@@ -274,6 +283,7 @@ export class McpServer {
     })
     this.limiter = new RateLimiter(deps.now ?? Date.now)
     this.oauthTokenVerifier = deps.oauthTokenVerifier ?? null
+    this.protectedResourceUrl = deps.protectedResourceUrl ?? null
     this.audit = async (entry) => {
       if (deps.auditSink) {
         await deps.auditSink(entry)
@@ -334,10 +344,16 @@ export class McpServer {
     // 2) المصادقة: Bearer rise_… (المسار التاريخي) أو Bearer JWT
     //    من طبقة OAuth لربط ChatGPT (المرحلة 10-ج) — كوكيز وجلسات
     //    تُرفض عمدًا في المسارين (مصادقة ambient = ثغرة CSRF).
+    //    401 بلا هوية يحمل WWW-Authenticate بصيغة resource_metadata
+    //    (موصفة MCP 2025-06-18) — العميل الصارم يعرف من أين يكتشف
+    //    خادم التفويض، وrealm يبقى للتوافق التاريخي.
     const authHeader = req.headers['authorization'] || ''
     const bearer = authHeader.toLowerCase().startsWith('bearer ')
       ? authHeader.slice(7).trim()
       : ''
+    const unauthHeader = this.protectedResourceUrl
+      ? `Bearer realm="awj-mcp", resource_metadata="${this.protectedResourceUrl}"`
+      : 'Bearer realm="awj-mcp"'
     let auth: AuthOutcome
     let credential: 'key' | 'oauth' = 'key'
     if (bearer.startsWith('rise_')) {
@@ -352,7 +368,7 @@ export class McpServer {
     } else {
       return {
         status: 401,
-        headers: corsHeaders({ 'WWW-Authenticate': 'Bearer realm="awj-mcp"' }),
+        headers: corsHeaders({ 'WWW-Authenticate': unauthHeader }),
         body: rpcErrorBody(
           null,
           -32001,

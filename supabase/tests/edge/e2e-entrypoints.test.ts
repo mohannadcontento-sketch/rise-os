@@ -168,12 +168,20 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     assertEquals(badJson.status, 400)
     assertEquals((await badJson.json()).error.code, -32700)
 
-    // بلا Bearer → 401
+    // بلا Bearer → 401 + ترويسة WWW-Authenticate بصيغة resource_metadata
+    // (مواصفة MCP 2025-06-18 — العميل الصارم يكتشف منها مسار الاكتشاف)
     const noAuth = await fetch(`http://127.0.0.1:8761/`, {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
     })
     assertEquals(noAuth.status, 401)
+    const wwwAuth = noAuth.headers.get('www-authenticate') || ''
+    assert(wwwAuth.includes('realm="awj-mcp"'), 'realm للتوافق التاريخي')
+    assert(
+      wwwAuth.includes('resource_metadata="'),
+      `resource_metadata للاكتشاف: ${wwwAuth}`,
+    )
+    assert(wwwAuth.includes('/.well-known/oauth-protected-resource'), 'رابط RFC 9728')
 
     // المصافحة الكاملة + الأدوات + استدعاء حقيقي
     const init = await (await fetch(`http://127.0.0.1:8761/`, {

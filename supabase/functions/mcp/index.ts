@@ -59,10 +59,13 @@ const issuer = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/mcp`
 const signingKey = await deriveSigningKey(serviceKey)
 
 // مثيل واحد لكل نسخة دالة (يحمل حدود المعدل في الذاكرة)
+// protectedResourceUrl: 401 يحمل WWW-Authenticate بصيغة resource_metadata
+// (مواصفة MCP 2025-06-18) — عميل صارم يكتشف منها مسار الاكتشاف
 const server = new McpServer({
   baseUrl: supabaseUrl,
   serviceKey,
   oauthTokenVerifier: (token: string) => oauth.verifyAccessTokenUser(token),
+  protectedResourceUrl: `${issuer}/.well-known/oauth-protected-resource`,
 })
 
 // طبقة OAuth (عميل PostgREST خاص بها — خفيف وبلا حالة)

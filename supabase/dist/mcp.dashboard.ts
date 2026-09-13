@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 // ملف مدموج آليًا للنشر من لوحة Supabase (الوظيفة: mcp)
-// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 03:03:07 UTC
+// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 03:05:18 UTC
 // لا تحرر هذا الملف يدويًا؛ عدّل المصادر ثم أعد التوليد.
 //
 // طريقة النشر (Dashboard):
@@ -1067,6 +1067,14 @@ interface McpServerDeps {
    * (السلوك التاريخي نفسه — الاختبارات القديمة لا تتغير).
    */
   oauthTokenVerifier?: (token: string) => Promise<AuthOutcome>
+  /**
+   * رابط بيانات المورد المحمي (RFC 9728) — يُحقن من index.ts
+   * (${issuer}/.well-known/oauth-protected-resource). يُستخدم في
+   * ترويسة WWW-Authenticate عند 401 كي يكتشف عملاء MCP الصارمون
+   * (المواصفة 2025-06-18: resource_metadata=…) مسار الاكتشاف
+   * بلا تخمين. غيابه = الصيغة القديمة realm فقط (سلوك تاريخي).
+   */
+  protectedResourceUrl?: string
 }
 
 interface McpHttpRequest {
@@ -1206,6 +1214,7 @@ class McpServer {
   private limiter: RateLimiter
   private audit: (entry: AuditEntry) => Promise<void>
   private oauthTokenVerifier: ((token: string) => Promise<AuthOutcome>) | null
+  private protectedResourceUrl: string | null
 
   constructor(deps: McpServerDeps) {
     this.db = new Postgrest({
@@ -1215,6 +1224,7 @@ class McpServer {
     })
     this.limiter = new RateLimiter(deps.now ?? Date.now)
     this.oauthTokenVerifier = deps.oauthTokenVerifier ?? null
+    this.protectedResourceUrl = deps.protectedResourceUrl ?? null
     this.audit = async (entry) => {
       if (deps.auditSink) {
         await deps.auditSink(entry)
@@ -1275,10 +1285,16 @@ class McpServer {
     // 2) المصادقة: Bearer rise_… (المسار التاريخي) أو Bearer JWT
     //    من طبقة OAuth لربط ChatGPT (المرحلة 10-ج) — كوكيز وجلسات
     //    تُرفض عمدًا في المسارين (مصادقة ambient = ثغرة CSRF).
+    //    401 بلا هوية يحمل WWW-Authenticate بصيغة resource_metadata
+    //    (موصفة MCP 2025-06-18) — العميل الصارم يعرف من أين يكتشف
+    //    خادم التفويض، وrealm يبقى للتوافق التاريخي.
     const authHeader = req.headers['authorization'] || ''
     const bearer = authHeader.toLowerCase().startsWith('bearer ')
       ? authHeader.slice(7).trim()
       : ''
+    const unauthHeader = this.protectedResourceUrl
+      ? `Bearer realm="awj-mcp", resource_metadata="${this.protectedResourceUrl}"`
+      : 'Bearer realm="awj-mcp"'
     let auth: AuthOutcome
     let credential: 'key' | 'oauth' = 'key'
     if (bearer.startsWith('rise_')) {
@@ -1293,7 +1309,7 @@ class McpServer {
     } else {
       return {
         status: 401,
-        headers: corsHeaders({ 'WWW-Authenticate': 'Bearer realm="awj-mcp"' }),
+        headers: corsHeaders({ 'WWW-Authenticate': unauthHeader }),
         body: rpcErrorBody(
           null,
           -32001,
@@ -2386,10 +2402,13 @@ const issuer = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/mcp`
 const signingKey = await deriveSigningKey(serviceKey)
 
 // مثيل واحد لكل نسخة دالة (يحمل حدود المعدل في الذاكرة)
+// protectedResourceUrl: 401 يحمل WWW-Authenticate بصيغة resource_metadata
+// (مواصفة MCP 2025-06-18) — عميل صارم يكتشف منها مسار الاكتشاف
 const server = new McpServer({
   baseUrl: supabaseUrl,
   serviceKey,
   oauthTokenVerifier: (token: string) => oauth.verifyAccessTokenUser(token),
+  protectedResourceUrl: `${issuer}/.well-known/oauth-protected-resource`,
 })
 
 // طبقة OAuth (عميل PostgREST خاص بها — خفيف وبلا حالة)
