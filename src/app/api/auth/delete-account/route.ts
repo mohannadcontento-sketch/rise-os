@@ -24,6 +24,8 @@ export const dynamic = 'force-dynamic'
 // ============================================================
 
 export async function DELETE(req: NextRequest) {
+  // QA-DIAG: مؤقت لتشخيص خطأ 500 — يُستبدل برسالة عامة بعد التحديد
+  let step = 'start'
   try {
     if (!isSupabaseConfigured()) {
       return NextResponse.json(
@@ -36,16 +38,19 @@ export async function DELETE(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
     }
+    step = 'auth-ok'
 
     const parsed = await parseBody(req, deleteAccountSchema)
     if (!parsed.ok) return parsed.response!
     const { email, password } = parsed.data!
+    step = 'body-ok'
 
     // ── 1. إعادة إثبات الهوية بكلمة المرور ──
     const isolated = await createSupabaseIsolatedClient()
     if (!isolated) {
       return NextResponse.json({ error: 'خدمة المصادقة غير متوفرة حالياً' }, { status: 503 })
     }
+    step = 'isolated-ok'
 
     const { data: authData, error: authError } = await isolated.auth.signInWithPassword({
       email,
@@ -54,11 +59,13 @@ export async function DELETE(req: NextRequest) {
     if (authError || !authData.user || authData.user.id !== userId) {
       return NextResponse.json({ error: 'كلمة المرور أو البريد الإلكتروني غير صحيح' }, { status: 403 })
     }
+    step = 'reauth-ok'
 
     const admin = await getSupabaseAdmin()
     if (!admin) {
       return NextResponse.json({ error: 'خدمة الإدارة غير متوفرة حالياً' }, { status: 503 })
     }
+    step = 'admin-ok'
 
     // ── 2. مسح عدادات الكاش قبل الحذف (الصفوف ستُسقط بالتتابع) ──
     try {
@@ -74,19 +81,24 @@ export async function DELETE(req: NextRequest) {
       console.error('[auth/delete-account] pre-delete signOut failed (continuing):', e)
     }
 
+    step = 'signout-attempt'
+
     // (ب) احذف بيانات المستخدم عبر RPC الذرّي (متاح للمصادق، نفس مسار
     //     "حذف جميع البيانات") — يضمن مسح المحتوى الشخصي حتى لو تغيرت
     //     قيود FK مستقبلًا، ثم يُسقط صف auth.users فيُتالِى الباقي.
     try {
+      step = 'rpc-attempt'
       const userClient = await createSupabaseUserClient(authData.session!.access_token)
       if (userClient) {
         await (userClient as any).rpc('delete_user_data_atomic', { p_user_id: userId })
       }
+      step = 'rpc-done'
     } catch (e) {
       console.error('[auth/delete-account] data wipe rpc failed (continuing to user deletion):', e)
     }
 
     // (ج) حذف مستخدم المصادقة نهائيًا — profiles وكل الجداول تتالى بعده.
+    step = 'deleteUser-attempt'
     const { error: deleteError } = await admin.auth.deleteUser(userId)
     if (deleteError) {
       console.error('[auth/delete-account] supabase deleteUser failed:', deleteError.message)
@@ -95,11 +107,20 @@ export async function DELETE(req: NextRequest) {
         { status: 503 }
       )
     }
+    step = 'deleteUser-done'
 
     const res = NextResponse.json({ success: true })
     return clearAuthCookies(res)
   } catch (error) {
-    console.error('[auth/delete-account] error:', error)
-    return NextResponse.json({ error: 'حدث خطأ أثناء حذف الحساب' }, { status: 500 })
+    console.error('[auth/delete-account] error at step:', step, error)
+    return NextResponse.json(
+      {
+        error: 'حدث خطأ أثناء حذف الحساب',
+        // QA-DIAG (مؤقت): اسم الخطوة ونوع الخطأ فقط — بلا تفاصيل داخلية
+        step,
+        errorName: (error as Error)?.constructor?.name ?? String(error),
+      },
+      { status: 500 }
+    )
   }
 }
