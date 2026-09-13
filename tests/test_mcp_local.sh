@@ -1,5 +1,5 @@
 #!/bin/bash
-# E2E test — خادم أوج MCP v3.0 (79 أداة — كل الأقسام) ضد Mock بالمخطط الإنتاجي الحقيقي
+# E2E test — خادم أوج MCP v3.1 (82 أداة — كل الأقسام + المراجعات ونقاط الخبرة) ضد Mock بالمخطط الإنتاجي الحقيقي
 # التشغيل (من جذر المستودع):
 #   node tests/mock_supabase.js &
 #   SUPABASE_URL=http://localhost:8787 SUPABASE_SERVICE_ROLE_KEY=test-service-key \
@@ -77,7 +77,7 @@ check "مفتاح وهمي مرفوض" "غير صالح أو ملغى" "$R"
 echo "== D) الأدوات: العدد والقراءات =="
 R=$(RPC "$ACCESS" '{"jsonrpc":"2.0","id":4,"method":"tools/list"}')
 N=$(echo "$R" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['result']['tools']))")
-check "عدد الأدوات = 79" "79" "$N"
+check "عدد الأدوات = 82" "82" "$N"
 R=$(TOOL "$ACCESS" 5 list_tasks '{"status":"todo","limit":20}')
 check "list_tasks" "تسليم التقرير" "$R"
 if echo "$R" | grep -q "مهمة سارة"; then FAIL=$((FAIL+1)); echo "✘ عزل المستخدمين فشل"; else PASS=$((PASS+1)); echo "✔ list_tasks يعزل المستخدمين"; fi
@@ -310,6 +310,42 @@ R=$(TOOL "$ACCESS" 99 create_book '{"title":"س","rating":9}')
 check "فحص نطاق rating" "rating: عدد صحيح بين 0 و5" "$R"
 R=$(TOOL "$ACCESS" 100 create_finance_record '{"type":"expense","amount":-5,"description":"سالب"}')
 check "رفض مبلغ سالب" "رقم موجب" "$R"
+
+echo "— استراحة 65 ثانية (حدود الكتابة 10/د) —"
+sleep 65
+
+echo "== L) v3.1 المراجعات ونقاط الخبرة =="
+R=$(TOOL "$ACCESS" 101 get_weekly_review '{}')
+check "get_weekly_review: مهمة مكتملة" "1 مهمة مكتملة" "$R"
+check "get_weekly_review: تركيز 113 دقيقة (48+42+23 من القسم J)" "1.9 ساعة تركيز" "$R"
+check "get_weekly_review: تسجيلات عادات (اليوم+أمس+2+3)" "4 تسجيل" "$R"
+check "get_weekly_review: متوسط الدرجة" "متوسط الدرجة" "$R"
+R2=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin)['result']['structuredContent']; print(len(d['byDay']))")
+check "get_weekly_review: 7 أيام" "7" "$R2"
+R=$(TOOL "$ACCESS" 102 get_weekly_review '{"days":15}')
+check "get_weekly_review: رفض أيام >14" "days: عدد صحيح بين 3 و14" "$R"
+R=$(TOOL "$ACCESS" 103 get_weekly_review '{"end_date":"2026-13-45"}')
+check "get_weekly_review: رفض تاريخ سيئ" "end_date: التاريخ يجب أن يكون YYYY-MM-DD صالحًا تقويميًا" "$R"
+R=$(TOOL "$ACCESS" 104 get_monthly_review '{"days":30}')
+check "get_monthly_review: الملخص" "انتظام عادات" "$R"
+R2=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin)['result']['structuredContent']; print(len(d['weeks']))")
+check "get_monthly_review: 5 أسابيع (30 يومًا)" "5" "$R2"
+R2=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin)['result']['structuredContent']; print('yes' if d.get('bestDay') else 'no')")
+check "get_monthly_review: أفضل يوم موجود" "yes" "$R2"
+R=$(TOOL "$ACCESS" 105 get_monthly_review '{"days":10}')
+check "get_monthly_review: رفض أيام <14" "days: عدد صحيح بين 14 و31" "$R"
+R=$(TOOL "$ACCESS" 106 list_xp_awards '{}')
+check "list_xp_awards: إجمالي 85 نقطة (10+15+20+40)" "85" "$R"
+check "list_xp_awards: 4 مكافآت (عزل u-222)" "4 مكافأة" "$R"
+check "list_xp_awards: ترجمة المصدر (روتين الصباح)" "روتين الصباح كامل" "$R"
+R=$(TOOL "$ACCESS" 107 list_xp_awards '{"limit":2}')
+R2=$(echo "$R" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['result']['structuredContent']['recent']))")
+check "list_xp_awards: limit=2" "2" "$R2"
+check "list_xp_awards: الإجمالي لا يتأثر بـ limit" "85" "$R"
+R=$(TOOL "$ACCESS" 108 list_xp_awards '{"limit":0}')
+check "list_xp_awards: رفض limit صفر" "limit: عدد صحيح بين 1 و100" "$R"
+R=$(TOOL "rise_other_user" 109 list_xp_awards '{}')
+check "عزل xp_awards: سارة 25 نقطة فقط" "25" "$R"
 
 echo ""
 echo "النتيجة: $PASS ناجح / $FAIL فاشل"
