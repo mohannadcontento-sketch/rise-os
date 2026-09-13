@@ -7,13 +7,15 @@
 //   • protectedResource: مؤشر RFC 9728 (resource + AS)
 //   • DCR (RFC 7591): تسجيل صالح → 201 ببيانات العميل، وروابط
 //     رد خارج النطاقات/تالفة/مفقودة → 400، وجسم غير JSON → 400
-//   • authorize: بلا redirect/نطاق ممنوع/مفتاح مزيف/خطة Free
-//     (403)/scope خاطئ/عميل خاطئ/plain PKCE — وكلها تعلن الخطأ
-//     عبر 302 (مواصفة OAuth) عندما يكون redirect نفسه صالحًا،
-//     و400 HTML عندما لا يكون. بلا api_key → صفحة إدخال بنموذج
-//     GET يحفظ كل معاملات OAuth (تجربة ChatGPT الحقيقية)
-//   • الموافقة: صفحة عربية (200) ثم confirm=1 → 302 مع
-//     code+state، وdeny=1 → access_denied
+//   • authorize: بلا redirect/نطاق ممنوع → 400 JSON (لا 302
+//     لنطاق غير موثوق)، وscope خاطئ/عميل خاطئ/plain PKCE تعلن
+//     الخطأ عبر 302 (مواصفة OAuth). بلا api_key → 302 لصفحة
+//     الموقع العام (authorizePageUrl) بكل معاملات OAuth محفوظة
+//     (عقد ChatGPT: الصفحة تعيدها مع المفتاح) — لا HTML من
+//     الدالة إطلاقًا (بوابة Supabase تحوّله text/plain)
+//   • المفتاح: صالح → 302 code فورًا (إدخال المفتاح هو
+//     الموافقة)، مزيف → 302 error=invalid_key، خطة Free →
+//     302 error=plan_required، وdeny=1 → access_denied
 //   • token: code+PKCE صحيح → رموز + فرض الاستخدام الواحد
 //     (إعادة التشغيل = invalid_grant) + verifier خاطئ +
 //     redirect مختلف + بيانات عميل خاطئة (Basic وbody) +
@@ -48,6 +50,8 @@ const CLIENT_ID = 'awj-test-client-0001'
 const CLIENT_SECRET = 'csecret_test_abcdef0123456789'
 const ISSUER = 'https://edge.test/functions/v1/mcp'
 const REDIRECT = 'https://chatgpt.test/aip-42/oauth/callback'
+/** صفحة التفويض على الموقع العام — كما تعلنها metadata */
+const AUTHORIZE_PAGE = 'https://site.test/mcp/authorize'
 
 const signingKey = await deriveSigningKey('test-service-key')
 
@@ -89,6 +93,7 @@ async function setup() {
     db: dbClient,
     issuer: ISSUER,
     signingKey,
+    authorizePageUrl: AUTHORIZE_PAGE,
     now: () => clockMs,
     // اختبارات: نطاق وهمي مسموح بدل chatgpt.com الحقيقي
     allowedRedirect: (u) => u.hostname === 'chatgpt.test' || u.hostname === 'chatgpt.com',
@@ -124,6 +129,13 @@ function redirectParams(res: { status: number; headers: Record<string, string> }
   return new URL(loc)
 }
 
+/** استخراج Location بلا فرض الحالة (لإحالات صفحة الموقع) */
+function pageRedirectParams(res: { status: number; headers: Record<string, string> }): URL {
+  const loc = res.headers['Location']
+  assert(loc, 'مفقود Location')
+  return new URL(loc)
+}
+
 /** مبادلة code مقابل الرموز (form-urlencoded — عقد ChatGPT) */
 async function exchange(
   oauth: McpOAuth,
@@ -134,16 +146,11 @@ async function exchange(
   return oauth.handleTokenPost('application/x-www-form-urlencoded', body, headers)
 }
 
-/** المسار الكامل: موافقة → code → tokens */
+/** المسار الكامل: مفتاح صالح → code → tokens */
 async function fullFlow(oauth: McpOAuth, verifier: string) {
   const challenge = await sha256B64Url(verifier)
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256' })), {})
-  assertEquals(res.status, 200)
-  const approved = await oauth.handleAuthorize(
-    new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
-  )
-  const loc = redirectParams(approved)
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256' })))
+  const loc = redirectParams(res)
   assertEquals(loc.searchParams.get('state'), 'st-123')
   const code = loc.searchParams.get('code')
   assert(code, 'مفقود code')
@@ -161,12 +168,14 @@ async function fullFlow(oauth: McpOAuth, verifier: string) {
 
 // ── القسم: metadata ─────────────────────
 
-Deno.test('oauth: metadata — نقطتا authorize/token وS256 وclient_secret_basic', () => {
+Deno.test('oauth: metadata — authorization_endpoint صفحة الموقع وtoken نقطة الدالة', () => {
   const { oauth } = setupSync()
   const res = oauth.metadata()
   const meta = JSON.parse(res.body ?? '{}')
   assertEquals(res.status, 200)
-  assertEquals(meta.authorization_endpoint, `${ISSUER}?oauth=authorize`)
+  // صفحة التفويض على الموقع العام (بوابة Supabase تمنع HTML من
+  // الدوال) — مواصفة RFC 8414 تسمح بأي رابط https مطلق
+  assertEquals(meta.authorization_endpoint, AUTHORIZE_PAGE)
   assertEquals(meta.token_endpoint, `${ISSUER}?oauth=token`)
   // نقطة DCR — ChatGPT يعتمدها للتسجيل الذاتي (RFC 7591)
   assertEquals(meta.registration_endpoint, `${ISSUER}/register`)
@@ -233,38 +242,44 @@ Deno.test('oauth: DCR بجسم غير JSON → 400 (fail-closed)', async () => {
 
 // ── القسم: authorize — الأخطاء ─────────────────────
 
-Deno.test('oauth: authorize بلا redirect_uri → 400 HTML', async () => {
+Deno.test('oauth: authorize بلا redirect_uri → 400 JSON (لا HTML من الدالة)', async () => {
   const { oauth } = await setup()
   const u = new URL(`${ISSUER}?oauth=authorize`)
   u.searchParams.set('api_key', TEST_KEY)
-  const res = await oauth.handleAuthorize(u, {})
+  const res = await oauth.handleAuthorize(u)
   assertEquals(res.status, 400)
-  assert((res.body ?? '').includes('عنوان إعادة التوجيه'))
+  assertEquals(JSON.parse(res.body ?? '{}').error, 'invalid_request')
+  assert((res.headers['Content-Type'] || '').includes('application/json'))
 })
 
 Deno.test('oauth: authorize مع redirect لنطاق ممنوع → 400 (لا تسريب 302)', async () => {
   const { oauth } = await setup()
   const u = new URL(authorizeUrl({ redirect_uri: 'https://evil.example/cb' }))
-  const res = await oauth.handleAuthorize(u, {})
+  const res = await oauth.handleAuthorize(u)
   assertEquals(res.status, 400)
   assertEquals(res.headers['Location'], undefined)
 })
 
-Deno.test('oauth: authorize بلا api_key → 200 صفحة إدخال بنموذج يحفظ المعاملات', async () => {
+Deno.test('oauth: authorize بلا api_key → 302 لصفحة الموقع بكل المعاملات', async () => {
   const { oauth } = await setup()
   const u = new URL(authorizeUrl({ code_challenge: 'cha-l', code_challenge_method: 'S256' }))
   u.searchParams.delete('api_key')
-  const res = await oauth.handleAuthorize(u, {})
-  assertEquals(res.status, 200)
-  const html = res.body ?? ''
-  // نموذج GET + حقل المفتاح + كل معاملات OAuth محفوظة (GET يستبدل الـquery)
-  assert(html.includes('<form method="get"'), 'نموذج GET')
-  assert(html.includes('name="api_key"'), 'حقل المفتاح')
-  assert(html.includes('name="oauth" value="authorize"'), 'oauth محفوظ')
-  assert(html.includes(`name="client_id" value="${CLIENT_ID}"`), 'client_id محفوظ')
-  assert(html.includes('name="code_challenge"'), 'التحدي محفوظ')
-  assert(html.includes('name="state" value="st-123"'), 'state محفوظ')
-  // إرسال النموذج فعليًا (محاكاة المستخدم): نفس الرابط + api_key
+  const res = await oauth.handleAuthorize(u)
+  const loc = pageRedirectParams(res)
+  assertEquals(res.status, 302, 'إحالة لا HTML')
+  assertEquals(res.body, null, 'لا جسم')
+  // الصفحة الصحيحة: نقطة الموقع العام (authorization_endpoint)
+  assertEquals(loc.origin + loc.pathname, AUTHORIZE_PAGE)
+  // كل معاملات OAuth محفوظة (الصفحة تعيدها في نموذجها) وبلا أعلام تحكم
+  assertEquals(loc.searchParams.get('response_type'), 'code')
+  assertEquals(loc.searchParams.get('client_id'), CLIENT_ID)
+  assertEquals(loc.searchParams.get('redirect_uri'), REDIRECT)
+  assertEquals(loc.searchParams.get('state'), 'st-123')
+  assertEquals(loc.searchParams.get('code_challenge'), 'cha-l')
+  assertEquals(loc.searchParams.get('code_challenge_method'), 'S256')
+  assertEquals(loc.searchParams.get('api_key'), null, 'المفتاح لا يُمرر')
+  assertEquals(loc.searchParams.get('oauth'), null, 'علم التحكم لا يُمرر')
+  // إرسال ما سترسله صفحة الموقع (نموذجها): نفس المعاملات + المفتاح
   const submitted = new URL(`${ISSUER}?oauth=authorize`)
   submitted.searchParams.set('response_type', 'code')
   submitted.searchParams.set('client_id', CLIENT_ID)
@@ -273,36 +288,45 @@ Deno.test('oauth: authorize بلا api_key → 200 صفحة إدخال بنمو�
   submitted.searchParams.set('code_challenge', 'cha-l')
   submitted.searchParams.set('code_challenge_method', 'S256')
   submitted.searchParams.set('api_key', TEST_KEY)
-  const after = await oauth.handleAuthorize(submitted, {})
-  assertEquals(after.status, 200, 'صفحة الموافقة بعد المفتاح')
-  assert((after.body ?? '').includes('تفويض ChatGPT'), 'موافقة وصلت')
+  const after = await oauth.handleAuthorize(submitted)
+  assertEquals(after.status, 302, '302 مع code مباشرة بعد المفتاح')
+  assert(redirectParams(after).searchParams.get('code'), 'code صدر فورًا')
 })
 
-Deno.test('oauth: authorize بمفتاح مزيف → 401 HTML', async () => {
+Deno.test('oauth: authorize بمفتاح مزيف → 302 لصفحة الموقع مع error=invalid_key', async () => {
   const { oauth } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ api_key: 'rise_fake' })), {})
-  assertEquals(res.status, 401)
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ api_key: 'rise_fake' })))
+  const loc = pageRedirectParams(res)
+  assertEquals(res.status, 302)
+  assertEquals(loc.origin + loc.pathname, AUTHORIZE_PAGE)
+  assertEquals(loc.searchParams.get('error'), 'invalid_key')
+  // المعاملات محفوظة لإعادة المحاولة، والمفتاح المزيف لا يُسرَّب
+  assertEquals(loc.searchParams.get('client_id'), CLIENT_ID)
+  assertEquals(loc.searchParams.get('api_key'), null)
+  assert(!(res.headers['Location'] || '').includes('rise_fake'))
 })
 
-Deno.test('oauth: authorize بمفتاح مستخدم Free → 403 + تدقيق plan_denied', async () => {
+Deno.test('oauth: authorize بمفتاح مستخدم Free → 302 error=plan_required + تدقيق', async () => {
   const { oauth, db } = await setup()
   const res = await oauth.handleAuthorize(
     new URL(authorizeUrl({ api_key: 'rise_free_key_0000000000000001' })),
-    {},
   )
-  assertEquals(res.status, 403)
+  const loc = pageRedirectParams(res)
+  assertEquals(res.status, 302)
+  assertEquals(loc.origin + loc.pathname, AUTHORIZE_PAGE)
+  assertEquals(loc.searchParams.get('error'), 'plan_required')
   assert(db.auditLogs.some((a) => a.action === 'mcp.oauth.plan_denied'))
 })
 
 Deno.test('oauth: authorize بعميل خاطئ → 302 invalid_client', async () => {
   const { oauth } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ client_id: 'wrong' })), {})
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ client_id: 'wrong' })))
   assertEquals(redirectParams(res).searchParams.get('error'), 'invalid_client')
 })
 
 Deno.test('oauth: authorize بscope خاطئ → 302 invalid_scope', async () => {
   const { oauth } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ scope: 'admin' })), {})
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ scope: 'admin' })))
   assertEquals(redirectParams(res).searchParams.get('error'), 'invalid_scope')
 })
 
@@ -310,54 +334,53 @@ Deno.test('oauth: authorize بplain PKCE → 302 invalid_request (S256 حصرً�
   const { oauth } = await setup()
   const res = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: 'abc', code_challenge_method: 'plain' })),
-    {},
   )
   assertEquals(redirectParams(res).searchParams.get('error'), 'invalid_request')
 })
 
 // ── القسم: authorize — المسار الإيجابي ─────────────────────
 
-Deno.test('oauth: authorize سليم → صفحة موافقة عربية (200) تهرب المعاملات', async () => {
-  const { oauth } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl()), {})
-  assertEquals(res.status, 200)
-  assert((res.headers['Content-Type'] || '').includes('text/html'))
-  const html = res.body ?? ''
-  assert(html.includes('تفويض ChatGPT'), 'صفحة الموافقة')
-  assert(html.includes('chatgpt.test'), 'نطاق العميل ظاهر')
-  assert(html.includes('st-123'), 'state ظاهر')
-  assert(!html.includes('<script'), 'بلا سكربتات — CSP نظيفة')
-})
-
-Deno.test('oauth: confirm=1 → 302 code+state + تدقيق authorized', async () => {
+Deno.test('oauth: authorize بمفتاح صالح → 302 code فورًا (المفتاح هو الموافقة)', async () => {
   const { oauth, db } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ confirm: '1' })), {})
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl()))
   const loc = redirectParams(res)
   assert(loc.searchParams.get('code'), 'code موجود')
   assertEquals(loc.searchParams.get('state'), 'st-123')
   assertEquals(loc.hostname, 'chatgpt.test')
   assertEquals(loc.pathname, '/aip-42/oauth/callback')
   assert(db.auditLogs.some((a) => a.action === 'mcp.oauth.authorized'))
+  // لا HTML من الدالة إطلاقًا (بوابة المنصة تحوّله text/plain)
+  assertEquals(res.body, null)
+  assert(!(res.headers['Content-Type'] || '').includes('text/html'))
+})
+
+Deno.test('oauth: confirm=1 الوارد من صفحة قديمة → نفس 302 code (توافق)', async () => {
+  const { oauth } = await setup()
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ confirm: '1' })))
+  assert(redirectParams(res).searchParams.get('code'), 'code موجود')
 })
 
 Deno.test('oauth: deny=1 → 302 access_denied + تدقيق denied', async () => {
   const { oauth, db } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ deny: '1' })), {})
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ deny: '1' })))
   assertEquals(redirectParams(res).searchParams.get('error'), 'access_denied')
   assert(db.auditLogs.some((a) => a.action === 'mcp.oauth.denied'))
 })
 
-Deno.test('oauth: api_key خبيث في HTML يُهرب (لا XSS)', async () => {
+Deno.test('oauth: api_key خبيث → 302 invalid_key بلا تسريب (لا XSS — لا HTML أصلًا)', async () => {
   const { oauth } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ api_key: 'rise_x"><script>' })), {})
-  assertEquals(res.status, 401)
-  assert(!(res.body ?? '').includes('<script>'))
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ api_key: 'rise_x"><script>' })))
+  const loc = pageRedirectParams(res)
+  assertEquals(res.status, 302)
+  assertEquals(loc.searchParams.get('error'), 'invalid_key')
+  assert(!(res.headers['Location'] || '').includes('<script>'))
+  assert(res.body === null, 'لا جسم HTML يُهرب أصلًا')
 })
 
-Deno.test('oauth: authorize بscope فارغ → الافتراضي (ChatGPT يرسله فارغًا)', async () => {
+Deno.test('oauth: authorize بscope فارغ → الافتراضي و302 code (ChatGPT يرسله فارغًا)', async () => {
   const { oauth } = await setup()
-  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ scope: '' })), {})
-  assertEquals(res.status, 200, 'نزل للنطاق الافتراضي ووصل الموافقة')
+  const res = await oauth.handleAuthorize(new URL(authorizeUrl({ scope: '' })))
+  assert(redirectParams(res).searchParams.get('code'), 'نزل للنطاق الافتراضي وصدر code')
 })
 
 // ── القسم: token — code grant ─────────────────────
@@ -380,7 +403,6 @@ Deno.test('oauth: إعادة استخدام code → invalid_grant (الاستخ
   const challenge = await sha256B64Url(verifier)
   const approved = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
   )
   const code = redirectParams(approved).searchParams.get('code')!
 
@@ -403,7 +425,6 @@ Deno.test('oauth: PKCE verifier خاطئ → invalid_grant', async () => {
   const challenge = await sha256B64Url('correct-verifier')
   const approved = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
   )
   const code = redirectParams(approved).searchParams.get('code')!
   const res = await exchange(oauth, {
@@ -419,7 +440,6 @@ Deno.test('oauth: تحدي بلا verifier → invalid_request', async () => {
   const challenge = await sha256B64Url('some-verifier')
   const approved = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
   )
   const code = redirectParams(approved).searchParams.get('code')!
   const res = await exchange(oauth, {
@@ -436,7 +456,6 @@ Deno.test('oauth: redirect_uri مختلف عند التبديل → invalid_gran
   const challenge = await sha256B64Url(verifier)
   const approved = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
   )
   const code = redirectParams(approved).searchParams.get('code')!
   const res = await exchange(oauth, {
@@ -498,7 +517,6 @@ Deno.test('oauth: code منتهٍ (ساعة متقدمة) → invalid_grant', as
   const challenge = await sha256B64Url('verifier-expired')
   const approved = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
   )
   const code = redirectParams(approved).searchParams.get('code')!
   advance(11 * 60 * 1000) // 11 دقيقة > عمر code (10)
@@ -534,7 +552,6 @@ Deno.test('oauth: عميل عام — code+PKCE بلا سرّ → 200 (عقد Ch
   const challenge = await sha256B64Url(verifier)
   const approved = await oauth.handleAuthorize(
     new URL(authorizeUrl({ code_challenge: challenge, code_challenge_method: 'S256', confirm: '1' })),
-    {},
   )
   const code = redirectParams(approved).searchParams.get('code')!
   const res = await exchange(oauth, {
@@ -551,7 +568,7 @@ Deno.test('oauth: عميل عام — code+PKCE بلا سرّ → 200 (عقد Ch
 Deno.test('oauth: عميل عام — code بلا تحدّ PKCE → 400 (بلا حماية = رفض)', async () => {
   const { oauth } = await setup()
   // تفويض بلا code_challenge أصلًا ثم تبديل بلا سرّ ولا verifier
-  const approved = await oauth.handleAuthorize(new URL(authorizeUrl({ confirm: '1' })), {})
+  const approved = await oauth.handleAuthorize(new URL(authorizeUrl({ confirm: '1' })))
   const code = redirectParams(approved).searchParams.get('code')!
   const res = await exchange(oauth, {
     grant_type: 'authorization_code',
@@ -754,6 +771,7 @@ function setupSync(): { oauth: McpOAuth } {
     db: stubDb,
     issuer: ISSUER,
     signingKey,
+    authorizePageUrl: AUTHORIZE_PAGE,
     now: () => clockMs,
     allowedRedirect: () => true,
   })

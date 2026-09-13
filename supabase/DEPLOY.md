@@ -210,32 +210,46 @@ qwen mcp add --transport http awj \
 > الأدوات (Tools).
 > (المصدر: code.visualstudio.com/docs/agents/reference/mcp-configuration).
 
-### ✅ ربط ChatGPT — عبر OAuth (منذ 10-ج)
+### ✅ ربط ChatGPT — عبر OAuth (منذ 10-ج + مراجعة صفحة الموقع)
 
 ChatGPT لا يقبل مفتاح Bearer ثابتًا (توثيق OpenAI الرسمي) — لذلك
-أضفنا طبقة OAuth 2.0 كاملة داخل وظيفة `mcp` نفسها. بعد نشر النسخة
-المحدثة (`dist/mcp.dashboard.ts` الحالية) وتشغيل **هجرة 034** مرة
-واحدة في SQL Editor:
+أضفنا طبقة OAuth 2.0 كاملة: اكتشاف well-known + تسجيل ديناميكي
+(DCR) + PKCE + رموز موقّعة. **صفحة إدخال المفتاح تعيش على الموقع
+العام** (`/mcp/authorize`) لا في الدالة — بوابة Supabase تمنع عرض
+HTML من الدوال على نطاق `*.supabase.co` المشترك (تحوّل text/html
+إلى text/plain + sandbox CSP — حماية من الصيد)، والدالة تعلن رابط
+الصفحة في metadata كـauthorization_endpoint (مسموح حسب RFC 8414)
+فتفتحها نافذة تفويض ChatGPT مباشرة.
 
-1. **جهّز القاعدة (مرة واحدة):** شغّل ملف
-   `supabase/migrations/034_phase10c_chatgpt_oauth.sql` كاملًا في
-   SQL Editor — ينشئ جدول رموز التفويز ويولّد بيانات العميل.
-2. **أعد نشر وظيفة `mcp`** بالملف المدموج المحدث (نفس خطوات
-   اللوحة أعلاه — الصق `supabase/dist/mcp.dashboard.ts`).
-3. **تحقق السريع:**
-   `https://<ref>.supabase.co/functions/v1/mcp?oauth=metadata` →
-   JSON فيه authorization_endpoint وtoken_endpoint.
-4. **في ChatGPT:**
-   - Settings → **Security and login** → شغّل **Developer mode**
-   - chatgpt.com/plugins → زر **+** → إنشاء تطبيق من خادم MCP بعيد
-   - أدخل بيانات العميل (تظهر جاهزة مع أزرار نسخ في
-     **إعدادات أوج → ربط MCP → ربط ChatGPT** بعد نشر 034):
-     - Server URL: `https://<ref>.supabase.co/functions/v1/mcp`
-     - Client ID + Client Secret (من إعدادات أوج)
-     - Authorization URL: نفس رابط authorize + `&api_key=rise_…`
-     - Token URL: `https://<ref>.supabase.co/functions/v1/mcp?oauth=token`
-5. **عند أول استخدام** تُفتح صفحة موافقة عربية من أوج — اضغط
-   «تفويض» ويعود ChatGPT برمز وصول صالح ساعة + تجديد 60 يومًا.
+المتطلبات (مرة واحدة):
+1. **هجرة 034** في SQL Editor:
+   `supabase/migrations/034_phase10c_chatgpt_oauth.sql` — جدول
+   رموز التفويز + بيانات العميل.
+2. **نشر وظيفة `mcp`** بالملف المدموج المحدث (الخطوات أعلاه —
+   الصق `supabase/dist/mcp.dashboard.ts`).
+3. **نشر الموقع** (Vercel — تلقائي مع push): صفحة
+   `src/app/mcp/authorize/page.tsx` يجب أن تكون حية على
+   `https://rise-os-gamma.vercel.app/mcp/authorize`.
+   > لو غيّرت نطاق الموقع مستقبلًا: حدّث `AUTHORIZE_PAGE_URL`
+   > في `supabase/functions/mcp/index.ts` وأعد توليد الحزمة.
+
+التحقق السريع بعد النشر:
+- `https://<ref>.supabase.co/functions/v1/mcp/.well-known/oauth-authorization-server`
+  → JSON فيه `authorization_endpoint` = رابط صفحة الموقع
+- `https://rise-os-gamma.vercel.app/mcp/authorize?client_id=…&redirect_uri=…&state=…`
+  → صفحة عربية بنموذج إدخال المفتاح (وليست كود HTML خام)
+
+خطوات المستخدم في ChatGPT:
+1. Settings → **Apps & Connectors** → تفعيل **Developer mode**
+   (من Advanced settings في نفس الصفحة).
+2. **Create / إضافة موصل جديد** → الصق رابط الخادم فقط:
+   `https://<ref>.supabase.co/functions/v1/mcp`
+   (لا Client ID ولا Secret ولا روابط يدوية — ChatGPT يكتشف
+   metadata ويسجّل نفسه عبر DCR تلقائيًا).
+3. عند طلب تسجيل الدخول تُفتح **صفحة أوج على الموقع** — الصق
+   مفتاح `rise_…` (خطة ماكس) واضغط **تفويض**.
+4. يرجع ChatGPT تلقائيًا بالرمز: وصول ساعة + تجديد 60 يومًا،
+   والأدوات الثمانية تظهر في المحادثة.
 
 الأمان المضمن: بوابة خطة ماكس تُفحص **في كل طلب** (النزول من ماكس
 يوقف رموز OAuth فورًا)، رمز التفويز يُستخدم مرة واحدة (جدول

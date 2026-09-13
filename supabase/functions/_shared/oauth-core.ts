@@ -9,7 +9,8 @@
 // مسار التفويض القياسي دون المساس بمسار rise_ القائم:
 //
 //   GET  ?oauth=metadata   → بيانات خادم التفويض (RFC 8414 مبسط)
-//   GET  ?oauth=authorize  → صفحة موافقة عربية → 302 مع code
+//   GET  ?oauth=authorize  → 302 لصفحة الموقع العام (إدخال المفتاح)
+//                            ثم 302 مع code بعد المفتاح الصالح
 //   POST ?oauth=token      → code→tokens أو refresh→tokens
 //   POST ?oauth=register   → تسجيل عميل ديناميكي (RFC 7591)
 //   POST (بلا oauth=)      → JSON-RPC كما هو + قبول Bearer JWT
@@ -54,13 +55,23 @@
 //   • redirect_uri المسموح: نطاقات chatgpt.com/openai.com فقط
 //     (https حصرًا) — لا يمكن استخدام النقطة لإعادة توجيه
 //     مهاجم إلى نطاقه، لا في authorize ولا في تسجيل DCR.
+//   • لا HTML من الدالة إطلاقًا: بوابة Supabase تمنع عرض HTML
+//     من الدوال على نطاق *.supabase.co المشترك (تحوّل text/html
+//     إلى text/plain + sandbox CSP — حماية من صفحات الصيد)،
+//     لذا صفحة إدخال المفتاح والموافقة تعيش على الموقع العام
+//     (authorizePageUrl — معلنة في metadata كauthorization_endpoint
+//     حسب المواصفة، وChatGPT يفتحها في نافذة التفويض مباشرة).
+//     الدالة تُحيل إليها بـ302 محتفظة بكل معاملات OAuth، والموقع
+//     يعيد إرسالها بنموذج GET مع api_key فيصدر code فورًا —
+//     إدخال المفتاح في الصفحة هو الموافقة نفسها.
 //   • ساعة وfetch قابلان للحقن — كل المنطق قابل للاختبار
 //     محليًا بلا Deno.serve (انظر oauth.test.ts).
 //
 // عقود الأخطاء: نصوص JSON-RPC العربية في mcp-core؛ هنا أخطاء
 // OAuth القياسية { error, error_description } بالإنجليزية
-// (مواصفة RFC 6749 — عملاء OAuth قياسيون يفهمونها) وصفحات
-// HTML عربية للبشر في authorize.
+// (مواصفة RFC 6749 — عملاء OAuth قياسيون يفهمونها). أخطاء
+// البشر (مفتاح غير صالح، خطة) تُبلَّغ لصفحة الموقع عبر معامل
+// error في إعادة التوجيه — لا HTML من الدالة إطلاقًا (أعلاه).
 // ============================================================
 
 import { Postgrest } from './postgrest.ts'
@@ -209,51 +220,16 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0
 }
 
-// ── القسم: تهريب HTML (كل مدخلات authorize غير موثوقة) ─────────────────────
-
-function esc(input: string): string {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-// ── القسم: صفحات HTML العربية (بسيطة، inline، بلا أصول خارجية) ─────
-
-function htmlPage(title: string, inner: string): string {
-  return `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>${esc(title)}</title>
-<style>
-  body{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;background:#f6f7fb;
-       margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
-  .card{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(2,6,23,.08);
-        max-width:420px;width:100%;padding:28px 24px;text-align:center}
-  h1{font-size:18px;margin:0 0 8px;color:#0f172a}
-  p{font-size:14px;color:#475569;line-height:1.8;margin:0 0 14px}
-  .brand{font-weight:700;color:#0ea5e9;font-size:20px;margin-bottom:18px;display:block}
-  .btn{display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;border:none;
-       border-radius:12px;padding:12px 32px;font-size:15px;font-weight:600;cursor:pointer;margin:4px}
-  .btn.ghost{background:transparent;color:#64748b;border:1px solid #e2e8f0}
-  .meta{font-size:12px;color:#94a3b8;margin-top:18px;direction:ltr;unicode-bidi:embed}
-  .warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;
-        padding:10px 14px;font-size:13px;margin-bottom:14px}
-  input[type=text]{width:100%;box-sizing:border-box;direction:ltr;text-align:left;
-        padding:12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px;
-        margin:6px 0 12px;font-family:ui-monospace,SFMono-Regular,monospace;color:#0f172a}
-  form{margin:0}
-</style>
-</head>
-<body><div class="card">${inner}</div></body></html>`
-}
-
 // ── القسم: الخادم ─────────────────────
+
+/** خطأ OAuth قياسي (JSON — RFC 6749). لا HTML من الدالة (أعلاه) */
+function jsonErr(status: number, error: string, desc: string): OAuthHttpResult {
+  return {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    body: JSON.stringify({ error, error_description: desc }),
+  }
+}
 
 export interface OAuthDeps {
   /** عميل PostgREST (نفس قاعدة المشروع — service_role) */
@@ -262,6 +238,10 @@ export interface OAuthDeps {
   issuer: string
   /** مفتاح التوقيع (deriveSigningKey(serviceKey)) */
   signingKey: string
+  /** رابط صفحة التفويض على الموقع العام (نموذج مفتاح rise_) —
+   *  معلن في metadata كauthorization_endpoint ويفتحه ChatGPT
+   *  في نافذة التفويض؛ الدالة تُحيل إليه عند غياب api_key */
+  authorizePageUrl: string
   /** ساعة قابلة للحقن (اختبارات) — ثوانٍ Unix */
   now?: () => number
   /** فحص نطاق إعادة التوجيه (اختبارات تتجاوزه) */
@@ -272,6 +252,7 @@ export class McpOAuth {
   private db: Postgrest
   private issuer: string
   private signingKey: string
+  private authorizePageUrl: string
   private now: () => number
   private clientCache: { id: string; secret: string } | null | undefined
   private allowedRedirect: (url: URL) => boolean
@@ -280,6 +261,7 @@ export class McpOAuth {
     this.db = deps.db
     this.issuer = deps.issuer
     this.signingKey = deps.signingKey
+    this.authorizePageUrl = deps.authorizePageUrl
     this.now = deps.now ?? (() => Math.floor(Date.now() / 1000))
     this.allowedRedirect = deps.allowedRedirect ?? this.defaultAllowedRedirect
   }
@@ -319,7 +301,10 @@ export class McpOAuth {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
       body: JSON.stringify({
         issuer: this.issuer,
-        authorization_endpoint: `${this.issuer}?oauth=authorize`,
+        // صفحة التفويض على الموقع العام — مواصفة RFC 8414 تسمح
+        // بأي رابط https مطلق، وChatGPT يفتحه في نافذة التفويض
+        // (بوابة Supabase تمنع HTML من الدوال — انظر الترويسة)
+        authorization_endpoint: this.authorizePageUrl,
         token_endpoint: `${this.issuer}?oauth=token`,
         // تسجيل ديناميكي (RFC 7591) — ChatGPT يسجّل نفسه هنا قبل التفويض
         registration_endpoint: `${this.issuer}/register`,
@@ -425,15 +410,15 @@ export class McpOAuth {
   }
 
   // ── GET ?oauth=authorize ──
-  async handleAuthorize(url: URL, reqHeaders: Record<string, string>): Promise<OAuthHttpResult> {
+  // لا HTML هنا إطلاقًا (بوابة Supabase تحوّله text/plain — الترويسة):
+  // غياب المفتاح أو خطؤه → إحالة 302 لصفحة الموقع العام (تحتفظ بكل
+  // معاملات OAuth فيزيد المستخدم مفتاحه ويعيد النموذج إلينا)؛ المفتاح
+  // الصالح → code فورًا — إدخال المفتاح في الصفحة هو الموافقة نفسها
+  // (الصفحة تشرح الممنوح قبل الإرسال، وdeny يبقى متاحًا منها).
+  async handleAuthorize(url: URL): Promise<OAuthHttpResult> {
     const p = url.searchParams
-    const html = (status: number, inner: string, title = 'أوج — تفويض') => ({
-      status,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-      body: htmlPage(title, inner),
-    })
 
-    // 1) إعادة التوجيه أصلًا: إن صحّت نُبلغ الأخطاء عبرها، وإلا 400 مباشرة
+    // 1) إعادة التوجيه أصلًا: إن صحّت نُبلغ الأخطاء عبرها، وإلا 400 JSON
     const redirectUriRaw = p.get('redirect_uri') ?? ''
     let redirect: URL | null = null
     try {
@@ -443,17 +428,22 @@ export class McpOAuth {
       redirect = null
     }
     if (!redirect) {
-      return html(
-        400,
-        `<span class="brand">أوج</span>
-         <h1>طلب تفويض غير صالح</h1>
-         <p>عنوان إعادة التوجيه (redirect_uri) مفقود أو خارج النطاقات المسموح بها.</p>
-         <p class="meta">redirect_uri must be an https URL on chatgpt.com or openai.com</p>`,
-      )
+      return jsonErr(400, 'invalid_request', 'redirect_uri must be an https URL on chatgpt.com or openai.com')
     }
     const back = (params: Record<string, string>): OAuthHttpResult => {
       const u = new URL(redirect!.toString())
       for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v)
+      return { status: 302, headers: { Location: u.toString(), 'Cache-Control': 'no-store' }, body: null }
+    }
+    /** إحالة إلى صفحة الموقع: كل معاملات الطلب الأصلية محفوظة
+     *  (بلا أعلام التحكم: oauth/api_key/error/confirm/deny) ± extra */
+    const page = (extra: Record<string, string> = {}): OAuthHttpResult => {
+      const u = new URL(this.authorizePageUrl)
+      for (const [k, v] of p.entries()) {
+        if (k === 'oauth' || k === 'api_key' || k === 'error' || k === 'confirm' || k === 'deny') continue
+        u.searchParams.set(k, v)
+      }
+      for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v)
       return { status: 302, headers: { Location: u.toString(), 'Cache-Control': 'no-store' }, body: null }
     }
     const state = p.get('state') ?? ''
@@ -476,107 +466,38 @@ export class McpOAuth {
     // 3) بيانات العميل (fail-closed: لم يشغّل المالك الهجرة 034)
     const client = await this.loadClient()
     if (!client) {
-      return html(
-        500,
-        `<span class="brand">أوج</span>
-         <h1>خدمة التفويض غير مهيأة بعد</h1>
-         <p>بيانات عميل OAuth غير موجودة في قاعدة البيانات — شغّل هجرة 034 ثم أعد المحاولة.</p>`,
-      )
+      return jsonErr(503, 'server_error', 'OAuth client is not configured (run migration 034)')
     }
     if (!clientId || !safeEqual(clientId, client.id)) {
       return back({ error: 'invalid_client', state })
     }
 
-    // 4) رفض صريح من المستخدم
+    // 4) رفض صريح من المستخدم (رابط «إلغاء» في صفحة الموقع)
     if (p.get('deny') === '1') {
       await this.audit('mcp.oauth.denied', clientId, null)
       return back({ error: 'access_denied', state })
     }
 
-    // 5) هوية المستخدم: مفتاح rise_ (نفس سلسلة mcp-core حرفيًا)
-    //    غائب؟ صفحة إدخال بنموذج GET يحفظ كل معاملات OAuth في
-    //    حقول مخفية — ChatGPT لا يعرف مفتاح المستخدم، فيلصقه
-    //    هنا بنفسه (بدل تعديل الرابط يدويًا — تجربة فاشلة قبل
-    //    هذه المراجعة). النموذج يستبدل الـquery كاملًا لذا نحفظ
-    //    كل معامل ضروري: oauth/response_type/client_id/redirect_uri
-    //    /state/code_challenge(+method)/scope — وapi_key من الحقل.
+    // 5) هوية المستخدم: مفتاح rise_ (نفس سلسلة mcp-core حرفيًا).
+    //    غائب؟ إحالة لصفحة الموقع — ChatGPT لا يعرف مفتاح المستخدم،
+    //    فيدخله المستخدم هناك بنفسه والصفحة تعيد النموذج إلينا كاملًا.
+    //    غير صالح؟ إحالة ذاتها مع error=invalid_key (يعرضه المستخدم
+    //    بالعربية ويُعيد المحاولة) — المفتاح نفسه لا يُعاد توجيهه أبدًا.
     const apiKey = (p.get('api_key') ?? '').trim()
-    if (!apiKey.startsWith('rise_')) {
-      const preserved: Array<[string, string]> = [
-        ['oauth', 'authorize'],
-        ['response_type', responseType],
-        ['client_id', clientId],
-        ['redirect_uri', redirectUriRaw],
-        ['state', state],
-      ]
-      if (challenge) preserved.push(['code_challenge', challenge])
-      if (challengeMethod) preserved.push(['code_challenge_method', challengeMethod])
-      if (scopeRaw.trim() !== '') preserved.push(['scope', scopeRaw])
-      const hidden = preserved
-        .map(([k, v]) => `<input type="hidden" name="${k}" value="${esc(v)}">`)
-        .join('\n          ')
-      return html(
-        200,
-        `<span class="brand">أوج</span>
-         <h1>مطلوب مفتاح MCP</h1>
-         <p>ربط ChatGPT يحتاج مفتاحك الشخصي من أوج (خطة ماكس) — يُنشأ من:
-            الإعدادات ← التكامل ← مفتاح MCP.</p>
-         <form method="get" action="">
-          ${hidden}
-          <input type="text" name="api_key" placeholder="rise_…" autocomplete="off" autofocus required>
-          <button class="btn" type="submit">متابعة</button>
-         </form>`,
-        'أوج — مفتاح MCP',
-      )
-    }
+    if (!apiKey.startsWith('rise_')) return page()
     const resolved = await resolveRiseKey(this.db, apiKey)
-    if (!resolved.ok) {
-      return html(
-        401,
-        `<span class="brand">أوج</span>
-         <h1>المفتاح غير صالح</h1>
-         <p>مفتاح MCP غير موجود أو ملغى أو الحساب موقوف — أنشئ مفتاحًا جديدًا من إعدادات أوج.</p>`,
-      )
-    }
+    if (!resolved.ok) return page({ error: 'invalid_key' })
 
-    // 6) بوابة الخطة (نفس عقد rise_: كل تفويض يعيد الفحص)
+    // 6) بوابة الخطة (نفس عقد rise_: كل تفويض يعيد الفحص) — الخطأ
+    //    بشري بطبيعته (ترقية الخطة) فيُعرض في صفحة الموقع
     const gate = await checkMaxPlanGate(this.db, resolved.userId)
     if (!gate.allowed) {
       await this.audit('mcp.oauth.plan_denied', clientId, resolved.userId)
-      return html(
-        403,
-        `<span class="brand">أوج</span>
-         <h1>التفويض متاح في خطة ماكس</h1>
-         <p>ربط ChatGPT وMCP من ميزات خطة ماكس — رقّ حسابك ثم أعد التفويض.</p>`,
-        'أوج — الخطة',
-      )
+      return page({ error: 'plan_required' })
     }
 
-    // 7) موافقة المستخدم: صفحة ثم confirm=1
-    if (p.get('confirm') !== '1') {
-      const host = esc(redirect.hostname)
-      const stateAttr = esc(state)
-      // نبني رابط «تفويض» آمنًا: نفس المعاملات + confirm=1
-      const approveUrl = new URL(url.toString())
-      approveUrl.searchParams.set('confirm', '1')
-      const denyUrl = new URL(url.toString())
-      denyUrl.searchParams.set('deny', '1')
-      return html(
-        200,
-        `<span class="brand">أوج</span>
-         <h1>تفويض ChatGPT بالوصول لأوج</h1>
-         <p>سيمكن للتطبيق المتصل (<b>${host}</b>) استخدام أدواتك الثمانية: قراءة مهامك وعاداتك
-            ومخطط يومك ويومياتك ودرجتك، وإنشاء مهام وتسجيل عادات وكتابة يوميات باسمك.</p>
-         <p>لا حذف لأي بيانات، وحدود الاستخدام 30 عملية/دقيقة، وكل كتابة تُسجَّل في التدقيق.
-            يمكنك إبطال الوصول في أي وقت من إعدادات أوج.</p>
-         <a class="btn" href="${esc(approveUrl.toString())}">تفويض</a>
-         <a class="btn ghost" href="${esc(denyUrl.toString())}">رفض</a>
-         <p class="meta">state: ${stateAttr || '—'}</p>`,
-        'أوج — موافقة',
-      )
-    }
-
-    // 8) إصدار code (JWT قصيرة العمر + استخدام واحد)
+    // 7) إصدار code (JWT قصيرة العمر + استخدام واحد) مباشرة بعد
+    //    المفتاح الصالح — لا خطوة confirm: إدخال المفتاح هو الموافقة
     const t = this.t()
     const payload: TokenPayload = {
       iss: this.issuer,

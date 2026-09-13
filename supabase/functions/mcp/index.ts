@@ -8,7 +8,8 @@
 // ChatGPT في _shared/oauth-core.ts:
 //
 //   GET  /?oauth=metadata   → بيانات خادم التفويض (RFC 8414)
-//   GET  /?oauth=authorize  → موافقة عربية ثم 302 مع code
+//   GET  /?oauth=authorize  → 302 لصفحة الموقع العام (إدخال المفتاح)
+//                             ثم 302 مع code بعد المفتاح الصالح
 //   POST /?oauth=token      → code/refresh → رموز access+refresh
 //   POST /?oauth=register   → تسجيل عميل ديناميكي (RFC 7591)
 //   POST /                  → JSON-RPC: Bearer rise_ أو Bearer JWT
@@ -36,6 +37,16 @@
 // متغيرات البيئة (تُحقن تلقائيًا من المنصة):
 //   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
 //   (بيانات عميل OAuth تُقرأ من app_config — هجرة 034)
+//
+// صفحة التفويض (إدخال مفتاح rise_) تعيش على الموقع العام لا هنا:
+//   بوابة Supabase تمنع عرض HTML من الدوال على نطاق *.supabase.co
+//   المشترك (تحوّل text/html إلى text/plain + sandbox CSP — حماية
+//   من الصيد)، لذا نعلن رابط الصفحة في metadata كـ
+//   authorization_endpoint (مسموح بأي رابط https مطلق حسب RFC 8414)
+//   وChatGPT يفتحها في نافذة التفويض. رابطها قابل للتخصيص عبر
+//   MCP_AUTHORIZE_PAGE_URL (اختبارات e2e) — الافتراضي: الموقع
+//   الإنتاجي (حدّثه لو تغير النطاق). ملف الصفحة:
+//   src/app/mcp/authorize/page.tsx — العقد في supabase/DEPLOY.md
 // ============================================================
 
 import { McpServer, sha256Hex } from '../_shared/mcp-core.ts'
@@ -68,11 +79,19 @@ const server = new McpServer({
   protectedResourceUrl: `${issuer}/.well-known/oauth-protected-resource`,
 })
 
+// صفحة التفويض على الموقع العام (نموذج إدخال المفتاح) — معلنة
+// في metadata كauthorization_endpoint ويفتحها ChatGPT في نافذة
+// التفويض؛ الدالة تُحيل إليها 302 عند غياب api_key (لا HTML هنا —
+// البوابة تحوّله text/plain، انظر الترويسة أعلاه). env للاختبارات
+const authorizePageUrl = Deno.env.get('MCP_AUTHORIZE_PAGE_URL')
+  ?? 'https://rise-os-gamma.vercel.app/mcp/authorize'
+
 // طبقة OAuth (عميل PostgREST خاص بها — خفيف وبلا حالة)
 const oauth = new McpOAuth({
   db: new Postgrest({ baseUrl: supabaseUrl, serviceKey: serviceKey }),
   issuer,
   signingKey,
+  authorizePageUrl,
 })
 
 /** تحويل ترويسات Request إلى خريطة صغيرة المفاتيح */
@@ -133,7 +152,7 @@ Deno.serve(
         case 'authorize':
           if (req.method !== 'GET') return fail('authorize تدعم GET فقط', 405)
           return oauth
-            .handleAuthorize(url, headersToRecord(req))
+            .handleAuthorize(url)
             .then(toResponse)
             .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
         case 'token':

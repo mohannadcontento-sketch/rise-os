@@ -8,14 +8,17 @@
 //
 //   MCP: GET→405 | JSON تالف→-32700 | بلا Bearer→401 | initialize
 //        + tools/list (8) + tools/call list_tasks (بيانات حية)
-//        + OAuth (10-ج): metadata + authorize/confirm→302 code
-//          + token (form) + JSON-RPC بـaccess_token (الحلقة كاملة)
+//        + OAuth (10-ج): metadata (authorization_endpoint = صفحة
+//          الموقع العام عبر MCP_AUTHORIZE_PAGE_URL) + authorize
+//          بمفتاح → 302 code فورًا + token (form) + JSON-RPC
+//          بـaccess_token (الحلقة كاملة) — لا HTML من الدالة
 //        + محاكاة ChatGPT الكاملة (كما تفعلها OpenAI حرفيًا):
 //          اكتشاف well-known الثلاث (AS/OIDC/protected-resource)
 //          + تسجيل DCR عبر POST /register (صالح/مهاجم) +
-//          authorize بلا مفتاح → نموذج GET → إرساله بالحقول
-//          المخفية → تبديل كعميل عام (بلا سرّ، PKCE فقط) →
-//          الرمز يعمل عبر JSON-RPC — السلسلة كاملة
+//          authorize بلا مفتاح → 302 لصفحة الموقع بكل المعاملات
+//          (عقد الصفحة) → إرسالها كما تفعل (نموذجها) مع المفتاح
+//          → تبديل كعميل عام (بلا سرّ، PKCE فقط) → الرمز يعمل
+//          عبر JSON-RPC — السلسلة كاملة
 //   PUSH: بلا مصادقة→401 | سر خاطئ→401 | مفتاح الخدمة→جولة نظيفة
 //        | force notification_id→إرسال فعلي يُفك تشفيره عند المزود
 //        | مفتاح بصيغة أخرى (sb_secret نمطًا)→ تحقق PostgREST→200
@@ -32,6 +35,8 @@ const USER = '44444444-4444-4444-4444-444444444444'
 const SERVICE_KEY = 'e2e-service-role-key'
 const E2E_CLIENT_ID = 'awj-e2e-client-01'
 const E2E_CLIENT_SECRET = 'csecret_e2e_0123456789abcdef'
+/** صفحة التفويض على الموقع العام — كما تُعلنها metadata */
+const AUTHORIZE_PAGE = 'http://127.0.0.1:9919/mcp/authorize'
 
 interface Proc {
   kill(): void
@@ -138,6 +143,9 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
   const commonEnv = {
     SUPABASE_URL: postgrest.url,
     SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
+    // صفحة التفويض (الموقع العام) — الدالة تعلنها في metadata
+    // وتُحيل إليها عند غياب api_key (لا HTML من الدالة إطلاقًا)
+    MCP_AUTHORIZE_PAGE_URL: AUTHORIZE_PAGE,
   }
 
   // ── إطلاق الوظيفتين ──
@@ -223,18 +231,26 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     assertEquals(badKey.status, 401)
 
     // ═══ OAuth (10-ج): الحلقة كاملة عبر HTTP حقيقي ═══
-    // metadata → بيانات خادم التفويض
+    // metadata → authorization_endpoint صفحة الموقع العام (لا HTML
+    // من الدالة — بوابة المنصة تحوّله text/plain)
     const metaRes = await fetch(`http://127.0.0.1:8761/?oauth=metadata`)
     assertEquals(metaRes.status, 200)
     const meta = await metaRes.json()
-    assert(String(meta.authorization_endpoint).includes('?oauth=authorize'))
+    assertEquals(meta.authorization_endpoint, AUTHORIZE_PAGE)
     assert(String(meta.token_endpoint).includes('?oauth=token'))
 
-    // authorize بلا مفتاح → 200 صفحة إدخال بنموذج (بدل 401 الجامد)
-    const noKey = await fetch(`http://127.0.0.1:8761/?oauth=authorize&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')}`)
-    assertEquals(noKey.status, 200)
-    assertEquals((noKey.headers.get('content-type') || '').includes('text/html'), true)
-    assert((await noKey.text()).includes('name="api_key"'), 'حقل إدخال المفتاح')
+    // authorize بلا مفتاح → 302 لصفحة الموقع بكل المعاملات
+    const noKey = await fetch(
+      `http://127.0.0.1:8761/?oauth=authorize&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')}`,
+      { redirect: 'manual' },
+    )
+    assertEquals(noKey.status, 302, 'إحالة لا HTML')
+    assertEquals((await noKey.text()) === '', true, 'جسم فارغ — لا HTML')
+    const noKeyLoc = new URL(noKey.headers.get('location')!)
+    assertEquals(noKeyLoc.origin + noKeyLoc.pathname, AUTHORIZE_PAGE)
+    assertEquals(noKeyLoc.searchParams.get('client_id'), E2E_CLIENT_ID)
+    assertEquals(noKeyLoc.searchParams.get('response_type'), 'code')
+    assertEquals(noKeyLoc.searchParams.get('api_key'), null, 'المفتاح لا يُمرر')
 
     // السيرفر الحقيقي يسمح بنطاقات ChatGPT فقط — نستخدم chatgpt.com
     const redirect = encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')
@@ -243,8 +259,9 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
       await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
     ))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
+    // authorize بمفتاح صالح → 302 code فورًا (المفتاح هو الموافقة)
     const approveRes = await fetch(
-      `http://127.0.0.1:8761/?oauth=authorize&api_key=${TEST_KEY}&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${redirect}&state=e2e-state&code_challenge=${challengeB64}&code_challenge_method=S256&confirm=1`,
+      `http://127.0.0.1:8761/?oauth=authorize&api_key=${TEST_KEY}&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${redirect}&state=e2e-state&code_challenge=${challengeB64}&code_challenge_method=S256`,
       { redirect: 'manual' },
     )
     assertEquals(approveRes.status, 302)
@@ -334,32 +351,30 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     assertEquals((await badDcr.json()).error, 'invalid_redirect_uri')
 
     // 3) التفويض كما يرسله ChatGPT: بلا api_key (لا يعرفه!) →
-    //    صفحة إدخال بنموذج GET يحفظ كل المعاملات في حقول مخفية
+    //    302 لصفحة الموقع (authorization_endpoint) بكل المعاملات —
+    //    ChatGPT فتح الصفحة في نافذة التفويض، والصفحة تعرض النموذج
     const cgRedirect = encodeURIComponent('https://chatgpt.com/aip-9/oauth/callback')
-    const formPage = await fetch(
+    const noKeyRes = await fetch(
       `http://127.0.0.1:8761/?oauth=authorize&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${cgRedirect}&state=cg-st-1&code_challenge=${challengeB64}&code_challenge_method=S256`,
+      { redirect: 'manual' },
     )
-    assertEquals(formPage.status, 200)
-    const formHtml = await formPage.text()
-    assert(formHtml.includes('name="api_key"'), 'حقل إدخال المفتاح')
-    // محاكاة المستخدم: نجمع الحقول المخفية (كما يرسلها المتصفح
-    // حرفيًا — GET يستبدل الـquery كاملًا) ثم نضيف المفتاح
-    const fields: Record<string, string> = {}
-    for (const m of formHtml.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) {
-      fields[m[1]] = m[2]
-    }
-    assertEquals(fields['oauth'], 'authorize')
-    assertEquals(fields['client_id'], E2E_CLIENT_ID)
-    assertEquals(fields['redirect_uri'], 'https://chatgpt.com/aip-9/oauth/callback')
-    fields['api_key'] = TEST_KEY
+    assertEquals(noKeyRes.status, 302)
+    const pageLoc = new URL(noKeyRes.headers.get('location')!)
+    assertEquals(pageLoc.origin + pageLoc.pathname, AUTHORIZE_PAGE)
+    assertEquals(pageLoc.searchParams.get('client_id'), E2E_CLIENT_ID)
+    assertEquals(pageLoc.searchParams.get('redirect_uri'), 'https://chatgpt.com/aip-9/oauth/callback')
+    assertEquals(pageLoc.searchParams.get('state'), 'cg-st-1')
+    assertEquals(pageLoc.searchParams.get('code_challenge'), challengeB64)
+    assertEquals(pageLoc.searchParams.get('code_challenge_method'), 'S256')
+    assertEquals(pageLoc.searchParams.get('oauth'), null, 'علم التحكم لا يُمرر')
+    // محاكاة نموذج الصفحة (كما يرسله المتصفح حرفيًا — GET يستبدل
+    // الـquery بحقوله): oauth=authorize + كل المعاملات + المفتاح
     const submitted = new URL('http://127.0.0.1:8761/')
-    for (const [k, v] of Object.entries(fields)) submitted.searchParams.set(k, v)
+    submitted.searchParams.set('oauth', 'authorize')
+    for (const [k, v] of pageLoc.searchParams.entries()) submitted.searchParams.set(k, v)
+    submitted.searchParams.set('api_key', TEST_KEY)
 
-    // صفحة الموافقة تظهر بعد المفتاح ثم confirm=1 → 302 مع code
-    const consentRes = await fetch(submitted, { redirect: 'manual' })
-    assertEquals(consentRes.status, 200, 'صفحة الموافقة بعد المفتاح')
-    assert((await consentRes.text()).includes('تفويض'))
-    submitted.searchParams.set('confirm', '1')
+    // المفتاح الصالح → 302 مع code فورًا (إدخاله هو الموافقة)
     const cgApproved = await fetch(submitted, { redirect: 'manual' })
     assertEquals(cgApproved.status, 302)
     const cgLoc = new URL(cgApproved.headers.get('location')!)
