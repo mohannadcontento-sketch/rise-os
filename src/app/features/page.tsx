@@ -10,12 +10,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LegalShell, { LegalSection } from "@/components/rise/legal-shell";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "المميزات | أوج — ٢٤ وحدة لحياتك كلها",
   description:
     "استكشف مميزات أوج: مهام وعادات وسلاسل إنجاز، عمل عميق ببومودورو، أهداف ومشاريع، صحة ونوم، مالية بالجنيه المصري، دماغ ثانٍ، مجتمع عربي، وربط MCP مع ChatGPT في باقة ماكس.",
+    openGraph: pageOg(
+    "المميزات | أوج — ٢٤ وحدة لحياتك كلها",
+    "استكشف مميزات أوج: مهام وعادات وسلاسل إنجاز، عمل عميق ببومودورو، أهداف ومشاريع، صحة ونوم، مالية بالجنيه المصري، دماغ ثانٍ، مجتمع عربي، وربط MCP مع ChatGPT في باقة ماكس.",
+    "/features"
+  ),
+  twitter: pageTwitter(
+    "المميزات | أوج — ٢٤ وحدة لحياتك كلها",
+    "استكشف مميزات أوج: مهام وعادات وسلاسل إنجاز، عمل عميق ببومودورو، أهداف ومشاريع، صحة ونوم، مالية بالجنيه المصري، دماغ ثانٍ، مجتمع عربي، وربط MCP مع ChatGPT في باقة ماكس."
+  ),
   alternates: { canonical: "/features" },
 };
 
