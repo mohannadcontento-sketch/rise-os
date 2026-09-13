@@ -63,9 +63,20 @@ async function markNotificationFromDeepLink(id: string): Promise<boolean> {
  * Registers the service worker, manages its update lifecycle, resyncs
  * an existing push subscription (never asks permission), and completes
  * push deep-links (?notification=).
+ *
+ * صفحة تفويض MCP (/mcp/authorize) مستثناة بالكامل: هي نافذة OAuth
+ * عابرة يفتحها ChatGPT — تسجيل SW فيها يعني controllerchange →
+ * location.reload() قد يمسح مفتاح المستخدم أثناء الكتابة أو يجهض
+ * إرسال النموذج (تنافس التنقل) قبل اكتماله، فيبدو للنافذة أن
+ * «لا شيء يحدث». لا PWA هنا أصلًا: لا تخزين مؤقت ولا إشعارات.
  */
 export function PWAInit() {
   useEffect(() => {
+    if (window.location.pathname.startsWith('/mcp/authorize')) {
+      handleNotificationDeepLink()
+      handleModuleShortcut()
+      return
+    }
     if (!('serviceWorker' in navigator)) {
       handleNotificationDeepLink()
       handleModuleShortcut()

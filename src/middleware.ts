@@ -140,17 +140,30 @@ function matchRateLimit(pathname: string): RateLimitConfig | null {
 // إلى نقطة دالة Supabase (نطاق مختلف عن الموقع). توجيه form-action
 // في CSP بـ 'self' فقط يمنع المتصفح من إرسال النموذج بصمت —
 // المستخدم يضغط «تفويض» ولا يحدث شيء (submit يُطلق بلا منع JS،
-// لكن التنقل يُحجب في مستوى CSP). الحل: نضيف وجهة الدالة لـ
-// form-action في هذه الصفحة وحدها؛ باقي الصفحات تبقى مقيدة.
+// لكن التنقل يُحجب في مستوى CSP).
+//
+// الأهم — حماية OAuth في Chromium: النموذج يحمل حقول
+// oauth + redirect_uri (توقيع نموذج OAuth)، فيطبّق المتصفح فحص
+// form-action على قيمة redirect_uri نفسها كذلك — لا على action
+// فقط. رد نداء ChatGPT (chatgpt.com/connector/oauth/…) ليس ضمن
+// المصادر → حجب صامت. لذا نضيف وجهة الدالة + نطاقات رد نداء
+// ChatGPT/OpenAI (نفس ما يقبله DCR في الدالة) لهذه الصفحة وحدها.
 // ============================================================
 const MCP_FUNCTIONS_ORIGIN = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
   .replace(/\/+$/, '')
 
-/** form-action إضافي لصفحة تفويض MCP فقط (وجهة الدالة) */
+/** نطاقات رد نداء ChatGPT/OpenAI — مرآة عقد DCR في دالة MCP */
+const OAUTH_CALLBACK_TARGETS = [
+  'https://chatgpt.com',
+  'https://*.chatgpt.com',
+  'https://openai.com',
+  'https://*.openai.com',
+]
+
+/** form-action إضافي لصفحة تفويض MCP فقط (وجهة الدالة + ردود نداء ChatGPT) */
 function formActionFor(pathname: string): string {
-  return /^\/mcp\/authorize\/?$/.test(pathname) && MCP_FUNCTIONS_ORIGIN
-    ? ` ${MCP_FUNCTIONS_ORIGIN}/functions/v1/mcp`
-    : ''
+  if (!/^\/mcp\/authorize\/?$/.test(pathname) || !MCP_FUNCTIONS_ORIGIN) return ''
+  return ` ${MCP_FUNCTIONS_ORIGIN}/functions/v1/mcp ${OAUTH_CALLBACK_TARGETS.join(' ')}`
 }
 
 function setSecurityHeaders(res: NextResponse, nonce: string, formActionExtra = ''): NextResponse {
