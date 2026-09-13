@@ -135,7 +135,25 @@ function matchRateLimit(pathname: string): RateLimitConfig | null {
   return null
 }
 
-function setSecurityHeaders(res: NextResponse, nonce: string): NextResponse {
+// ============================================================
+// المرحلة 10-ج (إصلاح CSP): صفحة /mcp/authorize ترسل نموذج GET
+// إلى نقطة دالة Supabase (نطاق مختلف عن الموقع). توجيه form-action
+// في CSP بـ 'self' فقط يمنع المتصفح من إرسال النموذج بصمت —
+// المستخدم يضغط «تفويض» ولا يحدث شيء (submit يُطلق بلا منع JS،
+// لكن التنقل يُحجب في مستوى CSP). الحل: نضيف وجهة الدالة لـ
+// form-action في هذه الصفحة وحدها؛ باقي الصفحات تبقى مقيدة.
+// ============================================================
+const MCP_FUNCTIONS_ORIGIN = (process.env.NEXT_PUBLIC_SUPABASE_URL || '')
+  .replace(/\/+$/, '')
+
+/** form-action إضافي لصفحة تفويض MCP فقط (وجهة الدالة) */
+function formActionFor(pathname: string): string {
+  return /^\/mcp\/authorize\/?$/.test(pathname) && MCP_FUNCTIONS_ORIGIN
+    ? ` ${MCP_FUNCTIONS_ORIGIN}/functions/v1/mcp`
+    : ''
+}
+
+function setSecurityHeaders(res: NextResponse, nonce: string, formActionExtra = ''): NextResponse {
   if (process.env.NODE_ENV === 'production') {
     res.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   }
@@ -156,7 +174,7 @@ function setSecurityHeaders(res: NextResponse, nonce: string): NextResponse {
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action 'self'${formActionExtra}`,
     ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
   ].join('; ')
 
@@ -221,7 +239,7 @@ export async function middleware(req: NextRequest) {
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    `form-action 'self'${formActionFor(pathname)}`,
     ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
   ].join('; '))
 
@@ -312,7 +330,7 @@ export async function middleware(req: NextRequest) {
   }
 
   const res = NextResponse.next({ request: { headers: requestHeaders } })
-  setSecurityHeaders(res, nonce)
+  setSecurityHeaders(res, nonce, formActionFor(pathname))
   res.headers.set('x-nonce', nonce)
   addNoCacheHeaders(res, pathname)
   return res
