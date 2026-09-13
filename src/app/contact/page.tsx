@@ -7,12 +7,21 @@
 
 import type { Metadata } from "next";
 import LegalShell, { LegalSection, LegalList } from "@/components/rise/legal-shell";
-import { SUPPORT_EMAIL, BUSINESS_EMAIL } from "@/lib/site";
+import { SUPPORT_EMAIL, BUSINESS_EMAIL, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "تواصل معنا | أوج",
   description:
     "قنوات التواصل مع فريق أوج: الدعم الفني والفوترة والأمان والإبلاغ عن الثغرات والشراكات — مع أزمنة الرد المتوقعة.",
+    openGraph: pageOg(
+    "تواصل معنا | أوج",
+    "قنوات التواصل مع فريق أوج: الدعم الفني والفوترة والأمان والإبلاغ عن الثغرات والشراكات — مع أزمنة الرد المتوقعة.",
+    "/contact"
+  ),
+  twitter: pageTwitter(
+    "تواصل معنا | أوج",
+    "قنوات التواصل مع فريق أوج: الدعم الفني والفوترة والأمان والإبلاغ عن الثغرات والشراكات — مع أزمنة الرد المتوقعة."
+  ),
   alternates: { canonical: "/contact" },
 };
 
