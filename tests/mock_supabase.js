@@ -42,6 +42,8 @@ const COLS = {
   work_sessions: { id: "string", user_id: "string", title: "string", planned_min: "number", active_min: "number", break_min: "number", breaks_count: "number", breaks_log: "string", task_ids: "string", tasks_completed: "number", quality_score: "number", notes: "string", status: "string", started_at: "string", completed_at: "string", created_at: "string" },
   user_achievements: { id: "string", user_id: "string", badge_id: "string", badge_name: "string", badge_icon: "string", badge_desc: "string", earned_at: "string" },
   user_settings: { id: "string", user_id: "string", theme: "string", language: "string", wake_up_time: "string", sleep_time: "string", focus_duration: "number", daily_water_goal: "number", daily_reading_goal: "number", weekly_exercise_goal: "number", notifications: "boolean", created_at: "string", updated_at: "string" },
+  // ====== v3.1 — المراجعات + نقاط الخبرة ======
+  xp_awards: { id: "string", user_id: "string", reason: "string", dedupe_key: "string", amount: "number", created_at: "string" },
 };
 
 const DB = {};
@@ -59,6 +61,7 @@ function seed() {
   DB.app_config.push({ key: "mcp_oauth_client_id", value: "awj-7b7f7ba5e0502c4f68f7", updated_at: now });
   DB.app_config.push({ key: "mcp_oauth_client_secret", value: "test-oauth-secret", updated_at: now });
   DB.user_subscriptions.push({ user_id: "u-111", plan: "max", status: "active", started_at: "2026-08-01T00:00:00Z", expires_at: "2026-12-31T00:00:00Z", updated_at: now, payment_method: null, reference: null, activated_by: null });
+  DB.user_subscriptions.push({ user_id: "u-222", plan: "max", status: "active", started_at: "2026-08-01T00:00:00Z", expires_at: "2026-12-31T00:00:00Z", updated_at: now, payment_method: null, reference: null, activated_by: null });
   DB.projects.push({ id: "pr-1", user_id: "u-111", name: "مشروع الإطلاق", description: "إطلاق أوج", color: "#059669", icon: null, progress: 0.5, status: "active", created_at: "2026-08-01T00:00:00Z", updated_at: now });
   DB.tasks.push({ id: "t-1", user_id: "u-111", title: "تسليم التقرير الشهري", description: "تقرير سبتمبر", status: "todo", priority: "high", label: null, project_id: "pr-1", due_date: "2026-09-20", due_time: null, is_recurring: false, recurring_pattern: null, estimated_min: 90, xp_reward: 10, completed_at: null, created_at: "2026-09-10T10:00:00Z", updated_at: "2026-09-10T10:00:00Z", depends_on: null, order: 0 });
   DB.tasks.push({ id: "t-2", user_id: "u-222", title: "مهمة سارة", description: "", status: "todo", priority: "low", label: null, project_id: null, due_date: null, due_time: null, is_recurring: false, recurring_pattern: null, estimated_min: null, xp_reward: 10, completed_at: null, created_at: "2026-09-11T10:00:00Z", updated_at: "2026-09-11T10:00:00Z", depends_on: null, order: 0 });
@@ -104,6 +107,23 @@ function seed() {
   DB.user_achievements.push({ id: "a-2", user_id: "u-111", badge_id: "organizer", badge_name: "مُنظّم", badge_icon: "🗂️", badge_desc: "نظّمت 100 مهمة", earned_at: "2026-09-01T10:00:00Z" });
   // صفوف وحدات أخرى في جدول knowledge المشترك — تختبر عزل BRAIN_TYPES
   DB.knowledge_items.push({ id: "k-99", user_id: "u-111", type: "budget-config", title: "cfg مالية", content: "{}", folder: null, tags: null, source: null, is_favorite: false, created_at: "2026-09-01T00:00:00Z", updated_at: now });
+  // ====== v3.1 — بذور المراجعات ونقاط الخبرة ======
+  // مهمة مكتملة قبل يومين (completed_at بتوقيت UTC داخل نافذة الأسبوع)
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString();
+  const fiveDaysAgo = new Date(Date.now() - 5 * 86400000).toISOString();
+  DB.tasks.push({ id: "t-3", user_id: "u-111", title: "مراجعة خطة الأسبوع", description: "", status: "done", priority: "medium", label: null, project_id: null, due_date: null, due_time: null, is_recurring: false, recurring_pattern: null, estimated_min: 30, xp_reward: 10, completed_at: twoDaysAgo, created_at: fiveDaysAgo, updated_at: twoDaysAgo, depends_on: null, order: 0 });
+  DB.focus_sessions.push({ id: "fs-2", user_id: "u-111", duration: 45, actual_min: 42, type: "pomodoro", notes: null, task_id: null, completed: true, started_at: twoDaysAgo, completed_at: twoDaysAgo, created_at: now });
+  DB.habit_logs.push({ id: "hl-3", habit_id: "h-1", date: twoDaysAgo.slice(0, 10), completed: true, count: 8, created_at: now });
+  DB.habit_logs.push({ id: "hl-4", habit_id: "h-1", date: new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10), completed: true, count: 7, created_at: now });
+  DB.daily_scores.push({ id: "ds-3", user_id: "u-111", date: twoDaysAgo.slice(0, 10), score: 8, completed_items: "[]", total_items: 9 });
+  DB.daily_scores.push({ id: "ds-4", user_id: "u-111", date: new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10), score: 5.5, completed_items: "[]", total_items: 8 });
+  DB.daily_scores.push({ id: "ds-5", user_id: "u-222", date: twoDaysAgo.slice(0, 10), score: 9, completed_items: "[]", total_items: 10 });
+  // نقاط خبرة (نفس بادئات مسار earn-xp) — إجمالي u-111 = 85
+  DB.xp_awards.push({ id: "x-1", user_id: "u-111", reason: "task:t-3", dedupe_key: "task:t-3", amount: 10, created_at: twoDaysAgo });
+  DB.xp_awards.push({ id: "x-2", user_id: "u-111", reason: "habit:h-1:2026-09-12", dedupe_key: "habit:h-1:2026-09-12", amount: 15, created_at: new Date(Date.now() - 86400000).toISOString() });
+  DB.xp_awards.push({ id: "x-3", user_id: "u-111", reason: "morning-routine-complete", dedupe_key: null, amount: 20, created_at: now });
+  DB.xp_awards.push({ id: "x-4", user_id: "u-111", reason: "focus", dedupe_key: null, amount: 40, created_at: fiveDaysAgo });
+  DB.xp_awards.push({ id: "x-5", user_id: "u-222", reason: "task:t-2", dedupe_key: "task:t-2", amount: 25, created_at: now });
 }
 seed();
 
