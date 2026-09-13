@@ -5,12 +5,22 @@
 // ============================================================
 
 import type { Metadata } from "next";
+import { pageOg, pageTwitter } from "@/lib/site";
 import LegalShell, { LegalSection, LegalList } from "@/components/rise/legal-shell";
 
 export const metadata: Metadata = {
   title: "عن أوج | awj.life",
   description:
     "قصة أوج: نظام حياة عربي أصيل — ٢٤ وحدة متكاملة، أولوية عربية كاملة، يعمل دون إنترنت، خصوصيتك أولًا، وقيمته قبل اشتراكه.",
+    openGraph: pageOg(
+    "عن أوج | awj.life",
+    "قصة أوج: نظام حياة عربي أصيل — ٢٤ وحدة متكاملة، أولوية عربية كاملة، يعمل دون إنترنت، خصوصيتك أولًا، وقيمته قبل اشتراكه.",
+    "/about"
+  ),
+  twitter: pageTwitter(
+    "عن أوج | awj.life",
+    "قصة أوج: نظام حياة عربي أصيل — ٢٤ وحدة متكاملة، أولوية عربية كاملة، يعمل دون إنترنت، خصوصيتك أولًا، وقيمته قبل اشتراكه."
+  ),
   alternates: { canonical: "/about" },
 };
 
