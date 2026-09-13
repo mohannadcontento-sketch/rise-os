@@ -3,12 +3,13 @@
 // ============================================================
 // admin-panel.tsx — لوحة الإدارة (القشرة الرئيسية)
 //
-// تاب-بار بثمانية أقسام؛ كل تاب مكوّن مستقل في ملفه الخاص
+// تاب-بار بأحد عشر قسمًا؛ كل تاب مكوّن مستقل في ملفه الخاص
 // (admin-*-tab.tsx) والقشرة هنا تملك فقط حالة التاب النشط وحوار
 // البث الجماعي. الوصول للوحة كله عبر requireAdmin على مسارات API.
 //
 // التابات: النظرة العامة · المستخدمون · الاشتراكات · المجتمع ·
-// الصحة والأخطاء · سجل الإدارة · الإحصاءات · قاعدة البيانات · المفاتيح
+// الصحة والأخطاء · سجل الإدارة · الإحصاءات · قاعدة البيانات ·
+// المفاتيح · الإعلانات · الخطط · النظام
 // ============================================================
 
 import { useState } from 'react'
@@ -22,6 +23,9 @@ import {
   BarChart3,
   Activity,
   TrendingUp,
+  Megaphone,
+  SlidersHorizontal,
+  Wrench,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -40,6 +44,9 @@ import { BroadcastDialog } from './admin-broadcast-dialog'
 import { AuditTab } from './admin-audit-tab'
 import { AdminCommunityTab } from './admin-community-tab'
 import { AdminSubscriptionsTab } from './admin-subscriptions-tab'
+import { AdminAdsTab } from './admin-ads-tab'
+import { AdminPlansTab } from './admin-plans-tab'
+import { AdminSystemTab } from './admin-system-tab'
 import { SystemStats } from './admin-panel-utils'
 
 /* ═══════════════ Main Admin Panel Component ═══════════════ */
@@ -118,6 +125,18 @@ export default function AdminPanel() {
             <Key className="w-3.5 h-3.5" />
             <span>مفاتيح API</span>
           </TabsTrigger>
+          <TabsTrigger value="ads" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Megaphone className="w-3.5 h-3.5" />
+            <span>الإعلانات</span>
+          </TabsTrigger>
+          <TabsTrigger value="plans" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>الخطط</span>
+          </TabsTrigger>
+          <TabsTrigger value="system" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <Wrench className="w-3.5 h-3.5" />
+            <span>النظام</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -146,6 +165,15 @@ export default function AdminPanel() {
         </TabsContent>
         <TabsContent value="api-keys">
           <ApiKeysTab />
+        </TabsContent>
+        <TabsContent value="ads">
+          <AdminAdsTab />
+        </TabsContent>
+        <TabsContent value="plans">
+          <AdminPlansTab />
+        </TabsContent>
+        <TabsContent value="system">
+          <AdminSystemTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -370,3 +370,122 @@ export const communityModerateSchema = z.discriminatedUnion('action', [
     reason: z.string().trim().max(500).optional(),
   }),
 ])
+
+// ─── المرحلة 11 — استكمال وحدات لوحة الإدارة (Ads / Plans / System) ───
+
+/** رقم وحدة AdSense: أرقام فقط، أو فراغ (= إزالة المفتاح ← إعلان البيت) */
+const adSlotValueSchema = z
+  .string()
+  .trim()
+  .refine((v) => v === '' || /^\d{6,20}$/.test(v), {
+    message: 'رقم الوحدة أرقام فقط (أو فراغ)',
+  })
+
+/** POST /api/rise/admin/ads — إعدادات الإعلانات + الإعلانات المباشرة */
+export const adminAdsActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('set'),
+    enabled: z.boolean().optional(),
+    adsenseClientId: z
+      .string()
+      .trim()
+      .regex(/^ca-pub-\d{6,20}$/, 'معرف الناشر بصيغة ca-pub- ثم أرقام')
+      .optional(),
+    slots: z
+      .object({
+        home: adSlotValueSchema.optional(),
+        community: adSlotValueSchema.optional(),
+        tasks: adSlotValueSchema.optional(),
+      })
+      .optional(),
+  }),
+  z.object({
+    action: z.literal('direct-ad-save'),
+    ad: z.object({
+      id: z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9-]{2,40}$/, 'معرّف الإعلان: أحرف صغيرة وأرقام وشرطات'),
+      title: z.string().trim().min(2, 'عنوان الإعلان مطلوب').max(80),
+      description: z.string().trim().max(160).optional(),
+      cta: z.string().trim().max(30).optional(),
+      href: z
+        .string()
+        .trim()
+        .max(500)
+        .regex(/^https?:\/\//, 'رابط الهدف يجب أن يبدأ بـ http(s)://')
+        .optional(),
+      image: z
+        .string()
+        .trim()
+        .max(500)
+        .regex(/^https?:\/\//, 'رابط الصورة يجب أن يبدأ بـ http(s)://')
+        .optional(),
+      placement: z.enum(['home', 'community', 'tasks', 'all']),
+      startAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ البدء بصيغة YYYY-MM-DD')
+        .nullable()
+        .optional(),
+      endAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاريخ الانتهاء بصيغة YYYY-MM-DD')
+        .nullable()
+        .optional(),
+      priority: z.number().int().min(0).max(1000).optional(),
+      active: z.boolean().optional(),
+    }),
+  }),
+  z.object({
+    action: z.literal('direct-ad-delete'),
+    id: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9-]{2,40}$/, 'معرّف الإعلان غير صالح'),
+  }),
+])
+
+/** POST /api/rise/admin/plans — تعديل حد ميزة لخطة (يسري فورًا خادميًا) */
+export const adminPlansActionSchema = z.object({
+  action: z.literal('set-entitlement'),
+  plan: z.enum(['free', 'plus', 'max']),
+  featureKey: z
+    .string()
+    .trim()
+    .regex(/^[a-z][a-z0-9._-]{2,63}$/, 'مفتاح الميزة غير صالح (مثل ai.action)'),
+  enabled: z.boolean(),
+  dailyLimit: z
+    .number()
+    .int('الحد اليومي عدد صحيح')
+    .min(0, 'الحد اليومي لا يمكن أن يكون سالبًا')
+    .max(100000, 'الحد اليومي كبير جدًا')
+    .nullable()
+    .optional(),
+  monthlyLimit: z
+    .number()
+    .int('الحد الشهري عدد صحيح')
+    .min(0, 'الحد الشهري لا يمكن أن يكون سالبًا')
+    .max(100000, 'الحد الشهري كبير جدًا')
+    .nullable()
+    .optional(),
+})
+
+/** POST /api/rise/admin/system — وضع الصيانة + أعلام الميزات */
+export const adminSystemActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('maintenance'),
+    enabled: z.boolean(),
+    message: z.string().trim().min(3, 'الرسالة قصيرة جدًا').max(160).optional(),
+  }),
+  z.object({
+    action: z.literal('flags'),
+    flags: z
+      .record(
+        z.string().regex(/^[a-z][a-z0-9_]{2,63}$/, 'اسم علم غير صالح'),
+        z.boolean(),
+      )
+      .refine((obj) => Object.keys(obj).length <= 50, {
+        message: 'أقصى عدد أعلام 50',
+      }),
+  }),
+])

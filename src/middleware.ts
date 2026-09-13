@@ -112,6 +112,10 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/rise/community/members': { limit: 30, window: '1 m' },
   '/api/rise/admin/community/moderate': { limit: 20, window: '1 m' },
   '/api/rise/admin/query': { limit: 10, window: '1 m' },
+  // المرحلة 11 — وحدات الإدارة المستكملة (Ads/Plans/System)
+  '/api/rise/admin/ads': { limit: 20, window: '1 m' },
+  '/api/rise/admin/plans': { limit: 20, window: '1 m' },
+  '/api/rise/admin/system': { limit: 20, window: '1 m' },
   // FIX: Increased from 100 to 300/min for /api/rise — the dashboard is
   // fetched by multiple components (sidebar 30s poll, dashboard on mount,
   // analytics, settings) plus useDataRefresh re-fetches. 100/min was too
@@ -133,6 +137,61 @@ function matchRateLimit(pathname: string): RateLimitConfig | null {
     if (pathname.startsWith(prefix)) return RATE_LIMITS[prefix]
   }
   return null
+}
+
+// ============================================================
+// المرحلة 11 (System) — بوابة وضع الصيانة:
+// عندما maintenance_mode=true في app_config (تاب «النظام») نرفض
+// كل طفرات /api/rise/* غير الإدارية بـ503 MAINTENANCE_MODE ورسالة
+// عربية — القراءة والمسارات الإدارية تظل تعمل حتى يستطيع الأدمن
+// الدخول وإيقافه دائمًا. أسبقية أعلى: env SYSTEM_MAINTENANCE_MODE
+// (kill-switch من Vercel عندما تتعطل قاعدة البيانات نفسها).
+//
+// الفحص بكاش 30 ثانية لكل نسخة Lambda + استعلام REST واحد خفيف
+// (select value where key=maintenance_mode) — لا نضرب DB مع كل
+// طلب. أي فشل اتصال = fail-open (الموقع يعمل — الصيانة لا تُقفل
+// بالخطأ أبدًا).
+// ============================================================
+const MAINTENANCE_SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const MAINTENANCE_SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+let maintenanceCache: { at: number; on: boolean } | null = null
+
+async function isMaintenanceActive(): Promise<boolean> {
+  if (process.env.SYSTEM_MAINTENANCE_MODE === 'true') return true
+  if (!MAINTENANCE_SB_URL || !MAINTENANCE_SB_KEY) return false
+  if (maintenanceCache && Date.now() - maintenanceCache.at < 30_000) {
+    return maintenanceCache.on
+  }
+  try {
+    const res = await fetch(
+      `${MAINTENANCE_SB_URL}/rest/v1/app_config?select=value&key=eq.maintenance_mode`,
+      {
+        headers: {
+          apikey: MAINTENANCE_SB_KEY,
+          Authorization: `Bearer ${MAINTENANCE_SB_KEY}`,
+        },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(2500),
+      },
+    )
+    if (!res.ok) return false
+    const rows = (await res.json()) as Array<{ value: string }>
+    const on = rows.length > 0 && rows[0].value === 'true'
+    maintenanceCache = { at: Date.now(), on }
+    return on
+  } catch {
+    // فشل الاستعلام = fail-open (لا نقفل الموقع بسبب فحص معطّل)
+    return false
+  }
+}
+
+/** مسارات مستثناة من بوابة الصيانة (الأدمن يتحكم ويوقف دائمًا) */
+function isMaintenanceExempt(pathname: string): boolean {
+  return (
+    pathname.startsWith('/api/rise/admin/') ||
+    pathname.startsWith('/api/rise/system/') ||
+    pathname.startsWith('/api/auth/')
+  )
 }
 
 // ============================================================
@@ -284,6 +343,29 @@ export async function middleware(req: NextRequest) {
         { error: 'طلب غير موثوق المصدر', code: 'CSRF_BLOCKED' },
         { status: 403 }
       )),
+      nonce,
+    )
+  }
+
+  // المرحلة 11 (System): رفض طفرات المستخدمين أثناء الصيانة —
+  // القراءة تستمر، ومسارات الأدمن/النظام/المصادقة مستثناة.
+  if (
+    pathname.startsWith('/api/rise/') &&
+    !pathname.startsWith('/api/rise/system/') &&
+    isStateChangingMethod(req.method) &&
+    !isMaintenanceExempt(pathname) &&
+    (await isMaintenanceActive())
+  ) {
+    return setSecurityHeaders(
+      withNonceRequest(
+        NextResponse.json(
+          {
+            error: 'أوج تحت الصيانة حاليًا — التعديلات محفوظة محليًا وستُرسل عند عودتنا. نرجو المحاولة بعد قليل.',
+            code: 'MAINTENANCE_MODE',
+          },
+          { status: 503, headers: { 'Retry-After': '60' } },
+        ),
+      ),
       nonce,
     )
   }
