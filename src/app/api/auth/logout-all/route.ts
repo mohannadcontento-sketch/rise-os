@@ -33,7 +33,14 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      await admin.auth.signOut(userId)
+      // FIX (QA المرحلة 15): إبطال الجلسات = admin API ويستقبل JWT وليس userId —
+      // الاستدعاء القديم كان يمرر userId فيتجاهله الخادم وتبقى كل الجلسات صالحة.
+      const accessToken = req.headers.get('Authorization')?.replace('Bearer ', '') ||
+        req.cookies.get('rise-access')?.value || ''
+      if (!accessToken) {
+        return NextResponse.json({ error: 'مطلوب تسجيل الدخول' }, { status: 401 })
+      }
+      await admin.auth.admin.signOut(accessToken)
     } catch (error) {
       console.error('[auth/logout-all] global signOut failed:', error)
       return NextResponse.json({ error: 'تعذر إبطال الجلسات، حاول لاحقاً' }, { status: 503 })

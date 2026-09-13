@@ -75,7 +75,7 @@ export async function hashApiKey(key: string): Promise<string> {
 // عملاء مفردون (singleton) يُنشؤون مرة واحدة — الحمل الكسول يمنع تكلفة init لكل طلب
 let _anonClient: any = null
 let _adminClient: any = null
-let _sbModule: any = null
+let _sbModule: typeof import("@supabase/supabase-js") | null = null
 
 /** Lazy load the supabase module */
 async function loadSupabase() {

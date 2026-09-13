@@ -114,10 +114,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── إبطال كل الجلسات بعد تغيير كلمة المرور ──
+    // FIX (QA المرحلة 15): إبطال الجلسات = admin API ويستقبل JWT وليس userId —
+    // الاستدعاء القديم كان يمرر userId فيتجاهله الخادم وتبقى الجلسات صالحة.
     const admin = await getSupabaseAdmin()
     if (admin) {
       try {
-        await admin.auth.signOut(userId)
+        await admin.auth.admin.signOut(accessToken)
       } catch (e) {
         console.error('[auth/update-password] global signOut failed (non-fatal):', e)
       }

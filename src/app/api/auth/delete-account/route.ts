@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic'
 // ============================================================
 
 export async function DELETE(req: NextRequest) {
-  // QA-DIAG: مؤقت لتشخيص خطأ 500 — يُستبدل برسالة عامة بعد التحديد
+  // QA-DIAG (أُبقي في السجل فقط): اسم آخر خطوة للفحص من Vercel logs
   let step = 'start'
   try {
     if (!isSupabaseConfigured()) {
@@ -75,8 +75,13 @@ export async function DELETE(req: NextRequest) {
     }
 
     // (أ) أغلق كل الجلسات أولًا حتى لا تبقى جلسة صالحة بعد حذف المستخدم.
+    // FIX (QA المرحلة 15): إبطال الجلسات = admin API ويستقبل JWT وليس userId
+    // — الاستدعاء القديم كان يمرر userId فيتجاهله الخادم (401) ويُهمل.
     try {
-      await admin.auth.signOut(userId)
+      const sessionJwt = authData.session?.access_token
+      if (sessionJwt) {
+        await admin.auth.admin.signOut(sessionJwt)
+      }
     } catch (e) {
       console.error('[auth/delete-account] pre-delete signOut failed (continuing):', e)
     }
@@ -98,8 +103,10 @@ export async function DELETE(req: NextRequest) {
     }
 
     // (ج) حذف مستخدم المصادقة نهائيًا — profiles وكل الجداول تتالى بعده.
+    // FIX (QA المرحلة 15): deleteUser على auth.admin وليس auth مباشرة —
+    // الاستدعاء القديم كان undefined فيرمي TypeError (500) ولا يُحذف الحساب.
     step = 'deleteUser-attempt'
-    const { error: deleteError } = await admin.auth.deleteUser(userId)
+    const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
     if (deleteError) {
       console.error('[auth/delete-account] supabase deleteUser failed:', deleteError.message)
       return NextResponse.json(
@@ -113,14 +120,6 @@ export async function DELETE(req: NextRequest) {
     return clearAuthCookies(res)
   } catch (error) {
     console.error('[auth/delete-account] error at step:', step, error)
-    return NextResponse.json(
-      {
-        error: 'حدث خطأ أثناء حذف الحساب',
-        // QA-DIAG (مؤقت): اسم الخطوة ونوع الخطأ فقط — بلا تفاصيل داخلية
-        step,
-        errorName: (error as Error)?.constructor?.name ?? String(error),
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'حدث خطأ أثناء حذف الحساب' }, { status: 500 })
   }
 }
