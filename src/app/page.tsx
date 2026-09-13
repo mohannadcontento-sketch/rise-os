@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import LandingPage, { FAQS } from "@/components/rise/landing";
+import LandingPage from "@/components/rise/landing";
+import { FAQS } from "@/lib/landing-faq";
 import { SITE_URL, SITE_NAME } from "@/lib/site";
 
 // ============================================================
