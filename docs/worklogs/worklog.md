@@ -262,3 +262,20 @@ Work Log:
 Stage Summary:
 - Repo now contains the corrective SQL at supabase/fixes/riseos-fix-composite-functions.sql — owner action: run it in Supabase SQL Editor to kill the last 500 (tasks/goals composite RPCs)
 - Everything else already on GitHub (main = bc029d3); prod healthy on reads + morning/books writes
+
+---
+Task ID: 28
+Agent: Super Z (main)
+Task: Phase 12 — Landing + SEO + Legal (repo plan continuation)
+
+Work Log:
+- Reviewed the Awj Development & Launch Plan (docs/Awj_Development_and_Launch_Plan.docx) against the repo state: phases 01-11 complete, phase 12 partial (landing existed; no pricing/legal/sitemap/JSON-LD/canonical) — that was the stop point
+- Added 7 public pages (pricing, privacy, terms, community-guidelines, refund-policy, contact, about) as pure Server Components via a shared legal-shell.tsx, all with per-page metadata + canonical
+- SEO: src/app/sitemap.ts (public routes only) + src/app/robots.ts (replaces static public/robots.txt, deleted) + src/lib/site.ts (NEXT_PUBLIC_SITE_URL-aware site constants)
+- JSON-LD on /: SoftwareApplication (3 offers) + Organization + FAQPage (FAQS now exported from landing.tsx — single source)
+- Product+Offers JSON-LD on /pricing; public/og.png (1200x630) generated with brand identity (El Messiri/Tajawal, emerald aurora on dark navy)
+- landing.tsx: new #pricing section (3 plan cards, Max highlighted) + nav link + footer legal links row
+
+Stage Summary:
+- Phase 12 (Landing+SEO+Legal) complete in repo; preview og.png copy at download/awj-og-preview.png locally
+- Owner follow-ups: connect awj.life domain (or set NEXT_PUBLIC_SITE_URL), Search Console verification, create support@/business@ mailboxes, human review of legal copy
