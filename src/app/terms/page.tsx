@@ -7,12 +7,21 @@
 
 import type { Metadata } from "next";
 import LegalShell, { LegalSection, LegalList } from "@/components/rise/legal-shell";
-import { SUPPORT_EMAIL } from "@/lib/site";
+import { SUPPORT_EMAIL, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "شروط الاستخدام | أوج",
   description:
     "شروط استخدام منصة أوج: الباقات الثلاث وحدودها، الدفع اليدوي والتفعيل، الاستخدام العادل، شروط MCP للباقة الأعلى، والحقوق والالتزامات المتبادلة.",
+    openGraph: pageOg(
+    "شروط الاستخدام | أوج",
+    "شروط استخدام منصة أوج: الباقات الثلاث وحدودها، الدفع اليدوي والتفعيل، الاستخدام العادل، شروط MCP للباقة الأعلى، والحقوق والالتزامات المتبادلة.",
+    "/terms"
+  ),
+  twitter: pageTwitter(
+    "شروط الاستخدام | أوج",
+    "شروط استخدام منصة أوج: الباقات الثلاث وحدودها، الدفع اليدوي والتفعيل، الاستخدام العادل، شروط MCP للباقة الأعلى، والحقوق والالتزامات المتبادلة."
+  ),
   alternates: { canonical: "/terms" },
 };
 
