@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 // ملف مدموج آليًا للنشر من لوحة Supabase (الوظيفة: mcp)
-// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 18:54:31 UTC
+// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 19:39:56 UTC
 // لا تحرر هذا الملف يدويًا؛ عدّل المصادر ثم أعد التوليد.
 //
 // طريقة النشر (Dashboard):
@@ -254,7 +254,7 @@ class Postgrest {
 
 // ──────────────────── من _shared/mcp-tools.ts ────────────────────
 // ============================================================
-// mcp-tools.ts — سجل أدوات MCP لخادم Supabase Edge (v3.0 — كل الأقسام)
+// mcp-tools.ts — سجل أدوات MCP لخادم Supabase Edge (v3.1 — 82 أداة)
 //
 // النسخة الأصيلة (Deno) الثمانية محفوظة حرفيًا كما هي، وأضيفت
 // عليها أدوات تغطي الموقع كاملًا — كلها على مخطط قاعدة البيانات
@@ -262,7 +262,8 @@ class Postgrest {
 // notifications/community_*/user_subscriptions/usage_daily/
 // profiles/user_api_keys + v3.0: books/knowledge_items/
 // finance_records/health_logs/morning_logs/focus_sessions/
-// work_sessions/planner_items/user_achievements/user_settings):
+// work_sessions/planner_items/user_achievements/user_settings
+// + v3.1: daily_scores/xp_awards):
 //   • كل استعلام يفرض ملكية user_id صراحة (العميل يعمل بمفتاح
 //     service_role الذي يتجاوز RLS — الملكية مسؤولية ندائنا)
 //   • الكتابة الذرية عبر نفس دوال التطبيق: create/update_
@@ -272,6 +273,9 @@ class Postgrest {
 //     (BRAIN_TYPES للدماغ، بادئة learning- لوحدة التعلم)
 //   • السجلات اليومية (صحة/صباح) upsert على (user_id, date)
 //     — نفس قيد التفرد المفروض في هجرة 005
+//   • v3.1: المراجعتان الأسبوعية/الشهرية محسوبتان من نفس مصادر
+//     وحدتي المراجعة بالموقع (إجاباتهما في localStorage لا تُقرأ
+//     من الخادم) + سجل نقاط الخبرة (xp_awards)
 //   • الحذف متاح صراحةً لمالك المفتاح لكنه يتطلب confirm:true
 //   • Validation يدوي strict (بلا zod — بيئة Deno بلا تبعيات):
 //     أي حقل غير معروف يُرفض، نفس صيغة خطأ المسار «path: رسالة»
@@ -368,6 +372,162 @@ function safeTags(raw: unknown): Record<string, unknown> {
 /** تقريب رقم إلى خانة عشرية واحدة (نسب التقدم والمجاميع) */
 function round1(n: number): number {
   return Math.round(n * 10) / 10
+}
+
+/** يوم القاهرة لطابع ISO زمني — نفس bucketing مسار الموقع (isoToCairoDate) */
+function cairoDayOf(iso: unknown): string | null {
+  if (iso === null || iso === undefined || iso === '') return null
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(String(iso)))
+  } catch {
+    return null
+  }
+}
+
+/** نافذة تواريخ تصاعدية (من الأقدم للأحدث) تنتهي عند end وتغطي days يومًا */
+function windowDates(end: string, days: number): string[] {
+  const base = new Date(`${end}T12:00:00Z`)
+  const out: string[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    out.push(new Date(base.getTime() - i * 86400000).toISOString().slice(0, 10))
+  }
+  return out
+}
+
+/** تاريخ صالح تقويميًا: الصيغة YYYY-MM-DD ويومًا موجودًا فعلًا
+ * (يمنع «2026-13-45» الذي يعبر DATE_RE ثم يفجّر Date بخطأ Invalid time) */
+function isValidDay(s: string): boolean {
+  if (!DATE_RE.test(s)) return false
+  const d = new Date(`${s}T12:00:00Z`)
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s
+}
+
+/** شكل اليوم في نتيجة المراجعة */
+interface ReviewDay {
+  date: string
+  tasksDone: number
+  focusMin: number
+  habitCheckIns: number
+  journaled: boolean
+  morningLogged: boolean
+  score: number | null
+}
+
+/** إحصاءات نافذة مراجعة من نفس مصادر وحدتي المراجعة بالموقع
+ * (المهام المكتملة + جلسات التركيز + تسجيلات العادات + اليوميات
+ * + روتين الصباح + daily_scores) — التجميع بتقويم القاهرة، والعزل
+ * على user_id في كل استعلام ثم إعادة فلترة بالنطاق في الكود
+ * (العميل الخارجي لا يثق بفلاتر in.() عبر mock/PostgREST معًا). */
+async function collectReviewStats(db: Postgrest, userId: string, dates: string[]) {
+  const inRange = new Set(dates)
+  const idx = new Map(dates.map((d, i) => [d, i]))
+  const byDay: ReviewDay[] = dates.map((d) => ({
+    date: d, tasksDone: 0, focusMin: 0, habitCheckIns: 0,
+    journaled: false, morningLogged: false, score: null,
+  }))
+
+  const from = dates[0]
+  // الطوابع الزمنية UTC: نوسّع البداية يومًا للخلف لأن 00:30 صباحًا بتقويم
+  // القاهرة تقع في نهاية يوم UTC السابق — ثم نعيد التجميع بالتقويم المحلي
+  const fromMinus1 = new Date(new Date(`${from}T00:00:00Z`).getTime() - 86400000).toISOString()
+
+  const [tasksRaw, focusRaw, habitRows, journalsRaw, morningRaw, scoresRaw] = await Promise.all([
+    db.select('tasks', {
+      select: 'status,completed_at',
+      filters: { user_id: `eq.${userId}`, status: 'eq.done', completed_at: `gte.${fromMinus1}` },
+      limit: 1000,
+    }),
+    db.select('focus_sessions', {
+      select: 'actual_min,started_at,completed',
+      filters: { user_id: `eq.${userId}`, completed: 'eq.true', started_at: `gte.${fromMinus1}` },
+      limit: 1000,
+    }),
+    db.select('habits', { select: 'id', filters: { user_id: `eq.${userId}` }, limit: 200 }),
+    db.select('journals', {
+      select: 'date',
+      filters: { user_id: `eq.${userId}`, date: `gte.${from}` },
+      limit: 2000,
+    }),
+    db.select('morning_logs', {
+      select: 'date',
+      filters: { user_id: `eq.${userId}`, date: `gte.${from}` },
+      limit: 1000,
+    }),
+    db.select('daily_scores', {
+      select: 'date,score',
+      filters: { user_id: `eq.${userId}`, date: `gte.${from}` },
+      limit: 2000,
+    }),
+  ])
+
+  const habitIdSet = new Set(((habitRows ?? []) as any[]).map((h) => String(h.id)))
+  // habit_logs بلا user_id (تُعزل عبر habit_id) — الفلترة بالطقم في الكود
+  const logsRaw = habitIdSet.size
+    ? await db.select('habit_logs', {
+        select: 'habit_id,date,completed',
+        filters: { date: `gte.${from}`, habit_id: inList([...habitIdSet]) },
+        limit: 5000,
+      })
+    : []
+
+  for (const t of (tasksRaw ?? []) as any[]) {
+    const d = cairoDayOf(t.completed_at)
+    if (d && inRange.has(d)) byDay[idx.get(d) as number].tasksDone += 1
+  }
+  for (const s of (focusRaw ?? []) as any[]) {
+    const d = cairoDayOf(s.started_at)
+    if (d && inRange.has(d)) byDay[idx.get(d) as number].focusMin += Number(s.actual_min ?? 0)
+  }
+  for (const l of (logsRaw ?? []) as any[]) {
+    const d = String(l.date ?? '').slice(0, 10)
+    if (d && inRange.has(d) && habitIdSet.has(String(l.habit_id)) && l.completed === true) {
+      byDay[idx.get(d) as number].habitCheckIns += 1
+    }
+  }
+  for (const j of (journalsRaw ?? []) as any[]) {
+    const d = String(j.date ?? '').slice(0, 10)
+    if (d && inRange.has(d)) byDay[idx.get(d) as number].journaled = true
+  }
+  for (const m of (morningRaw ?? []) as any[]) {
+    const d = String(m.date ?? '').slice(0, 10)
+    if (d && inRange.has(d)) byDay[idx.get(d) as number].morningLogged = true
+  }
+  for (const s of (scoresRaw ?? []) as any[]) {
+    const d = String(s.date ?? '').slice(0, 10)
+    if (d && inRange.has(d)) byDay[idx.get(d) as number].score = round1(Number(s.score ?? 0))
+  }
+
+  const completedTasks = byDay.reduce((n, x) => n + x.tasksDone, 0)
+  const focusMin = byDay.reduce((n, x) => n + x.focusMin, 0)
+  const habitCheckIns = byDay.reduce((n, x) => n + x.habitCheckIns, 0)
+  const journalEntries = byDay.filter((x) => x.journaled).length
+  const morningLogsCount = byDay.filter((x) => x.morningLogged).length
+  const scored = byDay.filter((x) => x.score !== null)
+  const averageScore = scored.length
+    ? round1(scored.reduce((a, b) => a + (b.score ?? 0), 0) / scored.length)
+    : null
+  const activeDays = byDay.filter(
+    (x) => x.tasksDone > 0 || x.focusMin > 0 || x.habitCheckIns > 0 || x.journaled || x.morningLogged,
+  ).length
+
+  return {
+    completedTasks, focusMin, habitCheckIns, journalEntries, morningLogsCount,
+    averageScore, activeDays, byDay,
+  }
+}
+
+/** أسماء مصادر نقاط الخبرة بالعربية (نفس بادئات مسار earn-xp) */
+const XP_REASON_AR: Record<string, string> = {
+  task: 'مهمة', habit: 'عادة', work: 'شغل', morning: 'روتين الصباح',
+  deepwork: 'شغل عميق', focus: 'تركيز', journal: 'يومية',
+  reading: 'قراءة', goal: 'هدف', 'morning-routine-complete': 'روتين الصباح كامل',
+}
+
+function xpReasonLabel(reason: string): string {
+  if (reason === 'morning-routine-complete') return XP_REASON_AR[reason]
+  return XP_REASON_AR[reason.split(':')[0]] ?? reason
 }
 
 /** فحص كائن الوسائط strict: يرفض أي مفتاح غير معروف */
@@ -4768,6 +4928,228 @@ const MCP_TOOLS: McpTool[] = [
     },
   },
 
+  // ═══════════ v3.1 — المراجعات (أسبوعية/شهرية) + نقاط الخبرة ═══════════
+  // وحدتا المراجعة بالموقع تخزنان إجابات المستخدم في المتصفح فقط
+  // (localStorage) فلا يصل إليها الخادم — لكن أرقامهما التلقائية
+  // تُحسب من المهام والتركيز والعادات واليوميات بتقويم القاهرة.
+  // هذه الأدوات تجمع نفس الأرقام فيحصل العميل على صورة المراجعة
+  // كاملة ويستطيع هو أو المستخدم ملء الإجابات فوقها.
+
+  // 80) ── get_weekly_review ─────────────────────────────
+  {
+    name: 'get_weekly_review',
+    title: 'المراجعة الأسبوعية',
+    kind: 'read',
+    description:
+      'أرقام الأسبوع كما تملؤها المراجعة الأسبوعية بالموقع تلقائيًا: المهام المكتملة، ساعات التركيز، تسجيلات العادات، اليوميات، ومتوسط درجة الإنتاجية — مثال: «راجع أسبوعي» أو «إيه أرقام الأسبوع اللي فات؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 3, maximum: 14, description: 'عدد أيام النافذة (افتراضي 7)' },
+        end_date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'آخر يوم في النافذة (افتراضي اليوم بتقويم القاهرة)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['days', 'end_date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.days !== undefined && (!Number.isInteger(a.days) || (a.days as number) < 3 || (a.days as number) > 14)) {
+        return bad('days: عدد صحيح بين 3 و14')
+      }
+      if (a.end_date !== undefined && !isValidDay(String(a.end_date))) {
+        return bad('end_date: التاريخ يجب أن يكون YYYY-MM-DD صالحًا تقويميًا')
+      }
+      return ok({ days: a.days as number | undefined, end_date: a.end_date as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const days = args.days ?? 7
+      const dates = windowDates(args.end_date ?? todayCairo(), days)
+      const s = await collectReviewStats(db, userId, dates)
+      return {
+        summary:
+          `آخر ${days} أيام (حتى ${dates[dates.length - 1]}): ${s.completedTasks} مهمة مكتملة، ` +
+          `${round1(s.focusMin / 60)} ساعة تركيز، ${s.habitCheckIns} تسجيل عادة، ` +
+          `${s.journalEntries} يومية${s.averageScore !== null ? `، متوسط الدرجة ${s.averageScore}` : ''} ` +
+          `— نشِط ${s.activeDays} من ${days} أيام`,
+        range: { from: dates[0], to: dates[dates.length - 1], days },
+        completedTasks: s.completedTasks,
+        focusHours: round1(s.focusMin / 60),
+        focusMinutes: s.focusMin,
+        habitCheckIns: s.habitCheckIns,
+        journalEntries: s.journalEntries,
+        morningLogsCount: s.morningLogsCount,
+        averageScore: s.averageScore,
+        activeDays: s.activeDays,
+        byDay: s.byDay,
+      }
+    },
+  },
+
+  // 81) ── get_monthly_review ─────────────────────────────
+  {
+    name: 'get_monthly_review',
+    title: 'المراجعة الشهرية',
+    kind: 'read',
+    description:
+      'صورة الشهر كاملة كما تقرؤها المراجعة الشهرية بالموقع: الإنجاز مجمّعًا أسبوعًا بأسبوع، انتظام العادات واليوميات، اتجاه درجة الإنتاجية (تحسّن أم تراجع)، وأفضل يوم — مثال: «قوّم شهري» أو «إيه أخبار الشهر ده؟».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 14, maximum: 31, description: 'عدد أيام النافذة (افتراضي 30)' },
+        end_date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'آخر يوم في النافذة (افتراضي اليوم بتقويم القاهرة)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['days', 'end_date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.days !== undefined && (!Number.isInteger(a.days) || (a.days as number) < 14 || (a.days as number) > 31)) {
+        return bad('days: عدد صحيح بين 14 و31')
+      }
+      if (a.end_date !== undefined && !isValidDay(String(a.end_date))) {
+        return bad('end_date: التاريخ يجب أن يكون YYYY-MM-DD صالحًا تقويميًا')
+      }
+      return ok({ days: a.days as number | undefined, end_date: a.end_date as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const days = args.days ?? 30
+      const dates = windowDates(args.end_date ?? todayCairo(), days)
+      const s = await collectReviewStats(db, userId, dates)
+
+      // تقسيم أسابيع (أقدم → أحدث) — نفس ما تعرضه المراجعة الشهرية
+      const weeks: Array<{
+        from: string; to: string; tasksDone: number; focusHours: number
+        habitCheckIns: number; journalEntries: number; averageScore: number | null
+      }> = []
+      for (let i = 0; i < dates.length; i += 7) {
+        const chunk = s.byDay.slice(i, Math.min(i + 7, dates.length))
+        const cs = chunk.filter((x) => x.score !== null)
+        weeks.push({
+          from: dates[i],
+          to: dates[Math.min(i + 6, dates.length - 1)],
+          tasksDone: chunk.reduce((n, x) => n + x.tasksDone, 0),
+          focusHours: round1(chunk.reduce((n, x) => n + x.focusMin, 0) / 60),
+          habitCheckIns: chunk.reduce((n, x) => n + x.habitCheckIns, 0),
+          journalEntries: chunk.filter((x) => x.journaled).length,
+          averageScore: cs.length ? round1(cs.reduce((a, b) => a + (b.score ?? 0), 0) / cs.length) : null,
+        })
+      }
+
+      // الاتجاه: متوسط النصف الأقدم مقابل الأحدث
+      const half = Math.floor(dates.length / 2)
+      const avgOf = (xs: ReviewDay[]): number | null => {
+        const sc = xs.filter((x) => x.score !== null)
+        return sc.length ? round1(sc.reduce((a, b) => a + (b.score ?? 0), 0) / sc.length) : null
+      }
+      const firstHalfAvg = avgOf(s.byDay.slice(0, half))
+      const lastHalfAvg = avgOf(s.byDay.slice(half))
+      const trend =
+        firstHalfAvg !== null && lastHalfAvg !== null
+          ? lastHalfAvg > firstHalfAvg ? 'improving' : lastHalfAvg < firstHalfAvg ? 'declining' : 'steady'
+          : null
+
+      // أفضل يوم: أكبر نشاط (مهمة = 3 نقاط، تسجيل عادة = 2، كل 30 دقيقة تركيز = 1)
+      let bestDay: ReviewDay | null = null
+      let bestScore = 0
+      for (const d of s.byDay) {
+        const v = d.tasksDone * 3 + d.habitCheckIns * 2 + d.focusMin / 30
+        if (v > bestScore) { bestScore = v; bestDay = d }
+      }
+
+      const habitConsistency = days > 0 ? Math.round((s.byDay.filter((x) => x.habitCheckIns > 0).length / days) * 100) : 0
+
+      const trendAr = trend === 'improving' ? 'تحسّن' : trend === 'declining' ? 'تراجع' : trend === 'steady' ? 'ثبات' : 'غير معروف'
+      return {
+        summary:
+          `آخر ${days} يومًا: ${s.completedTasks} مهمة، ${round1(s.focusMin / 60)} ساعة تركيز، ` +
+          `انتظام عادات ${habitConsistency}%، ${s.journalEntries} يومية، متوسط الدرجة ` +
+          `${s.averageScore ?? '—'} (اتجاه: ${trendAr}) — نشِط ${s.activeDays} من ${days} يومًا`,
+        range: { from: dates[0], to: dates[dates.length - 1], days },
+        completedTasks: s.completedTasks,
+        focusHours: round1(s.focusMin / 60),
+        focusMinutes: s.focusMin,
+        habitCheckIns: s.habitCheckIns,
+        habitConsistency,
+        journalEntries: s.journalEntries,
+        morningLogsCount: s.morningLogsCount,
+        averageScore: s.averageScore,
+        firstHalfAverageScore: firstHalfAvg,
+        lastHalfAverageScore: lastHalfAvg,
+        trend,
+        activeDays: s.activeDays,
+        bestDay: bestDay
+          ? {
+              date: bestDay.date,
+              tasksDone: bestDay.tasksDone,
+              focusMinutes: bestDay.focusMin,
+              habitCheckIns: bestDay.habitCheckIns,
+              score: bestDay.score,
+            }
+          : null,
+        weeks,
+        byDay: s.byDay,
+      }
+    },
+  },
+
+  // 82) ── list_xp_awards ─────────────────────────────
+  {
+    name: 'list_xp_awards',
+    title: 'سجل نقاط الخبرة',
+    kind: 'read',
+    description:
+      'نقاط الخبرة المكتسبة: الإجمالي التراكمي وعدد المكافآت + آخر المكافآت بمصادرها (مهمة/عادة/تركيز/قراءة…) — مثال: «إيه آخر حاجة كسبت فيها نقاط؟» أو «جمّع لي نقاطي كلها».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'عدد المكافآت الأخيرة (افتراضي 20)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100)) {
+        return bad('limit: عدد صحيح بين 1 و100')
+      }
+      return ok({ limit: a.limit as number | undefined })
+    },
+    async execute(db, userId, args) {
+      const limit = args.limit ?? 20
+      const [allRows, recentRows] = await Promise.all([
+        db.select('xp_awards', {
+          select: 'amount',
+          filters: { user_id: `eq.${userId}` },
+          limit: 10000,
+        }),
+        db.select('xp_awards', {
+          select: 'reason,amount,created_at',
+          filters: { user_id: `eq.${userId}` },
+          order: ['created_at.desc'],
+          limit,
+        }),
+      ])
+      const all = (allRows ?? []) as any[]
+      const totalXp = all.reduce((sum, r) => sum + Number(r.amount ?? 0), 0)
+      const recent = ((recentRows ?? []) as any[]).map((r) => ({
+        reason: String(r.reason ?? ''),
+        label: xpReasonLabel(String(r.reason ?? '')),
+        amount: Number(r.amount ?? 0),
+        createdAt: r.created_at,
+      }))
+      return {
+        summary: `إجمالي الخبرة المكتسبة: ${totalXp} نقطة عبر ${all.length} مكافأة`,
+        totalXp,
+        awardsCount: all.length,
+        truncated: all.length >= 10000,
+        recent,
+      }
+    },
+  },
+
 ]
 
 /** خريطة بحث سريعة بالاسم */
@@ -4831,14 +5213,16 @@ function publicToolsList() {
 
 const PROTOCOL_DEFAULT = '2025-06-18'
 const PROTOCOL_KNOWN = new Set(['2025-06-18', '2025-03-26', '2024-11-05'])
-const SERVER_INFO = { name: 'awj-mcp', version: '3.0.0' }
+const SERVER_INFO = { name: 'awj-mcp', version: '3.1.0' }
 
 const INSTRUCTIONS_AR =
   'أوج (awj.life) هو نظام حياة شخصي عربي متكامل: المهام والمشاريع، العادات، مخطط اليوم، اليوميات، الأهداف، ' +
   'القراءة (كتب ومقالات ودورات)، التعلم (أهداف ودورات ومهارات وسجل جلسات)، الدماغ الثاني (ملاحظات وأفكار)، ' +
-  'المالية (دخل ومصروف وادخار)، الصحة، روتين الصباح، التركيز والشغل، الإنجازات، والمجتمع. ' +
-  'ابدأ بـ get_today_plan و list_tasks و list_habits لتفهم يوم المستخدم، وlist_books و list_learning و ' +
-  'finance_summary و list_health_logs للأقسام الأخرى، وسجّل له بالأداة المناسبة عند الطلب (الأمثلة في وصف كل أداة). ' +
+  'المالية (دخل ومصروف وادخار)، الصحة، روتين الصباح، التركيز والشغل، المراجعات (الأسبوعية والشهرية)، ' +
+  'نقاط الخبرة والإنجازات، والمجتمع. ' +
+  'ابدأ بـ get_today_plan و list_tasks و list_habits لتفهم يوم المستخدم، وget_weekly_review و get_monthly_review ' +
+  'لتقييم مساره مؤخرًا، وlist_books و list_learning و finance_summary و list_health_logs للأقسام الأخرى، ' +
+  'وسجّل له بالأداة المناسبة عند الطلب (الأمثلة في وصف كل أداة). ' +
   'كل الأدوات تعمل على بيانات المستخدم نفسه فقط، والحذف النهائي يتطلب confirm:true صراحةً.'
 
 /** حد IP بالدقيقة (تكافؤ middleware مسار Vercel: 60/د) */
