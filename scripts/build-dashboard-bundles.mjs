@@ -115,11 +115,12 @@ ${m.text.trimEnd()}
   return header + '\n' + body + '\n'
 }
 
-// ── حزمة MCP: postgrest → mcp-tools → mcp-core → index ──
+// ── حزمة MCP: postgrest → mcp-tools → mcp-core → oauth-core → index ──
 const mcpBundle = buildBundle('mcp', [
   mergeModule('_shared/postgrest.ts'),
   mergeModule('_shared/mcp-tools.ts'),
   mergeModule('_shared/mcp-core.ts'),
+  mergeModule('_shared/oauth-core.ts'),
   mergeModule('mcp/index.ts'),
 ])
 writeFileSync(join(distDir, 'mcp.dashboard.ts'), mcpBundle)

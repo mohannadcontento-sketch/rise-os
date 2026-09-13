@@ -8,6 +8,8 @@
 //
 //   MCP: GET→405 | JSON تالف→-32700 | بلا Bearer→401 | initialize
 //        + tools/list (8) + tools/call list_tasks (بيانات حية)
+//        + OAuth (10-ج): metadata + authorize/confirm→302 code
+//          + token (form) + JSON-RPC بـaccess_token (الحلقة كاملة)
 //   PUSH: بلا مصادقة→401 | سر خاطئ→401 | مفتاح الخدمة→جولة نظيفة
 //        | force notification_id→إرسال فعلي يُفك تشفيره عند المزود
 // ============================================================
@@ -20,6 +22,8 @@ import { sha256Hex } from '../../functions/_shared/mcp-core.ts'
 const TEST_KEY = 'rise_e2e_000000000000000000000001'
 const USER = '44444444-4444-4444-4444-444444444444'
 const SERVICE_KEY = 'e2e-service-role-key'
+const E2E_CLIENT_ID = 'awj-e2e-client-01'
+const E2E_CLIENT_SECRET = 'csecret_e2e_0123456789abcdef'
 
 interface Proc {
   kill(): void
@@ -87,6 +91,9 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     { key: 'vapid_public_key', value: b64(pubRaw) },
     { key: 'vapid_private_key', value: privJwk.d! },
     { key: 'vapid_subject', value: 'mailto:e2e@awj.life' },
+    // بيانات عميل OAuth (كما زرعها 034)
+    { key: 'mcp_oauth_client_id', value: E2E_CLIENT_ID },
+    { key: 'mcp_oauth_client_secret', value: E2E_CLIENT_SECRET },
   )
 
   const postgrest = await startMockPostgrest(db)
@@ -194,6 +201,76 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
       body: JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'ping' }),
     })
     assertEquals(badKey.status, 401)
+
+    // ═══ OAuth (10-ج): الحلقة كاملة عبر HTTP حقيقي ═══
+    // metadata → بيانات خادم التفويض
+    const metaRes = await fetch(`http://127.0.0.1:8761/?oauth=metadata`)
+    assertEquals(metaRes.status, 200)
+    const meta = await metaRes.json()
+    assert(String(meta.authorization_endpoint).includes('?oauth=authorize'))
+    assert(String(meta.token_endpoint).includes('?oauth=token'))
+
+    // authorize بلا مفتاح → 401 HTML
+    const noKey = await fetch(`http://127.0.0.1:8761/?oauth=authorize&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')}`)
+    assertEquals(noKey.status, 401)
+    assertEquals((noKey.headers.get('content-type') || '').includes('text/html'), true)
+
+    // السيرفر الحقيقي يسمح بنطاقات ChatGPT فقط — نستخدم chatgpt.com
+    const redirect = encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')
+    const verifier = 'e2e-verifier-0123456789abcdef'
+    const challengeB64 = btoa(String.fromCharCode(...new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
+    ))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+    const approveRes = await fetch(
+      `http://127.0.0.1:8761/?oauth=authorize&api_key=${TEST_KEY}&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${redirect}&state=e2e-state&code_challenge=${challengeB64}&code_challenge_method=S256&confirm=1`,
+      { redirect: 'manual' },
+    )
+    assertEquals(approveRes.status, 302)
+    const loc = new URL(approveRes.headers.get('location')!)
+    assertEquals(loc.hostname, 'chatgpt.com')
+    assertEquals(loc.searchParams.get('state'), 'e2e-state')
+    const code = loc.searchParams.get('code')!
+    assert(code)
+
+    // token (form-urlencoded — عقد ChatGPT) → رموز
+    const tokenRes = await fetch(`http://127.0.0.1:8761/?oauth=token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: E2E_CLIENT_ID,
+        client_secret: E2E_CLIENT_SECRET,
+        code,
+        redirect_uri: 'https://chatgpt.com/aip-1/oauth/callback',
+        code_verifier: verifier,
+      }).toString(),
+    })
+    if (tokenRes.status !== 200) {
+      throw new Error(`token endpoint فشل: ${await tokenRes.text()}`)
+    }
+    const tokens = await tokenRes.json()
+    assert(tokens.access_token)
+    assert(tokens.refresh_token)
+
+    // JSON-RPC بـaccess_token (مصادقة OAuth عبر الخادم الحي)
+    const viaOauth = await (await fetch(`http://127.0.0.1:8761/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'tools/list' }),
+    })).json()
+    assertEquals(viaOauth.result.tools.length, 8)
+
+    // grant غير مدعوم عبر HTTP → 400
+    const badGrant = await fetch(`http://127.0.0.1:8761/?oauth=token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'password', client_id: E2E_CLIENT_ID, client_secret: E2E_CLIENT_SECRET,
+      }).toString(),
+    })
+    assertEquals(badGrant.status, 400)
+    assertEquals((await badGrant.json()).error, 'unsupported_grant_type')
 
     // ═══ PUSH-DISPATCH: المصادقة والإرسال الحي ═══
     // بلا مصادقة → 401

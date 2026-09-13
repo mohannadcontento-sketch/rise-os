@@ -46,6 +46,15 @@ interface KeyInfo {
   lastUsedAt?: string | null
 }
 
+/** بيانات ربط ChatGPT من /api/rise/mcp/oauth-info (خطة ماكس) */
+interface OauthInfo {
+  serverUrl: string
+  authorizeUrl: string
+  tokenUrl: string
+  clientId: string
+  clientSecret: string
+}
+
 /** عرض ثابت للأدوات (مرآة MCP_TOOLS — للنسخ فقط) */
 const TOOLS_DISPLAY: { name: string; label: string; write: boolean }[] = [
   { name: 'list_tasks', label: 'عرض المهام', write: false },
@@ -103,6 +112,9 @@ export function McpSection() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<'create' | 'revoke' | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [chatgptOpen, setChatgptOpen] = useState(false)
+  const [oauthInfo, setOauthInfo] = useState<OauthInfo | null>(null)
+  const [oauthState, setOauthState] = useState<'idle' | 'loading' | 'error' | 'ready' | 'unconfigured'>('idle')
 
   // التحميل الأول: setState داخل .then فقط — لا استدعاء مباشر
   // لدالة تحوي setState من جسم التأثير (react-hooks/set-state-in-effect)
@@ -125,6 +137,29 @@ export function McpSection() {
     setPlan(d.plan)
     setKeyInfo(d.keyInfo)
   }, [])
+
+  // جلب بيانات OAuth عند فتح قسم ChatGPT أول مرة (lazy)
+  useEffect(() => {
+    if (!chatgptOpen || oauthState !== 'idle' || plan !== 'max') return
+    let alive = true
+    setOauthState('loading')
+    apiFetch('/api/rise/mcp/oauth-info')
+      .then(async (res) => {
+        if (!alive) return
+        if (res.ok) {
+          setOauthInfo(await res.json().catch(() => null))
+          setOauthState('ready')
+        } else if (res.status === 503) {
+          setOauthState('unconfigured')
+        } else {
+          setOauthState('error')
+        }
+      })
+      .catch(() => alive && setOauthState('error'))
+    return () => {
+      alive = false
+    }
+  }, [chatgptOpen, oauthState, plan])
 
   const endpointUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/api/rise/mcp/call` : '/api/rise/mcp/call'
@@ -395,6 +430,83 @@ export function McpSection() {
     }
   }
 }`}</pre>
+                  </div>
+
+                  {/* ربط ChatGPT تحديدًا — OAuth (10-ج) */}
+                  <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setChatgptOpen((v) => !v)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-right hover:bg-cyan-500/10 transition-colors"
+                    >
+                      <span className="text-[11px] font-semibold flex items-center gap-1.5">
+                        <Bot className="w-3.5 h-3.5 text-cyan-500" />
+                        ربط ChatGPT تحديدًا (تفويض OAuth)
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{chatgptOpen ? 'إخفاء' : 'إظهار'}</span>
+                    </button>
+                    {chatgptOpen && (
+                      <div className="px-3 pb-3 space-y-2.5 border-t border-cyan-500/10 pt-2.5">
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          ChatGPT لا يقبل مفاتيح Bearer الثابتة — يستخدم تفويض OAuth قياسيًا. فعّل
+                          <b> Developer mode</b> من ChatGPT → Settings → Security، ثم من
+                          <b> ChatGPT Plugins</b> أنشئ تطبيق MCP جديد والصق القيم التالية:
+                        </p>
+                        {oauthState === 'loading' && (
+                          <div className="flex items-center justify-center py-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        )}
+                        {oauthState === 'unconfigured' && (
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                            تفويض ChatGPT غير مهيأ بعد على الخادم — أبلغ إدارة أوج (يتطلب تشغيل هجرة OAuth).
+                          </div>
+                        )}
+                        {oauthState === 'error' && (
+                          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2.5 text-[10px] text-red-600 leading-relaxed">
+                            تعذر جلب بيانات التفويض — أعد المحاولة لاحقًا.
+                          </div>
+                        )}
+                        {oauthState === 'ready' && oauthInfo && (
+                          <div className="space-y-2">
+                            {[
+                              { label: 'Client ID', value: oauthInfo.clientId, copy: 'Client ID' },
+                              { label: 'Client Secret', value: oauthInfo.clientSecret, copy: 'Client Secret' },
+                              {
+                                label: 'Authorization URL',
+                                value: newKey
+                                  ? `${oauthInfo.authorizeUrl}&api_key=${newKey}`
+                                  : `${oauthInfo.authorizeUrl}&api_key=<مفتاحك>`,
+                                copy: 'رابط التفويض',
+                              },
+                              { label: 'Token URL', value: oauthInfo.tokenUrl, copy: 'Token URL' },
+                            ].map((f) => (
+                              <div key={f.label} className="space-y-0.5">
+                                <p className="text-[10px] font-semibold text-muted-foreground">{f.label}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <code className="flex-1 min-w-0 text-[10px] font-mono bg-card rounded-lg px-2 py-1.5 break-all border border-white/10" dir="ltr">
+                                    {f.value}
+                                  </code>
+                                  <Button size="sm" variant="outline" className="shrink-0 h-7 px-2" onClick={() => copyText(f.value, f.copy)}>
+                                    <Copy className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                            {!newKey && (
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                                ⚠️ استبدل <code dir="ltr">&lt;مفتاحك&gt;</code> في Authorization URL بمفتاحك — أو أنشئ مفتاحًا
+                                جديدًا وسيظهر الرابط جاهزًا هنا تلقائيًا.
+                              </p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                              عند أول استخدام: ستُفتح صفحة موافقة من أوج — اضغط «تفويض» وستعود إلى ChatGPT.
+                              يمكنك قطع الوصول في أي وقت بـ«إبطال» المفتاح.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <p className="text-[10px] text-muted-foreground leading-relaxed">

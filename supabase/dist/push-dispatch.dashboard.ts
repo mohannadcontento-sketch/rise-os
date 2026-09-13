@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 // ملف مدموج آليًا للنشر من لوحة Supabase (الوظيفة: push-dispatch)
-// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 00:15:56 UTC
+// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 01:03:26 UTC
 // لا تحرر هذا الملف يدويًا؛ عدّل المصادر ثم أعد التوليد.
 //
 // طريقة النشر (Dashboard):
@@ -234,6 +234,18 @@ class Postgrest {
       method: 'POST',
       headers: this.headers({ Prefer: 'return=minimal' }),
       body: JSON.stringify(row),
+      signal: AbortSignal.timeout(10_000),
+    })
+  }
+
+  /** حذف بفلاتر (تنظيف رموز OAuth المنتهية — أفضل جهد) */
+  async delete(table: string, filters: Record<string, string>): Promise<void> {
+    const qs = Object.entries(filters)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&')
+    await this.call(`/rest/v1/${table}?${qs}`, {
+      method: 'DELETE',
+      headers: this.headers({ Prefer: 'return=minimal' }),
       signal: AbortSignal.timeout(10_000),
     })
   }

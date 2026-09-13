@@ -207,7 +207,43 @@ qwen mcp add --transport http awj \
 > الأدوات (Tools).
 > (المصدر: code.visualstudio.com/docs/agents/reference/mcp-configuration).
 
-### ⚠️ ChatGPT — يتطلب OAuth (ليس مفتاح Bearer)
+### ✅ ربط ChatGPT — عبر OAuth (منذ 10-ج)
+
+ChatGPT لا يقبل مفتاح Bearer ثابتًا (توثيق OpenAI الرسمي) — لذلك
+أضفنا طبقة OAuth 2.0 كاملة داخل وظيفة `mcp` نفسها. بعد نشر النسخة
+المحدثة (`dist/mcp.dashboard.ts` الحالية) وتشغيل **هجرة 034** مرة
+واحدة في SQL Editor:
+
+1. **جهّز القاعدة (مرة واحدة):** شغّل ملف
+   `supabase/migrations/034_phase10c_chatgpt_oauth.sql` كاملًا في
+   SQL Editor — ينشئ جدول رموز التفويز ويولّد بيانات العميل.
+2. **أعد نشر وظيفة `mcp`** بالملف المدموج المحدث (نفس خطوات
+   اللوحة أعلاه — الصق `supabase/dist/mcp.dashboard.ts`).
+3. **تحقق السريع:**
+   `https://<ref>.supabase.co/functions/v1/mcp?oauth=metadata` →
+   JSON فيه authorization_endpoint وtoken_endpoint.
+4. **في ChatGPT:**
+   - Settings → **Security and login** → شغّل **Developer mode**
+   - chatgpt.com/plugins → زر **+** → إنشاء تطبيق من خادم MCP بعيد
+   - أدخل بيانات العميل (تظهر جاهزة مع أزرار نسخ في
+     **إعدادات أوج → ربط MCP → ربط ChatGPT** بعد نشر 034):
+     - Server URL: `https://<ref>.supabase.co/functions/v1/mcp`
+     - Client ID + Client Secret (من إعدادات أوج)
+     - Authorization URL: نفس رابط authorize + `&api_key=rise_…`
+     - Token URL: `https://<ref>.supabase.co/functions/v1/mcp?oauth=token`
+5. **عند أول استخدام** تُفتح صفحة موافقة عربية من أوج — اضغط
+   «تفويض» ويعود ChatGPT برمز وصول صالح ساعة + تجديد 60 يومًا.
+
+الأمان المضمن: بوابة خطة ماكس تُفحص **في كل طلب** (النزول من ماكس
+يوقف رموز OAuth فورًا)، رمز التفويز يُستخدم مرة واحدة (جدول
+`mcp_oauth_codes`)، PKCE S256 إلزامي عند وجود التحدي، إعادة التوجيه
+مقيدة بنطاقات chatgpt.com/openai.com، والإيقاف يُفحص لحظيًا.
+
+> ملاحظة أمان: تدوير `service_role` key يبطل رموز OAuth الصادرة
+> (المفتاح الاشتقاقي يتغير) — المستخدم يعيد التفويض فقط، ولا
+> تأثير على البيانات أو مفاتيح rise_.
+
+### ⚠️ ChatGPT — قبل 10-ج (توثيق تاريخي)
 
 توثيق OpenAI الرسمي (developers.openai.com/api/docs/guides/developer-mode):
 

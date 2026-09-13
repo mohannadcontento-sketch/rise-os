@@ -120,6 +120,12 @@ export interface McpServerDeps {
   now?: () => number
   /** كاتب التدقيق قابل للاستبدال (اختبارات) */
   auditSink?: (entry: AuditEntry) => Promise<void> | void
+  /**
+   * تحقق رموز OAuth (access tokens) — يُحقن من index.ts عبر
+   * McpOAuth.verifyAccessTokenUser. غيابه = مسار rise_ فقط
+   * (السلوك التاريخي نفسه — الاختبارات القديمة لا تتغير).
+   */
+  oauthTokenVerifier?: (token: string) => Promise<AuthOutcome>
 }
 
 export interface McpHttpRequest {
@@ -190,6 +196,67 @@ export async function sha256Hex(input: string): Promise<string> {
     .join('')
 }
 
+/** نتيجة حل الهوية (rise_ أو OAuth — نفس الشكل) */
+export type AuthOutcome = { ok: true; userId: string } | { ok: false; reason: string }
+
+/**
+ * حل مفتاح rise_ من جذوره (مستقل للاستيراد من oauth-core):
+ * SHA-256 → user_api_keys → تحديث last_used_at → فحص الإيقاف.
+ * نفس عقد authenticate السابق حرفيًا (الأدوات الأصلية لم تتغير).
+ */
+export async function resolveRiseKey(db: Postgrest, apiKey: string): Promise<AuthOutcome> {
+  try {
+    const hash = await sha256Hex(apiKey)
+    const row = (await db.maybeSingle('user_api_keys', {
+      select: 'user_id',
+      filters: { key_hash: `eq.${hash}` },
+    })) as { user_id?: string } | null
+    if (!row?.user_id) return { ok: false, reason: 'unknown-key' }
+
+    // تحديث last_used_at (أفضل جهد — لا يمنع الطلب)
+    try {
+      await db.patch('user_api_keys', { key_hash: `eq.${hash}` }, { last_used_at: new Date().toISOString() })
+    } catch { /* أفضل جهد فقط */ }
+
+    // حساب موقوف؟ (fail-closed: فشل القراءة = رفض)
+    const profile = (await db.maybeSingle('profiles', {
+      select: 'suspended',
+      filters: { id: `eq.${row.user_id}` },
+    })) as { suspended?: boolean } | null
+    if (profile?.suspended === true) return { ok: false, reason: 'suspended' }
+
+    return { ok: true, userId: row.user_id }
+  } catch (err) {
+    return { ok: false, reason: `db-error:${(err as Error)?.message ?? ''}` }
+  }
+}
+
+/**
+ * بوابة الخطة (max نشط) — مستقلة للاستيراد من oauth-core.
+ * نفس منطق مسار Vercel حرفيًا: كل استدعاء يعيد الفحص (fail-closed).
+ */
+export async function checkMaxPlanGate(
+  db: Postgrest,
+  userId: string,
+): Promise<{ allowed: boolean; reason?: string }> {
+  try {
+    const data = (await db.maybeSingle('user_subscriptions', {
+      select: 'plan,status,expires_at',
+      filters: { user_id: `eq.${userId}` },
+    })) as { plan?: string; status?: string; expires_at?: string | null } | null
+
+    if (!data) return { allowed: false, reason: 'plan-free' } // لا صف = مجاني
+    const active =
+      data.status === 'active' &&
+      (!data.expires_at || new Date(data.expires_at).getTime() > Date.now())
+    if (data.plan === 'max' && active) return { allowed: true }
+    return { allowed: false, reason: `plan-${data.plan}${active ? '' : '-inactive'}` }
+  } catch (err) {
+    const reason = err instanceof PostgrestError ? `read-failed(${err.status})` : 'read-failed'
+    return { allowed: false, reason } // fail-closed
+  }
+}
+
 // ── القسم: المعالج الرئيسي ─────────────────────
 
 /** مثيل خادم — أنشئه مرة واحدة لكل نسخة دالة (يحمل الحدود) */
@@ -197,6 +264,7 @@ export class McpServer {
   private db: Postgrest
   private limiter: RateLimiter
   private audit: (entry: AuditEntry) => Promise<void>
+  private oauthTokenVerifier: ((token: string) => Promise<AuthOutcome>) | null
 
   constructor(deps: McpServerDeps) {
     this.db = new Postgrest({
@@ -205,6 +273,7 @@ export class McpServer {
       fetchImpl: deps.fetchImpl,
     })
     this.limiter = new RateLimiter(deps.now ?? Date.now)
+    this.oauthTokenVerifier = deps.oauthTokenVerifier ?? null
     this.audit = async (entry) => {
       if (deps.auditSink) {
         await deps.auditSink(entry)
@@ -262,9 +331,25 @@ export class McpServer {
       return { status: 400, headers: corsHeaders(), body: rpcErrorBody(null, -32600, 'طلب فارغ') }
     }
 
-    // 2) المصادقة: Bearer rise_… حصرًا (رفض واعٍ لأي مصادقة أخرى)
+    // 2) المصادقة: Bearer rise_… (المسار التاريخي) أو Bearer JWT
+    //    من طبقة OAuth لربط ChatGPT (المرحلة 10-ج) — كوكيز وجلسات
+    //    تُرفض عمدًا في المسارين (مصادقة ambient = ثغرة CSRF).
     const authHeader = req.headers['authorization'] || ''
-    if (!authHeader.startsWith('Bearer rise_')) {
+    const bearer = authHeader.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7).trim()
+      : ''
+    let auth: AuthOutcome
+    let credential: 'key' | 'oauth' = 'key'
+    if (bearer.startsWith('rise_')) {
+      auth = await this.authenticate(bearer)
+    } else if (
+      bearer &&
+      bearer.split('.').length === 3 &&
+      this.oauthTokenVerifier
+    ) {
+      credential = 'oauth'
+      auth = await this.verifyOAuth(bearer)
+    } else {
       return {
         status: 401,
         headers: corsHeaders({ 'WWW-Authenticate': 'Bearer realm="awj-mcp"' }),
@@ -275,15 +360,15 @@ export class McpServer {
         ),
       }
     }
-
-    const apiKey = authHeader.slice('Bearer '.length).trim()
-    const auth = await this.authenticate(apiKey)
     if (!auth.ok) {
-      console.warn('[mcp/edge] auth failed:', auth.reason)
+      console.warn('[mcp/edge] auth failed:', credential, auth.reason)
+      const message = credential === 'oauth'
+        ? 'رمز OAuth غير صالح أو منتهي — أعد التفويض من التطبيق المتصل'
+        : 'مفتاح MCP غير صالح أو ملغى'
       return {
         status: 401,
         headers: corsHeaders(),
-        body: rpcErrorBody(null, -32001, 'مفتاح MCP غير صالح أو ملغى'),
+        body: rpcErrorBody(null, -32001, message),
       }
     }
     const userId = auth.userId
@@ -296,7 +381,7 @@ export class McpServer {
         action: 'mcp.plan_denied',
         target_type: 'mcp',
         target_id: 'edge',
-        metadata: { reason: gate.reason, endpoint: 'supabase-edge' },
+        metadata: { reason: gate.reason, endpoint: 'supabase-edge', credential },
         ip_address: ip,
         user_agent: req.headers['user-agent'] || null,
       })
@@ -480,51 +565,23 @@ export class McpServer {
     return { status: 200, headers: corsHeaders({ 'Content-Type': 'application/json' }), body }
   }
 
-  // ── المصادقة: تجزئة → بحث → last_used_at ──
-  private async authenticate(apiKey: string): Promise<{ ok: true; userId: string } | { ok: false; reason: string }> {
+  // ── المصادقة: تفويض لـresolveRiseKey المستقلة (توحيد المسارين) ──
+  private async authenticate(apiKey: string): Promise<AuthOutcome> {
+    return resolveRiseKey(this.db, apiKey)
+  }
+
+  // ── المصادقة عبر OAuth: حقن من index (خطأ = رفض، لا استثناء) ──
+  private async verifyOAuth(token: string): Promise<AuthOutcome> {
+    if (!this.oauthTokenVerifier) return { ok: false, reason: 'oauth-not-configured' }
     try {
-      const hash = await sha256Hex(apiKey)
-      const row = (await this.db.maybeSingle('user_api_keys', {
-        select: 'user_id',
-        filters: { key_hash: `eq.${hash}` },
-      })) as { user_id?: string } | null
-      if (!row?.user_id) return { ok: false, reason: 'unknown-key' }
-
-      // تحديث last_used_at (أفضل جهد — لا يمنع الطلب)
-      try {
-        await this.db.patch('user_api_keys', { key_hash: `eq.${hash}` }, { last_used_at: new Date().toISOString() })
-      } catch { /* أفضل جهد فقط */ }
-
-      // حساب موقوف؟ (fail-closed: فشل القراءة = رفض)
-      const profile = (await this.db.maybeSingle('profiles', {
-        select: 'suspended',
-        filters: { id: `eq.${row.user_id}` },
-      })) as { suspended?: boolean } | null
-      if (profile?.suspended === true) return { ok: false, reason: 'suspended' }
-
-      return { ok: true, userId: row.user_id }
+      return await this.oauthTokenVerifier(token)
     } catch (err) {
-      return { ok: false, reason: `db-error:${(err as Error)?.message ?? ''}` }
+      return { ok: false, reason: `oauth-error:${(err as Error)?.message ?? ''}` }
     }
   }
 
-  // ── بوابة الخطة (نفس منطق مسار Vercel حرفيًا) ──
-  private async checkMaxPlanGate(userId: string): Promise<{ allowed: boolean; reason?: string }> {
-    try {
-      const data = (await this.db.maybeSingle('user_subscriptions', {
-        select: 'plan,status,expires_at',
-        filters: { user_id: `eq.${userId}` },
-      })) as { plan?: string; status?: string; expires_at?: string | null } | null
-
-      if (!data) return { allowed: false, reason: 'plan-free' } // لا صف = مجاني
-      const active =
-        data.status === 'active' &&
-        (!data.expires_at || new Date(data.expires_at).getTime() > Date.now())
-      if (data.plan === 'max' && active) return { allowed: true }
-      return { allowed: false, reason: `plan-${data.plan}${active ? '' : '-inactive'}` }
-    } catch (err) {
-      const reason = err instanceof PostgrestError ? `read-failed(${err.status})` : 'read-failed'
-      return { allowed: false, reason } // fail-closed
-    }
+  // ── بوابة الخطة: تفويض للنسخة المستقلة ──
+  private checkMaxPlanGate(userId: string) {
+    return checkMaxPlanGate(this.db, userId)
   }
 }

@@ -219,4 +219,16 @@ export class Postgrest {
       signal: AbortSignal.timeout(10_000),
     })
   }
+
+  /** حذف بفلاتر (تنظيف رموز OAuth المنتهية — أفضل جهد) */
+  async delete(table: string, filters: Record<string, string>): Promise<void> {
+    const qs = Object.entries(filters)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&')
+    await this.call(`/rest/v1/${table}?${qs}`, {
+      method: 'DELETE',
+      headers: this.headers({ Prefer: 'return=minimal' }),
+      signal: AbortSignal.timeout(10_000),
+    })
+  }
 }

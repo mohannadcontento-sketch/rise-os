@@ -55,6 +55,8 @@ export interface MockDb {
   pushDispatchLog: Record<string, unknown>[]
   auditLogs: Record<string, unknown>[]
   appConfig: { key: string; value: string }[]
+  /** رموز تفويز OAuth المستبدلة (الاستخدام الواحد — 034) */
+  mcpOAuthCodes: { jti: string; user_id: string; created_at?: string; expires_at: string }[]
   /** تفضيلات البوش المبسطة للبوابة (الافتراضي: مفعّل للجميع) */
   pushPrefs: Map<string, { push_enabled: boolean; categories: Record<string, boolean> }>
   /** تسجيل كل نداءات RPC (للتحقق في الاختبارات) */
@@ -83,6 +85,7 @@ export function createMockDb(): MockDb {
     pushDispatchLog: [],
     auditLogs: [],
     appConfig: [],
+    mcpOAuthCodes: [],
     pushPrefs: new Map(),
     rpcCalls: [],
     lastHeaders: null,
@@ -194,6 +197,7 @@ const TABLES: Record<string, (db: MockDb) => Record<string, unknown>[]> = {
   push_dispatch_log: (db) => db.pushDispatchLog,
   audit_logs: (db) => db.auditLogs,
   app_config: (db) => db.appConfig as unknown as Record<string, unknown>[],
+  mcp_oauth_codes: (db) => db.mcpOAuthCodes as unknown as Record<string, unknown>[],
 }
 
 // ── القسم: الخادم ─────────────────────
@@ -241,6 +245,15 @@ export function startMockPostgrest(db: MockDb, port = 0): Promise<MockServer> {
 
       if (req.method === 'POST') {
         return handleTablePost(db, tableMatch[1], qs, req, getter)
+      }
+
+      if (req.method === 'DELETE') {
+        const rows = getter(db).filter((r) => matches(r, qs.filters))
+        for (const r of rows) {
+          const idx = getter(db).indexOf(r)
+          if (idx >= 0) getter(db).splice(idx, 1)
+        }
+        return new Response(null, { status: 204 })
       }
 
       if (req.method === 'PATCH') {
@@ -320,7 +333,13 @@ function handleTablePost(
       return new Response(null, { status: 201 })
     }
 
-    // إدراج عادي (audit_logs)
+    // إدراج عادي (audit_logs) — مع فرض فريد jti لجدول رمز التفويز
+    // (محاكاة 23505/409: الاستخدام الواحد لرمز OAuth)
+    if (table === 'mcp_oauth_codes' && body.jti) {
+      if (getter(db).some((r) => String(r.jti) === String(body.jti))) {
+        return pgrstError(409, 'duplicate key value violates unique constraint "mcp_oauth_codes_pkey"', '23505')
+      }
+    }
     getter(db).push({ id: uuid(), ...body })
     if (prefer.includes('return=representation')) return json([body])
     return new Response(null, { status: 201 })
