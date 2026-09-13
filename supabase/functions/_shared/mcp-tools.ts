@@ -1,15 +1,18 @@
 // ============================================================
-// mcp-tools.ts — سجل أدوات MCP لخادم Supabase Edge (المرحلة 10-ب)
+// mcp-tools.ts — سجل أدوات MCP لخادم Supabase Edge (v2.0 موسّعة)
 //
-// هذه النسخة الأصيلة (Deno) من src/lib/mcp/tools.ts — نفس
-// الأدوات الثمانية، نفس الـJSON Schema، نفس رسائل الأخطاء،
-// لكن التنفيذ مباشر عبر PostgREST بدل مستودعات التطبيق:
-//   • لا أي عملية حذف («منع destructive actions افتراضيًا»)
+// النسخة الأصيلة (Deno) الثمانية محفوظة حرفيًا كما هي، وأضيفت
+// عليها أدوات تغطي بقية الموقع — كلها على مخطط قاعدة البيانات
+// الإنتاجي الفعلي (tasks/journals/goals/habits/habit_logs/
+// notifications/community_*/user_subscriptions/usage_daily/
+// profiles/user_api_keys):
 //   • كل استعلام يفرض ملكية user_id صراحة (العميل يعمل بمفتاح
 //     service_role الذي يتجاوز RLS — الملكية مسؤولية ندائنا)
 //   • الكتابة الذرية عبر نفس دوال التطبيق: create/update_
-//     task_with_subtasks (تفحص is_trusted_user_context بنفسها)
-//   • اليوميات: كتابة فقط + حماية استبدال (overwrite صريح)
+//     task_with_subtasks و create_goal_with_milestones
+//   • الحذف متاح صراحةً لمالك المفتاح لكنه يتطلب confirm:true
+//   • المجتمع: إعجاب/تعليق عبر الجداول الأصلية (العدادات
+//     تُحدَّث بالتريجرات الجاهزة trg_community_recount)
 //   • Validation يدوي strict (بلا zod — بيئة Deno بلا تبعيات):
 //     أي حقل غير معروف يُرفض، نفس صيغة خطأ المسار «path: رسالة»
 //
@@ -659,6 +662,1462 @@ export const MCP_TOOLS: McpTool[] = [
         date,
         fields: Object.keys(fields),
         id: saved?.id ?? null,
+      }
+    },
+  },
+
+  // ═══════════ v2.0 — توسعة المهام ═══════════
+
+  // 9) ── get_task ─────────────────────────────
+  {
+    name: 'get_task',
+    title: 'تفاصيل مهمة',
+    kind: 'read',
+    description:
+      'تفاصيل مهمة واحدة بالمعرّف (العنوان، الوصف، الحالة، الأولوية، الموعد، المشروع، العناوين الفرعية). خُذ المعرّف من list_tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', minLength: 1, description: 'معرّف المهمة (من list_tasks)' },
+      },
+      required: ['taskId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['taskId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.taskId !== 'string' || a.taskId.length < 1) return bad('taskId: المعرّف مطلوب')
+      return ok({ taskId: a.taskId })
+    },
+    async execute(db, userId, args) {
+      const task = (await db.maybeSingle('tasks', {
+        filters: { id: `eq.${args.taskId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!task) throw new Error('المهمة غير موجودة أو لا تملكها')
+      const [subtasks, project] = await Promise.all([
+        (db.select('subtasks', {
+          filters: { task_id: `eq.${args.taskId}` },
+          order: ['order.asc'],
+        }) as Promise<any[]>),
+        task.project_id
+          ? (db.maybeSingle('projects', { select: 'name', filters: { id: `eq.${task.project_id}` } }) as Promise<any>)
+          : Promise.resolve(null),
+      ])
+      return {
+        summary: `مهمة «${task.title}» — ${task.status}`,
+        task: {
+          id: task.id,
+          title: task.title,
+          description: task.description ?? null,
+          status: task.status,
+          priority: task.priority ?? null,
+          dueDate: task.due_date ?? null,
+          dueTime: task.due_time ?? null,
+          estimatedMin: task.estimated_min ?? null,
+          project: (project as any)?.name ?? null,
+          completedAt: task.completed_at ?? null,
+          subtasks: ((subtasks ?? []) as any[]).map((s) => ({
+            id: s.id,
+            title: s.title,
+            completed: s.completed === true,
+          })),
+        },
+      }
+    },
+  },
+
+  // 10) ── update_task ─────────────────────────────
+  {
+    name: 'update_task',
+    title: 'تعديل مهمة',
+    kind: 'write',
+    description:
+      'تعديل مهمة قائمة (العنوان/الوصف/الأولوية/الموعد/المدة/الحالة). مثال: «أجّل مهمة الاتصال بمهندس الشبكة لبكرة». لا يمس العناوين الفرعية.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', minLength: 1, description: 'معرّف المهمة' },
+        title: { type: 'string', minLength: 1, maxLength: 200, description: 'عنوان جديد' },
+        description: { type: 'string', maxLength: 2000, description: 'وصف جديد' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'أولوية' },
+        dueDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'موعد التسليم YYYY-MM-DD' },
+        dueTime: { type: 'string', description: 'وقت التسليم HH:MM' },
+        estimatedMin: { type: 'integer', minimum: 0, maximum: 600, description: 'المدة التقديرية بالدقائق' },
+      },
+      required: ['taskId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['taskId', 'title', 'description', 'priority', 'dueDate', 'dueTime', 'estimatedMin'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.taskId !== 'string' || a.taskId.length < 1) return bad('taskId: المعرّف مطلوب')
+      if (a.title !== undefined && (typeof a.title !== 'string' || a.title.length < 1 || a.title.length > 200)) {
+        return bad('title: نص 1–200 محرف')
+      }
+      if (a.description !== undefined && (typeof a.description !== 'string' || a.description.length > 2000)) {
+        return bad('description: نص حتى 2000 محرف')
+      }
+      if (a.priority !== undefined && !['low', 'medium', 'high', 'urgent'].includes(String(a.priority))) {
+        return bad('priority: المتاح: low, medium, high, urgent')
+      }
+      if (a.dueDate !== undefined && !DATE_RE.test(String(a.dueDate))) return bad('dueDate: YYYY-MM-DD')
+      if (a.dueTime !== undefined && !TIME_RE.test(String(a.dueTime))) return bad('dueTime: HH:MM')
+      if (a.estimatedMin !== undefined && (!Number.isInteger(a.estimatedMin) || (a.estimatedMin as number) < 0 || (a.estimatedMin as number) > 600)) {
+        return bad('estimatedMin: عدد صحيح بين 0 و600')
+      }
+      const hasChange = ['title', 'description', 'priority', 'dueDate', 'dueTime', 'estimatedMin'].some((k) => a[k] !== undefined)
+      if (!hasChange) return bad('مطلوب حقل واحد على الأقل لتعديله (title/description/priority/dueDate/…)')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const p_task: Record<string, unknown> = {}
+      if (args.title !== undefined) p_task.title = args.title
+      if (args.description !== undefined) p_task.description = args.description
+      if (args.priority !== undefined) p_task.priority = args.priority
+      if (args.dueDate !== undefined) p_task.due_date = args.dueDate
+      if (args.dueTime !== undefined) p_task.due_time = args.dueTime
+      if (args.estimatedMin !== undefined) p_task.estimated_min = args.estimatedMin
+      const result = (await db.rpc('update_task_with_subtasks', {
+        p_user_id: userId,
+        p_task_id: args.taskId,
+        p_task: p_task as any,
+        p_subtasks: null,
+      })) as { task?: any } | null
+      const task = result?.task
+      return {
+        summary: `حُدّثت المهمة «${task?.title ?? args.taskId}»`,
+        updated: true,
+        task: task
+          ? { id: task.id, title: task.title, status: task.status, priority: task.priority ?? null, dueDate: task.due_date ?? null }
+          : null,
+      }
+    },
+  },
+
+  // 11) ── reopen_task ─────────────────────────────
+  {
+    name: 'reopen_task',
+    title: 'إعادة فتح مهمة',
+    kind: 'write',
+    description:
+      'إعادة مهمة منجزة إلى حالة «todo» (عكس complete_task) — مثل «رجّع المهمة الي خلصتها بالغلط مفتوحة».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', minLength: 1, description: 'معرّف المهمة' },
+      },
+      required: ['taskId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['taskId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.taskId !== 'string' || a.taskId.length < 1) return bad('taskId: المعرّف مطلوب')
+      return ok({ taskId: a.taskId })
+    },
+    async execute(db, userId, args) {
+      const result = (await db.rpc('update_task_with_subtasks', {
+        p_user_id: userId,
+        p_task_id: args.taskId,
+        p_task: { status: 'todo' } as any,
+        p_subtasks: null,
+      })) as { task?: any } | null
+      const task = result?.task
+      if (!task) throw new Error('المهمة غير موجودة أو لا تملكها')
+      return {
+        summary: `أُعيد فتح المهمة «${task.title}»`,
+        reopened: true,
+        task: { id: task.id, title: task.title, status: task.status },
+      }
+    },
+  },
+
+  // 12) ── delete_task ─────────────────────────────
+  {
+    name: 'delete_task',
+    title: 'حذف مهمة',
+    kind: 'write',
+    description:
+      'حذف مهمة نهائيًا مع عناوينها الفرعية. يتطلب confirm:true صراحةً — مثل: «امسحلي مهمة كذا، متأكد». يُفضَّل complete_task بدل الحذف.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', minLength: 1, description: 'معرّف المهمة' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['taskId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['taskId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.taskId !== 'string' || a.taskId.length < 1) return bad('taskId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ taskId: a.taskId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('tasks', {
+        select: 'id,title',
+        filters: { id: `eq.${args.taskId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('المهمة غير موجودة أو لا تملكها')
+      await db.delete('tasks', { id: `eq.${args.taskId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذفت المهمة «${(owned as any).title}» نهائيًا مع عناوينها الفرعية`, deleted: true }
+    },
+  },
+
+  // 13) ── list_projects ─────────────────────────────
+  {
+    name: 'list_projects',
+    title: 'عرض المشاريع',
+    kind: 'read',
+    description: 'يعرض مشاريع المستخدم (الاسم، التقدم، الحالة) — مفيد قبل ربط المهام بمشروع.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const projects = ((await db.select('projects', {
+        select: 'id,name,description,progress,status,created_at',
+        filters: { user_id: `eq.${userId}` },
+        order: ['created_at.desc'],
+      })) ?? []) as any[]
+      return {
+        summary: `${projects.length} مشروع${projects.length ? '' : ' — لا مشاريع بعد'}`,
+        projects: projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description ?? null,
+          progress: Math.round((p.progress ?? 0) * 100) / 100,
+          status: p.status ?? null,
+        })),
+      }
+    },
+  },
+
+  // ═══════════ v2.0 — اليوميات (قراءة) ═══════════
+
+  // 14) ── list_journal_entries ─────────────────────────────
+  {
+    name: 'list_journal_entries',
+    title: 'عرض اليوميات',
+    kind: 'read',
+    description:
+      'يعرض مدخلات اليوميات مرتبة من الأحدث (التاريخ، مقتطف المحتوى، المزاج والطاقة). استخدم get_journal_entry للنص الكامل.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 30, description: 'أقصى عدد مدخلات (افتراضي 10)' },
+        fromDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'من تاريخ (اختياري)' },
+        toDate: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'إلى تاريخ (اختياري)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['limit', 'fromDate', 'toDate'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 30)) {
+        return bad('limit: عدد صحيح بين 1 و30')
+      }
+      if (a.fromDate !== undefined && !DATE_RE.test(String(a.fromDate))) return bad('fromDate: YYYY-MM-DD')
+      if (a.toDate !== undefined && !DATE_RE.test(String(a.toDate))) return bad('toDate: YYYY-MM-DD')
+      return ok({ limit: a.limit, fromDate: a.fromDate, toDate: a.toDate })
+    },
+    async execute(db, userId, args) {
+      const filters: Record<string, string> = { user_id: `eq.${userId}` }
+      if (args.fromDate) filters.date = `gte.${args.fromDate}`
+      if (args.toDate) filters.date = `lte.${args.toDate}`
+      const rows = ((await db.select('journals', {
+        select: 'id,date,content,mood,energy,created_at',
+        filters,
+        order: ['date.desc'],
+        limit: args.limit ?? 10,
+      })) ?? []) as any[]
+      return {
+        summary: `${rows.length} مدخل يوميات`,
+        entries: rows.map((j) => ({
+          date: String(j.date),
+          id: j.id,
+          excerpt: (j.content ?? '').slice(0, 140),
+          mood: j.mood ?? null,
+          energy: j.energy ?? null,
+        })),
+      }
+    },
+  },
+
+  // 15) ── get_journal_entry ─────────────────────────────
+  {
+    name: 'get_journal_entry',
+    title: 'قراءة يومية',
+    kind: 'read',
+    description: 'النص الكامل لمدخل يوميات بتاريخ محدد (الافتراضي اليوم) — الانتصارات، التحديات، الامتنان، خطة الغد.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'التاريخ (افتراضي اليوم)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['date'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.date !== undefined && !DATE_RE.test(String(a.date))) return bad('date: YYYY-MM-DD')
+      return ok({ date: a.date as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const date = args.date ?? todayCairo()
+      const entry = (await db.maybeSingle('journals', {
+        filters: { user_id: `eq.${userId}`, date: `eq.${date}` },
+      })) as any
+      if (!entry) return { summary: `لا مدخل يوميات بتاريخ ${date}`, entry: null }
+      return {
+        summary: `يومية ${date}`,
+        entry: {
+          date: String(entry.date),
+          content: entry.content ?? '',
+          wins: entry.wins ?? null,
+          challenges: entry.challenges ?? null,
+          ideas: entry.ideas ?? null,
+          tomorrowPlan: entry.tomorrow_plan ?? null,
+          gratitude: entry.gratitude ?? null,
+          mood: entry.mood ?? null,
+          energy: entry.energy ?? null,
+        },
+      }
+    },
+  },
+
+  // ═══════════ v2.0 — الأهداف ═══════════
+
+  // 16) ── list_goals ─────────────────────────────
+  {
+    name: 'list_goals',
+    title: 'عرض الأهداف',
+    kind: 'read',
+    description:
+      'يعرض أهداف المستخدم (العنوان، النوع، التقدم، الموعد النهائي، عدد المعالم). استخدم get_goal لتفاصيل معالم الهدف.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['active', 'completed', 'paused'], description: 'تصفية اختيارية بالحالة' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['status'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.status !== undefined && !['active', 'completed', 'paused'].includes(String(a.status))) {
+        return bad('status: المتاح: active, completed, paused')
+      }
+      return ok({ status: a.status as string | undefined })
+    },
+    async execute(db, userId, args) {
+      const filters: Record<string, string> = { user_id: `eq.${userId}` }
+      if (args.status) filters.status = `eq.${args.status}`
+      const goals = ((await db.select('goals', {
+        select: 'id,title,type,progress,status,deadline,created_at',
+        filters,
+        order: ['created_at.desc'],
+      })) ?? []) as any[]
+      return {
+        summary: `${goals.length} هدف${args.status ? ` (حالة: ${args.status})` : ''}`,
+        goals: goals.map((g) => ({
+          id: g.id,
+          title: g.title,
+          type: g.type ?? null,
+          progress: Math.round((g.progress ?? 0) * 100) / 100,
+          status: g.status ?? null,
+          deadline: g.deadline ?? null,
+        })),
+      }
+    },
+  },
+
+  // 17) ── create_goal ─────────────────────────────
+  {
+    name: 'create_goal',
+    title: 'إنشاء هدف',
+    kind: 'write',
+    description:
+      'ينشئ هدفًا جديدًا (مع معالم اختيارية). مثال: «سجّللي هدف أقرا 12 كتاب السنة دي مع معلم كل شهر». الكتابة عبر دالة التطبيق الذرية create_goal_with_milestones.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 200, description: 'عنوان الهدف (مطلوب)' },
+        vision: { type: 'string', maxLength: 3000, description: 'الرؤية — لماذا هذا الهدف' },
+        why: { type: 'string', maxLength: 3000, description: 'الدافع الأعمق' },
+        type: { type: 'string', enum: ['quarterly', 'yearly', 'monthly', 'custom'], description: 'نوع الهدف (افتراضي quarterly)' },
+        deadline: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'الموعد النهائي YYYY-MM-DD' },
+        milestones: {
+          type: 'array',
+          maxItems: 20,
+          items: { type: 'object', properties: { title: { type: 'string', minLength: 1, maxLength: 150 } }, required: ['title'], additionalProperties: false },
+          description: 'معالم الهدف (حد أقصى 20)',
+        },
+      },
+      required: ['title'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['title', 'vision', 'why', 'type', 'deadline', 'milestones'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.title !== 'string' || a.title.length < 1 || a.title.length > 200) {
+        return bad('title: العنوان مطلوب (1–200 محرف)')
+      }
+      for (const f of ['vision', 'why'] as const) {
+        if (a[f] !== undefined && (typeof a[f] !== 'string' || (a[f] as string).length > 3000)) {
+          return bad(`${f}: نص اختياري حتى 3000 محرف`)
+        }
+      }
+      if (a.type !== undefined && !['quarterly', 'yearly', 'monthly', 'custom'].includes(String(a.type))) {
+        return bad('type: المتاح: quarterly, yearly, monthly, custom')
+      }
+      if (a.deadline !== undefined && !DATE_RE.test(String(a.deadline))) return bad('deadline: YYYY-MM-DD')
+      if (a.milestones !== undefined) {
+        if (!Array.isArray(a.milestones) || (a.milestones as unknown[]).length > 20) {
+          return bad('milestones: مصفوفة حتى 20 معلمًا')
+        }
+        for (const m of a.milestones as unknown[]) {
+          if (typeof m !== 'object' || m === null || Array.isArray(m)) return bad('milestones: كل عنصر كائن {title}')
+          const t = (m as Record<string, unknown>).title
+          if (typeof t !== 'string' || t.length < 1 || t.length > 150) {
+            return bad('milestones.title: نص مطلوب (1–150 محرفًا)')
+          }
+        }
+      }
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const p_goal: Record<string, unknown> = { title: args.title }
+      if (args.vision !== undefined) p_goal.vision = args.vision
+      if (args.why !== undefined) p_goal.why = args.why
+      if (args.type !== undefined) p_goal.type = args.type
+      if (args.deadline !== undefined) p_goal.deadline = args.deadline
+      const result = (await db.rpc('create_goal_with_milestones', {
+        p_user_id: userId,
+        p_goal: p_goal as any,
+        p_milestones: (args.milestones ?? []).map((m: { title: string }, i: number) => ({ title: m.title, order: i })),
+      })) as { goal?: any; milestones?: any[] } | null
+      const goal = result?.goal
+      return {
+        summary: `أُنشئ الهدف «${goal?.title ?? args.title}»${(args.milestones ?? []).length ? ` مع ${args.milestones.length} معلم` : ''}`,
+        created: true,
+        goal: {
+          id: goal?.id ?? null,
+          title: goal?.title ?? args.title,
+          type: goal?.type ?? 'quarterly',
+          deadline: goal?.deadline ?? args.deadline ?? null,
+          milestonesCount: (result?.milestones ?? []).length,
+        },
+      }
+    },
+  },
+
+  // 18) ── get_goal ─────────────────────────────
+  {
+    name: 'get_goal',
+    title: 'تفاصيل هدف',
+    kind: 'read',
+    description: 'تفاصيل هدف واحد بالمعرّف مع معالمه وحالة كل معلم. خُذ المعرّف من list_goals.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goalId: { type: 'string', minLength: 1, description: 'معرّف الهدف' },
+      },
+      required: ['goalId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['goalId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.goalId !== 'string' || a.goalId.length < 1) return bad('goalId: المعرّف مطلوب')
+      return ok({ goalId: a.goalId })
+    },
+    async execute(db, userId, args) {
+      const goal = (await db.maybeSingle('goals', {
+        filters: { id: `eq.${args.goalId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!goal) throw new Error('الهدف غير موجود أو لا تملكه')
+      const milestones = ((await db.select('milestones', {
+        filters: { goal_id: `eq.${args.goalId}` },
+        order: ['order.asc'],
+      })) ?? []) as any[]
+      return {
+        summary: `هدف «${goal.title}» — تقدم ${Math.round((goal.progress ?? 0) * 100)}%`,
+        goal: {
+          id: goal.id,
+          title: goal.title,
+          vision: goal.vision ?? null,
+          why: goal.why ?? null,
+          type: goal.type ?? null,
+          progress: goal.progress ?? 0,
+          status: goal.status ?? null,
+          deadline: goal.deadline ?? null,
+          milestones: milestones.map((m) => ({ id: m.id, title: m.title, completed: m.completed === true })),
+        },
+      }
+    },
+  },
+
+  // 19) ── update_goal ─────────────────────────────
+  {
+    name: 'update_goal',
+    title: 'تعديل هدف',
+    kind: 'write',
+    description: 'تعديل هدف قائم (العنوان/الرؤية/الدافع/الموعد/الحالة/التقدم اليدوي). المعالم تُدار من التطبيق.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goalId: { type: 'string', minLength: 1, description: 'معرّف الهدف' },
+        title: { type: 'string', minLength: 1, maxLength: 200, description: 'عنوان جديد' },
+        vision: { type: 'string', maxLength: 3000, description: 'رؤية جديدة' },
+        why: { type: 'string', maxLength: 3000, description: 'دافع جديد' },
+        deadline: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'موعد نهائي جديد' },
+        status: { type: 'string', enum: ['active', 'completed', 'paused'], description: 'حالة جديدة' },
+      },
+      required: ['goalId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['goalId', 'title', 'vision', 'why', 'deadline', 'status'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.goalId !== 'string' || a.goalId.length < 1) return bad('goalId: المعرّف مطلوب')
+      if (a.title !== undefined && (typeof a.title !== 'string' || a.title.length < 1 || a.title.length > 200)) {
+        return bad('title: نص 1–200 محرف')
+      }
+      if (a.deadline !== undefined && !DATE_RE.test(String(a.deadline))) return bad('deadline: YYYY-MM-DD')
+      if (a.status !== undefined && !['active', 'completed', 'paused'].includes(String(a.status))) {
+        return bad('status: المتاح: active, completed, paused')
+      }
+      const hasChange = ['title', 'vision', 'why', 'deadline', 'status'].some((k) => a[k] !== undefined)
+      if (!hasChange) return bad('مطلوب حقل واحد على الأقل لتعديله')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const changes: Record<string, unknown> = {}
+      if (args.title !== undefined) changes.title = args.title
+      if (args.vision !== undefined) changes.vision = args.vision
+      if (args.why !== undefined) changes.why = args.why
+      if (args.deadline !== undefined) changes.deadline = args.deadline
+      if (args.status !== undefined) {
+        changes.status = args.status
+        if (args.status === 'completed') changes.progress = 100
+      }
+      await db.patch('goals', { id: `eq.${args.goalId}`, user_id: `eq.${userId}` }, changes)
+      const goal = (await db.maybeSingle('goals', {
+        select: 'id,title,status,progress',
+        filters: { id: `eq.${args.goalId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!goal) throw new Error('الهدف غير موجود أو لا تملكه')
+      return {
+        summary: `حُدّث الهدف «${goal.title}»${args.status ? ` (الحالة: ${goal.status})` : ''}`,
+        updated: true,
+        goal: { id: goal.id, title: goal.title, status: goal.status, progress: goal.progress },
+      }
+    },
+  },
+
+  // 20) ── complete_goal ─────────────────────────────
+  {
+    name: 'complete_goal',
+    title: 'إكمال هدف',
+    kind: 'write',
+    description: 'وضع علامة «مكتمل» على هدف (التقدم 100% + الحالة completed). قابل للتراجع عبر update_goal.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goalId: { type: 'string', minLength: 1, description: 'معرّف الهدف' },
+      },
+      required: ['goalId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['goalId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.goalId !== 'string' || a.goalId.length < 1) return bad('goalId: المعرّف مطلوب')
+      return ok({ goalId: a.goalId })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('goals', {
+        select: 'id,title',
+        filters: { id: `eq.${args.goalId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('الهدف غير موجود أو لا تملكه')
+      await db.patch('goals', { id: `eq.${args.goalId}`, user_id: `eq.${userId}` }, { status: 'completed', progress: 100 })
+      return {
+        summary: `أُكمل الهدف «${(owned as any).title}» 🎯`,
+        completed: true,
+        goal: { id: args.goalId, title: (owned as any).title },
+      }
+    },
+  },
+
+  // 21) ── delete_goal ─────────────────────────────
+  {
+    name: 'delete_goal',
+    title: 'حذف هدف',
+    kind: 'write',
+    description: 'حذف هدف نهائيًا مع معالمه. يتطلب confirm:true صراحةً. يُفضَّل complete_goal بدل الحذف.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goalId: { type: 'string', minLength: 1, description: 'معرّف الهدف' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['goalId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['goalId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.goalId !== 'string' || a.goalId.length < 1) return bad('goalId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ goalId: a.goalId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('goals', {
+        select: 'id,title',
+        filters: { id: `eq.${args.goalId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('الهدف غير موجود أو لا تملكه')
+      await db.delete('goals', { id: `eq.${args.goalId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذف الهدف «${(owned as any).title}» نهائيًا مع معالمه`, deleted: true }
+    },
+  },
+
+  // ═══════════ v2.0 — العادات (إدارة) ═══════════
+
+  // 22) ── get_habit ─────────────────────────────
+  {
+    name: 'get_habit',
+    title: 'تفاصيل عادة',
+    kind: 'read',
+    description: 'تفاصيل عادة بالمعرّف مع آخر 30 يومًا من السجل والسلسلة المتصلة. خُذ المعرّف من list_habits.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        habitId: { type: 'string', minLength: 1, description: 'معرّف العادة' },
+      },
+      required: ['habitId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['habitId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.habitId !== 'string' || a.habitId.length < 1) return bad('habitId: المعرّف مطلوب')
+      return ok({ habitId: a.habitId })
+    },
+    async execute(db, userId, args) {
+      const habit = (await db.maybeSingle('habits', {
+        filters: { id: `eq.${args.habitId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!habit) throw new Error('العادة غير موجودة أو لا تملكها')
+      const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+      const logs = ((await db.select('habit_logs', {
+        filters: { habit_id: `eq.${args.habitId}`, date: `gte.${thirtyAgo}` },
+        order: ['date.desc'],
+      })) ?? []) as any[]
+      const today = todayCairo()
+      const logList = logs.map((l) => ({ date: String(l.date), completed: l.completed === true, count: l.count ?? 1 }))
+      return {
+        summary: `عادة «${habit.name}» — سلسلة ${habitStreak(logList, today)} يوم`,
+        habit: {
+          id: habit.id,
+          name: habit.name,
+          description: habit.description ?? null,
+          frequency: habit.frequency ?? null,
+          targetCount: habit.target_count ?? 1,
+          reminderTime: habit.reminder_time ?? null,
+          streak: habitStreak(logList, today),
+          todayCompleted: logList.some((l) => l.date === today && l.completed),
+          recentLogs: logList.slice(0, 14),
+        },
+      }
+    },
+  },
+
+  // 23) ── create_habit ─────────────────────────────
+  {
+    name: 'create_habit',
+    title: 'إنشاء عادة',
+    kind: 'write',
+    description: 'تنشئ عادة جديدة. مثال: «ضيفلي عادة قراءة نصف ساعة يوميًا بهدف 1 مرة».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 150, description: 'اسم العادة (مطلوب)' },
+        description: { type: 'string', maxLength: 2000, description: 'وصف اختياري' },
+        frequency: { type: 'string', enum: ['daily', 'weekly', 'custom'], description: 'التكرار (افتراضي daily)' },
+        targetCount: { type: 'integer', minimum: 1, maximum: 50, description: 'الهدف اليومي بعدد المرات (افتراضي 1)' },
+        reminderTime: { type: 'string', description: 'وقت التذكير HH:MM (اختياري)' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['name', 'description', 'frequency', 'targetCount', 'reminderTime'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.name !== 'string' || a.name.length < 1 || a.name.length > 150) {
+        return bad('name: الاسم مطلوب (1–150 محرفًا)')
+      }
+      if (a.description !== undefined && (typeof a.description !== 'string' || a.description.length > 2000)) {
+        return bad('description: نص حتى 2000 محرف')
+      }
+      if (a.frequency !== undefined && !['daily', 'weekly', 'custom'].includes(String(a.frequency))) {
+        return bad('frequency: المتاح: daily, weekly, custom')
+      }
+      if (a.targetCount !== undefined && (!Number.isInteger(a.targetCount) || (a.targetCount as number) < 1 || (a.targetCount as number) > 50)) {
+        return bad('targetCount: عدد صحيح بين 1 و50')
+      }
+      if (a.reminderTime !== undefined && !TIME_RE.test(String(a.reminderTime))) return bad('reminderTime: HH:MM')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      await db.insert('habits', {
+        user_id: userId,
+        name: args.name,
+        description: args.description ?? null,
+        frequency: args.frequency ?? 'daily',
+        target_count: args.targetCount ?? 1,
+        reminder_time: args.reminderTime ?? null,
+      })
+      const habit = (await db.maybeSingle('habits', {
+        select: 'id,name,frequency,target_count',
+        filters: { user_id: `eq.${userId}`, name: `eq.${args.name}` },
+      })) as any
+      return {
+        summary: `أُنشئت العادة «${habit?.name ?? args.name}»`,
+        created: true,
+        habit: habit ? { id: habit.id, name: habit.name, frequency: habit.frequency, targetCount: habit.target_count } : null,
+      }
+    },
+  },
+
+  // 24) ── update_habit ─────────────────────────────
+  {
+    name: 'update_habit',
+    title: 'تعديل عادة',
+    kind: 'write',
+    description: 'تعديل عادة قائمة (الاسم/الوصف/التكرار/الهدف/وقت التذكير).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        habitId: { type: 'string', minLength: 1, description: 'معرّف العادة' },
+        name: { type: 'string', minLength: 1, maxLength: 150, description: 'اسم جديد' },
+        description: { type: 'string', maxLength: 2000, description: 'وصف جديد' },
+        frequency: { type: 'string', enum: ['daily', 'weekly', 'custom'], description: 'تكرار جديد' },
+        targetCount: { type: 'integer', minimum: 1, maximum: 50, description: 'هدف جديد' },
+        reminderTime: { type: 'string', description: 'وقت تذكير جديد HH:MM' },
+      },
+      required: ['habitId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['habitId', 'name', 'description', 'frequency', 'targetCount', 'reminderTime'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.habitId !== 'string' || a.habitId.length < 1) return bad('habitId: المعرّف مطلوب')
+      if (a.name !== undefined && (typeof a.name !== 'string' || a.name.length < 1 || a.name.length > 150)) {
+        return bad('name: نص 1–150 محرف')
+      }
+      if (a.frequency !== undefined && !['daily', 'weekly', 'custom'].includes(String(a.frequency))) {
+        return bad('frequency: المتاح: daily, weekly, custom')
+      }
+      if (a.targetCount !== undefined && (!Number.isInteger(a.targetCount) || (a.targetCount as number) < 1 || (a.targetCount as number) > 50)) {
+        return bad('targetCount: عدد صحيح بين 1 و50')
+      }
+      if (a.reminderTime !== undefined && !TIME_RE.test(String(a.reminderTime))) return bad('reminderTime: HH:MM')
+      const hasChange = ['name', 'description', 'frequency', 'targetCount', 'reminderTime'].some((k) => a[k] !== undefined)
+      if (!hasChange) return bad('مطلوب حقل واحد على الأقل لتعديله')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const changes: Record<string, unknown> = {}
+      if (args.name !== undefined) changes.name = args.name
+      if (args.description !== undefined) changes.description = args.description
+      if (args.frequency !== undefined) changes.frequency = args.frequency
+      if (args.targetCount !== undefined) changes.target_count = args.targetCount
+      if (args.reminderTime !== undefined) changes.reminder_time = args.reminderTime
+      await db.patch('habits', { id: `eq.${args.habitId}`, user_id: `eq.${userId}` }, changes)
+      const habit = (await db.maybeSingle('habits', {
+        select: 'id,name,frequency,target_count',
+        filters: { id: `eq.${args.habitId}`, user_id: `eq.${userId}` },
+      })) as any
+      if (!habit) throw new Error('العادة غير موجودة أو لا تملكها')
+      return {
+        summary: `حُدّثت العادة «${habit.name}»`,
+        updated: true,
+        habit: { id: habit.id, name: habit.name, frequency: habit.frequency, targetCount: habit.target_count },
+      }
+    },
+  },
+
+  // 25) ── delete_habit ─────────────────────────────
+  {
+    name: 'delete_habit',
+    title: 'حذف عادة',
+    kind: 'write',
+    description: 'حذف عادة نهائيًا مع سجلها. يتطلب confirm:true صراحةً.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        habitId: { type: 'string', minLength: 1, description: 'معرّف العادة' },
+        confirm: { type: 'boolean', description: 'يجب أن يكون true لتأكيد الحذف النهائي' },
+      },
+      required: ['habitId', 'confirm'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['habitId', 'confirm'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.habitId !== 'string' || a.habitId.length < 1) return bad('habitId: المعرّف مطلوب')
+      if (a.confirm !== true) return bad('confirm: الحذف النهائي يتطلب confirm:true صراحةً')
+      return ok({ habitId: a.habitId, confirm: true })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('habits', {
+        select: 'id,name',
+        filters: { id: `eq.${args.habitId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('العادة غير موجودة أو لا تملكها')
+      await db.delete('habits', { id: `eq.${args.habitId}`, user_id: `eq.${userId}` })
+      return { summary: `حُذفت العادة «${(owned as any).name}» نهائيًا مع سجلها`, deleted: true }
+    },
+  },
+
+  // ═══════════ v2.0 — الإشعارات ═══════════
+
+  // 26) ── list_notifications ─────────────────────────────
+  {
+    name: 'list_notifications',
+    title: 'عرض الإشعارات',
+    kind: 'read',
+    description: 'يعرض إشعارات المستخدم (العنوان، النوع، الأولوية، المقروء/غير المقروء) من الأحدث.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        unreadOnly: { type: 'boolean', description: 'إظهار غير المقروءة فقط (افتراضي false)' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, description: 'أقصى عدد إشعارات (افتراضي 15)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['unreadOnly', 'limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.unreadOnly !== undefined && typeof a.unreadOnly !== 'boolean') return bad('unreadOnly: قيمة منطقية')
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 50)) {
+        return bad('limit: عدد صحيح بين 1 و50')
+      }
+      return ok({ unreadOnly: a.unreadOnly as boolean | undefined, limit: a.limit as number | undefined })
+    },
+    async execute(db, userId, args) {
+      const filters: Record<string, string> = { user_id: `eq.${userId}` }
+      if (args.unreadOnly) filters.read = 'eq.false'
+      const rows = ((await db.select('notifications', {
+        select: 'id,title,body,type,priority,read,read_at,action_url,created_at',
+        filters,
+        order: ['created_at.desc'],
+        limit: args.limit ?? 15,
+      })) ?? []) as any[]
+      return {
+        summary: `${rows.length} إشعار${args.unreadOnly ? ' (غير مقروءة)' : ''}`,
+        notifications: rows.map((n) => ({
+          id: n.id,
+          title: n.title,
+          body: n.body ?? null,
+          type: n.type ?? null,
+          priority: n.priority ?? 'normal',
+          read: n.read === true,
+          actionUrl: n.action_url ?? null,
+          createdAt: n.created_at,
+        })),
+      }
+    },
+  },
+
+  // 27) ── unread_notifications_count ─────────────────────────────
+  {
+    name: 'unread_notifications_count',
+    title: 'عدد غير المقروء',
+    kind: 'read',
+    description: 'عدد الإشعارات غير المقروءة — مناسب لسؤال «عندي حاجة جديدة؟».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const rows = ((await db.select('notifications', {
+        select: 'id',
+        filters: { user_id: `eq.${userId}`, read: 'eq.false' },
+        limit: 100,
+      })) ?? []) as any[]
+      return { summary: `${rows.length} إشعار غير مقروء`, unreadCount: rows.length }
+    },
+  },
+
+  // 28) ── mark_notification_read ─────────────────────────────
+  {
+    name: 'mark_notification_read',
+    title: 'قراءة إشعار',
+    kind: 'write',
+    description: 'وضع علامة «مقروء» على إشعار بالمعرّف (read_at يُضبط تلقائيًا).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        notificationId: { type: 'string', minLength: 1, description: 'معرّف الإشعار (من list_notifications)' },
+      },
+      required: ['notificationId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['notificationId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.notificationId !== 'string' || a.notificationId.length < 1) return bad('notificationId: المعرّف مطلوب')
+      return ok({ notificationId: a.notificationId })
+    },
+    async execute(db, userId, args) {
+      const owned = await db.maybeSingle('notifications', {
+        select: 'id',
+        filters: { id: `eq.${args.notificationId}`, user_id: `eq.${userId}` },
+      })
+      if (!owned) throw new Error('الإشعار غير موجود أو لا تملكه')
+      await db.patch('notifications', { id: `eq.${args.notificationId}`, user_id: `eq.${userId}` }, { read: true })
+      return { summary: 'وُسم الإشعار كمقروء', marked: true, notificationId: args.notificationId }
+    },
+  },
+
+  // 29) ── mark_all_notifications_read ─────────────────────────────
+  {
+    name: 'mark_all_notifications_read',
+    title: 'قراءة الكل',
+    kind: 'write',
+    description: 'وضع علامة «مقروء» على كل إشعارات المستخدم غير المقروءة — مثل «اقرا كل الإشعارات».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      await db.patch('notifications', { user_id: `eq.${userId}`, read: 'eq.false' }, { read: true })
+      const remaining = ((await db.select('notifications', {
+        select: 'id',
+        filters: { user_id: `eq.${userId}`, read: 'eq.false' },
+        limit: 5,
+      })) ?? []) as any[]
+      return {
+        summary: 'وُسمت كل الإشعارات كمقروءة',
+        markedAll: true,
+        remainingUnread: remaining.length,
+      }
+    },
+  },
+
+  // ═══════════ v2.0 — المجتمع ═══════════
+
+  // 30) ── community_feed ─────────────────────────────
+  {
+    name: 'community_feed',
+    title: 'خلاصة المجتمع',
+    kind: 'read',
+    description: 'يعرض منشورات مجتمع أوج المنشورة (العنوان، مقتطف، الإعجابات، الردود) من الأحدث نشاطًا.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', minimum: 1, maximum: 30, description: 'أقصى عدد منشورات (افتراضي 15)' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 30)) {
+        return bad('limit: عدد صحيح بين 1 و30')
+      }
+      return ok({ limit: a.limit as number | undefined })
+    },
+    async execute(db, _userId, args) {
+      const posts = ((await db.select('community_posts', {
+        select: 'id,title,body,like_count,reply_count,last_activity_at,created_at',
+        filters: { status: 'eq.published' },
+        order: ['last_activity_at.desc'],
+        limit: args.limit ?? 15,
+      })) ?? []) as any[]
+      return {
+        summary: `${posts.length} منشورًا في المجتمع`,
+        posts: posts.map((p) => ({
+          id: p.id,
+          title: p.title,
+          excerpt: (p.body ?? '').slice(0, 160),
+          likes: p.like_count ?? 0,
+          replies: p.reply_count ?? 0,
+          lastActivityAt: p.last_activity_at,
+        })),
+      }
+    },
+  },
+
+  // 31) ── get_community_post ─────────────────────────────
+  {
+    name: 'get_community_post',
+    title: 'قراءة منشور',
+    kind: 'read',
+    description: 'النص الكامل لمنشور بالمعرّف مع تعليقاته. خُذ المعرّف من community_feed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        postId: { type: 'string', minLength: 1, description: 'معرّف المنشور' },
+      },
+      required: ['postId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['postId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.postId !== 'string' || a.postId.length < 1) return bad('postId: المعرّف مطلوب')
+      return ok({ postId: a.postId })
+    },
+    async execute(db, _userId, args) {
+      const post = (await db.maybeSingle('community_posts', {
+        filters: { id: `eq.${args.postId}`, status: 'eq.published' },
+      })) as any
+      if (!post) throw new Error('المنشور غير موجود')
+      const comments = ((await db.select('community_comments', {
+        select: 'id,body,like_count,created_at',
+        filters: { post_id: `eq.${args.postId}`, status: 'eq.published' },
+        order: ['created_at.asc'],
+        limit: 50,
+      })) ?? []) as any[]
+      return {
+        summary: `منشور «${post.title}» — ${post.like_count ?? 0} إعجابًا و${comments.length} تعليقًا`,
+        post: {
+          id: post.id,
+          title: post.title,
+          body: post.body,
+          likes: post.like_count ?? 0,
+          replies: post.reply_count ?? 0,
+          createdAt: post.created_at,
+          comments: comments.map((c) => ({ id: c.id, body: c.body, likes: c.like_count ?? 0, createdAt: c.created_at })),
+        },
+      }
+    },
+  },
+
+  // 32) ── create_community_post ─────────────────────────────
+  {
+    name: 'create_community_post',
+    title: 'نشر في المجتمع',
+    kind: 'write',
+    description: 'ينشر منشورًا باسم المستخدم في مجتمع أوج. مثال: «انشر في المجتمع سؤال عن أفضل تقنية للتركيز».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 3, maxLength: 200, description: 'عنوان المنشور (مطلوب)' },
+        body: { type: 'string', minLength: 1, maxLength: 10000, description: 'نص المنشور (مطلوب)' },
+      },
+      required: ['title', 'body'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['title', 'body'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.title !== 'string' || a.title.trim().length < 3 || a.title.length > 200) {
+        return bad('title: العنوان مطلوب (3–200 محرف)')
+      }
+      if (typeof a.body !== 'string' || a.body.trim().length < 1 || a.body.length > 10000) {
+        return bad('body: النص مطلوب (حتى 10000 محرف)')
+      }
+      return ok({ title: a.title, body: a.body })
+    },
+    async execute(db, userId, args) {
+      await db.insert('community_posts', {
+        user_id: userId,
+        title: args.title,
+        body: args.body,
+        status: 'published',
+      })
+      // insert بلا إعادة تمثيل — نجلب الصف المنشأ لتعرّفه للعميل
+      const rows = ((await db.select('community_posts', {
+        select: 'id,title,created_at',
+        filters: { user_id: `eq.${userId}`, title: `eq.${args.title}` },
+        order: ['created_at.desc'],
+        limit: 1,
+      })) ?? []) as any[]
+      const post = rows[0]
+      return {
+        summary: `نُشر «${args.title}» في المجتمع`,
+        published: true,
+        post: { id: post?.id ?? null, title: args.title },
+      }
+    },
+  },
+
+  // 33) ── comment_community_post ─────────────────────────────
+  {
+    name: 'comment_community_post',
+    title: 'تعليق على منشور',
+    kind: 'write',
+    description: 'يضيف تعليقًا للمستخدم على منشور في المجتمع.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        postId: { type: 'string', minLength: 1, description: 'معرّف المنشور (من community_feed)' },
+        body: { type: 'string', minLength: 1, maxLength: 5000, description: 'نص التعليق (مطلوب)' },
+      },
+      required: ['postId', 'body'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['postId', 'body'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.postId !== 'string' || a.postId.length < 1) return bad('postId: المعرّف مطلوب')
+      if (typeof a.body !== 'string' || a.body.trim().length < 1 || a.body.length > 5000) {
+        return bad('body: نص التعليق مطلوب (حتى 5000 محرف)')
+      }
+      return ok({ postId: a.postId, body: a.body })
+    },
+    async execute(db, userId, args) {
+      const post = await db.maybeSingle('community_posts', {
+        select: 'id',
+        filters: { id: `eq.${args.postId}`, status: 'eq.published' },
+      })
+      if (!post) throw new Error('المنشور غير موجود')
+      await db.insert('community_comments', {
+        post_id: args.postId,
+        user_id: userId,
+        body: args.body,
+        status: 'published',
+      })
+      // insert بلا إعادة تمثيل — نجلب التعليق المنشأ
+      const rows = ((await db.select('community_comments', {
+        select: 'id,post_id,created_at',
+        filters: { post_id: `eq.${args.postId}`, user_id: `eq.${userId}` },
+        order: ['created_at.desc'],
+        limit: 1,
+      })) ?? []) as any[]
+      const saved = rows[0]
+      return {
+        summary: 'أُضيف تعليقك',
+        commented: true,
+        comment: { id: saved?.id ?? null, postId: args.postId },
+      }
+    },
+  },
+
+  // 34) ── toggle_post_like ─────────────────────────────
+  {
+    name: 'toggle_post_like',
+    title: 'إعجاب بمنشور',
+    kind: 'write',
+    description: 'يبدّل إعجاب المستخدم بمنشور (إعجاب إن لم يكن معجبًا، وإلغاؤه إن كان). العدادات تُحدَّث تلقائيًا.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        postId: { type: 'string', minLength: 1, description: 'معرّف المنشور' },
+      },
+      required: ['postId'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['postId'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.postId !== 'string' || a.postId.length < 1) return bad('postId: المعرّف مطلوب')
+      return ok({ postId: a.postId })
+    },
+    async execute(db, userId, args) {
+      const post = await db.maybeSingle('community_posts', {
+        select: 'id',
+        filters: { id: `eq.${args.postId}`, status: 'eq.published' },
+      })
+      if (!post) throw new Error('المنشور غير موجود')
+      const existing = await db.maybeSingle('community_reactions', {
+        select: 'id',
+        filters: { user_id: `eq.${userId}`, target_type: 'eq.post', target_id: `eq.${args.postId}` },
+      })
+      if (existing) {
+        await db.delete('community_reactions', {
+          user_id: `eq.${userId}`,
+          target_type: 'eq.post',
+          target_id: `eq.${args.postId}`,
+        })
+        return { summary: 'أُلغي إعجابك بالمنشور', liked: false, postId: args.postId }
+      }
+      await db.insert('community_reactions', {
+        user_id: userId,
+        target_type: 'post',
+        target_id: args.postId,
+        reaction: 'like',
+      })
+      return { summary: 'أُعجبت بالمنشور', liked: true, postId: args.postId }
+    },
+  },
+
+  // 35) ── report_community_post ─────────────────────────────
+  {
+    name: 'report_community_post',
+    title: 'الإبلاغ عن منشور',
+    kind: 'write',
+    description: 'يبلّغ عن منشور مخالف (سبب إلزامي: spam/abuse/offensive/off_topic/other).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        postId: { type: 'string', minLength: 1, description: 'معرّف المنشور' },
+        reason: { type: 'string', enum: ['spam', 'abuse', 'offensive', 'off_topic', 'other'], description: 'سبب الإبلاغ' },
+        details: { type: 'string', maxLength: 2000, description: 'تفاصيل اختيارية' },
+      },
+      required: ['postId', 'reason'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['postId', 'reason', 'details'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.postId !== 'string' || a.postId.length < 1) return bad('postId: المعرّف مطلوب')
+      if (!['spam', 'abuse', 'offensive', 'off_topic', 'other'].includes(String(a.reason))) {
+        return bad('reason: المتاح: spam, abuse, offensive, off_topic, other')
+      }
+      if (a.details !== undefined && (typeof a.details !== 'string' || a.details.length > 2000)) {
+        return bad('details: نص حتى 2000 محرف')
+      }
+      return ok({ postId: a.postId, reason: a.reason, details: a.details })
+    },
+    async execute(db, userId, args) {
+      await db.insert('community_reports', {
+        reporter_id: userId,
+        target_type: 'post',
+        target_id: args.postId,
+        reason: args.reason,
+        details: args.details ?? null,
+        status: 'open',
+      })
+      return { summary: 'سُجّل بلاغك وسيراجعه المشرفون', reported: true, postId: args.postId }
+    },
+  },
+
+  // ═══════════ v2.0 — الحساب ═══════════
+
+  // 36) ── get_profile ─────────────────────────────
+  {
+    name: 'get_profile',
+    title: 'ملفي',
+    kind: 'read',
+    description: 'ملف المستخدم (الاسم، المعرجم handle، المستوى، نقاط الخبرة، السلاسل، إحصاءات الإنجاز).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const p = (await db.maybeSingle('profiles', {
+        select: 'name,email,avatar,handle,level,xp,xp_to_next_level,streak,longest_streak,total_focus_min,total_tasks_done,created_at',
+        filters: { id: `eq.${userId}` },
+      })) as any
+      if (!p) return { summary: 'لا ملف لهذا المستخدم', profile: null }
+      return {
+        summary: `${p.name} — مستوى ${p.level} · ${p.xp} XP · سلسلة ${p.streak} يوم`,
+        profile: {
+          name: p.name,
+          handle: p.handle ?? null,
+          avatar: p.avatar ?? null,
+          level: p.level ?? 1,
+          xp: p.xp ?? 0,
+          xpToNextLevel: p.xp_to_next_level ?? 100,
+          streak: p.streak ?? 0,
+          longestStreak: p.longest_streak ?? 0,
+          totalFocusMinutes: p.total_focus_min ?? 0,
+          totalTasksDone: p.total_tasks_done ?? 0,
+        },
+      }
+    },
+  },
+
+  // 37) ── update_profile ─────────────────────────────
+  {
+    name: 'update_profile',
+    title: 'تعديل الملف',
+    kind: 'write',
+    description: 'تعديل اسم المستخدم العلني أو رابط الصورة الرمزية.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 60, description: 'اسم عرض جديد' },
+        avatar: { type: 'string', maxLength: 500, description: 'رابط صورة رمزية جديد' },
+      },
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['name', 'avatar'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (a.name !== undefined && (typeof a.name !== 'string' || a.name.trim().length < 1 || a.name.length > 60)) {
+        return bad('name: نص 1–60 محرف')
+      }
+      if (a.avatar !== undefined && (typeof a.avatar !== 'string' || a.avatar.length > 500)) {
+        return bad('avatar: رابط حتى 500 محرف')
+      }
+      const hasChange = a.name !== undefined || a.avatar !== undefined
+      if (!hasChange) return bad('مطلوب حقل واحد على الأقل (name/avatar)')
+      return ok(a)
+    },
+    async execute(db, userId, args) {
+      const changes: Record<string, unknown> = {}
+      if (args.name !== undefined) changes.name = args.name
+      if (args.avatar !== undefined) changes.avatar = args.avatar
+      await db.patch('profiles', { id: `eq.${userId}` }, changes)
+      return { summary: 'حُدّث ملفك الشخصي', updated: true, fields: Object.keys(changes) }
+    },
+  },
+
+  // 38) ── get_subscription ─────────────────────────────
+  {
+    name: 'get_subscription',
+    title: 'اشتراكي',
+    kind: 'read',
+    description: 'حالة اشتراك المستخدم (الخطة، الحالة، تاريخ الانتهاء) — مثل «اشتراكي شنوة حالته؟».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const sub = (await db.maybeSingle('user_subscriptions', {
+        select: 'plan,status,started_at,expires_at,updated_at',
+        filters: { user_id: `eq.${userId}` },
+      })) as any
+      if (!sub) return { summary: 'خطة مجانية (لا اشتراك مدفوع)', subscription: { plan: 'free', status: 'none' } }
+      return {
+        summary: `خطة ${sub.plan} — ${sub.status}${sub.expires_at ? ` حتى ${String(sub.expires_at).slice(0, 10)}` : ''}`,
+        subscription: {
+          plan: sub.plan ?? 'free',
+          status: sub.status ?? null,
+          startedAt: sub.started_at ?? null,
+          expiresAt: sub.expires_at ?? null,
+        },
+      }
+    },
+  },
+
+  // 39) ── get_usage_today ─────────────────────────────
+  {
+    name: 'get_usage_today',
+    title: 'استخدام اليوم',
+    kind: 'read',
+    description: 'استخدام المستخدم اليوم (بتقويم القاهرة) لكل ميزة — مثل «استخدمت قداش من عملي اليوم؟».',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    validate(args) {
+      const r = rejectUnknown(args, [])
+      if (r) return r
+      return ok({})
+    },
+    async execute(db, userId) {
+      const today = todayCairo()
+      const rows = ((await db.select('usage_daily', {
+        select: 'feature_key,count,day',
+        filters: { user_id: `eq.${userId}`, day: `eq.${today}` },
+      })) ?? []) as any[]
+      const total = rows.reduce((s, r) => s + (r.count ?? 0), 0)
+      return {
+        summary: `${total} عملية موزعة على ${rows.length} ميزة اليوم`,
+        day: today,
+        total,
+        features: rows.map((r) => ({ feature: r.feature_key, count: r.count })),
+      }
+    },
+  },
+
+  // ═══════════ v2.0 — البحث الموحّد ═══════════
+
+  // 40) ── search_everything ─────────────────────────────
+  {
+    name: 'search_everything',
+    title: 'بحث شامل',
+    kind: 'read',
+    description: 'بحث واحد في مهامك وأهدافك وعاداتك ويومياتك (العناوين والنصوص) — مثل «دوّر على كلمة تقرير».',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', minLength: 2, maxLength: 100, description: 'نص البحث (مطلوب)' },
+        limit: { type: 'integer', minimum: 1, maximum: 20, description: 'أقصى نتائج لكل نوع (افتراضي 5)' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    validate(args) {
+      const r = rejectUnknown(args, ['query', 'limit'])
+      if (r) return r
+      const a = args as Record<string, unknown>
+      if (typeof a.query !== 'string' || a.query.trim().length < 2 || a.query.length > 100) {
+        return bad('query: نص البحث مطلوب (2–100 محرف)')
+      }
+      if (a.limit !== undefined && (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 20)) {
+        return bad('limit: عدد صحيح بين 1 و20')
+      }
+      return ok({ query: a.query.trim(), limit: (a.limit ?? 5) as number })
+    },
+    async execute(db, userId, args) {
+      const q = args.query
+      const like = `ilike.%${q}%`
+      const [tasks, goals, habits, journals] = await Promise.all([
+        (db.select('tasks', {
+          select: 'id,title,description,status',
+          filters: { user_id: `eq.${userId}`, title: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+        (db.select('goals', {
+          select: 'id,title,status,progress',
+          filters: { user_id: `eq.${userId}`, title: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+        (db.select('habits', {
+          select: 'id,name,frequency',
+          filters: { user_id: `eq.${userId}`, name: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+        (db.select('journals', {
+          select: 'id,date,content',
+          filters: { user_id: `eq.${userId}`, content: like },
+          limit: args.limit,
+        }) as Promise<any[]>).catch(() => []),
+      ])
+      const total = tasks.length + goals.length + habits.length + journals.length
+      return {
+        summary: total ? `وُجدت ${total} نتيجة لكلمة «${q}»` : `لا نتائج لكلمة «${q}»`,
+        tasks: (tasks as any[]).map((t) => ({ id: t.id, title: t.title, status: t.status })),
+        goals: (goals as any[]).map((g) => ({ id: g.id, title: g.title, status: g.status })),
+        habits: (habits as any[]).map((h) => ({ id: h.id, name: h.name, frequency: h.frequency })),
+        journalEntries: (journals as any[]).map((j) => ({
+          date: String(j.date),
+          excerpt: (j.content ?? '').slice(0, 120),
+        })),
       }
     },
   },
