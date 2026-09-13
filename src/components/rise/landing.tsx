@@ -148,6 +148,7 @@ function LandingNav() {
             ["#features", "المميزات"],
             ["#modules", "الوحدات"],
             ["#how", "بتعمل ايه؟"],
+            ["#pricing", "الأسعار"],
             ["#faq", "الأسئلة"],
           ].map(([href, label]) => (
             <a
@@ -648,10 +649,111 @@ function Steps() {
 }
 
 /* ============================================================
+   7.5) Pricing — الباقات الثلاث (نفس محتوى صفحة /pricing)
+   ============================================================ */
+const LANDING_PLANS = [
+  {
+    name: "المجانية",
+    price: "٠",
+    period: "جنيه / للأبد",
+    tagline: "ابدأ حياتك المنظمة مجانًا",
+    features: ["كل الوحدات الأساسية", "إشعارات ومجتمع كامل", "تصدير بياناتك متى شئت", "إعلانات خفيفة"],
+    highlighted: false,
+    cta: "ابدأ مجانًا",
+  },
+  {
+    name: "بلس",
+    price: "٣٠",
+    period: "جنيه / شهريًا",
+    tagline: "مساحة أوسع وصفر إعلانات",
+    features: ["بدون إعلانات نهائيًا", "حدود أعلى في كل الوحدات", "تقارير المراجعة الأسبوعية والشهرية", "دعم ذو أولوية"],
+    highlighted: false,
+    cta: "ارتقِ لبلس",
+  },
+  {
+    name: "ماكس",
+    price: "٥٠",
+    period: "جنيه / شهريًا",
+    tagline: "كل شيء مفتوح + MCP للذكاء الاصطناعي",
+    features: ["كل مزايا بلس بأعلى الحدود", "MCP: اربط ChatGPT ببياناتك", "٨٢ أداة لكل الأقسام", "مفاتيح API شخصية"],
+    highlighted: true,
+    cta: "امتلك ماكس",
+  },
+] as const;
+
+function Pricing() {
+  const router = useRouter();
+  return (
+    <section id="pricing" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <Reveal className="text-center">
+        <Pill tone="muted" className="mb-4">الأسعار</Pill>
+        <h2 className="font-display text-3xl font-black text-foreground sm:text-4xl">
+          باقة لكل مرحلة من رحلتك
+        </h2>
+        <p className="mx-auto mt-3 max-w-2xl leading-relaxed text-muted-foreground">
+          ابدأ مجانًا وادفع بس لما أوج يثبت قيمته في يومك — والإلغاء دايمًا بيدك، والبيانات تفضل معك مهما اخترت.
+        </p>
+      </Reveal>
+
+      <div className="mt-10 grid gap-6 md:grid-cols-3">
+        {LANDING_PLANS.map((plan, i) => (
+          <Reveal key={plan.name} delay={i * 90}>
+            <div
+              className={cn(
+                "relative flex h-full flex-col rounded-3xl border-2 p-7",
+                plan.highlighted
+                  ? "border-emerald-500/60 bg-surface-2 shadow-[0_0_40px_-12px_rgba(16,185,129,0.45)]"
+                  : "border-ink/10 bg-surface-2/60",
+              )}
+            >
+              {plan.highlighted && (
+                <span className="absolute -top-3.5 right-6 rounded-full bg-emerald-500 px-3.5 py-1 text-xs font-black text-white">
+                  الأكثر قيمة ⚡
+                </span>
+              )}
+              <h3 className="font-display text-xl font-black text-foreground">{plan.name}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{plan.tagline}</p>
+              <p className="mt-5 flex items-baseline gap-2">
+                <span className="font-display text-5xl font-black text-foreground">{plan.price}</span>
+                <span className="text-xs font-bold text-muted-foreground">{plan.period}</span>
+              </p>
+              <ul className="mt-6 flex-1 space-y-2.5">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" className="mt-1 shrink-0 text-emerald-500">
+                      <path d="m5 13 4.2 4.2L19 7.4" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <ComicButton
+                tone={plan.highlighted ? "lime" : "ink"}
+                onClick={() => router.push("/app")}
+                className="mt-7 w-full"
+              >
+                {plan.cta}
+              </ComicButton>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+
+      <Reveal>
+        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground/80">
+          الأسعار بالجنيه المصري، والدفع حاليًا يدوي بتفعيل سريع من الإدارة — التفاصيل الكاملة والأسئلة الشائعة في{" "}
+          <a href="/pricing" className="font-bold text-emerald-500 underline underline-offset-4">صفحة الأسعار</a>.
+        </p>
+      </Reveal>
+    </section>
+  );
+}
+
+/* ============================================================
    8) FAQ — native details/summary, styled
    ============================================================ */
-const FAQS: [string, string][] = [
-  ["هل أوج مجاني؟", "تقدر تبدأ وتجرب كل الموديولات مجانًا. خطط مدفوعة اختيارية لو حبيت تدعم التطوير وتحصل على مزايا إضافية."],
+export const FAQS: [string, string][] = [
+  ["هل أوج مجاني؟", "تقدر تبدأ وتجرب كل الموديولات مجانًا. في باقات مدفوعة اختيارية لو حبيت مساحة أوسع بدون إعلانات أو ربط الذكاء الاصطناعي — التفاصيل في قسم الأسعار تحت."],
   ["هل بياناتي آمنة؟", "بياناتك مشفّرة ومحمية بمصادقة Supabase، وخصوصيتك أولوية — بياناتك ملكك وحدك ولا تُشارك مع أي طرف ثالث."],
   ["هل يعمل بدون إنترنت؟", "أيوة — أوج تطبيق PWA كامل: ثبّته على موبايلك واشتغل براحتك، وبياناتك بتتزامن تلقائيًا لما يرجع النت."],
   ["هل التطبيق عربي بالكامل؟", "مكتوب ومصمم عربي من أول سطر — واجهة RTL أصلية، أرقام عربية، وخطوط مختارة بعناية للعربي."],
@@ -724,14 +826,22 @@ function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-4 sm:px-6 md:flex-row">
         <BrandMark />
         <p className="text-sm text-muted-foreground">امتلك صباحك. امتلك حياتك.</p>
-        <nav className="flex items-center gap-5 text-sm font-bold" aria-label="روابط التذييل">
+        <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-bold" aria-label="روابط التذييل">
           <button onClick={() => router.push("/app")} className="text-muted-foreground transition-colors hover:text-foreground">
             التطبيق
           </button>
           <a href="#features" className="text-muted-foreground transition-colors hover:text-foreground">المميزات</a>
-          <a href="#faq" className="text-muted-foreground transition-colors hover:text-foreground">الأسئلة</a>
+          <a href="#pricing" className="text-muted-foreground transition-colors hover:text-foreground">الأسعار</a>
+          <a href="/about" className="text-muted-foreground transition-colors hover:text-foreground">عن أوج</a>
+          <a href="/contact" className="text-muted-foreground transition-colors hover:text-foreground">تواصل</a>
         </nav>
       </div>
+      <nav className="mx-auto mt-6 flex max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 text-xs font-bold sm:px-6" aria-label="روابط قانونية">
+        <a href="/privacy" className="text-muted-foreground/70 transition-colors hover:text-foreground">سياسة الخصوصية</a>
+        <a href="/terms" className="text-muted-foreground/70 transition-colors hover:text-foreground">شروط الاستخدام</a>
+        <a href="/community-guidelines" className="text-muted-foreground/70 transition-colors hover:text-foreground">إرشادات المجتمع</a>
+        <a href="/refund-policy" className="text-muted-foreground/70 transition-colors hover:text-foreground">سياسة الاسترجاع</a>
+      </nav>
       <p className="mt-8 text-center text-xs text-muted-foreground">
         أوج © {new Date().getFullYear()} — صُنع بشغف للمستخدم العربي
       </p>
@@ -752,6 +862,7 @@ export default function LandingPage() {
       <ModulesMarquee />
       <WhatItDoes />
       <Steps />
+      <Pricing />
       <Faq />
       <FinalCta />
       <Footer />
