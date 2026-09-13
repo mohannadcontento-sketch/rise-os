@@ -8,12 +8,21 @@
 
 import type { Metadata } from "next";
 import LegalShell, { LegalSection, LegalList } from "@/components/rise/legal-shell";
-import { SUPPORT_EMAIL, LEGAL_LAST_UPDATED } from "@/lib/site";
+import { SUPPORT_EMAIL, LEGAL_LAST_UPDATED, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "سياسة الخصوصية | أوج",
   description:
     "كيف يجمع أوج بياناتك ويحميها ويستخدمها: بيانات حسابك ومحتواك، الإعلانات في الباقة المجانية، ملفات تعريف الارتباط، وحقوقك في التصدير والحذف.",
+    openGraph: pageOg(
+    "سياسة الخصوصية | أوج",
+    "كيف يجمع أوج بياناتك ويحميها ويستخدمها: بيانات حسابك ومحتواك، الإعلانات في الباقة المجانية، ملفات تعريف الارتباط، وحقوقك في التصدير والحذف.",
+    "/privacy"
+  ),
+  twitter: pageTwitter(
+    "سياسة الخصوصية | أوج",
+    "كيف يجمع أوج بياناتك ويحميها ويستخدمها: بيانات حسابك ومحتواك، الإعلانات في الباقة المجانية، ملفات تعريف الارتباط، وحقوقك في التصدير والحذف."
+  ),
   alternates: { canonical: "/privacy" },
 };
 
