@@ -77,22 +77,25 @@ curl -X POST "https://<project-ref>.supabase.co/functions/v1/mcp" \
 
 ```sql
 -- (أ) خزّن مفتاح الخدمة في Vault (مرة واحدة)
-select vault.create_secret('<SERVICE_ROLE_KEY>', 'push_dispatch_auth');
+select vault.create_secret('<SERVICE_SECRET>', 'push_dispatch_auth');
 
--- (ب) سجّل رابط الوظيفة
-insert into app_config (key, value) values
-  ('edge_function_push_dispatch_url', 'https://<project-ref>.supabase.co/functions/v1/push-dispatch')
-on conflict (key) do update set value = excluded.value;
+-- (ب) سجّل رابط الوظيفة (لاحظ اسم المفتاح: edge_push_dispatch_url)
+insert into app_config (key, value, updated_at) values
+  ('edge_push_dispatch_url', 'https://<project-ref>.supabase.co/functions/v1/push-dispatch', now())
+on conflict (key) do update set value = excluded.value, updated_at = now();
 
--- (ج) فعّل الجدولة (تنشئ مهمة cron كل دقيقتين)
-select rise_activate_push_dispatch();
+-- (ج) فعّل الجدولة: أعد تشغيل الهجرة 033 كاملة (idempotent) —
+--     كتلة DO ستجد السر والرابط وتنشئ cron awj-push-dispatch-sweep
 
 -- (د) تحقق
-select jobname, schedule from cron.job where jobname like '%push%';
+select jobname, schedule, active from cron.job
+where jobname = 'awj-push-dispatch-sweep';
 ```
 
-`<SERVICE_ROLE_KEY>` من: Project Settings → API keys →
-`service_role` (secret). VAPID يُقرأ تلقائيًا من `app_config` (زرعتها
+`<SERVICE_SECRET>` من: Project Settings → API Keys — **أي صيغة تعمل**:
+`sb_secret_…` (الجديدة) أو `service_role` JWT (القديم)؛ الوظيفة
+تتحقق من المفتاح حيًا عند PostgREST فلا يهم اختلاف الصيغة عن
+المحقون في بيئتها. VAPID يُقرأ تلقائيًا من `app_config` (زرعتها
 هجرة 028) — لا يلزم أي إعداد إضافي.
 
 ---
@@ -270,4 +273,5 @@ ChatGPT لا يقبل مفتاح Bearer ثابتًا (توثيق OpenAI الرس
 | JSON-RPC: «مطلوب مفتاح MCP» | الترويسة ناقصة/خاطئة | `Authorization: Bearer rise_…` من إعدادات أوج |
 | JSON-RPC: خطة غير ماكس | المستخدم على Free | فعّل ماكس من لوحة الأدمن أولًا |
 | البوش لا يصل | الجدولة غير مفعلة أو الرابط غلط | خطوات (أ)-(د) أعلاه + `select * from cron.job` |
+| 401 «غير مصرح» بمفتاح خدمة صحيح | اختلاف صيغة المفتاح بين vault وبيئة الوظيفة (نظام 2026) | الوظيفة الجديدة تتحقق حيًا — أعد لصق الحزمة المحدثة، أو خزن في vault نفس صيغة `sb_secret_` من الإعدادات |
 | أعدت تعديل المصادر | — | `node scripts/build-dashboard-bundles.mjs` ثم أعد اللصق |

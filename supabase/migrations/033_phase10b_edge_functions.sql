@@ -136,8 +136,10 @@ END $$;
 -- ─────────────────────────────────────────────────────────────
 -- (أ) تفعيل الجدولة — يشغّله المالك مرة واحدة في SQL Editor:
 --
---   -- 1) انسخ service_role key من Dashboard → Settings → API
---   select vault.create_secret('<SERVICE_ROLE_KEY>', 'push_dispatch_auth');
+--   -- 1) انسخ مفتاح الخدمة من Dashboard → Settings → API Keys
+--   --    (أي صيغة تعمل: sb_secret_… الجديدة أو service_role JWT
+--   --    القديم — الوظيفة تتحقق من المفتاح حيًا عند PostgREST)
+--   select vault.create_secret('<SERVICE_SECRET>', 'push_dispatch_auth');
 --
 --   -- 2) اضبط رابط الوظيفة (استبدل <PROJECT_REF> من إعدادات المشروع)
 --   insert into public.app_config (key, value, updated_at) values

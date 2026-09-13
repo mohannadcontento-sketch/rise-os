@@ -207,7 +207,21 @@ export interface MockServer {
   close(): Promise<void>
 }
 
-export function startMockPostgrest(db: MockDb, port = 0): Promise<MockServer> {
+/**
+ * بدائل الخادم: serviceKeys يفعّل محاكاة RLS لجدول app_config
+ * (بلا سياسات في الإنتاج): قراءته تُسمح لمفاتيح الخدمة المذكورة فقط،
+ * وغيرها يرى قائمة فارغة كما يفعل anon/publishable عند PostgREST
+ * الحقيقي — يُستخدم لاختبار مسار التحقق الحي في push-dispatch.
+ */
+export interface MockOpts {
+  serviceKeys?: string[]
+}
+
+export function startMockPostgrest(
+  db: MockDb,
+  port = 0,
+  opts: MockOpts = {},
+): Promise<MockServer> {
   const handler = (req: Request): Response | Promise<Response> => {
     const headers: Record<string, string> = {}
     req.headers.forEach((v, k) => (headers[k.toLowerCase()] = v))
@@ -222,11 +236,21 @@ export function startMockPostgrest(db: MockDb, port = 0): Promise<MockServer> {
       return handleRpc(db, rpcMatch[1], req)
     }
 
+    // ── محاكاة RLS لـ app_config (إن طُلبت الخدمة فقط) ──
+    // جدول بلا سياسات: مفاتيح الخدمة تتجاوز، والعام يرى فراغًا
+    const presentedKey = headers['apikey'] ||
+      (headers['authorization'] || '').replace(/^Bearer\s+/i, '')
+    const appConfigLocked = opts.serviceKeys !== undefined &&
+      path === '/rest/v1/app_config' &&
+      !opts.serviceKeys.includes(presentedKey)
+
     // ── مسار جدول ──
     const tableMatch = path.match(/^\/rest\/v1\/([a-z_]+)$/)
     if (tableMatch) {
       const getter = TABLES[tableMatch[1]]
       if (!getter) return pgrstError(404, `table not found: ${tableMatch[1]}`)
+      // محاكاة RLS على القراءة تحديدًا (التحقق الحي يستخدم GET)
+      if (appConfigLocked && req.method === 'GET') return json([])
       const qs = parseQuery(url)
 
       if (req.method === 'GET') {

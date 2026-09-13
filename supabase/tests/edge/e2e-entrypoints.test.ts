@@ -12,6 +12,8 @@
 //          + token (form) + JSON-RPC بـaccess_token (الحلقة كاملة)
 //   PUSH: بلا مصادقة→401 | سر خاطئ→401 | مفتاح الخدمة→جولة نظيفة
 //        | force notification_id→إرسال فعلي يُفك تشفيره عند المزود
+//        | مفتاح بصيغة أخرى (sb_secret نمطًا)→ تحقق PostgREST→200
+//        | مفتاح عام→ app_config فارغ→401 (نظام مفاتيح 2026)
 // ============================================================
 
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
@@ -96,7 +98,11 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     { key: 'mcp_oauth_client_secret', value: E2E_CLIENT_SECRET },
   )
 
-  const postgrest = await startMockPostgrest(db)
+  const postgrest = await startMockPostgrest(db, 0, {
+    // محاكاة RLS لـ app_config: مفاتيح الخدمة هاتان فقط تتجاوز —
+    // الثانية ليست في بيئة الوظيفة عمدًا لتغطية مسار التحقق الحي
+    serviceKeys: [SERVICE_KEY, 'e2e-sb-secret-style-key'],
+  })
   const provider = await startFakePushProvider()
   db.pushSubscriptions.push({
     id: crypto.randomUUID(),
@@ -300,6 +306,24 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     assertEquals(sweep.ok, true)
     assertEquals(sweep.processed, 1)
     assertEquals(sweep.sent, 1)
+
+    // مفتاح خدمة بصيغة مختلفة عن بيئة الوظيفة (نمط sb_secret_ 2026)
+    // → يُقبل عبر التحقق الحي عند PostgREST (جولة نظيفة ثانية)
+    const altRes = await fetch(`http://127.0.0.1:8762/`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer e2e-sb-secret-style-key' },
+      body: '{}',
+    })
+    assertEquals(altRes.status, 200)
+    assertEquals((await altRes.json()).ok, true)
+
+    // مفتاح عام (ليس خدمة): app_config يظهر له فارغًا → 401
+    const anonRes = await fetch(`http://127.0.0.1:8762/`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer e2e-public-anon-key' },
+      body: '{}',
+    })
+    assertEquals(anonRes.status, 401)
 
     // المزود الوهمي استلم الإشعار وفكه بنجاح
     assertEquals(provider.received.length, 1)
