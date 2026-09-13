@@ -33,6 +33,37 @@ export function siteUrl(path: string): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+
+/** ميتاداتا OpenGraph جاهزة لأي صفحة عامة (تجمع كل الحقول المشتركة). */
+export function pageOg(title: string, description: string, path: string) {
+  return {
+    title,
+    description,
+    type: "website" as const,
+    locale: "ar_EG",
+    siteName: SITE_NAME,
+    url: siteUrl(path),
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "أوج — امتلك صباحك. امتلك حياتك.",
+      },
+    ],
+  };
+}
+
+/** بطاقة Twitter جاهزة لأي صفحة عامة. */
+export function pageTwitter(title: string, description: string) {
+  return {
+    card: "summary_large_image" as const,
+    title,
+    description,
+    images: ["/og.png"],
+  };
+}
+
 /** الباقات الثلاث كما هي مطبقة في نظام الاشتراكات. */
 export const PLANS = {
   free: { key: "free", name: "المجانية", priceEGP: 0, ads: true, mcp: false },
