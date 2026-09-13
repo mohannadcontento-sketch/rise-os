@@ -279,3 +279,20 @@ Work Log:
 Stage Summary:
 - Phase 12 (Landing+SEO+Legal) complete in repo; preview og.png copy at download/awj-og-preview.png locally
 - Owner follow-ups: connect awj.life domain (or set NEXT_PUBLIC_SITE_URL), Search Console verification, create support@/business@ mailboxes, human review of legal copy
+
+---
+Task ID: 29
+Agent: Super Z (main)
+Task: Phase 13 — Security & Privacy (repo plan continuation; plan doc section «الأمان والخصوصية»)
+
+Work Log:
+- Mapped the plan's 13-item security checklist against the repo: items 1-10 + 12 already covered by hardening sessions 1-5 (reports in docs/reports/), migrations 005-031 (fail-closed RLS pattern), middleware rate limits (28 rules) + CSP/nonce/strict-dynamic + CSRF origin checks + idempotency keys, api-auth/audit guards with the ALS token-context fix from 27-c, sanitized community rendering, httpOnly cookie BFF, media_objects storage ledger (migration 031), and MCP v3.1 isolation — full evidence table written to docs/phase-12/SECURITY_PRIVACY.md
+- Closed gap #13 (cookie/consent for ads): new src/components/rise/ad-consent.tsx — Arabic RTL glass banner (accept vs non-personalized, privacy-policy link, reopen hook via the rise:ads-consent window event) + privacy-first inline head script in layout.tsx that defaults EVERY visitor to NPA (requestNonPersonalizedAds=1) by reading awj-ads-consent from localStorage synchronously BEFORE adsbygoogle.js loads (Google's documented NPA pattern) — personalized ads are now strictly opt-in; EEA note: enable a Google-certified CMP if EEA traffic grows
+- Closed gap #11 (backup/restore): docs/phase-12/BACKUP_RESTORE.md — asset inventory (Postgres critical / Cloudinary bytes / Turso mirror / env secrets), 3 layers (manual weekly dump now on the free plan → Supabase Pro daily + PITR before public launch → user self-export via /api/rise/export), ready-to-copy supabase db dump commands, step-by-step restore procedure (selective vs full), RPO/RTO table, quarterly restore drill checklist
+- Documented UPSTASH_REDIS_REST_URL/TOKEN in .env.example — without them the middleware's rate limits run per-serverless-instance (in-memory) instead of per-IP distributed
+- Note on folder numbering: docs/phase-12/ continues the repo's phase folder sequence (phase-11 = Landing) while the owner's plan numbering calls this phase 13
+
+Stage Summary:
+- Phase 13 (Security & Privacy) closed in repo: 13/13 checklist items addressed (11 pre-existing with evidence, 2 implemented this session: ads consent + backup plan) + both DoD items documented
+- Owner actions: set Upstash env vars in Vercel · follow BACKUP_RESTORE.md (weekly dump now, Pro before public launch) · run supabase/fixes/riseos-fix-composite-functions.sql (still pending from 27-c, fixes task-create 500) · human review of privacy-policy wording for AdSense cookies · rotate any pre-hardening credentials
+- Next in plan: Phase 14 (Performance & Reliability)
