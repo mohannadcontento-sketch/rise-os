@@ -138,11 +138,12 @@ export function McpSection() {
     setKeyInfo(d.keyInfo)
   }, [])
 
-  // جلب بيانات OAuth عند فتح قسم ChatGPT أول مرة (lazy)
+  // جلب بيانات OAuth عند الفتح — الحالة تُضبط في معالج الزر
+  // (setState داخل .then فقط — نفس نمط باقي القسم) والطلب يطلقه
+  // التأثير عند دخول حالة loading
   useEffect(() => {
-    if (!chatgptOpen || oauthState !== 'idle' || plan !== 'max') return
+    if (!chatgptOpen || oauthState !== 'loading' || plan !== 'max') return
     let alive = true
-    setOauthState('loading')
     apiFetch('/api/rise/mcp/oauth-info')
       .then(async (res) => {
         if (!alive) return
@@ -436,7 +437,11 @@ export function McpSection() {
                   <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 overflow-hidden">
                     <button
                       type="button"
-                      onClick={() => setChatgptOpen((v) => !v)}
+                      onClick={() => {
+                        const opening = !chatgptOpen
+                        setChatgptOpen(opening)
+                        if (opening && oauthState === 'idle') setOauthState('loading')
+                      }}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-right hover:bg-cyan-500/10 transition-colors"
                     >
                       <span className="text-[11px] font-semibold flex items-center gap-1.5">
