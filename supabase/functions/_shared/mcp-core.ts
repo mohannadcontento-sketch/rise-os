@@ -38,14 +38,16 @@ import { MCP_TOOLS_BY_NAME, publicToolsList } from './mcp-tools.ts'
 
 const PROTOCOL_DEFAULT = '2025-06-18'
 const PROTOCOL_KNOWN = new Set(['2025-06-18', '2025-03-26', '2024-11-05'])
-const SERVER_INFO = { name: 'awj-mcp', version: '3.0.0' }
+const SERVER_INFO = { name: 'awj-mcp', version: '3.1.0' }
 
 const INSTRUCTIONS_AR =
   'أوج (awj.life) هو نظام حياة شخصي عربي متكامل: المهام والمشاريع، العادات، مخطط اليوم، اليوميات، الأهداف، ' +
   'القراءة (كتب ومقالات ودورات)، التعلم (أهداف ودورات ومهارات وسجل جلسات)، الدماغ الثاني (ملاحظات وأفكار)، ' +
-  'المالية (دخل ومصروف وادخار)، الصحة، روتين الصباح، التركيز والشغل، الإنجازات، والمجتمع. ' +
-  'ابدأ بـ get_today_plan و list_tasks و list_habits لتفهم يوم المستخدم، وlist_books و list_learning و ' +
-  'finance_summary و list_health_logs للأقسام الأخرى، وسجّل له بالأداة المناسبة عند الطلب (الأمثلة في وصف كل أداة). ' +
+  'المالية (دخل ومصروف وادخار)، الصحة، روتين الصباح، التركيز والشغل، المراجعات (الأسبوعية والشهرية)، ' +
+  'نقاط الخبرة والإنجازات، والمجتمع. ' +
+  'ابدأ بـ get_today_plan و list_tasks و list_habits لتفهم يوم المستخدم، وget_weekly_review و get_monthly_review ' +
+  'لتقييم مساره مؤخرًا، وlist_books و list_learning و finance_summary و list_health_logs للأقسام الأخرى، ' +
+  'وسجّل له بالأداة المناسبة عند الطلب (الأمثلة في وصف كل أداة). ' +
   'كل الأدوات تعمل على بيانات المستخدم نفسه فقط، والحذف النهائي يتطلب confirm:true صراحةً.'
 
 /** حد IP بالدقيقة (تكافؤ middleware مسار Vercel: 60/د) */
