@@ -9,6 +9,7 @@ import { QueryProvider } from "@/components/query-provider";
 import { PerformanceMonitor } from "@/components/performance-monitor";
 import { ErrorCapture } from "@/components/error-capture";
 import { AuthProvider } from "@/components/auth-provider";
+import { AdsConsent } from "@/components/rise/ad-consent";
 import { DEFAULT_ADSENSE_CLIENT_ID } from "@/lib/ads/config";
 import { SITE_URL } from "@/lib/site";
 
@@ -105,6 +106,18 @@ export default async function RootLayout({
             AdSense — google-adsense-account هو الأسلوب الموثّق من Google
             ويُقرأ من الـHTML الخام (لا يتأثر بـCSP إطلاقًا). */}
         <meta name="google-adsense-account" content={DEFAULT_ADSENSE_CLIENT_ID} />
+        {/* المرحلة 13 (الأمان والخصوصية): موافقة الإعلانات — الافتراض
+            الآمن NPA (غير مخصصة) لكل زائر حتى موافقة صريحة عبر
+            ad-consent.tsx. سكربت متزامن في <head> قبل adsbygoogle.js
+            يقرأ القرار من localStorage ويضبط الإشارة قبل أول طلب
+            إعلان — نمط Google الموثّق للـNPA. */}
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{if(localStorage.getItem('awj-ads-consent')!=='accepted'){(window.adsbygoogle=window.adsbygoogle||[]).requestNonPersonalizedAds=1;}}catch(e){}})();",
+          }}
+        />
         {/* المرحلة 09 (Ads): سكربت AdSense في <head> كما تطلبه لوحة Google
             حرفيًا (snippet الصق الكود بين head و/head). الزاحف يقرأ الـHTML
             الخام فقط — التحميل الديناميكي من ad-slot وحده لا يُحتسب
@@ -134,6 +147,8 @@ export default async function RootLayout({
               <PerformanceMonitor />
               <ErrorCapture />
               {children}
+              {/* المرحلة 13: لافتة موافقة الإعلانات (NPA افتراضيًا حتى الموافقة) */}
+              <AdsConsent />
               {/* Unified toast system — sonner only (single system, Phase-2 design decision) */}
               <SonnerToaster position="top-center" richColors closeButton={false} />
               {/* Vercel Analytics — privacy-friendly pageview/web-vitals tracking */}
