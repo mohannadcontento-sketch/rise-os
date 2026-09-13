@@ -3,13 +3,14 @@
 //
 // مصدر واحد لاسم الموقع وعنوانه وقنوات التواصل والباقات — تستخدمه
 // sitemap.ts و robots.ts وصفحات التسويق والقانونية وميتاداتا OG.
-// NEXT_PUBLIC_SITE_URL يسمح بتبديل الدومين من إعدادات Vercel
-// بدون تعديل الكود (قيمة السوق awj.life عند تثبيت الدومين).
+// الافتراضي = رابط الإنتاج الحالي على Vercel. عند شراء awj.life
+// وتثبيته اضبط NEXT_PUBLIC_SITE_URL=https://awj.life من لوحة Vercel
+// (Settings → Environment Variables) بدون تعديل الكود.
 // ============================================================
 
 /** الدومين الأساسي للموقع (يُقرأ من البيئة عند توفرها). */
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://awj.life"
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://rise-os-gamma.vercel.app"
 ).replace(/\/+$/, "");
 
 /** اسم المنتج بالعربي. */
