@@ -10,12 +10,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import LegalShell, { LegalSection } from "@/components/rise/legal-shell";
-import { SITE_URL, SUPPORT_EMAIL } from "@/lib/site";
+import { SITE_URL, SUPPORT_EMAIL, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "الأسعار والباقات | أوج",
   description:
     "باقات أوج الثلاث: المجانية بإعلانات خفيفة، بلس ٣٠ جنيه/شهر بدون إعلانات بحدود أعلى، وماكس ٥٠ جنيه/شهر مع ربط MCP — والإلغاء بيدك في أي وقت.",
+    openGraph: pageOg(
+    "الأسعار والباقات | أوج",
+    "باقات أوج الثلاث: المجانية بإعلانات خفيفة، بلس ٣٠ جنيه/شهر بدون إعلانات بحدود أعلى، وماكس ٥٠ جنيه/شهر مع ربط MCP — والإلغاء بيدك في أي وقت.",
+    "/pricing"
+  ),
+  twitter: pageTwitter(
+    "الأسعار والباقات | أوج",
+    "باقات أوج الثلاث: المجانية بإعلانات خفيفة، بلس ٣٠ جنيه/شهر بدون إعلانات بحدود أعلى، وماكس ٥٠ جنيه/شهر مع ربط MCP — والإلغاء بيدك في أي وقت."
+  ),
   alternates: { canonical: "/pricing" },
 };
 
