@@ -10,6 +10,7 @@ import { PerformanceMonitor } from "@/components/performance-monitor";
 import { ErrorCapture } from "@/components/error-capture";
 import { AuthProvider } from "@/components/auth-provider";
 import { DEFAULT_ADSENSE_CLIENT_ID } from "@/lib/ads/config";
+import { SITE_URL } from "@/lib/site";
 
 // ============================================================
 // app/layout.tsx — الجذر العام للتطبيق كله
@@ -24,7 +25,7 @@ import { DEFAULT_ADSENSE_CLIENT_ID } from "@/lib/ads/config";
 export const metadata: Metadata = {
   title: "أوج | awj.life — امتلك صباحك. امتلك حياتك.",
   description: "أوج — نظام حياتك الشخصي المتكامل: إنتاجية، عادات، أهداف، عمل عميق، صحة، مالية وتعلم. يعمل بدون إنترنت!",
-  metadataBase: new URL("https://awj.life"),
+  metadataBase: new URL(SITE_URL), // يتبع NEXT_PUBLIC_SITE_URL — رابط الإنتاج الحالي
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -39,6 +40,16 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "أوج",
+  },
+  // المرحلة 12+: التحقق من ملكية الموقع في Google (Search Console + AdSense).
+  // التوكنان صادران عن عمليتي تحقق منفصلتين (وسم HTML + سجل TXT) —
+  // يقرأهما الزاحف من الـHTML الخام لكل صفحة عبر Next Metadata API،
+  // ولا يتأثران بـ CSP أو بالتحميل الديناميكي.
+  verification: {
+    google: [
+      "eRGXx3wHED4kcpurC3ZOXkXWwshI920YgRBniK9tb3c",
+      "iHoMQg_InwKeNSVcsTiAnf35Gs2YDY6At3yM6dONFWk",
+    ],
   },
   // P3#7: Additional meta tags in <head> below
   other: {},
