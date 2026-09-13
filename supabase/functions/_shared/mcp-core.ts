@@ -79,7 +79,9 @@ export class RateLimiter {
     if (isWrite && bucket.writes + 1 > LIMIT_WRITES_PER_MIN) {
       return { allowed: false, reason: 'write', retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - t) / 1000)) }
     }
-    bucket.count = total
+    // الطلب يُحصى في العداد الإجمالي مرة واحدة فقط (فحص مستوى الطلب) —
+    // فحص الكتابة اللاحق يزيد عدّاد الكتابة فقط، لا الإجمالي (كان يضاعفه سابقًا)
+    if (!isWrite) bucket.count = total
     if (isWrite) bucket.writes += 1
     if (this.buckets.size > 5000) {
       for (const [k, b] of this.buckets) if (t >= b.resetAt) this.buckets.delete(k)
