@@ -47,9 +47,11 @@ alter table public.mcp_oauth_codes enable row level security;
 -- فتتجاوز RLS، وأي عميل آخر لا يرى شيئًا (نفس عقد 033).
 
 -- فهرس تنظيف المجدول (احتياط — التنظيف أفضل-جهد داخل الوظيفة)
+-- ملاحظة: فهرس عادي على expires_at وليس جزئيًا بشرط now() —
+-- now() ليست IMMUTABLE فيرفضها Postgres في predicate الفهرس
+-- (اكتُشف أثناء التطبيق الفعلي على الإنتاج 2026-09-13).
 create index if not exists mcp_oauth_codes_expired_idx
-  on public.mcp_oauth_codes (expires_at)
-  where expires_at < now();
+  on public.mcp_oauth_codes (expires_at);
 
 -- ── 2) بيانات عميل OAuth (تولد مرة واحدة) ──────────────────
 insert into app_config (key, value)
