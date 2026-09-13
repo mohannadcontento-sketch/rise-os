@@ -8,12 +8,21 @@
 
 import type { Metadata } from "next";
 import LegalShell, { LegalSection, LegalList } from "@/components/rise/legal-shell";
-import { SUPPORT_EMAIL } from "@/lib/site";
+import { SUPPORT_EMAIL, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "سياسة الاسترجاع والإلغاء | أوج",
   description:
     "كيف تلغي اشتراكك في أوج، ماذا يحدث لبياناتك وباقتك عند الإلغاء، وضمان استرجاع ٤٨ ساعة لم تشأ فيه الباقة المدفوعة.",
+    openGraph: pageOg(
+    "سياسة الاسترجاع والإلغاء | أوج",
+    "كيف تلغي اشتراكك في أوج، ماذا يحدث لبياناتك وباقتك عند الإلغاء، وضمان استرجاع ٤٨ ساعة لم تشأ فيه الباقة المدفوعة.",
+    "/refund-policy"
+  ),
+  twitter: pageTwitter(
+    "سياسة الاسترجاع والإلغاء | أوج",
+    "كيف تلغي اشتراكك في أوج، ماذا يحدث لبياناتك وباقتك عند الإلغاء، وضمان استرجاع ٤٨ ساعة لم تشأ فيه الباقة المدفوعة."
+  ),
   alternates: { canonical: "/refund-policy" },
 };
 
