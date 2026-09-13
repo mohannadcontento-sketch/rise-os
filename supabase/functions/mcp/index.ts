@@ -6,11 +6,14 @@
 // حالة الربط = مفتاح Bearer). النواة في _shared/mcp-core.ts
 // والأدوات الثمانية في _shared/mcp-tools.ts.
 //
-// النشر (إلزامي):
-//   supabase functions deploy mcp --no-verify-jwt
-//   (--no-verify-jwt ضروري: مفاتيح rise_ ليست Supabase JWT —
-//    بوابة المنصة الافتراضية سترفضها قبل وصول الكود؛ كل
-//    التحقق يتم داخل mcp-core بسلسلة كاملة.)
+// النشر — مساران:
+//   أ) CLI (كامل البنية): supabase functions deploy mcp --no-verify-jwt
+//      (--no-verify-jwt إلزامي: مفاتيح rise_ ليست Supabase JWT — بوابة
+//       المنصة سترفضها قبل وصول الكود؛ التحقق يتم داخل mcp-core)
+//   ب) لوحة Dashboard (ملف واحد فقط): الصق الملف المدموج
+//      supabase/dist/mcp.dashboard.ts — وُلّد بـ
+//      scripts/build-dashboard-bundles.mjs (لا تحرره يدويًا)
+//      التفاصيل الكاملة: supabase/DEPLOY.md
 //
 // نقطة النهاية بعد النشر:
 //   https://<project-ref>.supabase.co/functions/v1/mcp

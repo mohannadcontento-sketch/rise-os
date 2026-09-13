@@ -11,10 +11,13 @@
 //   2) يدويًا: POST بمفتاح الخدمة — إجبار إشعار بعينه عبر
 //      ?notification_id=<uuid> (تشخيص/اختبار)
 //
-// النشر (إلزامي):
-//   supabase functions deploy push-dispatch --no-verify-jwt
-//   (نفس سبب MCP: نتحقق داخليًا من مفتاح الخدمة أو السر —
-//    وليس من JWT المنصة الافتراضي)
+// النشر — مساران:
+//   أ) CLI (كامل البنية): supabase functions deploy
+//      push-dispatch --no-verify-jwt
+//   ب) لوحة Dashboard (ملف واحد فقط): الصق الملف المدموج
+//      supabase/dist/push-dispatch.dashboard.ts — وُلّد بـ
+//      scripts/build-dashboard-bundles.mjs (لا تحرره يدويًا)
+//      التفاصيل الكاملة + خطوات الجدولة: supabase/DEPLOY.md
 //
 // متغيرات البيئة:
 //   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (حقن تلقائي)

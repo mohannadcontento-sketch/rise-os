@@ -1,0 +1,24 @@
+# ============================================================
+# supabase/config.toml — إعداد مشروع Supabase CLI
+#
+# يُستخدم عند النشر من الطرفية (المسار الموصى به):
+#   supabase link --project-ref <project-ref>
+#   supabase functions deploy mcp --no-verify-jwt
+#   supabase functions deploy push-dispatch --no-verify-jwt
+# (أو فقط `supabase functions deploy` — إعدادات verify_jwt
+#  أدناه تُطبَّق تلقائيًا لكل وظيفة)
+#
+# verify_jwt = false إلزامي للوظيفتين:
+#   - mcp: مفاتيح rise_ ليست Supabase JWT (بوابة المنصة
+#     سترفضها قبل وصول الكود — التحقق الكامل داخل الوظيفة)
+#   - push-dispatch: المجدول يمكن أن يستخدم x-cron-secret
+#     بدلًا من JWT
+# ============================================================
+
+project_id = "rise-os"
+
+[functions.mcp]
+verify_jwt = false
+
+[functions.push-dispatch]
+verify_jwt = false
