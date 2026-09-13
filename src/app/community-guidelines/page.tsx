@@ -8,12 +8,21 @@
 
 import type { Metadata } from "next";
 import LegalShell, { LegalSection, LegalList } from "@/components/rise/legal-shell";
-import { SUPPORT_EMAIL } from "@/lib/site";
+import { SUPPORT_EMAIL, pageOg, pageTwitter } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "إرشادات المجتمع | أوج",
   description:
     "قواعد السلوك في مجتمع أوج: الاحترام، المحتوى المسموح، آلية الإبلاغ والمراجعة، وإجراءات الإشراف من التنبيه إلى الحظر.",
+    openGraph: pageOg(
+    "إرشادات المجتمع | أوج",
+    "قواعد السلوك في مجتمع أوج: الاحترام، المحتوى المسموح، آلية الإبلاغ والمراجعة، وإجراءات الإشراف من التنبيه إلى الحظر.",
+    "/community-guidelines"
+  ),
+  twitter: pageTwitter(
+    "إرشادات المجتمع | أوج",
+    "قواعد السلوك في مجتمع أوج: الاحترام، المحتوى المسموح، آلية الإبلاغ والمراجعة، وإجراءات الإشراف من التنبيه إلى الحظر."
+  ),
   alternates: { canonical: "/community-guidelines" },
 };
 
