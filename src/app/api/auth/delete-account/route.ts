@@ -110,16 +110,7 @@ export async function DELETE(req: NextRequest) {
     if (deleteError) {
       console.error('[auth/delete-account] supabase deleteUser failed:', deleteError.message)
       return NextResponse.json(
-        {
-          error: 'تعذر حذف الحساب من مزود المصادقة. حاول لاحقاً أو تواصل مع الدعم.',
-          // QA-DIAG (مؤقت): تفاصيل خطأ المزود للتشخيص — يُحذف بعد الحل
-          diag: {
-            name: (deleteError as any)?.name ?? null,
-            status: (deleteError as any)?.status ?? null,
-            code: (deleteError as any)?.code ?? null,
-            message: (deleteError as any)?.message ?? null,
-          },
-        },
+        { error: 'تعذر حذف الحساب من مزود المصادقة. حاول لاحقاً أو تواصل مع الدعم.' },
         { status: 503 }
       )
     }
