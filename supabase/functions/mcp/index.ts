@@ -10,7 +10,14 @@
 //   GET  /?oauth=metadata   → بيانات خادم التفويض (RFC 8414)
 //   GET  /?oauth=authorize  → موافقة عربية ثم 302 مع code
 //   POST /?oauth=token      → code/refresh → رموز access+refresh
+//   POST /?oauth=register   → تسجيل عميل ديناميكي (RFC 7591)
 //   POST /                  → JSON-RPC: Bearer rise_ أو Bearer JWT
+//
+//   ومسارات اكتشاف ChatGPT (path — يوزّعها المُوزّع تحت):
+//   GET /.well-known/oauth-authorization-server → metadata
+//   GET /.well-known/openid-configuration       → metadata
+//   GET /.well-known/oauth-protected-resource   → RFC 9728
+//   POST /register                                → DCR (RFC 7591)
 //
 // النشر — مساران:
 //   أ) CLI (كامل البنية): supabase functions deploy mcp --no-verify-jwt
@@ -84,8 +91,36 @@ Deno.serve(
       return fail('الوظيفة غير مهيأة: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY مفقودة')
     }
 
-    // ── مسارات OAuth (?oauth=…) قبل توزيع JSON-RPC ──
+    // ── مسارات path لاكتشاف OAuth (عقد ChatGPT/MCP) ──
+    // ChatGPT لا يعرف ?oauth=… أصلًا: يكتشف الخدمة عبر مسارات
+    // well-known (لاحقة مسار الخادم — مواصفة MCP authorization)
+    // ويسجّل نفسه ديناميكيًا عبر POST /register (RFC 7591).
+    // المسارات الفرعية تصلنا كاملة من بوابة المنصة (تأكدنا حيًا:
+    // أي مسار تحت /functions/v1/mcp/… يصل الدالة نفسها) لذا
+    // نوزّعها هنا قبل ?oauth= وقبل JSON-RPC.
     const url = new URL(req.url)
+    const pathname = url.pathname.replace(/\/+$/, '')
+    const isWellKnownAs =
+      pathname.endsWith('/.well-known/oauth-authorization-server') ||
+      pathname.endsWith('/.well-known/openid-configuration')
+    if (isWellKnownAs) {
+      if (req.method !== 'GET') return fail('well-known تدعم GET فقط', 405)
+      return toResponse(oauth.metadata())
+    }
+    if (pathname.endsWith('/.well-known/oauth-protected-resource')) {
+      if (req.method !== 'GET') return fail('well-known تدعم GET فقط', 405)
+      return toResponse(oauth.protectedResource())
+    }
+    if (pathname.endsWith('/register')) {
+      if (req.method !== 'POST') return fail('register تدعم POST فقط', 405)
+      return req
+        .text()
+        .then((rawBody) => oauth.handleRegister(rawBody))
+        .then(toResponse)
+        .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
+    }
+
+    // ── مسارات OAuth (?oauth=…) قبل توزيع JSON-RPC ──
     const oauthAction = url.searchParams.get('oauth')
     if (oauthAction) {
       switch (oauthAction) {
@@ -109,6 +144,13 @@ Deno.serve(
                 headersToRecord(req),
               ),
             )
+            .then(toResponse)
+            .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
+        case 'register':
+          if (req.method !== 'POST') return fail('register تدعم POST فقط', 405)
+          return req
+            .text()
+            .then((rawBody) => oauth.handleRegister(rawBody))
             .then(toResponse)
             .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
         default:

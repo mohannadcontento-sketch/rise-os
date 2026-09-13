@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 // ملف مدموج آليًا للنشر من لوحة Supabase (الوظيفة: mcp)
-// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 01:59:11 UTC
+// وُلِّد بواسطة scripts/build-dashboard-bundles.mjs — 2026-09-13 03:03:07 UTC
 // لا تحرر هذا الملف يدويًا؛ عدّل المصادر ثم أعد التوليد.
 //
 // طريقة النشر (Dashboard):
@@ -1541,8 +1541,22 @@ class McpServer {
 //   GET  ?oauth=metadata   → بيانات خادم التفويض (RFC 8414 مبسط)
 //   GET  ?oauth=authorize  → صفحة موافقة عربية → 302 مع code
 //   POST ?oauth=token      → code→tokens أو refresh→tokens
+//   POST ?oauth=register   → تسجيل عميل ديناميكي (RFC 7591)
 //   POST (بلا oauth=)      → JSON-RPC كما هو + قبول Bearer JWT
 //                            بجانب Bearer rise_ (في mcp-core)
+//
+// ومسارات path (index.ts يوزّعها إلينا — عقد اكتشاف ChatGPT):
+//   GET  /.well-known/oauth-authorization-server → نفس metadata
+//   GET  /.well-known/openid-configuration       → نفس metadata
+//   GET  /.well-known/oauth-protected-resource   → RFC 9728 (مؤشر AS)
+//   POST /register                                 → نفس ?oauth=register
+//
+// لماذا هذه الإضافات؟ ChatGPT عند إضافة connector لا يعرف
+// ?oauth=… أصلًا: هو يكتشف الخدمة عبر well-known (مواصفة MCP
+// authorization: لاحقة المسار بعد رابط الخادم) ثم يسجّل نفسه
+// ديناميكيًا عبر POST register (RFC 7591). بدون هذه المسارات
+// يفشل الاكتشاف وترفض ChatGPT إضافة الخادم نهائيًا — وهو ما
+// حدث في الاختبار الحي الأول قبل هذه المراجعة.
 //
 // التصميم (stateless قدر الإمكان):
 //   • JWT موقّعة HS256 بمفتاح اشتقاقي = sha256(service_key +
@@ -1559,9 +1573,17 @@ class McpServer {
 //   • بيانات العميل (client_id/secret) في app_config (زرع 034) —
 //     نفس نمط VAPID في 028. سر العميل نص صريح بنيويًا كقيم
 //     VAPID: app_config بلا سياسات RLS للقراءة العامة.
+//   • تسجيل ChatGPT الديناميكي (RFC 7591): لا حالة إضافية —
+//     endpoint register يعيد بيانات العميل الثابتة نفسها لكل
+//     مسجل صالح (redirect_uris على نطاقات ChatGPT/OpenAI فقط).
+//     مأمون لأن السر «عام بنيويًا» كقيم VAPID (أعلاه): قيمة
+//     التحدي الحقيقية = PKCE + code أحادية الاستخدام + توقيع
+//     JWT، لا سرّ العميل. عميل بلا سر (public) مقبول في token
+//     بشرط PKCE (تحدي موجود + verifier مطابق) — وعقد refresh
+//     محمي بتوقيع الرمز نفسه وربطه بالعميل (cid) وبوابة الخطة.
 //   • redirect_uri المسموح: نطاقات chatgpt.com/openai.com فقط
 //     (https حصرًا) — لا يمكن استخدام النقطة لإعادة توجيه
-//     مهاجم إلى نطاقه.
+//     مهاجم إلى نطاقه، لا في authorize ولا في تسجيل DCR.
 //   • ساعة وfetch قابلان للحقن — كل المنطق قابل للاختبار
 //     محليًا بلا Deno.serve (انظر oauth.test.ts).
 //
@@ -1750,6 +1772,10 @@ function htmlPage(title: string, inner: string): string {
   .meta{font-size:12px;color:#94a3b8;margin-top:18px;direction:ltr;unicode-bidi:embed}
   .warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;
         padding:10px 14px;font-size:13px;margin-bottom:14px}
+  input[type=text]{width:100%;box-sizing:border-box;direction:ltr;text-align:left;
+        padding:12px;border:1px solid #e2e8f0;border-radius:12px;font-size:14px;
+        margin:6px 0 12px;font-family:ui-monospace,SFMono-Regular,monospace;color:#0f172a}
+  form{margin:0}
 </style>
 </head>
 <body><div class="card">${inner}</div></body></html>`
@@ -1814,7 +1840,7 @@ class McpOAuth {
     return this.clientCache
   }
 
-  // ── GET ?oauth=metadata ──
+  // ── GET ?oauth=metadata (ونفس الرد عبر مسارات well-known) ──
   metadata(): OAuthHttpResult {
     return {
       status: 200,
@@ -1823,13 +1849,107 @@ class McpOAuth {
         issuer: this.issuer,
         authorization_endpoint: `${this.issuer}?oauth=authorize`,
         token_endpoint: `${this.issuer}?oauth=token`,
+        // تسجيل ديناميكي (RFC 7591) — ChatGPT يسجّل نفسه هنا قبل التفويض
+        registration_endpoint: `${this.issuer}/register`,
         response_types_supported: ['code'],
         grant_types_supported: ['authorization_code', 'refresh_token'],
         code_challenge_methods_supported: ['S256'],
-        token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+        token_endpoint_auth_methods_supported: [
+          'client_secret_basic',
+          'client_secret_post',
+          // ChatGPT عميل عام (PKCE) — لا سرّ عند التبديل
+          'none',
+        ],
         scopes_supported: [SCOPE],
       }),
     }
+  }
+
+  // ── GET /.well-known/oauth-protected-resource (RFC 9728) ──
+  // مؤشر «المورد محمي بـAS» — نسخ أحدث من عميل ChatGPT تطلبه قبل
+  // metadata؛ عدم وجوده يجعلها ترجع لاكتشاف AS مباشرة، وتقديمه
+  // يضمن سير الاكتشاف على كل النسخ. الرد يشير لنا كخادم تفويض.
+  protectedResource(): OAuthHttpResult {
+    return {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+      body: JSON.stringify({
+        resource: this.issuer,
+        authorization_servers: [this.issuer],
+        // الأدوات المُعرّضة عبر هذا المورد (توثيقي للعميل)
+        scopes_supported: [SCOPE],
+      }),
+    }
+  }
+
+  // ── POST ?oauth=register (وPOST /register) — DCR حسب RFC 7591 ──
+  // ChatGPT يسجّل نفسه ديناميكيًا قبل بدء التفويض. لا حالة إضافية:
+  // نعيد بيانات العميل الثابتة من app_config لكل طلب تسجيل صالح
+  // (redirect_uris محصورة في نطاقات ChatGPT/OpenAI https — نفس
+  // فحص authorize). سرّ العميل «عام بنيويًا» (VAPID-like، أعلاه)
+  // فإفلاته هنا لا يغيّر نموذج التهديد؛ الحماية الفعلية = PKCE +
+  // code أحادية الاستخدام + توقيع JWT + بوابة الخطة.
+  async handleRegister(rawBody: string): Promise<OAuthHttpResult> {
+    const json = (status: number, obj: unknown): OAuthHttpResult => ({
+      status,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      body: JSON.stringify(obj),
+    })
+    // 1) جسم JSON — رفض أي شيء تالف فورًا (fail-closed)
+    let req: { redirect_uris?: unknown; client_name?: unknown }
+    try {
+      req = JSON.parse(rawBody || '{}')
+    } catch {
+      return json(400, { error: 'invalid_client_metadata', error_description: 'body must be valid JSON' })
+    }
+    // 2) بيانات العميل من app_config (لم يشغّل المالك 034؟ رفض)
+    const client = await this.loadClient()
+    if (!client) {
+      return json(503, {
+        error: 'server_error',
+        error_description: 'OAuth client is not configured (run migration 034)',
+      })
+    }
+    // 3) redirect_uris: مصفوفة غير فارغة وكلها https على نطاقاتنا المسموحة
+    const uris = Array.isArray(req.redirect_uris) ? req.redirect_uris : []
+    if (uris.length === 0) {
+      return json(400, {
+        error: 'invalid_redirect_uri',
+        error_description: 'redirect_uris is required',
+      })
+    }
+    for (const raw of uris) {
+      if (typeof raw !== 'string') {
+        return json(400, { error: 'invalid_redirect_uri', error_description: 'redirect_uris must be strings' })
+      }
+      let u: URL
+      try {
+        u = new URL(raw)
+      } catch {
+        return json(400, { error: 'invalid_redirect_uri', error_description: `malformed redirect_uri: ${raw.slice(0, 80)}` })
+      }
+      if (!this.allowedRedirect(u)) {
+        return json(400, {
+          error: 'invalid_redirect_uri',
+          error_description: 'only https redirect URIs on chatgpt.com / openai.com are accepted',
+        })
+      }
+    }
+    // 4) الرد: بيانات العميل الثابتة. نعلن نفسنا كعميل عام (none)
+    //    ونسلّم السر أيضًا — العميل الذي يختار استخدامه (client_secret_post)
+    //    يمر أيضًا: token يقبل المسارين (سر صالح أو PKCE بلا سر).
+    await this.audit('mcp.oauth.registered', client.id, null)
+    return json(201, {
+      client_id: client.id,
+      client_secret: client.secret,
+      client_id_issued_at: Math.floor(this.t() * 1000),
+      client_name: typeof req.client_name === 'string' ? req.client_name.slice(0, 80) : 'ChatGPT',
+      redirect_uris: uris,
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+      scope: SCOPE,
+    })
   }
 
   // ── GET ?oauth=authorize ──
@@ -1871,7 +1991,10 @@ class McpOAuth {
     const clientId = p.get('client_id') ?? ''
     const challenge = p.get('code_challenge') ?? ''
     const challengeMethod = p.get('code_challenge_method') ?? ''
-    const scope = p.get('scope') ?? SCOPE
+    // scope فارغ = غائب: بعض العملاء (ChatGPT) يرسلونه فارغًا —
+    // نعامل الفراغ كغائب وننزل إلى النطاق الوحيد المدعوم
+    const scopeRaw = p.get('scope') ?? ''
+    const scope = scopeRaw.trim() === '' ? SCOPE : scopeRaw
 
     if (scope !== SCOPE) return back({ error: 'invalid_scope', state })
     if (responseType !== 'code') return back({ error: 'unsupported_response_type', state })
@@ -1899,13 +2022,39 @@ class McpOAuth {
     }
 
     // 5) هوية المستخدم: مفتاح rise_ (نفس سلسلة mcp-core حرفيًا)
-    const apiKey = p.get('api_key') ?? ''
+    //    غائب؟ صفحة إدخال بنموذج GET يحفظ كل معاملات OAuth في
+    //    حقول مخفية — ChatGPT لا يعرف مفتاح المستخدم، فيلصقه
+    //    هنا بنفسه (بدل تعديل الرابط يدويًا — تجربة فاشلة قبل
+    //    هذه المراجعة). النموذج يستبدل الـquery كاملًا لذا نحفظ
+    //    كل معامل ضروري: oauth/response_type/client_id/redirect_uri
+    //    /state/code_challenge(+method)/scope — وapi_key من الحقل.
+    const apiKey = (p.get('api_key') ?? '').trim()
     if (!apiKey.startsWith('rise_')) {
+      const preserved: Array<[string, string]> = [
+        ['oauth', 'authorize'],
+        ['response_type', responseType],
+        ['client_id', clientId],
+        ['redirect_uri', redirectUriRaw],
+        ['state', state],
+      ]
+      if (challenge) preserved.push(['code_challenge', challenge])
+      if (challengeMethod) preserved.push(['code_challenge_method', challengeMethod])
+      if (scopeRaw.trim() !== '') preserved.push(['scope', scopeRaw])
+      const hidden = preserved
+        .map(([k, v]) => `<input type="hidden" name="${k}" value="${esc(v)}">`)
+        .join('\n          ')
       return html(
-        401,
+        200,
         `<span class="brand">أوج</span>
          <h1>مطلوب مفتاح MCP</h1>
-         <p>أضف مفتاحك الشخصي إلى رابط التفويض (المعامل api_key) — يُنشأ من إعدادات أوج (خطة ماكس).</p>`,
+         <p>ربط ChatGPT يحتاج مفتاحك الشخصي من أوج (خطة ماكس) — يُنشأ من:
+            الإعدادات ← التكامل ← مفتاح MCP.</p>
+         <form method="get" action="">
+          ${hidden}
+          <input type="text" name="api_key" placeholder="rise_…" autocomplete="off" autofocus required>
+          <button class="btn" type="submit">متابعة</button>
+         </form>`,
+        'أوج — مفتاح MCP',
       )
     }
     const resolved = await resolveRiseKey(this.db, apiKey)
@@ -2017,9 +2166,18 @@ class McpOAuth {
       } catch { /* نتجاهل Basic تالفًا ونفشل في المقارنة */ }
     }
     const client = await this.loadClient()
-    if (!client || !clientId || !safeEqual(clientId, client.id) || !safeEqual(clientSecret, client.secret)) {
+    // معرّف العميل إلزامي ومطابق دائمًا (سرّيًا كان أو عامًا).
+    // سرّ مُرسل؟ يجب أن يطابق (مسار العميل السرّي كاملًا كما كان).
+    // بلا سرّ؟ عميل عام (ChatGPT بعد DCR يعلن token_endpoint_auth_method
+    // = none) — يُقبل بشرط PKCE في منح code (تحت) وبتوقيع الرمز
+    // نفسه في منح refresh: السرّ «عام بنيويًا» أصلًا فلا يُضعف شيئًا.
+    if (!client || !clientId || !safeEqual(clientId, client.id)) {
       return oauthErr(401, 'invalid_client', 'client credentials are invalid')
     }
+    if (clientSecret !== '' && !safeEqual(clientSecret, client.secret)) {
+      return oauthErr(401, 'invalid_client', 'client credentials are invalid')
+    }
+    const publicClient = clientSecret === ''
 
     const grantType = form['grant_type'] ?? ''
 
@@ -2041,13 +2199,16 @@ class McpOAuth {
         return oauthErr(400, 'invalid_grant', 'redirect_uri does not match the authorization request')
       }
 
-      // PKCE S256 إلزامي عند وجود التحدي
+      // PKCE S256 إلزامي عند وجود التحدي، وإلزامي كذلك للعميل العام
+      // (بلا سرّ ولا تحدٍ = لا حماية تبديل إطلاقًا — رفض صريح)
       if (payload.chal) {
         if (!verifier) return oauthErr(400, 'invalid_request', 'code_verifier is required')
         const computed = await sha256B64Url(verifier)
         if (!safeEqual(computed, payload.chal)) {
           return oauthErr(400, 'invalid_grant', 'code_verifier does not match the challenge')
         }
+      } else if (publicClient) {
+        return oauthErr(400, 'invalid_request', 'code_verifier is required for public clients')
       }
 
       // الاستخدام الواحد: إدراج jti — التعارض = إعادة تشغيل
@@ -2179,7 +2340,14 @@ class McpOAuth {
 //   GET  /?oauth=metadata   → بيانات خادم التفويض (RFC 8414)
 //   GET  /?oauth=authorize  → موافقة عربية ثم 302 مع code
 //   POST /?oauth=token      → code/refresh → رموز access+refresh
+//   POST /?oauth=register   → تسجيل عميل ديناميكي (RFC 7591)
 //   POST /                  → JSON-RPC: Bearer rise_ أو Bearer JWT
+//
+//   ومسارات اكتشاف ChatGPT (path — يوزّعها المُوزّع تحت):
+//   GET /.well-known/oauth-authorization-server → metadata
+//   GET /.well-known/openid-configuration       → metadata
+//   GET /.well-known/oauth-protected-resource   → RFC 9728
+//   POST /register                                → DCR (RFC 7591)
 //
 // النشر — مساران:
 //   أ) CLI (كامل البنية): supabase functions deploy mcp --no-verify-jwt
@@ -2250,8 +2418,36 @@ Deno.serve(
       return fail('الوظيفة غير مهيأة: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY مفقودة')
     }
 
-    // ── مسارات OAuth (?oauth=…) قبل توزيع JSON-RPC ──
+    // ── مسارات path لاكتشاف OAuth (عقد ChatGPT/MCP) ──
+    // ChatGPT لا يعرف ?oauth=… أصلًا: يكتشف الخدمة عبر مسارات
+    // well-known (لاحقة مسار الخادم — مواصفة MCP authorization)
+    // ويسجّل نفسه ديناميكيًا عبر POST /register (RFC 7591).
+    // المسارات الفرعية تصلنا كاملة من بوابة المنصة (تأكدنا حيًا:
+    // أي مسار تحت /functions/v1/mcp/… يصل الدالة نفسها) لذا
+    // نوزّعها هنا قبل ?oauth= وقبل JSON-RPC.
     const url = new URL(req.url)
+    const pathname = url.pathname.replace(/\/+$/, '')
+    const isWellKnownAs =
+      pathname.endsWith('/.well-known/oauth-authorization-server') ||
+      pathname.endsWith('/.well-known/openid-configuration')
+    if (isWellKnownAs) {
+      if (req.method !== 'GET') return fail('well-known تدعم GET فقط', 405)
+      return toResponse(oauth.metadata())
+    }
+    if (pathname.endsWith('/.well-known/oauth-protected-resource')) {
+      if (req.method !== 'GET') return fail('well-known تدعم GET فقط', 405)
+      return toResponse(oauth.protectedResource())
+    }
+    if (pathname.endsWith('/register')) {
+      if (req.method !== 'POST') return fail('register تدعم POST فقط', 405)
+      return req
+        .text()
+        .then((rawBody) => oauth.handleRegister(rawBody))
+        .then(toResponse)
+        .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
+    }
+
+    // ── مسارات OAuth (?oauth=…) قبل توزيع JSON-RPC ──
     const oauthAction = url.searchParams.get('oauth')
     if (oauthAction) {
       switch (oauthAction) {
@@ -2275,6 +2471,13 @@ Deno.serve(
                 headersToRecord(req),
               ),
             )
+            .then(toResponse)
+            .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
+        case 'register':
+          if (req.method !== 'POST') return fail('register تدعم POST فقط', 405)
+          return req
+            .text()
+            .then((rawBody) => oauth.handleRegister(rawBody))
             .then(toResponse)
             .catch((err: Error) => fail(`خطأ غير متوقع: ${err?.message ?? 'غير معروف'}`))
         default:

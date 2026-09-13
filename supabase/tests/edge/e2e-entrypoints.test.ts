@@ -10,6 +10,12 @@
 //        + tools/list (8) + tools/call list_tasks (بيانات حية)
 //        + OAuth (10-ج): metadata + authorize/confirm→302 code
 //          + token (form) + JSON-RPC بـaccess_token (الحلقة كاملة)
+//        + محاكاة ChatGPT الكاملة (كما تفعلها OpenAI حرفيًا):
+//          اكتشاف well-known الثلاث (AS/OIDC/protected-resource)
+//          + تسجيل DCR عبر POST /register (صالح/مهاجم) +
+//          authorize بلا مفتاح → نموذج GET → إرساله بالحقول
+//          المخفية → تبديل كعميل عام (بلا سرّ، PKCE فقط) →
+//          الرمز يعمل عبر JSON-RPC — السلسلة كاملة
 //   PUSH: بلا مصادقة→401 | سر خاطئ→401 | مفتاح الخدمة→جولة نظيفة
 //        | force notification_id→إرسال فعلي يُفك تشفيره عند المزود
 //        | مفتاح بصيغة أخرى (sb_secret نمطًا)→ تحقق PostgREST→200
@@ -216,10 +222,11 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     assert(String(meta.authorization_endpoint).includes('?oauth=authorize'))
     assert(String(meta.token_endpoint).includes('?oauth=token'))
 
-    // authorize بلا مفتاح → 401 HTML
+    // authorize بلا مفتاح → 200 صفحة إدخال بنموذج (بدل 401 الجامد)
     const noKey = await fetch(`http://127.0.0.1:8761/?oauth=authorize&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')}`)
-    assertEquals(noKey.status, 401)
+    assertEquals(noKey.status, 200)
     assertEquals((noKey.headers.get('content-type') || '').includes('text/html'), true)
+    assert((await noKey.text()).includes('name="api_key"'), 'حقل إدخال المفتاح')
 
     // السيرفر الحقيقي يسمح بنطاقات ChatGPT فقط — نستخدم chatgpt.com
     const redirect = encodeURIComponent('https://chatgpt.com/aip-1/oauth/callback')
@@ -277,6 +284,106 @@ Deno.test('e2e: الوظيفتان تعملان كعمليات حية عبر HTT
     })
     assertEquals(badGrant.status, 400)
     assertEquals((await badGrant.json()).error, 'unsupported_grant_type')
+
+    // ═══ محاكاة ChatGPT الكاملة (كما تفعلها OpenAI حرفيًا) ═══
+    // 1) الاكتشاف: ChatGPT لا يعرف ?oauth=… — يبدأ من well-known
+    //    (لاحقة مسار الخادم حسب مواصفة MCP authorization)
+    const wkAs = await fetch(`http://127.0.0.1:8761/.well-known/oauth-authorization-server`)
+    assertEquals(wkAs.status, 200)
+    const asMeta = await wkAs.json()
+    assert(String(asMeta.registration_endpoint).endsWith('/register'), 'نقطة DCR معلنة')
+    const wkOid = await fetch(`http://127.0.0.1:8761/.well-known/openid-configuration`)
+    assertEquals(wkOid.status, 200)
+    const wkPr = await fetch(`http://127.0.0.1:8761/.well-known/oauth-protected-resource`)
+    assertEquals(wkPr.status, 200)
+    assertEquals((await wkPr.json()).authorization_servers.length, 1)
+
+    // 2) التسجيل الديناميكي: ChatGPT يسجّل نفسه كعميل عام
+    //    (token_endpoint_auth_method none) وروابطه على chatgpt.com
+    const dcr = await fetch(`http://127.0.0.1:8761/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'ChatGPT',
+        redirect_uris: ['https://chatgpt.com/aip-9/oauth/callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      }),
+    })
+    assertEquals(dcr.status, 201)
+    const reg = await dcr.json()
+    assertEquals(reg.client_id, E2E_CLIENT_ID)
+    assertEquals(reg.client_secret, E2E_CLIENT_SECRET)
+
+    // تسجيل برابط مهاجم → 400 (لا تسريب بيانات عميل لنطاق خارجي)
+    const badDcr = await fetch(`http://127.0.0.1:8761/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ redirect_uris: ['https://evil.example/cb'] }),
+    })
+    assertEquals(badDcr.status, 400)
+    assertEquals((await badDcr.json()).error, 'invalid_redirect_uri')
+
+    // 3) التفويض كما يرسله ChatGPT: بلا api_key (لا يعرفه!) →
+    //    صفحة إدخال بنموذج GET يحفظ كل المعاملات في حقول مخفية
+    const cgRedirect = encodeURIComponent('https://chatgpt.com/aip-9/oauth/callback')
+    const formPage = await fetch(
+      `http://127.0.0.1:8761/?oauth=authorize&response_type=code&client_id=${E2E_CLIENT_ID}&redirect_uri=${cgRedirect}&state=cg-st-1&code_challenge=${challengeB64}&code_challenge_method=S256`,
+    )
+    assertEquals(formPage.status, 200)
+    const formHtml = await formPage.text()
+    assert(formHtml.includes('name="api_key"'), 'حقل إدخال المفتاح')
+    // محاكاة المستخدم: نجمع الحقول المخفية (كما يرسلها المتصفح
+    // حرفيًا — GET يستبدل الـquery كاملًا) ثم نضيف المفتاح
+    const fields: Record<string, string> = {}
+    for (const m of formHtml.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) {
+      fields[m[1]] = m[2]
+    }
+    assertEquals(fields['oauth'], 'authorize')
+    assertEquals(fields['client_id'], E2E_CLIENT_ID)
+    assertEquals(fields['redirect_uri'], 'https://chatgpt.com/aip-9/oauth/callback')
+    fields['api_key'] = TEST_KEY
+    const submitted = new URL('http://127.0.0.1:8761/')
+    for (const [k, v] of Object.entries(fields)) submitted.searchParams.set(k, v)
+
+    // صفحة الموافقة تظهر بعد المفتاح ثم confirm=1 → 302 مع code
+    const consentRes = await fetch(submitted, { redirect: 'manual' })
+    assertEquals(consentRes.status, 200, 'صفحة الموافقة بعد المفتاح')
+    assert((await consentRes.text()).includes('تفويض'))
+    submitted.searchParams.set('confirm', '1')
+    const cgApproved = await fetch(submitted, { redirect: 'manual' })
+    assertEquals(cgApproved.status, 302)
+    const cgLoc = new URL(cgApproved.headers.get('location')!)
+    assertEquals(cgLoc.hostname, 'chatgpt.com')
+    assertEquals(cgLoc.searchParams.get('state'), 'cg-st-1')
+    const cgCode = cgLoc.searchParams.get('code')!
+    assert(cgCode)
+
+    // 4) التبديل كعميل عام: بلا client_secret إطلاقًا (عقد
+    //    token_endpoint_auth_method=none) — PKCE وحده هو الحماية
+    const cgTokRes = await fetch(`http://127.0.0.1:8761/?oauth=token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: E2E_CLIENT_ID,
+        code: cgCode,
+        redirect_uri: 'https://chatgpt.com/aip-9/oauth/callback',
+        code_verifier: verifier,
+      }).toString(),
+    })
+    assertEquals(cgTokRes.status, 200, 'تبديل العميل العام')
+    const cgTokens = await cgTokRes.json()
+    assert(cgTokens.access_token)
+
+    // 5) الرمز يعمل عبر JSON-RPC — السلسلة كاملة كما يراها ChatGPT
+    const cgTools = await (await fetch(`http://127.0.0.1:8761/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${cgTokens.access_token}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/list' }),
+    })).json()
+    assertEquals(cgTools.result.tools.length, 8)
 
     // ═══ PUSH-DISPATCH: المصادقة والإرسال الحي ═══
     // بلا مصادقة → 401
