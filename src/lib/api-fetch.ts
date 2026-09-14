@@ -480,6 +480,21 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     }
   }
 
+  // Beta: قفل الصيانة الحي — 503 MAINTENANCE_MODE من middleware يعني
+  // أن هذا المستخدم غير الأدمن والتطبيق مقفول الآن. إعادة تحميل واحدة
+  // فقط (علم sessionStorage) يُحوّله الـmiddleware إلى صفحة الصيانة —
+  // لا حلقة تحميل ممكنة: صفحة /maintenance نفسها لا تصدر طلبات /api/rise.
+  if (response.status === 503 && url.startsWith('/api/rise/') && typeof window !== 'undefined') {
+    try {
+      const probe = response.clone()
+      const body = (await probe.json().catch(() => null)) as { code?: string } | null
+      if (body?.code === 'MAINTENANCE_MODE' && !sessionStorage.getItem('rise-maintenance-lock')) {
+        sessionStorage.setItem('rise-maintenance-lock', '1')
+        window.location.reload()
+      }
+    } catch { /* ignore */ }
+  }
+
   // If 401 and this is an API request, try to refresh and retry.
   // FIX: Also try refresh when there's no Authorization header (cookie-based auth).
   // Previously, 401 errors from cookie-only auth never triggered refresh,
