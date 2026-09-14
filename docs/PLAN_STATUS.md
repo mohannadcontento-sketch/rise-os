@@ -1,8 +1,25 @@
 # خطة أوج — حالة التنفيذ الكاملة (محينة)
 
-> **آخر تحديث:** 2026-09-15 (جلسة 7) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلة 16 (UX Foundation) ✅ مغلقة (Task 38)**
+> **آخر تحديث:** 2026-09-15 (جلسة 8 — Task 39: جولة تحقق شاملة) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلة 16 (UX Foundation) ✅ مغلقة (Task 38)**
 > **مفتاح الرموز:** ✅ منفَّذ ومتحقَّق منه بأدلة · ⏳ مجدول (لم يحن وقته) · 👤 إجراء يدوي على المالك · 🔴 غير مكتمل
 > النسخة المعلَّمة بصريًا (علامات [✓] داخل نص الخطة الأصلي): `docs/Awj_Development_and_Launch_Plan.docx`
+
+## سجل التحقق الحي — Task 39 (2026-09-15) — كل العلامات ✅ أدناه أعيد فحصها حيًا اليوم
+
+| ما تم فحصه | الدليل الحي | الحالة |
+|---|---|---|
+| رفع جلسات 6/7 على GitHub | آخر 10 commits موجودة (آخرها 8fb818fe) · `docs/phase-16/UX_FOUNDATION.md` = 29KB · الخطة docx+pdf + worklog في مكانها | ✅ |
+| CI | آخر 5 runs (workflows: CI + Security Scan & Audit) = **success** على 23e1783c / f3b0ec9c / 8fb818fe | ✅ |
+| الصفحات العامة 9/9 | `sitemap.xml` = 9 مسارات، كلها → **200** (الرئيسية/pricing/features/about/contact/privacy/terms/community-guidelines/refund-policy) | ✅ |
+| البنية التحتية العامة | `ads.txt` 200 · `robots.txt` 200 · `/maintenance` 200 | ✅ |
+| حالة النظام | `/api/rise/system/status` → 200 · `{maintenance:false}` | ✅ |
+| دخول الأدمن + الـAPIs الداخلية | login → 200 (`isAdmin:true`) · dashboard/summary · tasks · habits · auth/session · admin/overview → **كلها 200** بجلسة صالحة | ✅ |
+| Web Push | `/api/rise/push/vapid-key` → `{configured:true, publicKey:…}` | ✅ |
+| بوابة قناة الملاحظات | `/api/rise/feedback` بلا جلسة → **401** | ✅ |
+| بوابة MCP على مستوى الخطة | `/api/rise/mcp/oauth-info` بجلسة Free → **403 PLAN_REQUIRED** | ✅ |
+| MCP v3.1 على Supabase (المستضيف الحقيقي) | POST بلا مفتاح → **401 + `WWW-Authenticate: Bearer realm="awj-mcp"`** · `…/functions/v1/mcp/.well-known/oauth-protected-resource` → **200** · GET → 405 (POST فقط — سلوك صحيح) | ✅ |
+
+> الخلاصة: كل علامات ✅ في هذا الملف مؤكدة بأدلة حية من تاريخ هذا السجل — لا يوجد شيء «مزعوم الرفع» غير موجود فعليًا. التنفيذ التالي: **المرحلة 17 (Home & My Day)** وفق `docs/phase-16/UX_FOUNDATION.md` §11.
 
 ---
 
