@@ -1,6 +1,6 @@
 # خطة أوج — حالة التنفيذ الكاملة (محينة)
 
-> **آخر تحديث:** 2026-09-15 (جلسة 8 — Task 39 تحقق شامل · Task 40 تعليم الخطة ☑) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلة 16 (UX Foundation) ✅ مغلقة (Task 38)**
+> **آخر تحديث:** 2026-09-15 (جلسة 9 — Task 41: **المرحلة 17 مغلقة ومُقاسة حيًّا**) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلتان 16 (UX Foundation) و17 (Home & My Day) ✅ مغلقتان**
 > **مفتاح الرموز:** ✅ منفَّذ ومتحقَّق منه بأدلة · ⏳ مجدول (لم يحن وقته) · 👤 إجراء يدوي على المالك · 🔴 غير مكتمل
 > النسخ المعلَّمة بصريًا (☑ داخل نص الخطط): **الخطة الشاملة الجديدة** `docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — 12 بندًا ☑ (تحديث 2026-09-15 / Task 40) · الخطة القديمة `docs/Awj_Development_and_Launch_Plan.docx`
 
@@ -19,7 +19,7 @@
 | بوابة MCP على مستوى الخطة | `/api/rise/mcp/oauth-info` بجلسة Free → **403 PLAN_REQUIRED** | ✅ |
 | MCP v3.1 على Supabase (المستضيف الحقيقي) | POST بلا مفتاح → **401 + `WWW-Authenticate: Bearer realm="awj-mcp"`** · `…/functions/v1/mcp/.well-known/oauth-protected-resource` → **200** · GET → 405 (POST فقط — سلوك صحيح) | ✅ |
 
-> الخلاصة: كل علامات ✅ في هذا الملف مؤكدة بأدلة حية من تاريخ هذا السجل — لا يوجد شيء «مزعوم الرفع» غير موجود فعليًا. التنفيذ التالي: **المرحلة 17 (Home & My Day)** وفق `docs/phase-16/UX_FOUNDATION.md` §11.
+> الخلاصة: كل علامات ✅ في هذا الملف مؤكدة بأدلة حية من تاريخ هذا السجل — لا يوجد شيء «مزعوم الرفع» غير موجود فعليًا. التنفيذ التالي: ~~المرحلة 17 (Home & My Day)~~ ✅ أُغلقت في الجلسة 9 (Task 41) — التفاصيل أدناه.
 
 ---
 
@@ -124,11 +124,22 @@ RLS audit · authorization · rate limiting · input validation · XSS sanitize 
 - **البوابة:** «خريطة نهائية + لا تعارض + لا قرارات معلقة» — **مُجتازة** (الجدول في §9 من الوثيقة)
 - **التالي:** المرحلة 17 — Home & My Day (تنفيذ مركز القيادة وفق §11 من الوثيقة)
 
-## المرحلة 17 — Home & My Day ⏳ (الخطة الجديدة)
-تنفيذ وفق `docs/phase-16/UX_FOUNDATION.md` §11: Home hierarchy نهائي · My Day timeline · Quick Add · حالات المستخدم الخمس · لا guilt copy · مقاييس Playwright + LCP/TTFB قبل/بعد.
+## المرحلة 17 — Home & My Day ✅ (مغلقة — جلسة 9 / Task 41)
+> أول مرحلة كود في الخطة الشاملة — مركز قيادة هادئ يستبدل لوحة الإحصائيات.
+> **الوثيقة الكاملة:** `docs/phase-17/HOME_MY_DAY.md` · **Commits:** `d6c2e49` + `91f0084` (CI أخضر + CodeQL + Audit)
 
-## المراحل 18-32 ⏳ (الخطة الشاملة الجديدة)
-18 Navigation+Explore · 19 Core Modules · 20 Onboarding+Auth+Consent · 21 Progress+Reviews · 22 Community · 23 Landing+Conversion · 24 Monetization+Ads · 25 Performance+Data · 26 MCP User Server (2026-07-28 + صفحة /mcp + Claude Code) · 27 Admin MCP منفصل · 28 Security Hardening (ASVS/WSTG) · 29 Automated QA Gate · 30 Break & Pen Test · 31 Observability+DR · 32 Closed Beta — التفاصيل الكاملة في `docs/Awj_Master_Development_Launch_Plan_AR.pdf`.
+- **مركز القيادة (home.tsx):** الترتيب المتعاقد §11 بالضبط — تحية → تركيز اليوم → يومي (لقطة اليوم) → أكمل من حيث توقفت → إجراءات سريعة (٦) → تقدمي → استكشف (خلف الطية) · عنوان الوحدة العامة يُخفى للرئيسية (التحية هي الرأس)
+- **خط «يومي» الزمني:** دمج **المصادر الخمسة حسب الوقت** — عناصر المخطط + مهام اليوم + العادات (بوقت تذكيرها) + **جلسات تركيز اليوم (بوقت بدئها الفعلي)** + **الروتين الصباحي (سجل ٢٠/٢٠/٢٠)** — ٦ صفوف ثم «عرض اليوم كامل»
+- **Quick Add (quick-add.tsx):** bottom sheet جوال (CSS خالص — بلا Vaul وفق سياسة المكتبات) / بطاقة مركزة سطح مكتب · ٦ أنواع (مهمة/عادة/يومية/تركيز/هدف/ملاحظة) · حارس in-flight + Idempotency-Key = **طلب واحد بالضبط** (مؤكد حيًّا في الإنتاج)
+- **الكتابة من الشاشة:** عادة = ١ نقرة · مهمة = ١ نقرة من لقطة اليوم (تدقيق §10)
+- **حالات المستخدم الخمس:** جديد (ترحيب + ٣ قوالب) · يوم فارغ · مزدحم (سقف ٦) · مساء (إغلاق اليوم: المتبقي → الفرصة التالية) · تعلم-focused
+- **صفر لغة لوم** (مفحوصة آليًا) + أرقام شرقية · موجتا تحميل: ٥ فوق الطية (خفيفة day-scoped) + ٤ بعد requestIdleCallback
+- **اختبارات Playwright ٥/٥** (`tests/e2e/home.spec.ts`): بوابة الدخول · جديد→عائد · **Quick Add بلا ازدواج (POST=1)** · الحارس أثناء الطفرة · **visual regression بخطوط أساس مرتكزة** (جوال+سطح مكتب)
+- **القياسات الحية (الإنتاج):** **LCP ١٣٦٤ → ٨٢٨ مللي (−٣٩٪)** · DCL −٤٣٪ · طلبات لوحدة الرئيسية: من الطلب الضخم الواحد (`/api/rise/dashboard` بكل شيء) إلى ٥ طلبات خفيفة فوق الطية — العقد مُجاز (نقطة الشريط الجانبي مسجّلة للمرحلة ٢٥)
+- **حذف موثّق:** dashboard.tsx (٢١١٢ سطر) + use-dashboard-data — الإحصاءات في «التحليلات» (حسم §9) · التسمية: dashboard → «الرئيسية»
+- **التحقق الحي:** تحية شخصية + كل الأقسام في الـDOM + إنشاء/تنظيف مهمة عبر Quick Add (POST=1 → ظهرت في الخط الزمني → DELETE 200)
+
+## المراحل 18-32 ⏳ (الخطة الشاملة الجديدة)18 Navigation+Explore · 19 Core Modules · 20 Onboarding+Auth+Consent · 21 Progress+Reviews · 22 Community · 23 Landing+Conversion · 24 Monetization+Ads · 25 Performance+Data · 26 MCP User Server (2026-07-28 + صفحة /mcp + Claude Code) · 27 Admin MCP منفصل · 28 Security Hardening (ASVS/WSTG) · 29 Automated QA Gate · 30 Break & Pen Test · 31 Observability+DR · 32 Closed Beta — التفاصيل الكاملة في `docs/Awj_Master_Development_Launch_Plan_AR.pdf`.
 
 ## المرحلة 33 — Public Launch ⏳ (كانت «16» في الترقيم القديم)
 Launch Gate جاهز تقنيًا؛ 👤 الدومين awj.life (آخر خطوة — Vercel A 76.76.21.21 / CNAME www → cname.vercel-dns.com + NEXT_PUBLIC_SITE_URL + Zoho MX/SPF/DKIM/DMARC + إعادة نشر + تحديث GSC/AdSense).
