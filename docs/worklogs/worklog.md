@@ -550,3 +550,39 @@ Work Log:
 Stage Summary:
 - Phase 17 GATE PASSED: Home is an independent command center — the whole day is understood in seconds without opening 5 modules
 - Next: Phase 18 (Navigation + Explore — 5-point mobile bar replacing GlassNav + Explore Hub + sidebar worlds) per UX_FOUNDATION §3/§4
+
+---
+Task ID: 42
+Agent: Super Z (main)
+Task: Owner request: "لي شلت الداش بورد بشكل كامل كانت مهمة وشكلها حلو رجعها وعدل عليها علشان تعمل الصفحة الرئيسية" — restore the deleted dashboard as the home page
+
+Work Log:
+- Recovered dashboard.tsx (2113 lines) + use-dashboard-data.ts (137) verbatim from git (d6c2e49^) via cat-file; verified integrity (esbuild parse + exact-string checks)
+- Built src/components/rise/dashboard-widgets.tsx (1910 lines) via scripts/build-dashboard-widgets.js surgical transform: top welcome bar removed (home header takes over), HorizonDial/getGreeting/levelInfo dropped, habits now interactive (1-click §10 — was disabled), compact error card, cleaned imports
+- Merged into home.tsx via scripts/merge-home-dashboard.js: rich header (star field CSS + level badge + XP bar + streak chip from wave-1 summary) · ProgressCard removed (moved to header) · lazy DashboardWidgets mount after requestIdleCallback · container max-w-6xl
+- Perf: home chunk 33KB without framer-motion/recharts (separate lazy widgets chunk 47KB) — LCP win preserved
+- Validation: tsc 0 errors · next build ✓ · eslint clean · e2e 5/5 serial + parallel (rich-dashboard assertions added)
+- Deterministic DOM verification with seeded data: all 13 dashboard sections confirmed rendering — VLM cross-checked
+- Local commit c8ca71a (push pending token — script ready: scripts/push_task42.sh at sandbox level)
+
+Stage Summary:
+- Dashboard is back as the home page: calm command center above the fold + full rich dashboard below, lazily loaded
+
+---
+Task ID: 43
+Agent: Super Z (main)
+Task: Owner request: "اتاكد من رفع التحديث على جتهب وحسن شكل البار الي تحت في الموبيل" — verify the GitHub push + redesign the mobile bottom bar
+
+Work Log:
+- Push verification: remote main = 49f4b48; Task-42 dashboard commit c8ca71a was local-only. Searched env/scripts/profiles — RISE_GH_TOKEN absent this session → both ready commits staged for push via scripts/push_task42.sh
+- BEFORE evidence: nav-before-{bar,bar-dark,bar-tasks,bar-360,full,full-360}.png + VLM critique — active white pill reads as FAB/CTA, floating dot looks random, night bar blends into content, alignment wobble
+- glass-nav.tsx redesign: active = soft glass zone (bg-white/13 + inset hairline ring) — reads as selected tab; icon in module-hue well (same identity as sidebar active row, community locally violet for glass visibility); lime indicator bar on pill top edge (replaces floating dot); inactive dimmed bare glyphs; labels width-budget («العادات»/«المخطط» — MODULE_LABELS stays canonical); h-[52px] items (48px+ touch), focus-visible ring, aria-current kept
+- globals.css: hairline ring + top highlight + deeper two-layer shadow (day) · sky hairline + ambient glow (night) · nav-ind-pop / nav-well-pop spring keyframes (auto-suppressed by prefers-reduced-motion global rule)
+- Geometry audit (DOM, scripts/check_nav_geometry.mjs): icon centered in well dx=dy=0 · indicator exactly on pill edge, centered on item · bar fits 390/360/320px (max-w calc(100vw-1.5rem)) · items uniform 52px
+- AFTER evidence: nav-after-*.png + VLM before/after — active state now legible, indicator connected, wells pop, labels aligned
+- e2e: 5/5 serial; flaky quick-add failures root-caused to the known 3/min signup limiter (65s backoff > 30s default budget) → 150s timeouts for the two data-writing tests (same treatment the visual test already had) — verified 429 backoff signature in failure logs; pre-existing, orthogonal to nav
+- Production build ✓ · tsc 0 errors · eslint clean on changed files
+- Commits: 6417427 (redesign + test hardening) · d0fbb6c (PLAN_STATUS Task-43 note)
+
+Stage Summary:
+- Mobile bottom bar upgraded to the design system's language (hue wells + lime indicator) with measured evidence at every step; 3 commits ready (c8ca71a + 6417427 + d0fbb6c), push blocked only on missing token this session
