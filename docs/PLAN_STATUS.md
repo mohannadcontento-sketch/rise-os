@@ -1,6 +1,6 @@
 # خطة أوج — حالة التنفيذ الكاملة (محينة)
 
-> **آخر تحديث:** 2026-09-14 · بعد إغلاق المراحل 12-15 (Landing/SEO/Legal · Security · Performance · QA)
+> **آخر تحديث:** 2026-09-14 (جلسة 2) · بعد خطوات المالك: نشر MCP v3.1 + تطبيق الهجرات (035/036) + ربط Upstash · وإعادة فحص QA الحية
 > **مفتاح الرموز:** ✅ منفَّذ ومتحقَّق منه بأدلة · ⏳ مجدول (لم يحن وقته) · 👤 إجراء يدوي على المالك · 🔴 غير مكتمل
 > النسخة المعلَّمة بصريًا (علامات [✓] داخل نص الخطة الأصلي): `docs/Awj_Development_and_Launch_Plan.docx`
 
@@ -35,9 +35,9 @@ Scope freeze على SaaS شخصي/إنتاجي: الأدوات والبيانا�
 
 ## المرحلة 9 — MCP للـMax ✅ (13/13)
 82 أداة v3.1 · OAuth 2.1+PKCE · Bearer rise_… · rate limits 60/د · audit · confirm للحذف · عزل user_id · 128/128 اختبار E2E · مفاتيح SHA-256.
-> ملاحظة: **النسخة الحية على Supabase لسه v2.1 (40 أداة)** — النشر أمر واحد على المالك: `supabase functions deploy mcp --project-ref cxtevczaptludomuiemq --no-verify-jwt`
+> ✅ **النسخة الحية على Supabase = v3.1 (منشورة ومتحقق منها 2026-09-14):** رد 401 يحمل `WWW-Authenticate` (علامة v3.x) + `/.well-known/oauth-protected-resource` يعمل 200 · بوابة Free ترد 403 PLAN_REQUIRED · استدعاء call بلا مفتاح rise_ → 401 (رفض واعٍ للكوكيز — قطع CSRF).
 
-## المرحلة 10 — Admin Dashboard ✅ (12/12 — استُكملت هذه الجلسة)
+## المرحلة 10 — Admin Dashboard ✅ (12/12)
 | الوحدة | الحالة | الدليل |
 |---|---|---|
 | Users | ✅ | تاب كامل: بحث/تصفية/الخطة/الحالة |
@@ -45,9 +45,9 @@ Scope freeze على SaaS شخصي/إنتاجي: الأدوات والبيانا�
 | Usage | ✅ | تاب الإحصاءات (استخدام يومي/شهري) |
 | Notifications | ✅ | broadcast نظامي |
 | Community | ✅ | moderation queue + بلاغات + حظر |
-| **Ads** | ✅ **جديد** | `/api/rise/admin/ads` + تاب «الإعلانات»: تشغيل/إيقاف + slots المواضع + Direct Ads CRUD |
-| **Plans** | ✅ **جديد** | `/api/rise/admin/plans` + تاب «الخطط»: تعديل plan_entitlements (يسري فورًا خادميًا بلا نشر) |
-| **System** | ✅ **جديد** | `/api/rise/admin/system` + تاب «النظام»: وضع صيانة + أعلام ميزات + حالة النشر + `/api/rise/system/status` عامة |
+| Ads | ✅ | `/api/rise/admin/ads` + تاب «الإعلانات»: تشغيل/إيقاف + slots المواضع + Direct Ads CRUD |
+| Plans | ✅ | `/api/rise/admin/plans` + تاب «الخطط»: تعديل plan_entitlements (يسري فورًا خادميًا بلا نشر) |
+| System | ✅ | `/api/rise/admin/system` + تاب «النظام»: وضع صيانة + أعلام ميزات + حالة النشر + `/api/rise/system/status` عامة |
 | Security (4 بنود) | ✅ | requireAdmin على كل مسار + audit_logs + لا شاشة تعتمد Client authorization |
 
 التنفيذ: middleware بوابة صيانة (503 MAINTENANCE_MODE للطفرات غير الإدارية، كاش 30ث، fail-open) + rate limits جديدة + هجرة 035 idempotent.
@@ -61,17 +61,19 @@ RLS audit · authorization · rate limiting · input validation · XSS sanitize 
 
 ## المرحلة 13 — Performance وReliability ✅
 `docs/phase-13/PERFORMANCE_RELIABILITY.md` — 11/12 بندًا بالأدلة + قياسات TTFB حية. 👤 البند الوحيد: مراجعة استهلاك الخدمات (لوحات المالك).
+> ✅ **Upstash (الخطة المجانية) ربطه المالك 2026-09-14** — الحدود تنتقل من لكل-نسخة إلى لكل-IP موزعة (UPSTASH_REDIS_REST_URL/TOKEN). النشر الأخير يتطلب إعادة نشر لتصبح فعالة — راجع «أوامر المالك».
 
-## المرحلة 14 — QA شامل قبل النشر ✅ (فحوصات حية + ما يتبقى للـBeta)
-`docs/phase-14/QA_PRELAUNCH.md` — 31/31 فحصًا حيًا + دورة حياة حساب كاملة (إنشاء→لوحة→402 حد Free→منشور→حذف→401).
-**QA كسرت المنتج عمدًا وكشفت 3 أخطاء إنتاج حقيقية:**
+## المرحلة 14 — QA شامل قبل النشر ✅ (31/31 + إعادة فحص 2026-09-14)
+`docs/phase-14/QA_PRELAUNCH.md` — 31/31 فحصًا حيًا + دورة حياة حساب كاملة.
+**QA كسرت المنتج عمدًا وكشفت 3 أخطاء إنتاج حقيقية — الثلاثة مقفولة الآن:**
 1. ❌→✅ حذف الحساب لم يكن يعمل إطلاقًا (TypeError: auth.deleteUser على auth.admin) — أُصلح (b772388).
-2. ❌→✅ إبطال الجلسات بعد تغيير كلمة المرور/الحذف كان صامت الفشل (signOut يمرر userId بدل JWT) — أُصلح في 3 مسارات.
-3. ⏳ مستخدمو المجتمع لا يُحذفون (audit_logs RESTRICT) — هجرة 036 مرفوعة 👤 المالك يطبقها.
-⚠️ الحدود تعمل لكل-نسخة حتى ضبط Upstash (إلزامي قبل التسجيل العام).
+2. ❌→✅ إبطال الجلسات بعد كلمة المرور/الحذف كان صامت الفشل — أُصلح في 3 مسارات وتحقق حيًا.
+3. ⏳→✅ مستخدمو المجتمع لا يُحذفون (audit_logs RESTRICT) — **هجرة 036 مطبقة ومتحقق منها حيًا 2026-09-14**: حذف حساب له منشور + بلاغ ضده = 200، والحساب التجريبي العالق qa-cycle-1789343456 نُظّف بنجاح.
+**إعادة فحص ما بعد خطوات المالك (15/15 + 7/7):** بوابات MCP على Free (403 PLAN_REQUIRED / 401 بلا مفتاح) · مسار البلاغ كامل (B يبلّغ عن منشور A → 201 يدخل طابور المراجعة، وبلاغ وهمي → 404) · **منشور → تعليق → إشعار وصل فعلًا لمركز إشعارات صاحب المنشور** («تعليق جديد على منشورك») · تنظيف ذاتي للحسابات التجريبية.
+⚠️ الحدود: Upstash مربوط — التحقق النهائي من 429 الموزعة بعد أول إعادة نشر (انظر أوامر المالك).
 
 ## المرحلة 15 — Beta مغلقة ⏳
-كل البنية جاهزة (إشعارات · أخطاء · أعلام ميزات من تاب النظام · حد قابل للتعديل فورًا من تاب الخطط). 👤 المستخدم يستدعي أول دفعة مستخدمين حقيقيين.
+كل البنية جاهزة (إشعارات · أخطاء · أعلام ميزات من تاب النظام · حد قابل للتعديل فورًا من تاب الخطط · حذف الحسابات يعمل 100%). 👤 المستخدم يستدعي أول دفعة مستخدمين حقيقيين.
 
 ## المرحلة 16 — Public Launch ⏳
 Launch Gate جاهز تقنيًا؛ 👤 الدومين awj.life (آخر خطوة — Vercel A 76.76.21.21 / CNAME www → cname.vercel-dns.com + NEXT_PUBLIC_SITE_URL + Zoho MX/SPF/DKIM/DMARC + إعادة نشر + تحديث GSC/AdSense).
@@ -93,23 +95,23 @@ Launch Gate جاهز تقنيًا؛ 👤 الدومين awj.life (آخر خطو�
 | Usage limits server-side | ✅ (consume_usage داخل DB) |
 | الاشتراكات اليدوية end-to-end | ✅ آليًا · 👤 تجربة مرجع حقيقي في Beta |
 | Free يرى الإعلانات فقط | ✅ بوابة خادمية · 👤 تحقق أول ظهور AdSense |
-| In-App notifications | ✅ |
+| In-App notifications | ✅ (متحقق حيًا: تعليق → إشعار) |
 | Web Push | ✅ آليًا · 👤 تجربة جهاز حقيقي في Beta |
-| Community + moderation | ✅ |
-| MCP لـMax فقط | ✅ · 👤 نشر v3.1 (أمر واحد) |
+| Community + moderation | ✅ (البلاغ → الطابور متحقق حيًا) |
+| MCP لـMax فقط | ✅ **v3.1 حية** · 👤 إعادة ربط موصل ChatGPT بالمفتاح الحالي |
 | Admin Dashboard | ✅ 12/12 |
 | Legal منشورة | ✅ (+ 👤 مراجعة بشرية للنصوص) |
 | SEO basics + sitemap + robots | ✅ · 👤 Verify GSC |
 | Error logging/monitoring | ✅ |
 | Backups | ✅ (خطة موثقة) · 👤 أول dump أسبوعي |
-| QA regression | ✅ آلي · Beta البشرية ⏳ |
+| QA regression | ✅ آلي 31/31 + إعادة فحص · Beta البشرية ⏳ |
 | Beta بدون مشاكل مانعة | ⏳ |
 | خطة rollback | ✅ (git revert + Vercel instant rollback) |
 
-## أوامر المالك المجمعة (كلها مرة واحدة)
+## أوامر المالك المتبقية
 1. GSC: **Verify** بخاصية URL prefix ثم Submit `sitemap.xml` ثم Request indexing لكل صفحة.
-2. نشر MCP v3.1: `supabase functions deploy mcp --project-ref cxtevczaptludomuiemq --no-verify-jwt`
-3. **إلزامي قبل التسجيل العام:** ضبط Upstash في Vercel (UPSTASH_REDIS_REST_URL/TOKEN) — بدونه الحدود لكل-نسخة لا لكل-IP (انتباه: اختبار 7 محاولات دخول متفرقة لم يطلق 429).
-4. تطبيق الهجرات المعلقة من SQL editor: `supabase/fixes/riseos-fix-composite-functions.sql` + **035** (مفاتيح النظام) + **036** (يفتح حذف حسابات مستخدمي المجتمع — بدونه حذف الحساب يفشل لأي مستخدم نشط) — بعدها أعد حذف الحساب التجريبي العالق qa-cycle-1789343456@qa-probe.test.
+2. ~~نشر MCP v3.1~~ ✅ تم 2026-09-14 — يُنصح بإعادة ربط موصل ChatGPT/Gemini للتأكد من 82 أداة (`tools/list`).
+3. **Upstash (تم الربط):** لو 429 لم تظهر بعد 6 محاولات دخول فاشلة من نفس الجهاز → تأكد أن `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` مضافان لبيئة **Production** في Vercel (Settings → Environment Variables) بنفس الأسماء حرفيًا ثم **Redeploy** — متغيرات البيئة لا تصبح فعالة إلا بإعادة نشر.
+4. ~~تطبيق الهجرات 035/036~~ ✅ تم ومتحقق حيًا (حذف مستخدم مجتمع = 200). ~~حذف الحساب التجريبي العالق~~ ✅ نُظّف.
 5. Beta مغلقة → ثم الدومين awj.life أخيرًا.
 6. ⚠️ **إبطال توكن GitHub (ghp_aUh5…)** — انتهى استخدامه في هذه الجلسات.
