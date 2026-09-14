@@ -1,12 +1,14 @@
 import { test, expect } from '@playwright/test'
 
 // ============================================================
-// home.spec.ts — المرحلة 17: Home & My Day (عقد الاختبارات)
+// home.spec.ts — المرحلة ١٧ (تحديث المالك): الرئيسية = لوحة القيادة
 //
 // ١) Home loads for new user — الزيارة الأولى بلا جلسة تعرض بوابة
 //    الدخول (وضع الاستعلام) ثم الرئيسية بعد الدخول.
 // ٢) Home loads for returning user — مركز القيادة يعرض الترتيب
-//    المتعاقد: تحية → تركيز اليوم → يومي → إجراءات سريعة.
+//    المتعاقد: تحية → تركيز اليوم → يومي → إجراءات سريعة،
+//    ثم ودجات لوحة القيادة الغنية (درجة الإنتاجية + KPIs) بعد
+//    خمول المتصفح (حزمة lazy).
 // ٣) Quick Add creates one entity without duplicate request —
 //    النقر المتكرر السريع على «احفظ» يرسل طلب POST واحدًا فقط
 //    (حارس in-flight في الواجهة + Idempotency-Key من api-fetch).
@@ -100,6 +102,12 @@ test.describe('المرحلة 17 — Home & My Day', () => {
     await expect(page.getByLabel('تركيز اليوم')).toBeVisible({ timeout: 15000 })
     await expect(page.getByLabel('تركيز اليوم')).toContainText('مهمة اليوم الأولى')
     await expect(page.getByLabel('لقطة اليوم')).toContainText('مهمة اليوم الأولى')
+
+    // ── لوحة القيادة الغنية: حزمة lazy تُحمّل بعد خمول المتصفح ──
+    // القسم الجديد (طلب المالك): بطاقة درجة الإنتاجية + KPIs + الشارات
+    await expect(page.getByText('درجة الإنتاجية', { exact: false })).toBeVisible({ timeout: 20000 })
+    await expect(page.getByText('الشارات المتاحة')).toBeVisible({ timeout: 20000 })
+    await expect(page.getByText('متوسط الإنتاجية الأسبوعي')).toBeVisible({ timeout: 20000 })
   })
 
   test('Quick Add ينشئ كيانًا واحدًا بلا طلبات مكررة', async ({ page }) => {
@@ -156,13 +164,20 @@ test.describe('المرحلة 17 — Home & My Day', () => {
     await expect(dialog).toBeHidden({ timeout: 15000 })
   })
   // ── Visual regression: خط أساس مرتكز (mobile + desktop) ──
-  // الترتيب المستقر: تحية → ترحيب المستخدم الجديد → لقطة اليوم →
-  // إجراءات سريعة → تقدمي → استكشف — كلا الشاشتين بنفس القالب
+  // الترتيب المستقر: تحية (هيدر الداشبورد الغني) → تركيز اليوم →
+  // لقطة اليوم → إجراءات سريعة → لوحة القيادة الغنية (درجة +
+  // KPIs + شارات) — ننتظر تحميل الحزمة lazy قبل اللقطات
   test('Visual regression: خط أساس للرئيسية (جوال + سطح مكتب)', async ({ page }) => {
+    // حد تسجيل الـ middleware (٣/دقيقة) قد يفرض backoff ٦٥ ثانية
+    // — مهلة موسعة كي تتسع للانتظار + تحميل الحزمة lazy
+    test.setTimeout(150_000)
     await login(page)
+    // ننتظر لوحة القيادة الغنية (lazy بعد خمول المتصفح) قبل أي لقطة
+    await expect(page.getByText('الشارات المتاحة')).toBeVisible({ timeout: 25000 })
+    await expect(page.getByText('متوسط الإنتاجية الأسبوعي')).toBeVisible({ timeout: 15000 }).catch(() => { /* mock بلا سجل أسبوعي — بطاقة مشروطة */ })
     // جوال ٣٧٥px
     await page.setViewportSize({ width: 375, height: 812 })
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(1200)
     await expect(page).toHaveScreenshot('home-mobile.png', {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -170,7 +185,7 @@ test.describe('المرحلة 17 — Home & My Day', () => {
     })
     // سطح مكتب ١٢٨٠px
     await page.setViewportSize({ width: 1280, height: 800 })
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(1200)
     await expect(page).toHaveScreenshot('home-desktop.png', {
       fullPage: false,
       maxDiffPixelRatio: 0.02,

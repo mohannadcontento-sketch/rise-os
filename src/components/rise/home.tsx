@@ -1,19 +1,18 @@
 'use client'
 
 // ============================================================
-// home.tsx — المرحلة 17: Home & My Day (مركز القيادة)
+// home.tsx — المرحلة ١٧ (تحديث المالك): الرئيسية = لوحة القيادة
 //
-// يستبدل لوحة الإحصائيات القديمة (dashboard.tsx) بمركز قيادة
-// هادئ وفق docs/phase-16/UX_FOUNDATION.md §11:
-//   Greeting → Focus of the Day → Today snapshot (My Day) →
-//   Continue → Quick actions → Progress → (خلف الطية) Discover.
+// فوق الطية: هيدر الداشبورد الغني (تحية + مستوى + خبرة + سلسلة
+// + حقل نجوم CSS) → تركيز اليوم → يومي (الخط الزمني) → إجراءات
+// سريعة — وفق docs/phase-16/UX_FOUNDATION.md §11 بموجة بيانات
+// خفيفة سريعة (LCP محفوظ).
 //
-// حالات المستخدم الخمس مصمَّمة صراحة (§11): جديد · يوم فارغ ·
-// يوم مزدحم · مساء · مستخدم تعلم-focused.
-//
-// البيانات: موجتان — فوق الطية (summary/tasks/habits/planner/
-// morning) فورًا، وكل ما تحتها (focus/books/knowledge/projects)
-// lazy بعد خمول المتصفح (§ «حصر التحميل الأولي على فوق fold»).
+// تحت الطية: ودجات لوحة التحكم الغنية كاملة (dashboard-widgets)
+// — درجة الإنتاجية، KPIs، متأخرة، رسم الأسبوع، أهداف، عادات،
+// شارات، صحة، قراءة، جدار تحفيز، تركيز، مشاريع — تُحمّل lazy
+// بعد خمول المتصفح في حزمة منفصلة (framer-motion + recharts)
+// فلا تمس LCP فوق الطية (طلب المالك: إرجاع الداشبورد).
 //
 // قواعد UX Copy (§7): صفر لغة لوم («المتبقي»/«الفرصة التالية») ·
 // أرقام عربية شرقية · أفعال في الأزرار · تسميات MODULE_LABELS.
@@ -24,9 +23,9 @@
 // مباشرة من لقطة اليوم (تدقيق §10: عادة = ١ نقرة).
 // ============================================================
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Sun, Moon, CloudSun, Target, CheckCircle2, Circle, Flame,
+  Sun, Moon, CloudSun, Target, CheckCircle2, Circle, Flame, Zap,
   BookOpen, Lightbulb, Compass, ChevronDown, ChevronUp,
   RefreshCw, Sparkles, PenLine, Timer, Plus, ArrowLeft,
 } from 'lucide-react'
@@ -39,7 +38,13 @@ import { MODULE_LABELS } from '@/lib/module-labels'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { QuickAdd, type QuickAddType } from '@/components/rise/quick-add'
+import { getUserStorage } from '@/lib/user-storage'
 import { toast } from 'sonner'
+
+// ودجات لوحة القيادة الغنية — حزمة lazy منفصلة (framer-motion +
+// recharts) تُحمّل بعد خمول المتصفح فلا تمس LCP فوق الطية
+const DashboardWidgets = lazy(() =>
+  import('@/components/rise/dashboard-widgets').then(m => ({ default: m.default })))
 
 // ── القسم: الأنواع ──────────────────────────────────────────
 
@@ -66,6 +71,33 @@ type TimelineRow = {
   taskId?: string
   habitId?: string
   habitDone?: boolean
+}
+
+// ── القسم: حقل النجوم (خلفية الهيدر — CSS خالص) ──────────────
+
+/** ١٢ نجمة تتلألأ بمواقع ثابتة محسوبة مرة واحدة (روح الداشبورد القديم). */
+function StarField() {
+  const stars = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+    top: 8 + (i * 7) % 85,
+    left: 5 + (i * 13) % 90,
+    size: 2 + (i % 3),
+    delay: i * 0.4,
+    dur: 3 + (i % 3),
+  })), [])
+  return (
+    <div
+      className="absolute inset-0 -m-3 sm:-m-4 rounded-3xl bg-gradient-to-bl from-forest/[0.05] via-emerald-accent/[0.04] to-transparent dark:from-emerald-accent/[0.07] dark:via-forest/[0.04] pointer-events-none overflow-hidden"
+      aria-hidden="true"
+    >
+      {stars.map((s, i) => (
+        <span
+          key={i}
+          className="absolute rounded-full bg-emerald-accent/30 dark:bg-emerald-accent/40 animate-star-twinkle"
+          style={{ top: `${s.top}%`, left: `${s.left}%`, width: s.size, height: s.size, animationDelay: `${s.delay}s`, animationDuration: `${s.dur}s` }}
+        />
+      ))}
+    </div>
+  )
 }
 
 // ── القسم: مساعدات العرض ─────────────────────────────────────
@@ -416,61 +448,6 @@ function QuickActionsRow({ onAdd }: { onAdd: (t: QuickAddType) => void }) {
 }
 
 // ── القسم: تقدمي (مستوى/سلسلة — بلا احتفال مبالغ) ─────────────
-
-function ProgressCard({ summary }: { summary: HomeSummary | null }) {
-  const u = summary?.user
-  const t = summary?.today
-  const level = u?.level || 1
-  const xp = u?.xp || 0
-  const xpNext = u?.xpToNextLevel || 100
-  const pct = Math.min(100, Math.round((xp / Math.max(xpNext, 1)) * 100))
-  const streak = u?.streak || 0
-
-  return (
-    <section className="glass rounded-2xl p-4 sm:p-5 mb-4" aria-label="تقدمي">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold flex items-center gap-2">
-          <Flame className="w-5 h-5 text-orange-400" aria-hidden="true" />
-          تقدمي
-        </h3>
-        {streak > 0 && (
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Flame className="w-3.5 h-3.5 text-orange-400" aria-hidden="true" />
-            سلسلة {toArabicNum(streak)} يوم
-          </span>
-        )}
-      </div>
-      <div className="flex items-baseline gap-2 mb-2">
-        <span className="text-2xl font-bold">{toArabicNum(level)}</span>
-        <span className="text-sm text-muted-foreground">المستوى</span>
-        <span className="text-xs text-muted-foreground mr-auto" dir="ltr">
-          {toArabicNum(xp)} / {toArabicNum(xpNext)} XP
-        </span>
-      </div>
-      <div
-        className="h-2 rounded-full bg-muted overflow-hidden"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`تقدم المستوى ${pct}%`}
-      >
-        <div
-          className="h-full rounded-full bg-gradient-to-l from-primary to-emerald-400 transition-[width] duration-500"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      {t && (t.tasksTotal > 0 || t.habitsTotal > 0) && (
-        <p className="text-xs text-muted-foreground mt-3">
-          {t.tasksTotal > 0 && `مهام اليوم: ${toArabicNum(t.tasksCompleted)}/${toArabicNum(t.tasksTotal)}`}
-          {t.tasksTotal > 0 && t.habitsTotal > 0 && ' · '}
-          {t.habitsTotal > 0 && `عادات اليوم: ${toArabicNum(t.habitsCompleted)}/${toArabicNum(t.habitsTotal)}`}
-        </p>
-      )}
-    </section>
-  )
-}
-
 // ── القسم: إغلاق اليوم (حالة المساء — بلا لوم) ────────────────
 
 function EveningCloseCard({ remaining, nextLabel, onJournal, onReview }: {
@@ -615,6 +592,22 @@ function DiscoverWorlds({ onOpen }: { onOpen: (m: keyof typeof MODULE_LABELS) =>
   )
 }
 
+// ── القسم: هيكل لوحة القيادة أثناء تحميل الحزمة ──────────────
+
+function RichSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="جارٍ تحميل لوحة القيادة" className="space-y-4">
+      <div className="glass rounded-2xl h-40 animate-pulse" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="glass rounded-2xl h-32 animate-pulse" />
+        ))}
+      </div>
+      <div className="glass rounded-2xl h-64 animate-pulse" />
+    </div>
+  )
+}
+
 // ── القسم: الهيكل الثابت أثناء التحميل (≤٤٠٠ مللي ثم skeleton) ──
 
 function HomeSkeleton() {
@@ -719,6 +712,14 @@ export default function Home() {
     else setTimeout(load, 700)
   }, [])
 
+  // ── الموجة ٣: لوحة القيادة الغنية — حزمة lazy بعد خمول المتصفح ──
+  const [showRich, setShowRich] = useState(false)
+  useEffect(() => {
+    const ric = (window as any).requestIdleCallback?.bind(window)
+    if (ric) ric(() => setShowRich(true), { timeout: 1600 })
+    else setTimeout(() => setShowRich(true), 900)
+  }, [])
+
   // ── الحسابات ──
   const timeline = useMemo(
     () => buildTimeline(tasks, habits, logs, planner, today, focusSessions, morning?.todayLog),
@@ -795,23 +796,74 @@ export default function Home() {
   }, [])
 
   const { text: greetingText, Icon: GreetingIcon } = greetingFor(hour)
-  const firstName = (summary?.user?.name || '').split(' ')[0]
+  const firstName = useMemo(() => {
+    let name = (summary?.user?.name || '').split(' ')[0] || ''
+    if (!name || name === 'مستخدم') {
+      try {
+        const stored = getUserStorage('rise-settings')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (parsed.userName?.trim()) name = parsed.userName.trim().split(' ')[0]
+        }
+      } catch { /* ignore */ }
+    }
+    return name
+  }, [summary])
+  // مستوى/خبرة/سلسلة الهيدر — من الموجة الأولى (summary)
+  const level = summary?.user?.level || 1
+  const xp = summary?.user?.xp || 0
+  const xpNext = summary?.user?.xpToNextLevel || 100
+  const streak = summary?.user?.streak || 0
+  const levelPct = Math.min(100, Math.round((xp / Math.max(xpNext, 1)) * 100))
 
   if (loading && !summary) return <HomeSkeleton />
 
   return (
-    <div className="max-w-3xl mx-auto space-y-0">
-      {/* ١) التحية */}
-      <header className="mb-4 px-1">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2.5">
-          <GreetingIcon className="w-7 h-7 text-amber-400" aria-hidden="true" />
-          {greetingText}{firstName ? ` يا ${firstName}` : ''}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {isEvening
-            ? 'خلاصة يومك أمامك — والفرصة التالية بانتظارك'
-            : 'يومك كله في نظرة واحدة'}
-        </p>
+    <div className="max-w-6xl mx-auto space-y-0">
+      {/* ١) التحية — هيدر الداشبورد الغني (موجة أولى) */}
+      <header className="relative mb-5 px-1">
+        <StarField />
+        <div className="relative">
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2.5">
+            <GreetingIcon className="w-7 h-7 text-amber-400" aria-hidden="true" />
+            {greetingText}{firstName ? ` يا ${firstName}` : ''}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isEvening
+              ? 'خلاصة يومك أمامك — والفرصة التالية بانتظارك'
+              : 'يومك كله في نظرة واحدة'}
+          </p>
+          <div className="flex items-center gap-2.5 mt-3 flex-wrap">
+            {/* شارة المستوى — نفس هوية الداشبورد الذهبية */}
+            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-l from-gold to-gold-light text-[10px] px-2.5 py-0.5 font-bold shadow-md shadow-gold/20 border-0 text-forest-dark">
+              <Zap className="w-3 h-3" aria-hidden="true" />
+              المستوى {toArabicNum(level)}
+            </span>
+            <span className="text-[11px] text-muted-foreground" dir="ltr">
+              {toArabicNum(xp)} / {toArabicNum(xpNext)} خبرة
+            </span>
+            {streak > 0 && (
+              <span className="inline-flex items-center gap-1.5 glass rounded-xl px-3 py-1">
+                <Flame className="w-4 h-4 text-gold" aria-hidden="true" />
+                <span className="text-xs font-bold text-gradient-gold">{toArabicNum(streak)}</span>
+                <span className="text-[10px] text-muted-foreground">أيام متتالية</span>
+              </span>
+            )}
+            <div
+              className="w-32 sm:w-40 h-2 rounded-full bg-muted overflow-hidden"
+              role="progressbar"
+              aria-valuenow={levelPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="تقدم المستوى"
+            >
+              <div
+                className="h-full rounded-full bg-gradient-to-l from-gold to-gold-light transition-[width] duration-700"
+                style={{ width: `${levelPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
       </header>
 
       {/* ٢) حالة المستخدم الجديد */}
@@ -856,8 +908,14 @@ export default function Home() {
       {/* ٦) إجراءات سريعة */}
       <QuickActionsRow onAdd={openQuickAdd} />
 
-      {/* ٧) تقدمي */}
-      <ProgressCard summary={summary} />
+      {/* ٧) لوحة القيادة الغنية — ودجات الداشبورد كاملة (lazy بعد الخمول) */}
+      {showRich && (
+        <section aria-label="لوحة القيادة" className="mt-6">
+          <Suspense fallback={<RichSkeleton />}>
+            <DashboardWidgets />
+          </Suspense>
+        </section>
+      )}
 
       {/* ٨) استكشف — خلف الطية */}
       <DiscoverWorlds onOpen={setActiveModule} />

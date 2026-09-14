@@ -1,6 +1,6 @@
 # خطة أوج — حالة التنفيذ الكاملة (محينة)
 
-> **آخر تحديث:** 2026-09-15 (جلسة 9 — Task 41: **المرحلة 17 مغلقة ومُقاسة حيًّا**) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلتان 16 (UX Foundation) و17 (Home & My Day) ✅ مغلقتان**
+> **آخر تحديث:** 2026-09-15 (جلسة 9 — Task 42: **طلب المالك — إرجاع لوحة القيادة الغنية كقسم في الرئيسية**، فوق §11 وبهيدر الداشبورد؛ Task 41: المرحلة 17 مغلقة ومُقاسة حيًّا) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلتان 16 (UX Foundation) و17 (Home & My Day) ✅ مغلقتان**
 > **مفتاح الرموز:** ✅ منفَّذ ومتحقَّق منه بأدلة · ⏳ مجدول (لم يحن وقته) · 👤 إجراء يدوي على المالك · 🔴 غير مكتمل
 > النسخ المعلَّمة بصريًا (☑ داخل نص الخطط): **الخطة الشاملة الجديدة** `docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — 12 بندًا ☑ (تحديث 2026-09-15 / Task 40) · الخطة القديمة `docs/Awj_Development_and_Launch_Plan.docx`
 
@@ -138,6 +138,8 @@ RLS audit · authorization · rate limiting · input validation · XSS sanitize 
 - **القياسات الحية (الإنتاج):** **LCP ١٣٦٤ → ٨٢٨ مللي (−٣٩٪)** · DCL −٤٣٪ · طلبات لوحدة الرئيسية: من الطلب الضخم الواحد (`/api/rise/dashboard` بكل شيء) إلى ٥ طلبات خفيفة فوق الطية — العقد مُجاز (نقطة الشريط الجانبي مسجّلة للمرحلة ٢٥)
 - **حذف موثّق:** dashboard.tsx (٢١١٢ سطر) + use-dashboard-data — الإحصاءات في «التحليلات» (حسم §9) · التسمية: dashboard → «الرئيسية»
 - **التحقق الحي:** تحية شخصية + كل الأقسام في الـDOM + إنشاء/تنظيف مهمة عبر Quick Add (POST=1 → ظهرت في الخط الزمني → DELETE 200)
+
+- **تحديث المالك (Task 42):** طلب صريح بإرجاع الداشبورد «كانت مهمة وشكلها حلو» → **أُرجعت كاملة كقسم غني في الرئيسية**: `dashboard-widgets.tsx` (١٩١٠ أسطر من الأصل المسترجَع من git: درجة الإنتاجية + KPIs الأربعة + المتأخرة + رسم الأسبوع + المهام القادمة + الأهداف + العادات + الشارات + الصحة + القراءة + جدار التحفيز + جلسات التركيز + المشاريع) + هيدر الرئيسية صار هيدر الداشبورد (تحية + شارة مستوى + شريط خبرة + سلسلة + حقل نجوم CSS) · الجلب عبر `use-dashboard-data` (نداء تجميعي واحد) · **حزمة lazy منفصلة بعد requestIdleCallback — حزمة الرئيسية ٣٣KB بلا framer-motion/recharts فمحسّن LCP المرحلة محفوظ** · تحسين على الأصل: تسجيل العادة من اللوحة بنقرة واحدة (كانت disabled) · ProgressCard حُذف (انتقل للهيدر بلا تكرار) · e2e ٥/٥ (تتابع + توازٍ) + فحوص DOM لكل أقسام اللوحة ببيانات مزروعة
 
 ## المراحل 18-32 ⏳ (الخطة الشاملة الجديدة)18 Navigation+Explore · 19 Core Modules · 20 Onboarding+Auth+Consent · 21 Progress+Reviews · 22 Community · 23 Landing+Conversion · 24 Monetization+Ads · 25 Performance+Data · 26 MCP User Server (2026-07-28 + صفحة /mcp + Claude Code) · 27 Admin MCP منفصل · 28 Security Hardening (ASVS/WSTG) · 29 Automated QA Gate · 30 Break & Pen Test · 31 Observability+DR · 32 Closed Beta — التفاصيل الكاملة في `docs/Awj_Master_Development_Launch_Plan_AR.pdf`.
 
