@@ -385,3 +385,23 @@ Stage Summary:
 - Free plan notes: 10K commands/day (sufficient for launch; monitor at growth)
 - Remaining owner queue: GSC Verify + submit sitemap → closed Beta with real users → awj.life domain last → revoke GitHub token (and optionally rotate the Upstash token shared in chat)
 - All phases 0-14 now fully closed technically; the only open items are human/Beta/domain steps
+
+---
+Task ID: 34
+Agent: Super Z (main)
+Task: «يلا نبداء» — launch Phase 15 (Closed Beta): build the missing in-app feedback channel end-to-end
+
+Work Log:
+- Read the phase-15 plan tasks: 8 ops items — all infrastructure-ready except «جمع Feedback داخل التطبيق» (repo-wide search: zero feedback files) → built it following every repo pattern (data layer sb()/toSnake/toCamel, requireUser/withIdempotency, requireAdmin+logAudit, SectionCard, admin tab conventions, supabase/migrations numbering)
+- Migration 037: feedback table (type IN bug/suggestion/question/other, message 5-2000, page context, status new/read/handled, handled_at) + indexes + RLS (insert_own/select_own only — no user UPDATE/DELETE by design: channel integrity) + idempotent statements
+- API: POST/GET /api/rise/feedback (submit idempotent + own list, graceful 503 FEEDBACK_NOT_READY before 037 applied, 42P01/PGRST205 detection) · GET/POST /api/rise/admin/feedback (last 200 + profile names + status/type/24h counts in one pass, set-status with before/after audit log)
+- UI: «ملاحظاتك على أوج» settings section (type chips, auto page context, own feedback with live status badges new→read→handled) · «ملاحظات البيتا» admin tab (4 stat cards + status filters with live new-count badge + mark read/handled actions, 60s auto-refresh)
+- middleware RATE_LIMITS: 5/min user, 30/min admin · docs/phase-15/BETA_RUNBOOK.md: remaining phase-15 tasks mapped + daily 5-min checklist + success metrics + free-tier limits + rollback
+- Pushed as ONE atomic commit be72c64 (12 files, Git Data API) — then CI caught a real defect: tsc TS2305 ChatBubble not exported in lucide-react ^0.525 (2 errors, both my new files) → fixed immediately in f0c9723 (MessageCircle — verified already used in codebase) → CI fully green (note: the 43 react-hooks/set-state-in-effect lint errors are pre-existing legacy debt; the CI ESLint step already runs continue-on-error by design — no change made there)
+- Live verification after f0c9723 deploy: GET /api/rise/feedback no-session → 401 (route live) · with fresh QA session → {"feedback":[],"notReady":true} (graceful degradation before 037 works exactly as designed) · admin gate → 403 · QA account cleaned (DELETE 200, session dead 401)
+- Noticed maintenance_mode=true is currently ON (custom message set from the System tab — presumably the owner testing it): /api/auth/* and admin/system paths are exempt, everything else mutation-blocked (503). Full POST-flow tests (submit + zod rejections + 5/min limit) scheduled after the owner turns it off + applies 037
+
+Stage Summary:
+- Phase 15 Closed Beta technically launched: the last missing plan task (in-app feedback) is built, deployed, and live-verified in its pre-migration degraded state; everything else in the runbook maps to existing, already-verified infrastructure
+- Owner's 2 steps to activate the channel: apply 037 in SQL Editor + turn maintenance off (if it was a test) — then I run the full live E2E (submit → admin sees → status flow → rate limit) and the beta invites can start
+- Quality incident honestly logged: ChatBubble typo broke the build once — caught by CI gate, fixed within minutes; no production impact (Vercel kept serving the previous deployment until the fix)
