@@ -199,6 +199,60 @@ function isMaintenanceExempt(pathname: string): boolean {
 }
 
 // ============================================================
+// Beta (طلب المالك): استثناء الأدمن من قفل الصيانة.
+// التحقق من داخل middleware (edge) باتصالين REST خفيفين مع
+// كاش 30 ثانية لكل توكن — الهدف: الأدمن يستخدم التطبيق كله
+// طبيعيًا أثناء الصيانة (يصلح ويبني ويوقفها) بينما غير الأدمن
+// يرى صفحة /maintenance وطفراته مرفوضة 503.
+// فشل التحقق = ليس أدمن (fail-closed) — وللأدمن دائمًا مسارات
+// /api/rise/admin/* و /api/rise/system/* المستثناة باثيًا أصلًا،
+// فيقدر يوقف الصيانة حتى لو فشل هذا الفحص مؤقتًا.
+// ============================================================
+const MAINTENANCE_SB_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const adminCheckCache = new Map<string, { at: number; isAdmin: boolean }>()
+
+async function isAdminRequester(req: NextRequest): Promise<boolean> {
+  if (!MAINTENANCE_SB_URL || !MAINTENANCE_SB_ANON || !MAINTENANCE_SB_KEY) return false
+  const token = req.cookies.get('rise-access')?.value
+  if (!token || token.length < 50) return false
+  const cached = adminCheckCache.get(token)
+  if (cached && Date.now() - cached.at < 30_000) return cached.isAdmin
+  let isAdmin = false
+  try {
+    // 1) التحقق من الجلسة (نفس كوكيز rise-access الذي تستخدمه المسارات)
+    const uRes = await fetch(`${MAINTENANCE_SB_URL}/auth/v1/user`, {
+      headers: { apikey: MAINTENANCE_SB_ANON, Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(2500),
+    })
+    if (uRes.ok) {
+      const user = (await uRes.json()) as { id?: string }
+      if (user?.id) {
+        // 2) الدور من profiles (نفس منطق isAdminRole في audit.ts)
+        const pRes = await fetch(
+          `${MAINTENANCE_SB_URL}/rest/v1/profiles?select=role&id=eq.${user.id}`,
+          {
+            headers: { apikey: MAINTENANCE_SB_KEY, Authorization: `Bearer ${MAINTENANCE_SB_KEY}` },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(2500),
+          },
+        )
+        if (pRes.ok) {
+          const rows = (await pRes.json()) as Array<{ role?: string }>
+          const v = String(rows[0]?.role ?? '').trim().toLowerCase()
+          isAdmin = rows.length > 0 && (v === 'admin' || v === 'ادمن')
+        }
+      }
+    }
+  } catch {
+    isAdmin = false // غير متأكد ≠ أدمن
+  }
+  if (adminCheckCache.size > 500) adminCheckCache.clear() // حماية الذاكرة
+  adminCheckCache.set(token, { at: Date.now(), isAdmin })
+  return isAdmin
+}
+
+// ============================================================
 // المرحلة 10-ج (إصلاح CSP): صفحة /mcp/authorize ترسل نموذج GET
 // إلى نقطة دالة Supabase (نطاق مختلف عن الموقع). توجيه form-action
 // في CSP بـ 'self' فقط يمنع المتصفح من إرسال النموذج بصمت —
@@ -351,27 +405,45 @@ export async function middleware(req: NextRequest) {
     )
   }
 
-  // المرحلة 11 (System): رفض طفرات المستخدمين أثناء الصيانة —
-  // القراءة تستمر، ومسارات الأدمن/النظام/المصادقة مستثناة.
-  if (
+  // المرحلة 11 (System) + Beta: قفل التطبيق أثناء الصيانة —
+  // طلب المالك: التطبيق كله مقفول لغير الأدمن:
+  //   (أ) صفحة /app (ومساراتها) لغير الأدمن → تحويل لصفحة /maintenance
+  //   (ب) طفرات /api/rise/* لغير الأدمن → 503 MAINTENANCE_MODE
+  // الأدمن (profiles.role = admin/ادمن) يمر طبيعيًا في الحالتين.
+  // القراءة تظل متاحة، ومسارات الأدمن/النظام/المصادقة مستثناة أصلًا.
+  const isAppShellPage = pathname === '/app' || pathname.startsWith('/app/')
+  const isUserRiseMutation =
     pathname.startsWith('/api/rise/') &&
     !pathname.startsWith('/api/rise/system/') &&
     isStateChangingMethod(req.method) &&
-    !isMaintenanceExempt(pathname) &&
-    (await isMaintenanceActive())
-  ) {
-    return setSecurityHeaders(
-      withNonceRequest(
-        NextResponse.json(
-          {
-            error: 'أوج تحت الصيانة حاليًا — التعديلات محفوظة محليًا وستُرسل عند عودتنا. نرجو المحاولة بعد قليل.',
-            code: 'MAINTENANCE_MODE',
-          },
-          { status: 503, headers: { 'Retry-After': '60' } },
-        ),
-      ),
-      nonce,
-    )
+    !isMaintenanceExempt(pathname)
+  if (isAppShellPage || isUserRiseMutation) {
+    if (await isMaintenanceActive()) {
+      const adminBypass = await isAdminRequester(req)
+      if (isAppShellPage && !adminBypass) {
+        const maintenanceUrl = req.nextUrl.clone()
+        maintenanceUrl.pathname = '/maintenance'
+        maintenanceUrl.search = ''
+        return setSecurityHeaders(
+          withNonceRequest(NextResponse.redirect(maintenanceUrl, 307)),
+          nonce,
+        )
+      }
+      if (isUserRiseMutation && !adminBypass) {
+        return setSecurityHeaders(
+          withNonceRequest(
+            NextResponse.json(
+              {
+                error: 'أوج تحت الصيانة حاليًا — نرجو المحاولة بعد قليل.',
+                code: 'MAINTENANCE_MODE',
+              },
+              { status: 503, headers: { 'Retry-After': '60' } },
+            ),
+          ),
+          nonce,
+        )
+      }
+    }
   }
 
   const rateConfig = matchRateLimit(pathname)
