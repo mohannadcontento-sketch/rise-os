@@ -881,28 +881,52 @@ main {
     }
   }
   /* Glass pill nav (component a) — day: forest glass; night: obsidian-blue glass.
-     Both keep white text ≥4.5:1 over any page content. */
+     Both keep white text ≥4.5:1 over any page content.
+     Phase-17 polish: hairline ring + top highlight keep the pill separated
+     from page content (night mode no longer blends); active tab gets a lime
+     indicator bar + hue well (see glass-nav.tsx). */
   .glass-nav {
-    background: color-mix(in srgb, var(--forest) 90%, transparent);
-    -webkit-backdrop-filter: blur(12px) saturate(180%) contrast(200%);
-    backdrop-filter: blur(12px) saturate(180%) contrast(200%);
+    background: color-mix(in srgb, var(--forest) 92%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(170%);
+    backdrop-filter: blur(14px) saturate(170%);
     border-radius: 99rem;
+    max-width: calc(100vw - 1.5rem);
     box-shadow:
-      inset 2px 2px 5px -2px rgba(255, 255, 255, 0.35),
-      0 8px 32px rgba(11, 16, 21, 0.28);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.13),
+      0 12px 36px -8px rgba(11, 16, 21, 0.45),
+      0 4px 14px -6px rgba(11, 16, 21, 0.30);
   }
   .dark .glass-nav {
-    background: color-mix(in srgb, #101A2E 88%, transparent);
+    background: color-mix(in srgb, #101A2E 90%, transparent);
     box-shadow:
-      inset 2px 2px 5px -2px rgba(148, 180, 255, 0.22),
-      0 8px 32px rgba(0, 0, 0, 0.55),
-      0 0 24px -8px rgba(124, 156, 245, 0.35);
+      inset 0 1px 0 0 rgba(148, 180, 255, 0.18),
+      inset 0 0 0 1px rgba(148, 180, 255, 0.15),
+      0 12px 36px -6px rgba(0, 0, 0, 0.60),
+      0 0 26px -10px rgba(124, 156, 245, 0.35);
   }
   .glass-nav-item {
-    transition: transform 0.15s var(--ease-spring), background-color 0.15s ease;
+    transition: transform 0.15s var(--ease-spring), background-color 0.2s ease, box-shadow 0.2s ease;
   }
   .glass-nav-item:active {
-    transform: scale(0.96);
+    transform: scale(0.95);
+  }
+  /* active-tab lime indicator — spring pop onto the pill's top edge */
+  @keyframes nav-ind-pop {
+    0%   { transform: translateX(-50%) scaleX(0.35); opacity: 0; }
+    60%  { transform: translateX(-50%) scaleX(1.12); opacity: 1; }
+    100% { transform: translateX(-50%) scaleX(1);    opacity: 1; }
+  }
+  .nav-indicator {
+    animation: nav-ind-pop 0.34s var(--ease-spring) both;
+  }
+  /* active icon well — spring pop-in (module color identity) */
+  @keyframes nav-well-pop {
+    0%   { transform: scale(0.82); }
+    100% { transform: scale(1); }
+  }
+  .nav-well {
+    animation: nav-well-pop 0.3s var(--ease-spring) both;
   }
   /* ─── Neo Duotone icon wells — the "distinctive icons" system ───
      Each module icon sits in a rounded well tinted with its hue.

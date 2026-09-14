@@ -111,6 +111,9 @@ test.describe('المرحلة 17 — Home & My Day', () => {
   })
 
   test('Quick Add ينشئ كيانًا واحدًا بلا طلبات مكررة', async ({ page }) => {
+    // حد تسجيل الـ middleware (٣/دقيقة) قد يفرض backoff ٦٥ ثانية
+    // — مهلة موسعة (نمط اختبار اللقطات) كي تتسع للاحتظار
+    test.setTimeout(150_000)
     await login(page)
 
     // عدّ طلبات إنشاء المهام على مستوى الشبكة
@@ -152,6 +155,8 @@ test.describe('المرحلة 17 — Home & My Day', () => {
   })
 
   test('Quick Add: الحارس يعطل زر الحفظ أثناء الطفرة', async ({ page }) => {
+    // حد تسجيل الـ middleware (٣/دقيقة) قد يفرض backoff ٦٥ ثانية
+    test.setTimeout(150_000)
     await login(page)
     await page.getByRole('button', { name: 'أضف مهمة' }).click()
     const dialog = page.getByRole('dialog', { name: 'إضافة سريعة' })
