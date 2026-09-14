@@ -513,3 +513,16 @@ Work Log:
 Stage Summary:
 - Every ✅ mark in PLAN_STATUS is now backed by same-day live evidence — nothing claimed-pushed is missing
 - Next: Phase 17 (Home & My Day) per docs/phase-16/UX_FOUNDATION.md §11
+
+
+---
+Task ID: 40
+Agent: Super Z (main)
+Task: Owner asked: mark completed tasks inside the plan (docx+PDF) on GitHub + execute next phase (17)
+
+Work Log:
+- Marked 12 evidence-based items in docs/Awj_Master_Development_Launch_Plan_AR.docx: 9 of 11 phase-16 items (8 tasks + clicks audit; screen-reader & manual-nav tests stay ☐ per UX_FOUNDATION §12 deferral to 17/18) + phase-23 pricing & links items (session-6 deliverables, live-verified Task 39) + phase-30 "50+ attack cases" test item (docs/phase-15/BREAKTESTS_50.md 50/50)
+- Added status legend to the version line + "— مغلقة ✓" to phase-16 heading
+- Re-installed Amiri Regular/Bold (sandbox reset had removed them — first reconvert fell back to DejaVu, 19 pages, no Amiri) → reconverted: 24 pages, Amiri embedded, matches original pagination
+- Verified: pdftotext ☑=13/☐=255 (consistent: 266-12+legend) + VLM visual QA page 4 PASS (9 ☑ visible, 2 deferred ☐, connected Arabic, correct RTL, no defects)
+- Pushed marked docx + pdf (replacing originals; clean originals preserved in git history 252da595/f72f1096) + PLAN_STATUS note
