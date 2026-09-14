@@ -323,3 +323,23 @@ Stage Summary:
 - Phases 10-14 all closed: Admin 12/12 (Ads/Plans/System built), Performance evidence doc, QA live suite + 3 real bugs found (2 fixed in code, 1 via migration 036 pending owner apply)
 - Plan in docs/ fully updated: marked docx/pdf (190 ✓) + PLAN_STATUS.md as the living status board
 - Owner queue: apply migrations 035+036 (SQL editor) → set Upstash env (mandatory before public signup) → GSC Verify → deploy MCP v3.1 → Beta human QA pass → awj.life last
+
+---
+Task ID: 31
+Agent: Super Z (main)
+Task: Phase 14 (QA) post-owner-steps retest — MCP v3.1 live verification + migration 036 + Upstash (owner request: continue phase-14 tasks after deploying MCP, applying Supabase migrations, and connecting Upstash free plan)
+
+Work Log:
+- Verified owner's manual steps live:
+  1) MCP v3.1 deployed: 401 from the Supabase edge function now carries WWW-Authenticate (v3.x marker; v2.1 lacked it) + /.well-known/oauth-protected-resource returns 200 with resource metadata — the live MCP is the 82-tool v3.1
+  2) Migration 036 applied: login+delete of the stuck QA account qa-cycle-1789343456@qa-probe.test (worst case: community activity) → 200, sessions dead (401)
+  3) Upstash connected by owner — but 7 failed logins still returned 401 with no 429: env vars only take effect after a redeploy (the running build predates the binding); final 429 verification scheduled after this docs push triggers the deploy
+- Phase 14 QA retest suite (22/22 green):
+  - MCP plan gates on a fresh Free account: POST /api/rise/mcp/key → 403 PLAN_REQUIRED; POST /api/rise/mcp/call without Bearer rise_… → 401 (deliberate cookie rejection — CSRF-proof machine path)
+  - Full A/B lifecycle with self-cleanup: A (signup → dashboard 200 → MCP gate 403 → community post 201) · B (signup → report on A's post → 201 enters admin moderation queue; fake-target report → 404) · deletes of B (no activity) and A (post + report against — max 036 case) both 200 with dead sessions
+  - Closed the last automatable QA item live: post → comment → notification — C posted, D commented, C's notification center actually received «تعليق جديد على منشورك» (💬, unread, type=community); accounts self-deleted 200/200
+- Docs updated: QA_PRELAUNCH.md (post-owner-steps section 4, 22/22) · PERFORMANCE_RELIABILITY.md (Upstash connected + activation note: env vars require a redeploy; final check = 6 failed logins → 6th must 429) · PLAN_STATUS.md (phase 9/13/14 updates + owner queue: MCP deploy done, migrations done, stuck account cleaned) · plan docx: +2 [✓] (Community post→comment→notification, Report content→Admin review) → 192 marks, 10 honest Beta exceptions
+
+Stage Summary:
+- Phase 14 (QA) fully closed against owner-completed prerequisites: MCP v3.1 live (gates verified), migration 036 verified in production (worst-case delete works), stuck test account cleaned, report+comment+notification flows verified end-to-end
+- Remaining owner queue: final 429 check after this deploy (if missing → confirm UPSTASH_REDIS_REST_URL/TOKEN on Production env + redeploy) · GSC Verify · Beta human pass · awj.life domain last · revoke GitHub token
