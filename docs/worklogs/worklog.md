@@ -343,3 +343,23 @@ Work Log:
 Stage Summary:
 - Phase 14 (QA) fully closed against owner-completed prerequisites: MCP v3.1 live (gates verified), migration 036 verified in production (worst-case delete works), stuck test account cleaned, report+comment+notification flows verified end-to-end
 - Remaining owner queue: final 429 check after this deploy (if missing → confirm UPSTASH_REDIS_REST_URL/TOKEN on Production env + redeploy) · GSC Verify · Beta human pass · awj.life domain last · revoke GitHub token
+
+---
+Task ID: 32
+Agent: Super Z (main)
+Task: Verify owner's Upstash activation claim («تم») — live 3-level diagnosis after env vars + redeploy
+
+Work Log:
+- Owner reported «تم» for owner-queue item 3 (adding UPSTASH_REDIS_REST_URL/TOKEN in Vercel Production + redeploy). Live verification executed immediately:
+  1) Level 1 (scattered connections): 8 failed logins, each a separate TCP connection → 401×8, zero 429 → the in-memory fallback still active, per-isolate counters reset on every new connection
+  2) Level 2 (single-connection session, Python requests.Session keep-alive): 401×4 then 429 at attempt 5 (Retry-After: 12, code RATE_LIMITED, Arabic body) → middleware + limiter code proven 100% healthy; limit 5/min confirmed; the 429 is emitted by the middleware itself
+  3) Level 3 (force a completely fresh build): pushed docs commit 28e7634 (docs/phase-14/UPSTASH_RETEST.md) → waited 150s → site healthy (home 200, system/status 200) → re-ran scattered test → still 401×8 → the freshly-built deployment ALSO lacks the env vars
+- Cross-checked the code side exhaustively: src/middleware.ts reads UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN verbatim (module top-level) · package.json has @upstash/ratelimit ^2.0.8 + @upstash/redis ^1.38.1 · build succeeds · CSP already whitelists https://*.upstash.io — nothing wrong in the repo
+- Definitive conclusion (all alternatives eliminated): the two env vars are NOT correctly present in the Vercel dashboard for the project serving rise-os-gamma.vercel.app. Most likely causes ranked: (1) vars added to the wrong Vercel project (owner has multiple), (2) added to Preview/Development instead of Production, (3) name typo or redis:// value instead of REST https://…​.upstash.io
+- Docs pushed: docs/phase-14/UPSTASH_RETEST.md (full 3-level evidence + ranked causes + exact fix steps) · docs/PLAN_STATUS.md (session-3 header, phase 13/14 notes, owner-queue item 3 rewritten with the project-check gotcha and the marker-commit verification flow) · this worklog entry
+- Health alongside the diagnosis (nothing broken): home 200 · system/status 200 · sitemap/robots 200 · MCP v3.1 alive (WWW-Authenticate present) · GSC verification meta tags live on home (both URL-prefix tokens)
+
+Stage Summary:
+- Upstash still NOT distributed in production despite owner's «تم» — but now with a mathematically exhaustive diagnosis: code ✅ · deps ✅ · middleware ✅ · fresh-build ✅ → dashboard configuration is the only remaining variable
+- Next owner step (item 3, rewritten): open the EXACT project serving rise-os-gamma.vercel.app → Settings → Environment Variables → add both vars (values from Upstash Console REST API section, https://…​.upstash.io format) for Production → say «تم» → we push a marker commit (fresh build, redeploy-free) and verify 429 across scattered connections within minutes
+- Everything else remains green: MCP v3.1 live, migrations applied, QA 31/31 + 22/22, GSC tags ready for the owner's Verify click
