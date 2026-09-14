@@ -26,6 +26,7 @@ import {
   Megaphone,
   SlidersHorizontal,
   Wrench,
+  MessageSquareHeart,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -47,6 +48,7 @@ import { AdminSubscriptionsTab } from './admin-subscriptions-tab'
 import { AdminAdsTab } from './admin-ads-tab'
 import { AdminPlansTab } from './admin-plans-tab'
 import { AdminSystemTab } from './admin-system-tab'
+import { AdminFeedbackTab } from './admin-feedback-tab'
 import { SystemStats } from './admin-panel-utils'
 
 /* ═══════════════ Main Admin Panel Component ═══════════════ */
@@ -137,6 +139,10 @@ export default function AdminPanel() {
             <Wrench className="w-3.5 h-3.5" />
             <span>النظام</span>
           </TabsTrigger>
+          <TabsTrigger value="feedback" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+            <MessageSquareHeart className="w-3.5 h-3.5" />
+            <span>ملاحظات البيتا</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -174,6 +180,9 @@ export default function AdminPanel() {
         </TabsContent>
         <TabsContent value="system">
           <AdminSystemTab />
+        </TabsContent>
+        <TabsContent value="feedback">
+          <AdminFeedbackTab />
         </TabsContent>
       </Tabs>
     </div>

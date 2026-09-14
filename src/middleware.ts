@@ -93,6 +93,10 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   '/api/rise/delete-all': { limit: 2, window: '1 m' },
   '/api/rise/mcp/key': { limit: 5, window: '1 m' },
   '/api/rise/mcp/call': { limit: 60, window: '1 m' },
+  // المرحلة 15 — قناة ملاحظات البيتا: إرسال ضييق (منع السبام عبر
+  // الملاحظات الوهمية)، والإدارة متساهلة (تحديث حالات متتابع).
+  '/api/rise/feedback': { limit: 5, window: '1 m' },
+  '/api/rise/admin/feedback': { limit: 30, window: '1 m' },
   // المرحلة 06 — Web Push: تجربة الإرسال ضيقة عن قصد (هي إشعار
   // حقيقي يمر بالمسار الموحد)، والتسجيل متساهل عمدًا — pwa-init
   // يعيد مزامنة الاشتراك عند كل إقلاع (multi-tab = نداءات متتالية)،

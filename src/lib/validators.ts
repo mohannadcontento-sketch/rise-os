@@ -489,3 +489,21 @@ export const adminSystemActionSchema = z.discriminatedUnion('action', [
       }),
   }),
 ])
+
+/** POST /api/rise/feedback — إرسال ملاحظة البيتا (المرحلة 15) */
+export const feedbackSubmitSchema = z.object({
+  type: z.enum(['bug', 'suggestion', 'question', 'other']),
+  message: z
+    .string()
+    .trim()
+    .min(5, 'اكتب ملاحظتك بوضوح (5 أحرف على الأقل)')
+    .max(2000, 'الملاحظة طويلة جدًا (الحد 2000 حرف)'),
+  page: z.string().trim().max(160).optional(),
+})
+
+/** POST /api/rise/admin/feedback — تحديث حالة ملاحظة (المرحلة 15) */
+export const adminFeedbackActionSchema = z.object({
+  action: z.literal('set-status'),
+  id: uuidSchema,
+  status: z.enum(['new', 'read', 'handled']),
+})
