@@ -429,3 +429,34 @@ Stage Summary:
 - The beta feedback channel is **fully operational in production**: 037 applied by the owner, complete cycle verified live (submit → idempotent replay → tracked status → distributed 429 → cascade-safe deletion)
 - All 8 phase-15 ops items are now green; the only remaining owner action for the whole beta phase is inviting the first 5–20 real users
 - Test methodology note preserved: rate-limit probes must use a unified session (rotating egress IPs make scattered curl probes meaningless)
+
+---
+Task ID: 36
+Agent: Super Z (main)
+Task: Owner requests (session 6): full maintenance lock except admin · 50 break tests with the owner's admin account · pricing page redesign · UX suggestions for feature overload
+
+Work Log:
+- Read the current middleware maintenance gate (path-based exemptions only, pages never locked) and the auth stack (rise-access cookie → Supabase user → profiles.role = admin/ادمن)
+- Built the maintenance lock feature:
+  - New `/maintenance` page (noindex) with Awj aurora design + `maintenance-watch` client component (polls system/status every 20s, shows the admin's custom message, auto-returns to /app when maintenance ends)
+  - middleware: non-admin GET /app* → 307 redirect to /maintenance; non-admin rise mutations → 503; NEW `isAdminRequester()` (session token → auth/v1/user → profiles.role, 30s token-cached, fail-closed) exempts admins from BOTH gates
+  - api-fetch: 503 MAINTENANCE_MODE → one guarded reload (sessionStorage flag, no loop possible) so open tabs lock instantly
+  - 5 commits (50f3366·753fb99·d322f7c·ed212b8·436e751) — note: 50f3366's CI failed as a stacked-commit artifact (page landed one commit before its dependency); the final state 436e751 is fully green
+- Redesigned the pricing page end-to-end (same data/promises/JSON-LD): wide marketing layout, trust chips, richer plan cards (glow + «الأكثر قيمة» + Max scale), 5-row quick comparison table, guarantees row, restyled FAQ, final CTA — reuses PublicFooter, pure server component
+- Live verification of the lock: **18/18 PASS** — anon + regular user locked (307 + 503), admin passes (200 + mutations succeed during maintenance), toggles both directions with ≤35s propagation, ended with maintenance OFF
+- Wrote and ran the 50 break tests (two scripts + one methodology retest) using probe accounts + the owner's admin account:
+  - Auth 10/10 (brute force 429, forged cookie/Bearer/rise_ key → 401, logout kills session)
+  - Authorization 8/10 then 10/10 (regular user CANNOT disable maintenance via admin/system → 403; RLS isolation; forged user_id ignored; the 405 was admin/query being POST-only — retested with POST → 403)
+  - Input validation 10/10 (XSS/SQLi stored as inert text — parameterized queries; all boundaries 400 not 500; javascript: page treated as data)
+  - Distributed rate limits 6/6 (5/3/2 per minute all enforced and recover; per-path scoping verified) — two initial failures were methodology artifacts (fresh sessions inherited the same egress IP → premature 429 = correct defense)
+  - Idempotency/CSRF 8/8 (428/409/403/400 all correct)
+  - Maintenance lock 4/4 · Admin with owner account 4/4 (set-status works, audit logs system-maintenance + feedback-status-set, cascade delete verified)
+  - Cleanup: all 7 remaining qa-probe.test accounts self-deleted (including a stale one from the previous session)
+- Authored `docs/phase-15/UX_SUGGESTIONS.md` for the feature-overload concern: progressive disclosure as the core treatment (6-module core bar + «المزيد», 3-step onboarding, teaching empty states, start templates, weekly single digest, advanced features behind «متقدم», measure from admin stats before changing)
+- Updated PLAN_STATUS (session-6 block + owner item 7: change the admin password shared in chat) and BETA_RUNBOOK (emergency plan now describes the full lock behavior)
+
+Stage Summary:
+- Maintenance now does exactly what the owner asked: the whole app locks for non-admins (page + mutations + instant lock for open tabs), while the admin works normally to fix things and turn it off
+- The app survived all 50 break attempts with zero successful breaches; rate-limit and CSRF/idempotency defenses all held
+- Pricing page has a full marketing-grade look; UX suggestions documented and prioritized by beta timing
+- Security follow-ups for the owner: change the admin account password (shared in chat) + revoke the GitHub token + optionally rotate the Upstash token
