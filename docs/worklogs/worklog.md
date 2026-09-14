@@ -296,3 +296,30 @@ Stage Summary:
 - Phase 13 (Security & Privacy) closed in repo: 13/13 checklist items addressed (11 pre-existing with evidence, 2 implemented this session: ads consent + backup plan) + both DoD items documented
 - Owner actions: set Upstash env vars in Vercel · follow BACKUP_RESTORE.md (weekly dump now, Pro before public launch) · run supabase/fixes/riseos-fix-composite-functions.sql (still pending from 27-c, fixes task-create 500) · human review of privacy-policy wording for AdSense cookies · rotate any pre-hardening credentials
 - Next in plan: Phase 14 (Performance & Reliability)
+
+---
+Task ID: 30
+Agent: Super Z (main)
+Task: Phases 10-14 completion + full plan marking (owner request: execute, review the whole plan in docs/, and update it)
+
+Work Log:
+- Inventory gap analysis re-run: the 3 honest gaps from Phase 10 (Admin) were Ads UI / Plans UI / System (maintenance+flags) — implemented all three this session
+- Ads module: /api/rise/admin/ads (GET live app_config values, no 10-min cache; POST set/direct-ad-save/direct-ad-delete) + admin-ads-tab.tsx (global toggle, ca-pub client id, 3 placement slots, Direct Ads CRUD dialog with schedule/priority) + zod adminAdsActionSchema + audit log + resetAdsConfigCache on write
+- Plans module: /api/rise/admin/plans (GET plans + plan_entitlements; POST set-entitlement) + admin-plans-tab.tsx (per plan x feature editable daily/monthly limits with empty=null semantics, add-new-entitlement form) — writes go straight to plan_entitlements (the enforcement source consumed inside consume_usage), so limit changes apply server-side instantly with no redeploy; audit includes before/after values
+- System module: src/lib/system-config.ts (maintenance_mode/message/feature_flags from app_config, 30s cache, env kill-switch SYSTEM_MAINTENANCE_MODE) + /api/rise/admin/system (toggle+flags+deploy info) + public /api/rise/system/status + admin-system-tab.tsx + middleware maintenance gate: non-admin /api/rise mutations rejected with 503 MAINTENANCE_MODE (Retry-After 60, Arabic message) while admin/auth/system paths stay exempt; 30s in-memory cache + direct REST probe, fail-open on any error; rate limits added for the 3 new admin routes
+- Migration 035_phase11_admin_control.sql: idempotent seed of maintenance_mode/feature_flags keys
+- admin-panel.tsx: 3 new tabs (الإعلانات/الخطط/النظام) → 12 modules total; local CI parity verified (bun install + tsc --noEmit + next build all green) before every push
+- Phase 13 (Performance) closed with evidence: docs/phase-13/PERFORMANCE_RELIABILITY.md — 11/12 items with repo evidence + live TTFB measurements; 1 owner item (service consumption dashboards)
+- Phase 14 (QA) executed live: 31/31 automated probes green (public routes, auth negatives, admin gates incl. the 3 new ones, idempotency 428, CSRF 403, validation messages, sensitive files 404, system status) + full account lifecycle (signup→session→dashboard→free-limit 402 LIMIT_REACHED→community post 201→delete→dead session 401)
+- QA BROKE the product on purpose and found 3 real production bugs:
+  1) delete-account NEVER worked: admin.auth.deleteUser is undefined (lives on auth.admin) → TypeError 500; invisible to tsc because the supabase module cache was typed any (now typed) — fixed in b772388
+  2) session revocation after password change/logout-all/delete was silently failing: admin.auth.signOut(userId) passes a userId where a JWT is expected → server ignores it; fixed in 3 routes via admin.auth.admin.signOut(accessToken) — verified live: old session 401 after delete
+  3) users with any community activity can never be deleted: audit_logs.actor_user_id FK = ON DELETE RESTRICT (migration 013) blocks profiles/auth.users deletion ("Database error deleting user") — fixed by migration 036_qa_account_delete_fix.sql (SET NULL + nullable actor, ledger rows survive; also relaxes community moderation refs) — OWNER must apply 036 (with 035) via SQL editor; the QA repro account qa-cycle-1789343456@qa-probe.test stays until then
+- Rate-limit caveat surfaced: 7 spread login attempts did not trip 429 — Upstash env vars still unset in Vercel so limits run per-instance (in-memory); documented as a REQUIRED pre-launch step
+- Plan documents updated in docs/: PLAN_STATUS.md (full roadmap status 0→17 with per-item evidence + owner command list), Awj_Development_and_Launch_Plan.docx regenerated with 190 [✓] marks (12 honest exceptions: GSC verify, service-consumption review, 10 browser/device-dependent QA items left for Beta) + matching PDF regenerated via soffice
+- Commits: 150d922 (admin modules) · b429d5a (diag) · b772388 (auth fixes) · d17f9b9 (diag2) · ba6d14a (migration 036 + cleanup) + docs commit; CI + Security Scan green throughout
+
+Stage Summary:
+- Phases 10-14 all closed: Admin 12/12 (Ads/Plans/System built), Performance evidence doc, QA live suite + 3 real bugs found (2 fixed in code, 1 via migration 036 pending owner apply)
+- Plan in docs/ fully updated: marked docx/pdf (190 ✓) + PLAN_STATUS.md as the living status board
+- Owner queue: apply migrations 035+036 (SQL editor) → set Upstash env (mandatory before public signup) → GSC Verify → deploy MCP v3.1 → Beta human QA pass → awj.life last

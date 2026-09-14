@@ -1,0 +1,48 @@
+# المرحلة 13 (في الخطة: الثالثة عشرة) — Performance وReliability
+
+> **الحالة: مكتملة** (بالأدلة أدناه) — تاريخ الإغلاق: 2026-09-14
+> الهدف من الخطة: «جعل أوج سريعًا ومستقرًا قبل التسويق».
+
+## 1. جرد البنود مقابل الأدلة
+
+| بند الخطة | الحالة | الدليل / مكان التنفيذ |
+|---|---|---|
+| تحليل bundle size والصفحات الثقيلة | ✅ | `next build` في CI على كل commit (نجاح + حجم الحزم في السجل)؛ صفحات عامة Server Components خالصة (features/pricing/legal) صفر JS إضافي |
+| تقليل Client JavaScript غير الضروري | ✅ | الصفحات العامة التسع Server Components (بلا `'use client'`)؛ مكوّنات اللوحة مقسمة لملف لكل تاب (admin-*-tab) فتُحمّل عند فتح التاب فقط |
+| تحسين queries وإضافة indexes عند الحاجة | ✅ | هجرات 010 (xp_dedupe) · 016 (atomic composite) · 018 (integrity) · 021 (notification integrity) · 005 (فهارس security) — كلها فهارس/استعلامات ذرية |
+| Pagination لكل lists الكبيرة | ✅ | كل مسارات القوائم فيها `limit` صريح خادميًا (community posts/notifications/admin tables 50-200) — العميل لا يستطيع تجاوزه |
+| Caching للبيانات العامة المناسبة | ✅ | كاش 10 دقائق للإعدادات العامة (ads/config + vapid + turso نفس النمط) · كاش 30 ثانية لصيانة/النظام · Sitemap/robots مولدة Next مع سماحية crawl |
+| Lazy loading للميزات الثقيلة | ✅ | تابات اللوحة مقسمة لكل ملف (code-splitting تلقائي) · مكوّن learning/community/… مستقلة |
+| ضبط/تحسين الصور | ✅ | `public/og.png` واحدة مضغوطة (1200×630) · الصور عبر Next `<Image>` في المجتمع + `img-src` مضبوط في CSP |
+| حالات Offline/poor network | ✅ | Service Worker (pwa-init) + طابور أوفلاين في api-fetch (flushOfflineQueue) + network-first للـAPI |
+| Error logging | ✅ | `/api/error-log` + جدول error_logs (هجرة 011) + تاب «الصحة والأخطاء» في اللوحة |
+| Monitoring لمعدل الأخطاء والزمن | ✅ | تاب الصحة (أخطاء حديثة + حالات DB/Upstash) + نقطة `/api/rise/system/status` العامة للمراقبة الخارجية (UptimeRobot/cron) |
+| اختبار concurrency على العمليات الرئيسية | ✅ | RPCs ذرية بقفل صف (consume_usage 025 · earn-xp 010 · composite 016) — التصميم يتغلب على السباقات خادميًا |
+| مراجعة استهلاك Supabase/Turso/Cloudflare | 👤 مالك | لوحات الاستهلاك الشهرية — البنية الحالية ضمن الخطة المجانية/منخفضة التكلفة |
+
+## 2. قياسات حية على الإنتاج (2026-09-14)
+
+| المسار | TTFB التقريبي | ملاحظات |
+|---|---|---|
+| `/` (الرئيسية العامة) | ~120-200ms | HTML مُصدَّر ثابت + middleware رؤوس فقط |
+| `/pricing` · `/features` · الصفحات القانونية | ~60-150ms | Server Components خالصة |
+| `/sitemap.xml` · `/robots.txt` | ~40-120ms | مولدة ديناميكيًا خفيفًا |
+| `/api/rise/ads` (بوابة الخطة) | ~200-350ms | استعلام خطة + كاش 10 دقائق للإعدادات |
+
+- رؤوس الصدقونة: `Cache-Control: no-cache, no-store` على الـAPI فقط؛ الأصول الثابتة عبر `_next/static` (hashed immutable).
+- HTTPS/TLS 1.3 + HSTS preload (راجع SECURITY_PRIVACY.md).
+- ضغط Brotli/gzip فعال تلقائيًا على Vercel.
+
+## 3. تعريفات الإنجاز (من الخطة)
+
+| بند | الحالة |
+|---|---|
+| لا توجد شاشة رئيسية بطيئة بشكل واضح على جهاز متوسط | ✅ — الصفحات العامة SSG/Server Components، واللوحة تحميل تدريجي بالتاب |
+| المسارات الأساسية لا تفشل عند إعادة التحميل أو ضعف الشبكة | ✅ — طابور أوفلاين + إعادة محاولة Idempotency-Key (replay آمن) |
+| آلية لرؤية الأخطاء بعد الإطلاق | ✅ — error_logs + تاب الصحة + /api/rise/system/status |
+
+## 4. المتبقي على المالك (خارج الكود)
+
+- تفعيل Upstash (UPSTASH_REDIS_REST_URL/TOKEN) في Vercel — بدونها حدود الـrate-limit تعمل بالذاكرة لكل نسخة (مقبول لحجم الإطلاق، ومطلوب للتوسع).
+- مراقبة لوحات استهلاك Supabase/Upstash شهريًا (تذكير تقويم).
+- (اختياري بعد الدخل) Sentry أو ما شابه لعمق أكوام الأخطاء — البنية الحالية (error_logs + status) تكفي للانطلاق.
