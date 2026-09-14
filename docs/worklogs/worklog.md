@@ -526,3 +526,27 @@ Work Log:
 - Re-installed Amiri Regular/Bold (sandbox reset had removed them — first reconvert fell back to DejaVu, 19 pages, no Amiri) → reconverted: 24 pages, Amiri embedded, matches original pagination
 - Verified: pdftotext ☑=13/☐=255 (consistent: 266-12+legend) + VLM visual QA page 4 PASS (9 ☑ visible, 2 deferred ☐, connected Arabic, correct RTL, no defects)
 - Pushed marked docx + pdf (replacing originals; clean originals preserved in git history 252da595/f72f1096) + PLAN_STATUS note
+
+---
+Task ID: 41
+Agent: Super Z (main)
+Task: Execute Phase 17 (Home & My Day) — first code phase of the new master plan
+
+Work Log:
+- Built the command center (src/components/rise/home.tsx): UX_FOUNDATION §11 hierarchy — Greeting → Focus of the Day → My Day (today snapshot) → Continue → Quick actions (6) → Progress → Discover (below fold)
+- My Day timeline merges 5 sources by time: planner items + today's tasks + habits (reminder time) + today's focus sessions (actual start time) + morning routine (today's 20/20/20 log) — 6 rows + "عرض اليوم كامل"
+- QuickAdd (src/components/rise/quick-add.tsx): 6 entity types, bottom sheet on mobile (pure CSS — Vaul rejected per library policy) / centered card on desktop, in-flight guard + auto Idempotency-Key → exactly ONE POST (verified live in production), toast + auto refresh via rise:data-changed
+- 5 user states per plan: new (welcome + 3 starter templates), empty day, busy (6-row cap), evening (day close: المتبقي → الفرصة التالية + journal), learning-focused
+- Two-wave loading: 5 light day-scoped requests above fold, 4 lazy after requestIdleCallback
+- Deleted dashboard.tsx (2112 lines) + use-dashboard-data.ts — stats live in analytics (UX_FOUNDATION §9 ruling) · MODULE_LABELS dashboard → "الرئيسية" · shell hides generic title for Home
+- Playwright tests/e2e/home.spec.ts 5/5 stable (serial + parallel): new-user gate, new→returning contract, Quick Add single-POST (rapid clicks + late Enter guarded), submit guard, visual regression baselines (home-mobile/desktop.png committed)
+- Test hardening journey (all real issues): ads-consent dialog overlay blocks form interaction → dismiss; /app self-reload destroys contexts → race-based waits; pre-hydration fills wiped by React re-render → fill+verify toPass loop; parallel clicks on disabled button hang → bounded timeouts; press() without timeout hangs forever → 3s timeout; signup rate limit 3/min (middleware in-memory) → 65s window backoff; final: API-based session login (tests target phase-17 contract, not the login form)
+- Pre-existing failures verified via git stash to be identical before my changes: login.spec ×3 (stale expectations) + dashboard finance ×1 — not regressions
+- Production measurements (same browser + method): BEFORE (stats dashboard) LCP 1364ms / DCL 696-985ms / one huge /api/rise/dashboard fetch → AFTER (command center) LCP 828ms (−39%) / DCL 398ms / 5 light above-fold requests; sidebar's legacy dashboard fetch documented for Phase 25
+- Commits: d6c2e49 (home+quickadd+tests+deletions) + 91f0084 (5-source timeline + baselines) + 6b77f9b (docs + round-2 plan marks) + 259f40e (worklog) — CI + Security Scan green on all
+- Live verification on production: personal greeting renders, all §11 sections present in DOM, Quick Add creates with POST=1, task appears in timeline with Eastern numerals («المتبقي ١»), cleanup DELETE 200 (Idempotency-Key)
+- Round-2 plan marking: phase 17 (all 11 items) + heading — total 23 ☑ across the docx/pdf (16: 9 · 17: 11 · 23: 2 · 30: 1), VLM-verified, 24 pages Amiri preserved
+
+Stage Summary:
+- Phase 17 GATE PASSED: Home is an independent command center — the whole day is understood in seconds without opening 5 modules
+- Next: Phase 18 (Navigation + Explore — 5-point mobile bar replacing GlassNav + Explore Hub + sidebar worlds) per UX_FOUNDATION §3/§4
