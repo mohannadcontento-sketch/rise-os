@@ -23,7 +23,7 @@ import {
   Bug,
   Lightbulb,
   HelpCircle,
-  ChatBubble,
+  MessageCircle,
   CheckCircle2,
   Eye,
   Clock,
@@ -52,7 +52,7 @@ const TYPES: { key: FBType; label: string; icon: React.ComponentType<{ className
   { key: 'bug', label: 'مشكلة', icon: Bug },
   { key: 'suggestion', label: 'اقتراح', icon: Lightbulb },
   { key: 'question', label: 'سؤال', icon: HelpCircle },
-  { key: 'other', label: 'أخرى', icon: ChatBubble },
+  { key: 'other', label: 'أخرى', icon: MessageCircle },
 ]
 
 const STATUS_META: Record<FBStatus, { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {

@@ -22,7 +22,7 @@ import {
   Bug,
   Lightbulb,
   HelpCircle,
-  ChatBubble,
+  MessageCircle,
   Check,
   Eye,
   Clock,
@@ -65,7 +65,7 @@ const TYPE_META: Record<FBType, { label: string; icon: React.ComponentType<{ cla
   bug: { label: 'مشكلة', icon: Bug, cls: 'bg-destructive/15 text-destructive' },
   suggestion: { label: 'اقتراح', icon: Lightbulb, cls: 'bg-gold/15 text-gold' },
   question: { label: 'سؤال', icon: HelpCircle, cls: 'bg-cyan-500/15 text-cyan-600' },
-  other: { label: 'أخرى', icon: ChatBubble, cls: 'bg-muted text-muted-foreground' },
+  other: { label: 'أخرى', icon: MessageCircle, cls: 'bg-muted text-muted-foreground' },
 }
 
 const STATUS_FILTERS: { key: 'all' | FBStatus; label: string }[] = [
