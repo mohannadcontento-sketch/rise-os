@@ -1,6 +1,6 @@
 # خطة أوج — حالة التنفيذ الكاملة (محينة)
 
-> **آخر تحديث:** 2026-09-14 (جلسة 4) · **المرحلة 15 (Beta) انطلقت:** قناة الملاحظات داخل التطبيق مبنية ومنشورة ومتحقق منها حيًا (be72c64 + f0c9723) · Upstash ✅ · المراحل 0-14 مقفولة بالكامل
+> **آخر تحديث:** 2026-09-15 (جلسة 7) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المرحلة 16 (UX Foundation) ✅ مغلقة (Task 38)**
 > **مفتاح الرموز:** ✅ منفَّذ ومتحقَّق منه بأدلة · ⏳ مجدول (لم يحن وقته) · 👤 إجراء يدوي على المالك · 🔴 غير مكتمل
 > النسخة المعلَّمة بصريًا (علامات [✓] داخل نص الخطة الأصلي): `docs/Awj_Development_and_Launch_Plan.docx`
 
@@ -92,10 +92,31 @@ RLS audit · authorization · rate limiting · input validation · XSS sanitize 
 - وضع الصيانة: ✅ مطفي ومتحقق (`/api/rise/system/status` → maintenance:false)
 👤 المتبقي على المالك: **استدعاء أول 5-20 مستخدمًا حقيقيًا فقط** — كل البنية حية ومتحقق منها.
 
-## المرحلة 16 — Public Launch ⏳
+## المرحلة 16 — UX Foundation ✅ (مغلقة — جلسة 7 / Task 38)
+> **أول مرحلة من الخطة الشاملة الجديدة** — مرحلة قرارات لا كود: تحويل أفكار UX إلى نظام مكتوب قبل تعديل الواجهة.
+- **المخرج:** `docs/phase-16/UX_FOUNDATION.md` — الخريطة المرجعية الكاملة للمراحل 17-19:
+  - **جرد فعلي من الكود:** 10 صفحات عامة (فحص حي 10/10 → 200) + 22 وحدة (مطابقة ModuleId↔MODULE_LABELS↔الشريط↔GlassNav = 22/22) + توثيق أن Auth حاليًا query-mode (قراره في المرحلة 20)
+  - **العوالم الأربعة:** أنجز (tasks/projects/goals/deepwork/work/calendar = 6) · تطور (learning/reading/brain = 3) · توازن (morning/habits/journal/health = 4) · إدارة حياتي (planner/finance/analytics/weekly-review/monthly-review = 5) — 18 + 4 وحدات نظام (dashboard/community/settings/admin) = 22 ✓ مع جدول إعادة التوطين من المجموعات الخمس الحالية
+  - **5 نقاط جوال:** الرئيسية · استكشف (Hub جديد) · + (Quick Add) · المجتمع · حسابي — tasks/habits/planner تخرج من الشريط السفلي إلى Home/لقطة اليوم
+  - **قاعدة الـ 6:** ميزانية معرفية لكل سياق (Home فوق الطية 6 · Quick Add 6 أنواع · لقطة اليوم 6 صفوف...) — العلاج الهيكلي لملاحظة «كتر الخصائص»
+  - **مصفوفة حالات** empty/loading/error/success لـ 10 شاشات + 4 قواعد عابلة
+  - **قواعد UX Copy:** فصحى مبسطة · صفر لغة لوم («المتبقي/الفرصة التالية») · أرقام شرقية · أفعال في الأزرار · تسميات من MODULE_LABELS فقط
+  - **قواعد Accessibility:** 9 قواعد ملزمة مبنية على فحص الكود (48 aria-label حالي · reduced-motion في globals فقط · استكمالها مطلوب في 17-19)
+  - **حسم التعارضات (بوابة الإغلاق):** 10 قرارات محسومة — أهمها **«يومي» ليس وحدة مستقلة بل القسم المركزي داخل Home** (منع سطحين متنافسين لليوم) · dashboard الحالية تتحول من لوحة إحصائيات (15+ قسمًا) إلى مركز قيادة والإحصائيات تنتقل لـ analytics · Explore يستبدل الوصول الشبكي · Community نقطة مستقلة
+  - **تدقيق نقرات:** حالي↔هدف لـ 6 مهام أساسية (إضافة مهمة 4-5→2-3 · بدء تركيز 4→2 · تسجيل عادة 3→1)
+- **البوابة:** «خريطة نهائية + لا تعارض + لا قرارات معلقة» — **مُجتازة** (الجدول في §9 من الوثيقة)
+- **التالي:** المرحلة 17 — Home & My Day (تنفيذ مركز القيادة وفق §11 من الوثيقة)
+
+## المرحلة 17 — Home & My Day ⏳ (الخطة الجديدة)
+تنفيذ وفق `docs/phase-16/UX_FOUNDATION.md` §11: Home hierarchy نهائي · My Day timeline · Quick Add · حالات المستخدم الخمس · لا guilt copy · مقاييس Playwright + LCP/TTFB قبل/بعد.
+
+## المراحل 18-32 ⏳ (الخطة الشاملة الجديدة)
+18 Navigation+Explore · 19 Core Modules · 20 Onboarding+Auth+Consent · 21 Progress+Reviews · 22 Community · 23 Landing+Conversion · 24 Monetization+Ads · 25 Performance+Data · 26 MCP User Server (2026-07-28 + صفحة /mcp + Claude Code) · 27 Admin MCP منفصل · 28 Security Hardening (ASVS/WSTG) · 29 Automated QA Gate · 30 Break & Pen Test · 31 Observability+DR · 32 Closed Beta — التفاصيل الكاملة في `docs/Awj_Master_Development_Launch_Plan_AR.pdf`.
+
+## المرحلة 33 — Public Launch ⏳ (كانت «16» في الترقيم القديم)
 Launch Gate جاهز تقنيًا؛ 👤 الدومين awj.life (آخر خطوة — Vercel A 76.76.21.21 / CNAME www → cname.vercel-dns.com + NEXT_PUBLIC_SITE_URL + Zoho MX/SPF/DKIM/DMARC + إعادة نشر + تحديث GSC/AdSense).
 
-## المرحلة 17 — ما بعد الإطلاق (30 يوم) ⏳
+## المرحلة 34 — أول 30 يوم بعد الإطلاق ⏳ (كانت «17» في الترقيم القديم)
 مؤشرات قياس: تاب الإحصاءات + /api/rise/system/status + error_logs.
 
 ---
