@@ -363,3 +363,25 @@ Stage Summary:
 - Upstash still NOT distributed in production despite owner's «تم» — but now with a mathematically exhaustive diagnosis: code ✅ · deps ✅ · middleware ✅ · fresh-build ✅ → dashboard configuration is the only remaining variable
 - Next owner step (item 3, rewritten): open the EXACT project serving rise-os-gamma.vercel.app → Settings → Environment Variables → add both vars (values from Upstash Console REST API section, https://…​.upstash.io format) for Production → say «تم» → we push a marker commit (fresh build, redeploy-free) and verify 429 across scattered connections within minutes
 - Everything else remains green: MCP v3.1 live, migrations applied, QA 31/31 + 22/22, GSC tags ready for the owner's Verify click
+
+---
+Task ID: 33
+Agent: Super Z (main)
+Task: Upstash final verification after owner's second message (actual credentials + Vercel build) — CLOSE owner-queue item 3
+
+Work Log:
+- Owner sent the actual UPSTASH_REDIS_REST_URL/TOKEN values and confirmed adding them in Vercel with a successful build
+- Direct REST verification of the credentials: GET /ping → {"result":"PONG"} — valid; dbsize before test = 0 (clean)
+- Initial scattered-connections test returned 401×8 BUT dbsize grew 0→3: the middleware WAS writing rate-limit keys to Redis — the 429 absence was a testing artifact, not a product gap
+- Root cause of the artifact identified via key inspection: the sandbox rotates egress IPs across connections (3 distinct IPs from 8 requests: 47.57.232.232 / 47.57.242.119 / 8.212.10.159) and the limiter keys per IP (rateKey = ratelimit:{ip}:{path}) — each key accumulated only 2-3 hits, below the limit of 5. Conclusion: scattered-connections testing from a single sandbox is NOT a valid distributed-counter test; prior "not connected" diagnosis for this session's first test round was an artifact
+- Definitive 3-phase verification (70s cooldown first):
+  A) Single session (one connection = one IP): 401×5 → 429@6 with Retry-After: 22, X-RateLimit-Limit: 5, X-RateLimit-Remaining: 0 (headers only produced by the @upstash/ratelimit path)
+  B) Direct Redis inspection: keys @upstash/ratelimit:ratelimit:{IP}:/api/auth/login:{bucket} present with TTL — and middleware line 382 confirms the in-memory path is fully skipped when Redis is configured
+  C) THE ABSOLUTE PROOF: a brand-new session (new isolate + new connection) immediately after the limit was exceeded → 429 on the FIRST attempt (Retry-After: 20). A fresh isolate has no memory; the rejection can only come from the shared Redis counter
+- Docs updated: docs/phase-14/UPSTASH_RETEST.md (final result + methodology note) · docs/phase-13/PERFORMANCE_RELIABILITY.md (Upstash item 🔴→✅ with the 3-phase evidence) · docs/PLAN_STATUS.md (header, phase 13/14 notes, owner-queue item 3 closed + optional token-rotation hygiene note) · this worklog entry
+
+Stage Summary:
+- ✅ Upstash distributed rate limiting VERIFIED WORKING in production — owner-queue item 3 CLOSED with airtight evidence (429 on a cold isolate)
+- Free plan notes: 10K commands/day (sufficient for launch; monitor at growth)
+- Remaining owner queue: GSC Verify + submit sitemap → closed Beta with real users → awj.life domain last → revoke GitHub token (and optionally rotate the Upstash token shared in chat)
+- All phases 0-14 now fully closed technically; the only open items are human/Beta/domain steps
