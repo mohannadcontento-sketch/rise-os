@@ -460,3 +460,20 @@ Stage Summary:
 - The app survived all 50 break attempts with zero successful breaches; rate-limit and CSRF/idempotency defenses all held
 - Pricing page has a full marketing-grade look; UX suggestions documented and prioritized by beta timing
 - Security follow-ups for the owner: change the admin account password (shared in chat) + revoke the GitHub token + optionally rotate the Upstash token
+---
+Task ID: 37
+Agent: Super Z (main)
+Task: Owner uploaded the new master plan (Awj_Master_Development_Launch_Plan_AR.docx) — understand it, upload it to the repo, and produce a PDF version
+
+Work Log:
+- Read the full document (24-page Arabic executive plan, September 2026): it covers the REMAINING work only (no rebuild) across phases 16-34 — UX Foundation, Home/My Day, Navigation/Explore, Core Modules, Onboarding+Auth+Consent, Progress/Reviews, Community, Landing/Pricing, Monetization/Ads, Performance, MCP User Server (MCP 2026-07-28 + Claude Code + JSON), Admin MCP (fully separated), Security Hardening (ASVS/API Top 10/WSTG), Automated QA gates, Break & Pen Test (50+ cases), Observability/DR, Closed Beta, Public Launch (awj.life), first 30 days
+- Key architectural rulings: Supabase stays the single source of truth (no Neon, no second infrastructure); library-addition policy defaults to NO (Vaul/Embla candidates only); each phase has tasks + tests + a closing gate; final Launch Gate table (UX/Product/Security/MCP/Admin MCP/Performance/QA/Ops/Legal/Production)
+- Confirmed the new plan explicitly absorbs the session-6 deliverables as phases 16 (UX), 23 (Pricing), 30 (Break tests) and 31 (maintenance emergency controls) — so Task 36's work maps 1:1 onto the new numbering
+- Converted docx → PDF: system had no Arabic-capable substitute for the document's Arial, so installed Amiri (naskh + Latin) and Liberation Mono, rewrote the font tables in a working copy (w:ascii/w:hAnsi/w:cs + theme bidi fonts), repacked, converted via LibreOffice 25.2 headless
+- Verified the PDF: 24 pages, Amiri-Regular/Bold embedded (subset), text extraction round-trips Arabic correctly, VLM visual QA PASS (connected naskh letters, correct RTL + right alignment, English technical terms inline correct, tables/borders intact)
+- Uploaded both files to docs/ (docx = the owner's original untouched; PDF = the converted copy)
+
+Stage Summary:
+- The new master plan is now in the repo: docs/Awj_Master_Development_Launch_Plan_AR.docx + docs/Awj_Master_Development_Launch_Plan_AR.pdf (commits: 252da595 · f72f1096)
+- Phase numbering now continues from 16 per the new plan; Phase 15 closed-beta remains live with "invite first users" as the standing owner action
+- PDF is print/share-ready (24 pages, letter, embedded Amiri) and lives beside the original docx in docs/
