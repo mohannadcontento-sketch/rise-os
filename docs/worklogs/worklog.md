@@ -493,3 +493,23 @@ Stage Summary:
 - Phase 16 closure gate PASSED: final UX map exists, no Home/Explore/My Day/Modules conflicts, no pending UI decisions blocking implementation
 - Next: Phase 17 (Home & My Day) implements §11 of the foundation doc; its acceptance metrics (Playwright, LCP/TTFB, request count) are already specified
 - Commits: 23e1783c · f3b0ec9c
+
+
+---
+Task ID: 39
+Agent: Super Z (main)
+Task: Owner asked to verify all code is actually pushed to GitHub and to check-mark every task that is confirmed done + pushed + working
+
+Work Log:
+- Verified repo state: last 10 commits present (Task 36 ×4, Task 37 ×3, Task 38 ×3 — latest 8fb818fe)
+- CI: last 5 runs (CI + Security Scan & Audit workflows) all success on 23e1783c / f3b0ec9c / 8fb818fe
+- Repo files verified: docs/phase-16/UX_FOUNDATION.md (29,411 B) · PLAN_STATUS.md · worklog.md (59,006 B) · master plan docx+pdf
+- Live probes: 9/9 sitemap pages → 200 · ads.txt/robots/maintenance → 200 · /api/rise/system/status → {maintenance:false}
+- Authenticated probes: admin login 200 (isAdmin:true) · dashboard/summary, tasks, habits, auth/session, admin/overview → all 200
+- Web Push: /api/rise/push/vapid-key → {configured:true, publicKey} · feedback no-auth → 401 · MCP oauth-info (free) → 403 PLAN_REQUIRED
+- MCP v3.1 re-verified on the real Supabase host (cxtevczaptludomuiemq.supabase.co/functions/v1/mcp): no-key POST → 401 + WWW-Authenticate realm="awj-mcp" · .well-known/oauth-protected-resource → 200 · GET → 405
+- PLAN_STATUS.md updated: added "سجل التحقق الحي — Task 39" table (10 evidence rows) + refreshed header
+
+Stage Summary:
+- Every ✅ mark in PLAN_STATUS is now backed by same-day live evidence — nothing claimed-pushed is missing
+- Next: Phase 17 (Home & My Day) per docs/phase-16/UX_FOUNDATION.md §11
