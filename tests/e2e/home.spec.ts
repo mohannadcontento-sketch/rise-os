@@ -45,10 +45,18 @@ async function dismissOnboarding(page: import('@playwright/test').Page) {
  */
 async function login(page: import('@playwright/test').Page) {
   const email = uniqueEmail()
-  const res = await page.request.post('/api/auth/signup', {
-    data: { email, password: TEST_PASSWORD, name: 'مختبر المرحلة ١٧' },
-  })
-  expect(res.ok(), `signup API: ${res.status()}`).toBeTruthy()
+  // حد معدل signup قد يرد 429 عند تشغيل الاختبارات متتالية —
+  // إعادة محاولة قصيرة تفك الاختناق
+  let res: import('@playwright/test').APIResponse | null = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    res = await page.request.post('/api/auth/signup', {
+      data: { email, password: TEST_PASSWORD, name: 'مختبر المرحلة ١٧' },
+    })
+    if (res.ok() || res.status() !== 429) break
+    // نافذة الحد دقيقة كاملة — انتظارها يفك الاختناق حتمًا
+    await page.waitForTimeout(65000)
+  }
+  expect(res && res.ok(), `signup API: ${res ? res.status() : 'none'}`).toBeTruthy()
 
   await page.goto('/app')
   await dismissOnboarding(page)
@@ -147,4 +155,27 @@ test.describe('المرحلة 17 — Home & My Day', () => {
     await expect(dialog.getByRole('button', { name: /جارٍ الحفظ|احفظ الآن/ })).toBeVisible()
     await expect(dialog).toBeHidden({ timeout: 15000 })
   })
+  // ── Visual regression: خط أساس مرتكز (mobile + desktop) ──
+  // الترتيب المستقر: تحية → ترحيب المستخدم الجديد → لقطة اليوم →
+  // إجراءات سريعة → تقدمي → استكشف — كلا الشاشتين بنفس القالب
+  test('Visual regression: خط أساس للرئيسية (جوال + سطح مكتب)', async ({ page }) => {
+    await login(page)
+    // جوال ٣٧٥px
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.waitForTimeout(800)
+    await expect(page).toHaveScreenshot('home-mobile.png', {
+      fullPage: false,
+      maxDiffPixelRatio: 0.02,
+      animations: 'disabled',
+    })
+    // سطح مكتب ١٢٨٠px
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.waitForTimeout(800)
+    await expect(page).toHaveScreenshot('home-desktop.png', {
+      fullPage: false,
+      maxDiffPixelRatio: 0.02,
+      animations: 'disabled',
+    })
+  })
+
 })

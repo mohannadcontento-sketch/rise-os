@@ -60,7 +60,7 @@ interface ContinueItem { kind: 'book' | 'knowledge' | 'project'; title: string; 
 type TimelineRow = {
   key: string
   time: string | null           // HH:MM أو null لـ«بدون وقت»
-  kind: 'task' | 'habit' | 'planner'
+  kind: 'task' | 'habit' | 'planner' | 'routine' | 'focus'
   label: string
   done: boolean
   taskId?: string
@@ -101,11 +101,13 @@ function taskRank(t: HomeTask): number {
 /**
  * دمج مصادر اليوم في خط زمني واحد حسب الوقت (§ مهمة المرحلة):
  * عناصر المخطط (بوقتها) + مهام اليوم (بوقتها ثم بلا وقت) +
- * العادات (بوقت التذكير إن وُجد). مرتبة بالوقت ثم بلا وقت أخيرًا.
+ * العادات (بوقت التذكير) + جلسات تركيز اليوم (بوقت بدئها) +
+ * الروتين الصباحي (بوقت سجلّه). مرتبة بالوقت ثم بلا وقت أخيرًا.
  */
 function buildTimeline(
   tasks: HomeTask[], habits: HomeHabit[], logs: HomeHabitLog[],
   planner: HomePlannerItem[], today: string,
+  focusSessions: any[] = [], morningLog: any = null,
 ): TimelineRow[] {
   const rows: TimelineRow[] = []
 
@@ -116,12 +118,36 @@ function buildTimeline(
     })
   }
 
+  // الروتين الصباحي — سجل اليوم إن وُجد (٢٠/٢٠/٢٠ ثابت البنية)
+  if (morningLog) {
+    const done = morningLog.totalItems > 0
+      ? (morningLog.completedItems || 0) >= morningLog.totalItems
+      : !!morningLog.completedAt
+    const t = typeof morningLog.startedAt === 'string' ? morningLog.startedAt.slice(11, 16) : null
+    rows.push({
+      key: 'm-routine', time: t || null, kind: 'routine',
+      label: 'الروتين الصباحي', done,
+    })
+  }
+
+  // جلسات تركيز اليوم — بوقت بدئها الفعلي
+  const todayFocus = focusSessions.filter((s: any) =>
+    typeof s.startedAt === 'string' && s.startedAt.slice(0, 10) === today)
+  for (const s of todayFocus) {
+    rows.push({
+      key: 'f-' + s.id, time: s.startedAt.slice(11, 16), kind: 'focus',
+      label: `جلسة تركيز · ${toArabicNum(s.duration || 0)} دقيقة`,
+      done: !!s.completed,
+    })
+  }
+
   const todayTasks = tasks.filter((t) => t.dueDate === today && t.status !== 'cancelled')
   for (const t of todayTasks) {
     rows.push({
       key: 't-' + t.id, time: t.dueTime || null, kind: 'task',
       label: t.title, done: t.status === 'done', taskId: t.id,
-    })
+      priority: t.priority,
+    } as TimelineRow & { priority?: string })
   }
 
   const doneHabitIds = new Set(logs.filter((l) => l.date === today && l.completed).map((l) => l.habitId))
@@ -292,6 +318,9 @@ function MyDayCard({
                   <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary shrink-0">
                     {PRIORITY_LABEL[(r as any).priority || 'medium']}
                   </span>
+                )}
+                {r.kind === 'focus' && !r.done && (
+                  <Timer className="w-3.5 h-3.5 text-cyan-400 shrink-0" aria-hidden="true" />
                 )}
               </li>
             ))}
@@ -628,6 +657,7 @@ export default function Home() {
   const [books, setBooks] = useState<any[]>([])
   const [knowledge, setKnowledge] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
+  const [focusSessions, setFocusSessions] = useState<any[]>([])
 
   const [expanded, setExpanded] = useState(false)
   const [quickAdd, setQuickAdd] = useState<{ open: boolean; type: QuickAddType | null }>({ open: false, type: null })
@@ -672,14 +702,16 @@ export default function Home() {
     wave2Ref.current = true
     const load = async () => {
       try {
-        const [bookRes, knowRes, projRes] = await Promise.all([
+        const [bookRes, knowRes, projRes, focusRes] = await Promise.all([
           apiGet('/api/rise/books'),
           apiGet('/api/rise/knowledge'),
           apiGet('/api/rise/projects'),
+          apiGet('/api/rise/focus'),
         ])
         if (bookRes.ok) { try { const d = await bookRes.json(); setBooks(Array.isArray(d) ? d : d.books || []) } catch {} }
         if (knowRes.ok) { try { const d = await knowRes.json(); setKnowledge(d.items || []) } catch {} }
         if (projRes.ok) { try { const d = await projRes.json(); setProjects(Array.isArray(d) ? d : d.projects || []) } catch {} }
+        if (focusRes.ok) { try { const d = await focusRes.json(); setFocusSessions(Array.isArray(d) ? d : d.sessions || []) } catch {} }
       } catch { /* ثانوي — يبقى صامتًا */ }
     }
     const ric = (window as any).requestIdleCallback?.bind(window)
@@ -689,8 +721,8 @@ export default function Home() {
 
   // ── الحسابات ──
   const timeline = useMemo(
-    () => buildTimeline(tasks, habits, logs, planner, today),
-    [tasks, habits, logs, planner, today],
+    () => buildTimeline(tasks, habits, logs, planner, today, focusSessions, morning?.todayLog),
+    [tasks, habits, logs, planner, today, focusSessions, morning],
   )
 
   const focusOfDay = useMemo(() => {
@@ -788,7 +820,10 @@ export default function Home() {
       ) : (
         <FocusOfDayCard
           row={focusOfDay}
-          onStart={() => setActiveModule('tasks')}
+          onStart={() => setActiveModule(
+            focusOfDay?.kind === 'focus' ? 'deepwork'
+              : focusOfDay?.kind === 'habit' ? 'habits'
+                : 'tasks')}
         />
       )}
 
