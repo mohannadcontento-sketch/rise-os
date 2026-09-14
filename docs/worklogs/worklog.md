@@ -477,3 +477,19 @@ Stage Summary:
 - The new master plan is now in the repo: docs/Awj_Master_Development_Launch_Plan_AR.docx + docs/Awj_Master_Development_Launch_Plan_AR.pdf (commits: 252da595 · f72f1096)
 - Phase numbering now continues from 16 per the new plan; Phase 15 closed-beta remains live with "invite first users" as the standing owner action
 - PDF is print/share-ready (24 pages, letter, embedded Amiri) and lives beside the original docx in docs/
+---
+Task ID: 38
+Agent: Super Z (main)
+Task: Execute the new master plan — Phase 16 (UX Foundation): turn UX ideas into a written decision system before any UI code changes
+
+Work Log:
+- Recon from the actual code (source of truth per the plan): route tree (10 public routes + /app shell), module-labels.ts (22 ModuleId), sidebar.tsx navGroups (today/execute/growth/community/life + pinned + admin), glass-nav.tsx (5 items: dashboard/tasks/habits/planner/community), onboarding (4 steps), command menu (⌘K wired in app/page.tsx), dashboard.tsx audit (≈15+ stat sections — confirms the "showcase, not command center" diagnosis), a11y reality check (48 aria-labels, prefers-reduced-motion only in globals.css, focus-visible in ~5 files, keyboard shortcuts ctrl+0/m/n/d + /)
+- Live smoke: 10/10 public pages → 200 on rise-os-gamma.vercel.app
+- Authored docs/phase-16/UX_FOUNDATION.md (12 sections, all grounded in code facts): screen inventory (current + reserved), 5 user journeys with click budgets, the 4 life worlds (أنجز 6 / تطور 3 / توازن 4 / إدارة حياتي 5 = 18 + dashboard/community/settings/admin = 22 ✓ exact match, relocation table from current groups), mobile 5-point nav (الرئيسية/استكشف/+/المجتمع/حسابي — tasks/habits/planner leave the bar), the 6-item cognitive budget with 7 contexts, empty/loading/error/success matrix for 10 screens, UX copy rules (zero guilt language, «المتبقي/الفرصة التالية»), 9 accessibility rules mapped to the Radix stack, click audit (current vs target for 6 core flows), and the conflict-resolution table
+- Conflict rulings (phase gate): My Day is NOT a new module — it is the central section inside Home (prevents two competing day surfaces); current dashboard becomes the command center with stats moving to analytics; Explore hub replaces grid access (every module ≤2 taps or 1 via ⌘K); community stays an independent nav point; onboarding stays 4 steps until Phase 20; module names frozen until post-19 measurement
+- Updated PLAN_STATUS.md: header now points to the new master plan as governing; phase 16 closed with evidence; old "16 Public Launch"/"17 post-launch" renumbered to 33/34; phases 17-32 index inserted
+
+Stage Summary:
+- Phase 16 closure gate PASSED: final UX map exists, no Home/Explore/My Day/Modules conflicts, no pending UI decisions blocking implementation
+- Next: Phase 17 (Home & My Day) implements §11 of the foundation doc; its acceptance metrics (Playwright, LCP/TTFB, request count) are already specified
+- Commits: 23e1783c · f3b0ec9c
