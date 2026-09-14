@@ -25,7 +25,7 @@ import type { ModuleId } from '@/store/app-store'
  * mobile "الرئيسية" and desktop "لوحة التحكم" for the same module).
  */
 export const MODULE_LABELS: Record<ModuleId, string> = {
-  'dashboard': 'لوحة التحكم',
+  'dashboard': 'الرئيسية',
   'morning': 'الروتين الصباحي',
   'planner': 'المخطط اليومي',
   'tasks': 'المهام',

@@ -89,3 +89,8 @@ extracted/
 shots/
 scripts/
 deno.lock
+
+# Phase 17 local artifacts
+playwright-report/
+bun.lock
+prisma/test.db

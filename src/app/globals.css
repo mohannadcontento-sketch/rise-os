@@ -670,6 +670,20 @@ button, a, input, textarea, select, [role="button"], .glass, .premium-card {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* المرحلة 17 — حركة الإضافة السريعة (sheetUp جوال / scaleIn سطح مكتب / fadeIn خلفية) */
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .module-title-animate {
   animation: fadeInRight 0.4s ease-out;
 }

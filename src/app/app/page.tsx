@@ -82,7 +82,9 @@ const NotificationsDrawer = lazy(() => import('@/components/rise/notifications-d
 const ReminderEngine = lazy(() => import('@/components/rise/reminder-engine').then(m => ({ default: m.ReminderEngine })))
 
 // Lazy load all modules
-const Dashboard = lazy(() => import('@/components/rise/dashboard').then(m => ({ default: m.default })))
+// المرحلة 17: Home — مركز القيادة الجديد (يحل محل لوحة الإحصائيات القديمة:
+// الإحصاءات موجودة في وحدة التحليلات — حسم UX_FOUNDATION §9)
+const Home = lazy(() => import('@/components/rise/home').then(m => ({ default: m.default })))
 const MorningRoutine = lazy(() => import('@/components/rise/morning-routine').then(m => ({ default: m.default })))
 const DailyPlanner = lazy(() => import('@/components/rise/daily-planner').then(m => ({ default: m.default })))
 const Tasks = lazy(() => import('@/components/rise/tasks').then(m => ({ default: m.default })))
@@ -119,7 +121,7 @@ const AD_MODULE_MAP: Partial<Record<ModuleId, 'home' | 'community' | 'tasks'>> =
   tasks: 'tasks',
 }
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
-  'dashboard': Dashboard,
+  'dashboard': Home,
   'morning': MorningRoutine,
   'planner': DailyPlanner,
   'tasks': Tasks,
@@ -537,7 +539,9 @@ export default function AwjApp() {
               key={activeModule}
               className="p-3 sm:p-4 md:p-6 pb-28 lg:pb-6 animate-[fadeSlideIn_0.2s_ease-out]"
             >
-              {/* Module title with hue gradient bar & date */}
+              {/* المرحلة 17: عنوان الوحدة — يُخفى للرئيسية (Home يعرض تحيته
+                  الخاصة كرأس الصفحة وفق UX_FOUNDATION §11) */}
+              {activeModule !== 'dashboard' && (
               <div className="mb-4 sm:mb-6 flex items-stretch gap-2 sm:gap-3 module-title-animate" key={`title-${activeModule}`}>
                 <div
                   className="w-1.5 rounded-full shrink-0"
@@ -551,6 +555,7 @@ export default function AwjApp() {
                   <p className="text-xs text-muted-foreground mt-0.5">{todayArabic}</p>
                 </div>
               </div>
+              )}
               <Suspense fallback={<LoadingFallback />}>
                 <ModuleErrorBoundary moduleName={moduleNames[activeModule]}>
                   <ActiveComponent />
