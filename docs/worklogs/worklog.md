@@ -634,3 +634,32 @@ Work Log:
 Stage Summary:
 - Phase 19 GATE PASSED: every module keeps its own identity while sharing the same navigation/typography/spacing/feedback patterns; the one architectural ruling (aggregation-not-raw-records) is now server-enforced and test-proven
 - Next: Phase 20 (Onboarding + Auth + Consent) per master plan
+
+---
+Task ID: 47
+Agent: Super Z (main)
+Task: Owner sent the GitHub token → pushed queued phase-19 commits (6ab46b4, CI+Security green), then executed the next plan phase (20: Onboarding + Auth + Consent)
+
+Work Log:
+- Pushed 631c791..6ab46b4 (phase-19 feat + plan marking) — CI + Security Scan green on 6ab46b4; remote verified via ls-remote
+- Extracted phase-20 scope from master plan (9 tasks + 4 tests) + recon of the whole auth surface (login/signup/session/refresh/resend/reset/logout-all/delete-account routes, cookie-auth, middleware limiters, login-page, onboarding, ads-consent, data layer)
+- NEW /login + /signup standalone routes (noindex): same login-page component via defaultMode prop + optional onLogin (redirect-to-/app mode with full page load for httpOnly cookie pickup) — query-mode inside /app fully preserved (backward compat); landing's 4 conversion CTAs → /signup, footer keeps /app
+- NEW user_consents (migration 038 Supabase + Prisma local + mock-client table map + data/consents.ts repo): consent row per (user×type×version) with SHA-256 ua/ip hashes only, RLS select-own + insert-own, NO update/delete (legal record), server-side insert at acceptance moment (even pre-email-confirmation; service-role in prod / Prisma in dev; ignoreDuplicates keeps the ORIGINAL timestamp)
+- NEW policy-versions.ts single source: REQUIRED_POLICY_VERSIONS derived from LEGAL_LAST_UPDATED (site.ts) — same reference /terms + /privacy display; future legal update automatically flips the required consent version
+- NEW /api/auth/consents GET (own records + currentVersionsAccepted + notReady graceful degradation pre-038)
+- signup route gate: acceptedTerms!==true → 403 CONSENT_REQUIRED (Arabic message — Zod's type-error default was English, fixed); version mismatch → 409 POLICY_VERSION_MISMATCH returning requiredPolicyVersions; password strength 8+/letter/digit in Zod (both Supabase + mock paths; existing users unaffected — checked at creation only)
+- login-page UX: mandatory consent checkbox (terms/privacy links new-tab + live version in Eastern digits), live password requirements indicator (role=status, aria-describedby, 3 checks), confirmation INFO card (violet, not error-red) with resend + 30s cooldown, 409 handling re-asks acceptance
+- Onboarding step 3 rebuilt per UX_FOUNDATION §9/9: «استكشف عوالمك الأربعة» — 4 world cards from lib/worlds.ts (the single source) with gradients + MODULE_LABELS chips
+- Storage audit (plan item): full inventory of localStorage/sessionStorage writers — ZERO tokens in client storage; rise-user-info is non-authoritative UI metadata; legacy rise-auth/sb-* keys are CLEARED not written; cookies httpOnly+SameSite=Lax proven from response headers
+- logout-all verified wired in settings + password-change auto-invalidation documented (both pre-existing, now evidence-backed in SECURITY_PRIVACY phase-20 section with real providers table)
+- NEW tests/e2e/auth.spec.ts 11/11 (serial, shared account, storage state saved to gitignored tests/.auth/): routes+noindex+consent elements · live pw indicator (1/3 for 'abc', 3/3 strong) · 403 CONSENT_REQUIRED · 409 with requiredPolicyVersions · consent happy path (2 rows + accepted + storage state) · consents unauth 401 · login Set-Cookie hardening (HttpOnly+SameSite=lax case-insensitive) + UI login → /app redirect + storage audit + document.cookie can't read tokens · session expiry (clearCookies → 401 → shell back to gate) · 401/403 gates (admin gate 403 even unauthenticated — measured) · logout-all (Set-Cookie clearing + immediate 401) · export 200 + delete-account local contract 503 Supabase-only (real deletion verified live in QA-14)
+- Rewrote stale login.spec.ts (3 historically-failing pre-phase-11 expectations) → 4/4 on /login route
+- Updated regression payloads: consentedSignupPayload helper (reads LEGAL_LAST_UPDATED at runtime — stays in sync forever) + digit-bearing passwords in home/explore/core-modules specs
+- Root-caused 5 mysteries: pre-hydration fills wiped (→ networkidle before every form fill), Zod default English message precedes refine (→ unified message at call site), SameSite=lax lowercase normalization, admin gate 403-before-session (expectations fixed to match measured contract), signup limiter 3/min across my repeated runs (65s spacing)
+- Regression: home 5/5 · explore 9/9 · core-modules 4/4 (perf smoke re-verified solo 10.5s after a load-flake) · tsc 0 · eslint clean (1 documented intentional disable) · next build ✓ with both new routes
+- Docs: docs/phase-20/AUTH_CONSENT.md (11 sections) + SECURITY_PRIVACY phase-20 section + PLAN_STATUS closure + master plan marked (13 ☑ + heading «مغلقة ✓», total 61 ☑; PDF re-converted via Amiri pipeline, page-7 VLM-verified: no empty boxes, Arabic connected)
+
+Stage Summary:
+- Phase 20 GATE PASSED: account creation is formal (clear URLs), safe (strength + gates + hardened cookies + no client tokens), auditable (user_consents legal record with versioned policy from the single LEGAL_LAST_UPDATED source)
+- Owner action pending: apply supabase/migrations/038 in Supabase SQL Editor
+- Next: Phase 21 (Progress + Reviews) per master plan

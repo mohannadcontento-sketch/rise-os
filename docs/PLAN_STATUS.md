@@ -1,6 +1,6 @@
 # خطة أوج — حالة التنفيذ الكاملة (محينة)
 
-> **آخر تحديث:** 2026-09-15 (جلسة 11 — Task 46: **المرحلة 19 (إعادة تشكيل الوحدات الأساسية) مغلقة** — تحليلات من التجميع الخادمي + مرشّح «اليوم» + حلقات السلاسل + وضع الخصوصية؛ اختبارات ٤/٤) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المراحل 16 (UX) و17 (Home) و18 (التنقل) و19 (الوحدات) ✅ مغلقة**
+> **آخر تحديث:** 2026-09-15 (جلسة 12 — Task 47: **المرحلة 20 (Onboarding+Auth+Consent) مغلقة** — مسارا /login و/signup + جدول user_consents (038) + بوابة رفض خادمية 403/409 + مؤشر كلمة المرور + تدقيق التخزين + خطوة العوالم؛ auth.spec ١١/١١ · login.spec ٤/٤ · انحدار ١٨/١٨) · **الخطة الحاكمة الآن: الخطة الشاملة الجديدة** (`docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — المراحل 16-34) · المراحل 0-15 مقفولة · **المراحل 16 (UX) و17 (Home) و18 (التنقل) و19 (الوحدات) و20 (المصادقة) ✅ مغلقة**
 > **مفتاح الرموز:** ✅ منفَّذ ومتحقَّق منه بأدلة · ⏳ مجدول (لم يحن وقته) · 👤 إجراء يدوي على المالك · 🔴 غير مكتمل
 > النسخ المعلَّمة بصريًا (☑ داخل نص الخطط): **الخطة الشاملة الجديدة** `docs/Awj_Master_Development_Launch_Plan_AR.docx/pdf` — 48 بندًا ☑ (تحديث 2026-09-15 / Task 46 — 16/17/18/19 مغلقة) · الخطة القديمة `docs/Awj_Development_and_Launch_Plan.docx`
 
@@ -19,7 +19,7 @@
 | بوابة MCP على مستوى الخطة | `/api/rise/mcp/oauth-info` بجلسة Free → **403 PLAN_REQUIRED** | ✅ |
 | MCP v3.1 على Supabase (المستضيف الحقيقي) | POST بلا مفتاح → **401 + `WWW-Authenticate: Bearer realm="awj-mcp"`** · `…/functions/v1/mcp/.well-known/oauth-protected-resource` → **200** · GET → 405 (POST فقط — سلوك صحيح) | ✅ |
 
-> الخلاصة: كل علامات ✅ في هذا الملف مؤكدة بأدلة حية من تاريخ هذا السجل — لا يوجد شيء «مزعوم الرفع» غير موجود فعليًا. التنفيذ التالي: ~~المرحلة 18~~ ✅ · ~~المرحلة 19~~ ✅ أُغلقت في الجلسة 11 (Task 46) — التفاصيل أدناه · المرحلة التالية: **20 (Onboarding+Auth+Consent)**.
+> الخلاصة: كل علامات ✅ في هذا الملف مؤكدة بأدلة حية من تاريخ هذا السجل — لا يوجد شيء «مزعوم الرفع» غير موجود فعليًا. التنفيذ التالي: ~~المرحلة 18~~ ✅ · ~~المرحلة 19~~ ✅ أُغلقت في الجلسة 11 (Task 46) · ~~المرحلة 20~~ ✅ أُغلقت في الجلسة 12 (Task 47) — التفاصيل أدناه · المرحلة التالية: **21 (Progress+Reviews)**.
 
 ---
 
@@ -165,8 +165,20 @@ RLS audit · authorization · rate limiting · input validation · XSS sanitize 
 - **مواءمة عقد API اكتشفها اختبار الانحدار:** `description` في المالية اختياري Zod/مطلوب Prisma — عميل بلا وصف كان يسقط 500 → افتراضي فراغ
 - **الاختبارات (بنود الخطة الأربعة):** `core-modules.spec` **٤/٤** — إثبات التجميع بحجب كل المسارات الخام (الوحدة ترسم من المجمع وحده) · CRUD للوحدات الثماني · Idempotency (نفس المفتاح مرتين = سجل واحد) · حالات الخطأ/الفراغ · **أداء: ١٢٠ مهمة ترسم في ~٣.٤ ثانية (dev)** · انحدار home ٥/٥ + explore ٩/٩ · tsc/eslint/build ✓
 
-## المراحل 20-32 ⏳ (الخطة الشاملة الجديدة)
-20 Onboarding+Auth+Consent · 21 Progress+Reviews · 22 Community · 23 Landing+Conversion · 24 Monetization+Ads · 25 Performance+Data · 26 MCP User Server (2026-07-28 + صفحة /mcp + Claude Code) · 27 Admin MCP منفصل · 28 Security Hardening (ASVS/WSTG) · 29 Automated QA Gate · 30 Break & Pen Test · 31 Observability+DR · 32 Closed Beta — التفاصيل الكاملة في `docs/Awj_Master_Development_Launch_Plan_AR.pdf`.
+## المرحلة 20 — Onboarding + Auth + Consent ✅ (مغلقة — جلسة 12 / Task 47)
+> الهدف الحرفي: «جعل إنشاء الحساب والدخول رسميين وآمنين وقابلين للتدقيق».
+> **الوثيقة الكاملة:** `docs/phase-20/AUTH_CONSENT.md`
+- **مسارا /login و /signup (البند الشرطي):** أُضيفا + وضع الاستعلام داخل /app محفوظ بالكامل (توافق رجعي) — مكون واحد قابل للتهيئة (defaultMode) لا سطحان؛ حملة كاملة بعد الدخول تلتقط الكوكيز httpOnly من الخادم · noindex · CTA الهبوط الأربعة → /signup
+- **جدول user_consents (هجرة 038 + Prisma محلي):** صف لكل (مستخدم×نوع×نسخة) + بصمات SHA-256 دنيا · RLS قراءة/إدراج باسمي فقط — لا تعديل ولا حذف (سجل قانوني) · الإدراج خادميًا لحظة القبول (حتى قبل تأكيد البريد) · إعادة قبول لا تستبدل التاريخ الأصلي
+- **بوابة رفض خادمية:** بلا قبول → 403 CONSENT_REQUIRED · نسخة لا تطابق السارية → 409 POLICY_VERSION_MISMATCH (يعيد المطلوبة) — النسخة من LEGAL_LAST_UPDATED (نفس مرجع /terms و/privacy): تحديث قانوني مستقبلي = طلب قبول جديد تلقائيًا
+- **UX التسجيل:** checkbox إلزامي بروابط تاب-جديد + النسخة السارية بأرقام شرقية · مؤشر كلمة مرور حي (٨+حرف+رقم) عميلًا وخادميًا (المستخدمون الحاليون غير متأثرين) · بطاقة تأكيد البريد كمعلومة (بلا لوم) + إعادة إرسال بتهدئة ٣٠ث
+- **تدقيق التخزين:** جرد كامل — صفر توكن/جلسة في أي تخزين عميلي (الكوكيز httpOnly+SameSite=Lax مقيسة من الرؤوس) · logout-all مربوط بالإعدادات وتغيير كلمة المرور يبطل الجلسات تلقائيًا (كانا قائمين — وُثّق بالأدلة)
+- **Onboarding §9/9:** الخطوة 3 صارت «استكشف عوالمك الأربعة» من lib/worlds.ts (المصدر الواحد) بشرائح MODULE_LABELS
+- **الاختبارات:** auth.spec **١١/١١** (حالة المصادقة خارج git في tests/.auth/ — ٤ بنود الخطة كاملة: 401/403/CSRF/expiry · دورة الموافقة قبولًا/رفضًا/تحديث نسخة · deletion/export) · login.spec أُعيدت كتابته **٤/٤** (كانت ٣ فحوص متقادمة فاشلة تاريخيًا) · انحدار home ٥/٥ + explore ٩/٩ + core-modules ٤/٤ · tsc/eslint/build ✓ · الوثائق: SECURITY_PRIVACY قسم المرحلة 20 (مزودون حقيقيون + جرد التخزين)
+- 👤 **المتبقي على المالك:** تطبيق هجرة 038 في Supabase (قبلها: البوابة تعمل والسجل أفضل-جهد في الإنتاج)
+
+## المراحل 21-32 ⏳ (الخطة الشاملة الجديدة)
+21 Progress+Reviews · 22 Community · 23 Landing+Conversion · 24 Monetization+Ads · 25 Performance+Data · 26 MCP User Server (2026-07-28 + صفحة /mcp + Claude Code) · 27 Admin MCP منفصل · 28 Security Hardening (ASVS/WSTG) · 29 Automated QA Gate · 30 Break & Pen Test · 31 Observability+DR · 32 Closed Beta — التفاصيل الكاملة في `docs/Awj_Master_Development_Launch_Plan_AR.pdf`.
 
 ## المرحلة 33 — Public Launch ⏳ (كانت «16» في الترقيم القديم)
 Launch Gate جاهز تقنيًا؛ 👤 الدومين awj.life (آخر خطوة — Vercel A 76.76.21.21 / CNAME www → cname.vercel-dns.com + NEXT_PUBLIC_SITE_URL + Zoho MX/SPF/DKIM/DMARC + إعادة نشر + تحديث GSC/AdSense).

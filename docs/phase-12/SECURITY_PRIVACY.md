@@ -87,3 +87,76 @@
 - `docs/reports/SUPABASE_SESSION4_SQL.md` / `SUPABASE_SESSION5_SQL.md`
 - `SECURITY.md` + `public/.well-known/security.txt`
 - `.github/workflows/security-scan.yml` (bun audit + CodeQL أسبوعي)
+
+---
+
+## المرحلة 20 (تحديث 2026-09-15) — الموافقة والتدقيق ومزودو الخدمة الحقيقيون
+
+> بند الخطة: «تحديث Security/Privacy docs لتطابق providers الحقيقيين» + جعل
+> إنشاء الحساب رسميًا آمنًا قابلًا للتدقيق. التفاصيل الكاملة في
+> `docs/phase-20/AUTH_CONSENT.md`.
+
+### موافقة إنشاء الحساب (سجل قانوني قابل للتدقيق)
+
+- **جدول `user_consents`** (هجرة Supabase `038_phase20_user_consents.sql` +
+  نموذج Prisma محلي): صف لكل (مستخدم × نوع × نسخة) — `consent_type`
+  (terms/privacy) + `policy_version` + `consented_at` + `metadata` ببصمات
+  SHA-256 مجزّأة (ua/ip) فقط — لا PII خام.
+- **RLS**: قراءة صفوفي فقط + إدراج باسمي — لا تحديث ولا حذف من العميل
+  إطلاقًا (سجل قانوني غير قابل للتعديل). الإدراج الفعلي يتم خادميًا من
+  بوابة signup عبر service role — **يُسجَّل لحظة القبول حتى قبل تأكيد
+  البريد**؛ إعادة القبول لنفس النسخة لا تستبدل التاريخ الأصلي
+  (unique index + ignoreDuplicates).
+- **بوابة رفض خادمية**: بلا قبول → 403 `CONSENT_REQUIRED`؛ نسخة سياسة
+  لا تطابق السارية → 409 `POLICY_VERSION_MISMATCH` (يعيد النسخ المطلوبة).
+  النسخة تُشتق من `LEGAL_LAST_UPDATED` (site.ts) — نفس مرجع صفحتي
+  /terms و /privacy، فأي تحديث قانوني مستقبلي يفعّل طلب قبول جديد تلقائيًا.
+- **الواجهة**: checkbox إلزامي بروابط واضحة للشروط والخصوصية (تاب جديد) +
+  عرض النسخة السارية؛ مؤشر متطلبات كلمة المرور حي (٨+ محارف + حرف +
+  رقم) مطبق عميلًا وخادميًا (Zod) — كلمات مرور المستخدمين الحاليين غير
+  متأثرة (القوة تُفحص عند الإنشاء فقط).
+- **مسارات مستقلة `/login` و `/signup`** (noindex): نفس مكوّن البوابة —
+  وضع الاستعلام داخل /app محفوظ بالكامل (توافق رجعي). بعد الدخول: حملة
+  كاملة إلى /app لتلتقط الكوكيز httpOnly من جهة الخادم.
+
+### تدقيق التخزين العميلي (بند «تأكيد عدم وضع session/token في localStorage»)
+
+جرد كامل لمواقع `localStorage.setItem`/`sessionStorage.setItem` في `src/`
+(2026-09-15): **صفر توكن/جلسة في أي تخزين عميلي قابل للقراءة** —
+
+| المخزن | المحتوى | الحكم |
+|---|---|---|
+| `rise-user-info` | بيانات واجهة غير حاكمة (id/email/name/isAdmin عرضيًا) — الخادم يعيد التحقق من كل قرار | ✅ ليس توكنًا |
+| `rise-auth` | قيمة قديمة تُمسح عند تسجيل الخروج/انتهاء الجلسة (لا كاتب لها) | ✅ |
+| `sb-*-auth-token` | تُمسح استباقيًا من `auth-provider` (لم يعد Supabase JS يكتبها — BFF) | ✅ |
+| awj-ads-consent / onboarding / user-storage / PWA | تفضيلات وقرارات واجهة فقط | ✅ |
+
+الكوكيز `rise-access`/`rise-refresh`: httpOnly + Secure (إنتاج) +
+SameSite=Lax — مثبت باختبار حي (`auth.spec`: قراءة `document.cookie`
+لا تكشفها + رؤوس Set-Cookie محللة).
+
+### مزودو الخدمة الحقيقيون (مطابقة الوثائق للواقع)
+
+| الطبقة | المزود الفعلي | ملاحظات الخصوصية |
+|---|---|---|
+| المصادقة | Supabase Auth (بريد + كلمة مرور، تأكيد بريد إلزامي) | بيانات الاعتماد لدى Supabase؛ التطبيق يرى JWT فقط عبر BFF |
+| قاعدة البيانات | Supabase Postgres (إنتاج) / SQLite (dev) | RLS على كل جدول خاص؛ user_consents أُضيف بنفس النمط |
+| الاستضافة | Vercel | سجلات + أسرار في Vercel env |
+| Rate limiting | Upstash Redis (موزع، إنتاج) + fallback ذاكرة | مفاتيح عدّاد بـ TTL فقط |
+| ميديا المجتمع | Cloudinary | بايتات خارج Supabase بموجب قرار المالك؛ الوسيط والسجل داخليان |
+| الإعلانات (Free) | Google AdSense | NPA افتراضيًا حتى الموافقة (لافتة ad-consent) — لا إعلانات في المالية/الصحة/النماذج |
+| MCP (Max) | بوابة Supabase Edge Function v3.1 | OAuth 2.1+PKCE؛ مفاتيح SHA-256 |
+
+### الخروج من كل الأجهزة والحالات الحساسة
+
+`/api/auth/logout-all` (إبطال global للـrefresh tokens عبر service role ثم
+مسح الكوكيز) متاح من الإعدادات؛ تغيير كلمة المرور يُبطل كل الجلسات
+تلقائيًا (`update-password`) — وكذلك حذف الحساب. مُتحقق بالاختبارات
+(`auth.spec`: logout-all يمسح الكوكيز فورًا والـAPI بعده 401).
+
+### 👤 إجراء المالك المرتبط
+
+- **تطبيق هجرة `supabase/migrations/038_phase20_user_consents.sql`** في
+  Supabase SQL Editor (نفس خطوات 035/036/037). قبل التطبيق: بوابة القبول
+  مفعلة والرفض يعمل، لكن سجل الموافقات يُخزَّن فقط في dev (fail-open مع
+  تسجيل الخطأ) — التطبيق يُكمل قابلية التدقيق في الإنتاج.
