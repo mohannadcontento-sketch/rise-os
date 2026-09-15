@@ -586,3 +586,29 @@ Work Log:
 
 Stage Summary:
 - Mobile bottom bar upgraded to the design system's language (hue wells + lime indicator) with measured evidence at every step; 3 commits ready (c8ca71a + 6417427 + d0fbb6c), push blocked only on missing token this session
+
+---
+
+## Task 45 — Phase 18: Navigation + Explore (2026-09-15, session 10)
+
+**Owner request:** «يلا ارجع شوف الخطة واي الي هيتنفز الخطوة الجيا» → plan review confirmed Phase 18 (Navigation + Explore) as next per master plan + UX_FOUNDATION §11.
+
+Work Log:
+- Extracted exact phase-18 task list from the master plan docx (6 tasks + 3 test items); mapped to UX_FOUNDATION §3/§4/§5/§9 rulings
+- NEW lib/worlds.ts — single source for the 4 life worlds (achieve 6 · grow 3 · balance 4 · manage 5 = 18) consumed by BOTH sidebar and Explore Hub (no membership drift); community independent (§9/4)
+- NEW explore-hub.tsx — 'explore' ModuleId (navigation surface, not a content module): world cards with identity gradients + local search (first-6 §5, Enter opens first) + "خارج العوالم" section; ≤2 taps to any module (§4.3)
+- NEW account-card.tsx — حسابي quick sheet (avatar/name/email/level/streak/XP bar → full settings + guarded logout) per ruling §9/6; store data only, no extra fetch on open (plan display deferred: no lightweight API exists)
+- glass-nav.tsx — 5 structural roles (الرئيسية · استكشف · + · المجتمع · حسابي); + = permanent emerald-gradient well opening the shell-level QuickAdd; explore tab lights inside world modules (IA-true back-to-hub); fixed v1 bug: + injection at index 2 REPLACED the community tab (Fragment restructure); kept the measured Task-43 visual language
+- sidebar.tsx — 5 groups → 4 world accordion cards from worlds.ts (same NAV_OPEN_KEY + auto-open of active module's world) + community pinned independent row; default open = achieve
+- Shell (app/page.tsx) — URL follows module (?module= pushState): mobile back walks modules instead of exiting, popstate/refresh/deep-links restore active module; first-run sync skip (ref guard) kills the phantom dashboard history entry; QuickAdd lifted to shell (one instance; home surfaces dispatch rise:quick-add); old Zap FAB removed (two competing floating add buttons); explore lazy in moduleComponents
+- home.tsx — internal QuickAdd instance removed (event-based); DiscoverWorlds grid → ExploreTeaser single card (kills the duplicated worlds list); icons.tsx — 3 new 24×24 glyphs (explore compass · sprout · steering helm)
+- Escape hardening: QuickAdd/AccountCard now listen on document with capture phase — discovered bubble-phase keydowns never reached window listeners in dev (verified via event probes: capture fires, bubble lost; manual window dispatch worked) → capture listener closes from any focused element in every environment
+- Root-caused 3 testing mysteries along the way: (1) stale dev-server hot-reload state (old session's server was still bound to :3000 — EADDRINUSE on my restart attempt) explained phantom listener/sheet behaviors → clean restart; (2) Playwright strict-mode violation on dual h2 «التقويم» matches read as "false" → .first(); (3) pushState goBack needs waitUntil:'commit' (no load event in SPAs)
+- e2e NEW explore.spec.ts 9/9: bar roles · worlds 6/3/4/5 + 18 module buttons + 3 independent · world→module→back/forward URL contract · deep-link + refresh restore · + opens QuickAdd from a module + Escape closes · account card → settings + aria-current · keyboard search «تقو»+Enter + calm empty state · desktop sidebar 4 worlds + community/settings pinned · home teaser opens hub
+- Regression home.spec 5/5 (fixed a pre-existing 429-timeout gap: «مركز القيادة» test lacked the 150s budget its siblings had — surfaces only when suites run back-to-back)
+- tsc 0 errors · eslint clean on all changed files · next build ✓ (explore hub = separate lazy chunk)
+- docs/phase-18/NAVIGATION_EXPLORE.md (10 sections) + PLAN_STATUS phase-18 closure
+
+Stage Summary:
+- Phase 18 GATE PASSED: choice-load reduced while every one of the 22 modules is preserved — mobile IA is now 5 structural roles + worlds hub, desktop is 4 world cards, URL history tracks modules (back/forward/refresh), and every module is ≤2 taps away
+- Next: Phase 19 (Core Modules) per master plan
