@@ -48,7 +48,10 @@ import {
   Scale,
   Activity,
   CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -156,6 +159,18 @@ export default function Health() {
   const [data, setData] = useState<HealthData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // المرحلة 19 (تخطيطات حساسة للخصوصية): إخفاء قراءات اليوم عن الشاشة
+  const [privacy, setPrivacy] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return getUserStorage('rise-health-privacy') === '1' } catch { return false }
+  })
+  const togglePrivacy = useCallback(() => {
+    setPrivacy((v) => {
+      try { setUserStorage('rise-health-privacy', v ? '0' : '1') } catch {}
+      return !v
+    })
+  }, [])
+  const maskVal = (v: string | number) => (privacy ? '••' : v)
 
   const [form, setForm] = useState({ ...EMPTY_LOG })
   const [exerciseNotes, setExerciseNotes] = useState('')
@@ -471,9 +486,22 @@ export default function Health() {
             <p className="text-xs text-muted-foreground">تتبع صحتك وعافيتك اليومية</p>
           </div>
         </div>
-        <motion.div whileTap={{ scale: 0.95 }}>
+        <div className="flex items-center gap-2">
+          {/* وضع الخصوصية (المرحلة 19): زر عين — يقنّع قراءات اليوم */}
           <Button
-            onClick={handleSave}
+            variant="outline"
+            size="icon"
+            aria-pressed={privacy}
+            aria-label={privacy ? 'إظهار القراءات' : 'إخفاء القراءات'}
+            title={privacy ? 'القراءات مخفية — اضغط للإظهار' : 'وضع الخصوصية — إخفاء القراءات'}
+            onClick={togglePrivacy}
+            className="h-10 w-10 rounded-xl glass border-0 shrink-0"
+          >
+            {privacy ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </Button>
+          <motion.div whileTap={{ scale: 0.95 }}>
+            <Button
+              onClick={handleSave}
             disabled={saving}
             className="bg-forest text-paper-soft dark:bg-lime dark:text-ink hover:opacity-90 shadow-lg rounded-xl h-10 text-sm font-semibold"
           >
@@ -489,7 +517,8 @@ export default function Health() {
             )}
             {saving ? 'جاري الحفظ...' : 'حفظ'}
           </Button>
-        </motion.div>
+          </motion.div>
+        </div>
       </motion.div>
 
       {/* Health Score Hero */}
@@ -518,11 +547,11 @@ export default function Health() {
               {healthScore >= 70 ? 'ممتاز 🎉' : healthScore >= 40 ? 'جيد 👍' : 'يحتاج تحسين 💪'}
             </p>
             <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-              <span>نوم {data?.todayLog?.sleepHours || 0}س</span>
+              <span>نوم {maskVal(data?.todayLog?.sleepHours || 0)}س</span>
               <span>·</span>
-              <span>ماء {data?.todayLog?.waterGlasses || 0} كوب</span>
+              <span>ماء {maskVal(data?.todayLog?.waterGlasses || 0)} كوب</span>
               <span>·</span>
-              <span>خطوات {data?.todayLog?.steps?.toLocaleString('ar-EG') || '٠'}</span>
+              <span>خطوات {maskVal(data?.todayLog?.steps?.toLocaleString('ar-EG') || '٠')}</span>
             </div>
           </div>
         </div>

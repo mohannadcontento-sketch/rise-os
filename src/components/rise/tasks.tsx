@@ -47,6 +47,7 @@ import {
   Circle,
   Loader2,
   Sparkles,
+  Sun,
   Lock,
   Link2,
   GripVertical,
@@ -217,6 +218,8 @@ export function Tasks() {
   const [filterProject, setFilterProject] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [scope, setScope] = useState<'mine' | 'projects'>('mine')
+  // المرحلة 19 (Tasks + Today): مرشّح مستحق اليوم + المتأخرة
+  const [todayOnly, setTodayOnly] = useState(false)
   const [formTitle, setFormTitle] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formPriority, setFormPriority] = useState('medium')
@@ -244,7 +247,7 @@ export function Tasks() {
     deleteTask,
     toggleSubtask,
     createTask: createTaskController,
-  } = useTasksController({ scope, filterPriority, filterProject, filterStatus, searchQuery })
+  } = useTasksController({ scope, filterPriority, filterProject, filterStatus, searchQuery, todayOnly })
 
   // ── القسم: إنشاء المهمة — الإرسال ثم تصفير النموذج ──
   const createTask = async () => {
@@ -711,7 +714,13 @@ export function Tasks() {
     )
   }
 
-  const hasActiveFilter = filterStatus !== 'all' || filterPriority !== 'all' || filterProject !== 'all' || !!searchQuery
+  const hasActiveFilter = filterStatus !== 'all' || filterPriority !== 'all' || filterProject !== 'all' || !!searchQuery || todayOnly
+
+  // عدّاد مرشّح «اليوم» من المهام المرئية في النطاق الحالي
+  const todayStr = getToday()
+  const todayCount = scopedTasks.filter(
+    (t) => t.dueDate && t.dueDate <= todayStr && t.status !== 'done' && t.status !== 'cancelled',
+  ).length
 
   /* ────────────── Render: Main ────────────── */
   return (
@@ -771,6 +780,30 @@ export function Tasks() {
             )}
           </button>
         </div>
+
+        {/* ═══ مرشّح «اليوم» (المرحلة 19): مستحق اليوم + المتأخرة ═══ */}
+        <button
+          type="button"
+          aria-pressed={todayOnly}
+          aria-label="مرشّح اليوم"
+          title="مهام مستحقة اليوم والمتأخرة"
+          onClick={() => setTodayOnly((v) => !v)}
+          className={cn(
+            'flex items-center gap-1.5 h-10 px-3 rounded-xl text-xs font-semibold transition-all duration-200 shrink-0 border',
+            todayOnly
+              ? 'bg-gold/15 text-gold border-gold/40 shadow-sm'
+              : 'glass border-transparent text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Sun className="w-4 h-4" />
+          اليوم
+          <span className={cn(
+            'num text-[10px] rounded-full px-1.5 py-px',
+            todayOnly ? 'bg-gold/20 text-gold' : 'bg-muted text-muted-foreground'
+          )}>
+            {toArabicDigits(todayCount)}
+          </span>
+        </button>
 
         {/* Search */}
         <div className="relative flex-1 w-full sm:max-w-xs">
@@ -1107,17 +1140,23 @@ export function Tasks() {
             <RiseIcon glyph={MODULE_ICONS.tasks.glyph} hue={MODULE_ICONS.tasks.hue} size="lg" lift />
           </div>
           <h3 className="text-base font-bold text-foreground mb-1.5">
-            {hasActiveFilter ? 'لا توجد مهام تطابق الفلتر' : 'لا توجد مهام بعد'}
+            {todayOnly && scopedTasks.length > 0
+              ? 'لا شيء مستحق اليوم'
+              : hasActiveFilter
+                ? 'لا توجد مهام تطابق الفلتر'
+                : 'لا توجد مهام بعد'}
           </h3>
           <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-            {hasActiveFilter
-              ? 'جرّب تغيير الفلتر لرؤية مهام أخرى'
-              : 'ابدأ بإضافة مهمتك الأولى ونظّم يومك بشكل أفضل.'}
+            {todayOnly && scopedTasks.length > 0
+              ? 'يومك صافٍ من المستحقات — خطّط للغد أو خذ قسطًا من الراحة.'
+              : hasActiveFilter
+                ? 'جرّب تغيير الفلتر لرؤية مهام أخرى'
+                : 'ابدأ بإضافة مهمتك الأولى ونظّم يومك بشكل أفضل.'}
           </p>
           {hasActiveFilter && (
             <Button
               variant="outline"
-              onClick={() => { setFilterStatus('all'); setFilterPriority('all'); setFilterProject('all'); setSearchQuery('') }}
+              onClick={() => { setFilterStatus('all'); setFilterPriority('all'); setFilterProject('all'); setSearchQuery(''); setTodayOnly(false) }}
               className="mt-4 rounded-xl text-sm"
             >
               إعادة ضبط الفلاتر

@@ -69,6 +69,8 @@ interface UseTasksControllerOptions {
   filterProject: string
   filterStatus: string
   searchQuery: string
+  /** المرحلة 19 (حكم الخطة: Tasks + Today): مستحق اليوم + المتأخرة — المفتوحة فقط */
+  todayOnly?: boolean
 }
 
 // ── القسم: الحالة والجلب الأولي ──────────────────────────────────
@@ -79,6 +81,7 @@ export function useTasksController({
   filterProject,
   filterStatus,
   searchQuery,
+  todayOnly = false,
 }: UseTasksControllerOptions) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -167,14 +170,21 @@ export function useTasksController({
     [tasks, scope],
   )
 
+  // مرشّح «اليوم»: مستحق اليوم + المتأخرة (غير المنجزة/الملغاة) —
+  // المتأخرة تبقى ظاهرة كي تُعالج لا كي تُنسى (لغة بلا لوم §8)
+  const today = getToday()
   const filteredTasks = useMemo(() => scopedTasks.filter((task) => {
+    if (todayOnly) {
+      const open = task.status !== 'done' && task.status !== 'cancelled'
+      if (!open || !task.dueDate || task.dueDate > today) return false
+    }
     if (filterPriority !== 'all' && task.priority !== filterPriority) return false
     if (scope === 'projects' && filterProject !== 'all' && task.projectId !== filterProject) return false
     if (filterStatus === 'blocked') return isTaskBlocked(task)
     if (filterStatus !== 'all' && task.status !== filterStatus) return false
     if (searchQuery && !task.title.includes(searchQuery) && !task.description?.includes(searchQuery)) return false
     return true
-  }), [scopedTasks, filterPriority, filterProject, filterStatus, searchQuery, isTaskBlocked, scope])
+  }), [scopedTasks, filterPriority, filterProject, filterStatus, searchQuery, isTaskBlocked, scope, todayOnly, today])
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [] }

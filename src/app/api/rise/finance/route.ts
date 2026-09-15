@@ -51,7 +51,9 @@ export async function POST(req: NextRequest) {
 
     // Strip metadata fields that should never come from client
     const { id, createdAt, updatedAt, userId: _uid, ...dataFields } = body
-    const record = await data.financeRecords.create(userId, parsed.data)
+    // description اختياري في الـZod لكنه مطلوب في Prisma — نوفّر افتراضيًا فراغًا
+    // (مواءمة عقد الـAPI: أي عميل MCP/اختبار بلا وصف لا يفشل 500)
+    const record = await data.financeRecords.create(userId, { ...parsed.data, description: parsed.data.description ?? '' })
     return NextResponse.json(record)
   
   })} catch (error) {

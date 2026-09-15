@@ -66,7 +66,9 @@ import {
   Target,
   DollarSign,
   Eye,
+  EyeOff,
 } from 'lucide-react'
+import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -204,6 +206,17 @@ export default function Finance() {
   const [data, setData] = useState<FinanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  // المرحلة 19 (تخطيطات حساسة للخصوصية): إخفاء كل المبالغ عن الشاشة
+  const [privacy, setPrivacy] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return getUserStorage('rise-finance-privacy') === '1' } catch { return false }
+  })
+  const togglePrivacy = useCallback(() => {
+    setPrivacy((v) => {
+      try { setUserStorage('rise-finance-privacy', v ? '0' : '1') } catch {}
+      return !v
+    })
+  }, [])
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -497,8 +510,13 @@ export default function Finance() {
   }
 
   const formatAmount = (amount: number) => {
+    // وضع الخصوصية: قيمة مقنّعة بدل الرقم — لا يظهر مبلغ على الشاشة
+    if (privacy) return '••••'
     return amount.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
   }
+
+  // نفس القناع للأرقام العربية المباشرة (الميزانية)
+  const maskNum = (n: number) => (privacy ? '••' : toArabicNum(n))
 
   /* ─── Loading ─── */
   if (loading) {
@@ -533,7 +551,21 @@ export default function Finance() {
           </div>
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <div className="flex items-center gap-2">
+          {/* وضع الخصوصية (المرحلة 19): زر عين — يقنّع كل المبالغ فورًا */}
+          <Button
+            variant="outline"
+            size="icon"
+            aria-pressed={privacy}
+            aria-label={privacy ? 'إظهار المبالغ' : 'إخفاء المبالغ'}
+            title={privacy ? 'المبالغ مخفية — اضغط للإظهار' : 'وضع الخصوصية — إخفاء المبالغ'}
+            onClick={togglePrivacy}
+            className="h-10 w-10 rounded-xl glass border-0 shrink-0"
+          >
+            {privacy ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </Button>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <motion.div whileTap={{ scale: 0.95 }}>
               <Button className="bg-forest text-paper-soft hover:bg-forest/90 dark:bg-lime dark:text-ink dark:hover:bg-lime/90 shadow-lg rounded-xl h-10 text-sm font-semibold">
@@ -672,6 +704,7 @@ export default function Finance() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </motion.div>
 
       {/* ══════════ Budget Section ══════════ */}
@@ -709,7 +742,7 @@ export default function Finance() {
                       />
                     </svg>
                     <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-foreground">
-                      <span className="num" dir="ltr">{toArabicNum(budgetData.overallHealth)}</span>
+                      <span className="num" dir="ltr">{maskNum(budgetData.overallHealth)}</span>
                     </span>
                   </div>
                   <div className="text-start">
@@ -820,7 +853,7 @@ export default function Finance() {
                             onClick={() => setEditingBudget(item.name)}
                             className="text-[10px] text-muted-foreground hover:text-foreground font-medium px-1.5 py-0.5 rounded hover:bg-secondary transition-colors"
                           >
-                            <span className="num" dir="ltr">{toArabicNum(item.limit)}</span>
+                            <span className="num" dir="ltr">{maskNum(item.limit)}</span>
                           </motion.button>
                         )}
                       </div>
@@ -835,7 +868,7 @@ export default function Finance() {
                       />
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>أنفقت <span className="num" dir="ltr">{toArabicNum(Math.round(item.spent))}</span></span>
+                      <span>أنفقت <span className="num" dir="ltr">{maskNum(Math.round(item.spent))}</span></span>
                       <span className={cn(
                         item.percentage >= 100 ? 'text-destructive font-semibold' :
                         item.percentage >= 80 ? 'text-gold font-medium' : ''

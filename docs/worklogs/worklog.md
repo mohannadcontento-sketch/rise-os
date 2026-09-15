@@ -612,3 +612,25 @@ Work Log:
 Stage Summary:
 - Phase 18 GATE PASSED: choice-load reduced while every one of the 22 modules is preserved — mobile IA is now 5 structural roles + worlds hub, desktop is 4 world cards, URL history tracks modules (back/forward/refresh), and every module is ≤2 taps away
 - Next: Phase 19 (Core Modules) per master plan
+
+---
+
+## Task 46 — Phase 19: Core Modules Rework (2026-09-15, session 11)
+
+**Owner request:** «كمل» — continue with the next phase per master plan (19: Core Modules).
+
+Work Log:
+- Extracted phase-19 scope from the master plan (12 module items + 4 test items) and audited ALL 12 modules (13,720 lines) against it: 7 modules already had their plan identity (projects/goals/learning/reading/deepwork/journal/calendar) → closed via regression; 4 real gaps built; 1 architectural gap re-engineered
+- **Analytics aggregation-first (the plan's exact ruling):** NEW `GET /api/rise/analytics?days=7|30|90` — server-side aggregation of ALL chart series (dailyScores with components, habitTrend rates, focusByDay weekday minutes on Cairo-local bucketing, healthTrend points, focusTotals week/total/longest, personal records, live user stats) + today's score computed+upserted with the same unified computeDailyScore; withAggregateCache under the same agg:{userId} namespace all write routes already bust; client analytics.tsx went from 4 full raw dumps (habits logs + focus sessions + health logs + dashboard) client-side-aggregated to ONE request per period — "yearly" 90-day window now real for scores; fixed stale trend-insight threshold (7→70 on the unified 0-100 score); added fetch-failure banner + retry (was silent); habits/focus/health/dashboard fetchers deleted
+- **Tasks + Today (plan item):** todayOnly filter in use-tasks-controller (due-today + overdue, open only — overdue stays visible to be handled, §8 no-blame), sun chip with live count + aria-pressed/label, dedicated guilt-free empty state «لا شيء مستحق اليوم», reset button clears it too
+- **Habits streak rings (plan item):** per-habit SVG arc around the flame filling toward a 7-day week target, gold when complete, flame pulse kept for streaks > 3
+- **Health/Finance privacy-sensitive (plan item):** eye toggle in each module header masks all amounts (•••• through formatAmount + budget numbers) and today's readings (sleep/water/steps) — per-user pref via getUserStorage lazy-init (codebase pattern); ads were already excluded from these modules
+- **API contract alignment found by the CRUD regression:** finance POST description optional-in-Zod but required-in-Prisma (any client omitting it got 500) → defaults to ''; tasks PUT takes id in the body
+- **e2e NEW core-modules.spec.ts 4/4:** (1) aggregation proof — ALL raw endpoints route-blocked with 500, module still renders KPIs + charts from the aggregated endpoint alone + period switch fires days=30 request (expect.poll for lazy-chunk timing); (2) Today chip count + filter + no-blame empty state; (3) error banner via 500-interception + habit streak ring SVG + finance/health privacy eyes masking/unmasking with exact ar-EG numerals (٥٬٤٠٠ — U+066C separator); (4) full CRUD regression across 8 entities + idempotency same-key double-POST = exactly 1 record + perf smoke: 120 tasks render in ~3.4s (dev)
+- Root-caused 4 testing mysteries: (1) service worker re-issues page fetches that escape page.route interception → test.use({ serviceWorkers: 'block' }) scoped to this spec; (2) onboarding modal + ads-consent banner are BOTH role=dialog — random race left the modal covering the consent button → deterministic sequential dismissal (modal first); (3) parallel API seeding (120 concurrent writes) expired Prisma's 5s idempotency transactions on SQLite (dev/mock only — production is the Supabase path) → sequential seeding; (4) Arabic-Indic digit mismatch in locators — API titles pass through with Latin digits while .num elements get Eastern digits → assert with Latin
+- Regression: home.spec 5/5 + explore.spec 9/9 · tsc 0 · eslint zero new errors (8 known pre-existing compiler-debt on untouched patterns) · next build ✓
+- docs/phase-19/CORE_MODULES.md (9 sections: 12-module audit table, per-item builds, tests, gate) + PLAN_STATUS phase-19 closure
+
+Stage Summary:
+- Phase 19 GATE PASSED: every module keeps its own identity while sharing the same navigation/typography/spacing/feedback patterns; the one architectural ruling (aggregation-not-raw-records) is now server-enforced and test-proven
+- Next: Phase 20 (Onboarding + Auth + Consent) per master plan

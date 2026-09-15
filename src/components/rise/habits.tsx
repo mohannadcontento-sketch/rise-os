@@ -922,16 +922,32 @@ export function HabitsView() {
                           {/* Streak chip — tinted icon-box style */}
                           <div className="mt-2.5 flex items-center justify-between gap-2">
                             <span
-                              className="inline-flex items-center gap-1 px-2.5 h-7 rounded-xl transition-colors"
+                              className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-xl transition-colors"
                               style={{ backgroundColor: `${habit.color}14`, color: habit.color }}
+                              title="حلقة السلسلة: قوس نحو ٧ أيام متتالية"
                             >
-                              <motion.span
-                                animate={streak.current > 3 ? { scale: [1, 1.25, 1] } : {}}
-                                transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
-                                className="inline-flex"
-                              >
-                                <Flame className="w-3.5 h-3.5" />
-                              </motion.span>
+                              {/* المرحلة 19 (streak rings): قوس حول اللهب — ٧ أيام هدف الأسبوع، ذهبية عند الاكتمال */}
+                              <span className="relative inline-flex w-5 h-5 items-center justify-center shrink-0">
+                                <svg width={20} height={20} className="absolute -rotate-90" aria-hidden>
+                                  <circle cx={10} cy={10} r={8} fill="none" stroke={`${habit.color}26`} strokeWidth={2.5} />
+                                  <motion.circle
+                                    cx={10} cy={10} r={8} fill="none"
+                                    stroke={streak.current >= 7 ? '#C99A3E' : habit.color}
+                                    strokeWidth={2.5} strokeLinecap="round"
+                                    strokeDasharray={2 * Math.PI * 8}
+                                    initial={{ strokeDashoffset: 2 * Math.PI * 8 }}
+                                    animate={{ strokeDashoffset: 2 * Math.PI * 8 - (Math.min(streak.current, 7) / 7) * 2 * Math.PI * 8 }}
+                                    transition={{ duration: 0.9, ease: 'easeOut' }}
+                                  />
+                                </svg>
+                                <motion.span
+                                  animate={streak.current > 3 ? { scale: [1, 1.25, 1] } : {}}
+                                  transition={{ type: 'tween', duration: 1.2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                                  className="relative inline-flex"
+                                >
+                                  <Flame className="w-3 h-3" />
+                                </motion.span>
+                              </span>
                               {streak.current > 0 ? (
                                 <span className="text-[11px] font-bold">
                                   <span className="num" dir="ltr">{streak.current}</span> يوم

@@ -3,23 +3,29 @@
 // ============================================================
 // analytics.tsx — وحدة «التحليلات»
 //
-// لوحة قياس شاملة تُجمِّع بيانات أربعة مسارات (لوحة التحكم والعادات
-// والتركيز والصحة) في KPIs ورسوم بيانية ورؤى عربية تلقائية.
+// لوحة قياس شاملة في KPIs ورسوم بيانية ورؤى عربية تلقائية.
+//
+// المرحلة 19 (حكم الخطة): الرسوم تبدأ من التجميع لا من تنزيل
+// السجلات الخام — طلب واحد إلى /api/rise/analytics?days= يعيد
+// كل السلاسل محسوبة على السيرفر (درجات الأيام/اتجاه العادات/
+// توزيع التركيز/نقاط الصحة/الأرقام القياسية). الواجهة القديمة
+// كانت تنزّل ٤ مجالات خام كاملة وتجمعها على الجهاز.
 //
 // البنية الداخلية:
-//   1) أنواع وثوابت: واجهات بيانات المسارات، ألوان الرسوم، وترجمة
+//   1) أنواع وثوابت: واجهة الحمولة المجمّعة، ألوان الرسوم، وترجمة
 //      مفاتيح التلميحات إلى العربية
 //   2) مكونات مساعدة: GlassTooltip (تلميح موحّد للرسوم) و
 //      AnimatedCounter (عدّاد متحرك بـ framer-motion)
 //   3) getGrade: تحويل متوسط الدرجة إلى تقدير حرفي (A+→F)
-//   4) المكوّن الرئيسي: جلب متوازٍ ثم حسابات useMemo لكل رسم ثم
-//      طبقة عرض: بطاقات، تقدير عام، رسوم، ورؤى
+//   4) المكوّن الرئيسي: طلب مجمّع واحد (يعاد عند تغيير الفترة أو
+//      refreshKey) ثم اشتقاقات خفيفة ثم طبقة العرض
 //
 // الرسوم كلها recharts بلون الهوية البنفسجي مع تلميح glass موحّد؛
-// تبديل الفترة يعيد حساب الرسوم محلياً دون إعادة الجلب.
+// تبديل الفترة يطلب نافذة الأيام المناسبة (٧/٣٠/٩٠) — الكاش
+// الخادمي ٢٠ ثانية يجعل التبديل فوري التكلفة.
 // ============================================================
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion'
 import {
   Zap,
@@ -67,34 +73,29 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { toLocalDateStr, getToday } from '@/lib/rise-utils'
 
 /* ────────────── Types ────────────── */
 
-interface DashboardData {
+/** حمولة /api/rise/analytics — سلاسل مجمّعة جاهزة للرسم */
+interface AnalyticsPayload {
+  period: number
+  date: string
   user: {
-    name: string
-    level: number
     xp: number
+    level: number
     streak: number
     longestStreak: number
     totalFocusMin: number
     totalTasksDone: number
   }
   dailyScores: { date: string; score: number; morningScore: number; taskScore: number; habitScore: number; focusScore: number; healthScore: number; journalScore: number }[]
-}
-
-interface HabitData {
-  habits: { id: string; name: string }[]
-  logs: { habitId: string; date: string; completed: boolean }[]
-}
-
-interface FocusData {
-  sessions: { id: string; duration: number; actualMin: number; completed: boolean; startedAt: string }[]
-}
-
-interface HealthData {
-  logs: { date: string; sleepHours: number | null; waterGlasses: number | null; mood: number | null; energy: number | null }[]
+  habitTrend: { date: string; rate: number }[]
+  todayHabitRate: number
+  habitLongestStreak: number
+  focusByDay: { day: string; minutes: number; hours: number }[]
+  focusTotals: { thisWeekMin: number; lastWeekMin: number; totalMin: number; completedCount: number; longestSessionMin: number }
+  healthTrend: { date: string; sleep: number; water: number; mood: number }[]
+  records: { highestScore: number; mostTasksInDay: number; longestFocusMin: number }
 }
 
 type Period = 'weekly' | 'monthly' | 'yearly'
@@ -184,134 +185,70 @@ function getGrade(score: number): { letter: string; color: string; glow: string 
 
 export default function Analytics() {
   const [period, setPeriod] = useState<Period>('weekly')
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
-  const [habits, setHabits] = useState<HabitData | null>(null)
-  const [focus, setFocus] = useState<FocusData | null>(null)
-  const [health, setHealth] = useState<HealthData | null>(null)
+  const [payload, setPayload] = useState<AnalyticsPayload | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchFailed, setFetchFailed] = useState(false)
   const [compareMode, setCompareMode] = useState(false)
-
-  // Average score for performance grade
-  const avgScore = useMemo(() => {
-    if (!dashboard?.dailyScores?.length) return 0
-    // نافذة الأيام المعروضة حسب الفترة: 7 / 30 / 90 يوماً
-    const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
-    const recent = dashboard.dailyScores.slice(-days)
-    return recent.length > 0 ? Math.round(recent.reduce((s, d) => s + d.score, 0) / recent.length) : 0
-  }, [dashboard, period])
-
-  const grade = getGrade(avgScore)
-
-  // ── جلب البيانات: أربعة مسارات متوازية تُعاد عند refreshKey ──
+  // عدّاد إعادة المحاولة — يحرّك الطلب من زر اللافتة (معالج حدث، ليس داخل التأثير)
+  const [retryNonce, setRetryNonce] = useState(0)
+  const retry = useCallback(() => setRetryNonce((n) => n + 1), [])
 
   const { refreshKey } = useDataRefresh()
 
+  // نافذة الأيام حسب الفترة — الطلب الواحد يعيد السلاسل مجهزة لها
+  const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
+
+  // التجميع الخادمي: طلب واحد يعاد عند تغيير الفترة أو refreshKey أو إعادة المحاولة
   useEffect(() => {
     async function load() {
       try {
-        // جلب متوازٍ لأربعة مسارات؛ نجاح كل واحد مستقل والبقية تبقى بحالتها السابقة
-        const [dashRes, habitRes, focusRes, healthRes] = await Promise.all([
-          apiFetch('/api/rise/dashboard'),
-          apiFetch('/api/rise/habits'),
-          apiFetch('/api/rise/focus'),
-          apiFetch('/api/rise/health'),
-        ])
-
-        let dash: any = null, habit: any = null, foc: any = null, hlt: any = null
-
-        if (dashRes.ok) { try { dash = await dashRes.json() } catch {} }
-        if (habitRes.ok) { try { habit = await habitRes.json() } catch {} }
-        if (focusRes.ok) { try { foc = await focusRes.json() } catch {} }
-        if (healthRes.ok) { try { hlt = await healthRes.json() } catch {} }
-
-        if (dash) setDashboard(dash)
-        if (habit) setHabits(habit)
-        if (foc) setFocus(foc)
-        if (hlt) setHealth(hlt)
+        const res = await apiFetch(`/api/rise/analytics?days=${days}`)
+        if (!res.ok) throw new Error(String(res.status))
+        const data: AnalyticsPayload = await res.json()
+        setPayload(data)
+        setFetchFailed(false)
       } catch {
-        // ignore
+        setFetchFailed(true)
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [refreshKey])
+  }, [days, refreshKey, retryNonce])
 
-  // ─── Computed Charts ───
+  const dailyScores = useMemo(() => payload?.dailyScores ?? [], [payload])
 
-  const productivityData = useMemo(() => {
-    if (!dashboard?.dailyScores) return []
-    const scores = dashboard.dailyScores.slice(-(period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90))
-    return scores.map((s) => ({
+  // Average score for performance grade
+  const avgScore = useMemo(() => {
+    if (dailyScores.length === 0) return 0
+    return Math.round(dailyScores.reduce((s, d) => s + d.score, 0) / dailyScores.length)
+  }, [dailyScores])
+
+  const grade = getGrade(avgScore)
+
+  // ─── Computed Charts — السلاسل تأتي مجمّعة، الاشتقاق هنا خفيف ───
+
+  const productivityData = useMemo(() =>
+    dailyScores.map((s) => ({
       date: s.date.slice(5),
       score: Math.round(s.score),
-    }))
-  }, [dashboard, period])
+    })), [dailyScores])
 
-  const habitTrendData = useMemo(() => {
-    if (!habits) return []
-    const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
-    const today = new Date()
-    const result: { date: string; rate: number }[] = []
-    // نبني يوماً لكل تاريخ في النافذة (حتى الفارغ = 0%) كي يبقى الخط متصلاً
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(d.getDate() - i)
-      const key = toLocalDateStr(d)
-      const dayLogs = habits.logs.filter((l) => l.date === key)
-      const total = habits.habits.length
-      const completed = dayLogs.filter((l) => l.completed).length
-      result.push({
-        date: key.slice(5),
-        rate: total > 0 ? Math.round((completed / total) * 100) : 0,
-      })
-    }
-    return result
-  }, [habits, period])
+  const habitTrendData = payload?.habitTrend ?? []
 
-  const focusByDayData = useMemo(() => {
-    if (!focus) return []
-    // تجميع دقائق الجلسات المكتملة حسب يوم الأسبوع عبر كامل السجل
-    const dayMap: Record<string, number> = {}
-    dayNamesAr.forEach((d) => (dayMap[d] = 0))
-    focus.sessions
-      .filter((s) => s.completed)
-      .forEach((s) => {
-        const day = new Date(s.startedAt).getDay()
-        dayMap[dayNamesAr[day]] = (dayMap[dayNamesAr[day]] || 0) + s.actualMin
-      })
-    return dayNamesAr.map((name) => ({
-      day: name,
-      minutes: dayMap[name],
-      hours: Math.round((dayMap[name] / 60) * 10) / 10,
-    }))
-  }, [focus])
+  const focusByDayData = payload?.focusByDay ?? []
 
-  const taskCompletionData = useMemo(() => {
-    if (!dashboard?.dailyScores) return []
-    const days = period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90
-    const scores = dashboard.dailyScores.slice(-days)
-    return scores.map((s) => ({
+  const taskCompletionData = useMemo(() =>
+    dailyScores.map((s) => ({
       date: s.date.slice(5),
       tasks: Math.round(s.taskScore * 10) / 10,
-    }))
-  }, [dashboard, period])
+    })), [dailyScores])
 
-  const healthTrendsData = useMemo(() => {
-    if (!health?.logs) return []
-    const logs = health.logs.slice(-(period === 'weekly' ? 7 : period === 'monthly' ? 30 : 90)).reverse()
-    return logs.map((l) => ({
-      date: l.date.slice(5),
-      sleep: l.sleepHours || 0,
-      water: l.waterGlasses || 0,
-      mood: l.mood || 0,
-    }))
-  }, [health, period])
+  const healthTrendsData = payload?.healthTrend ?? []
 
   const goalDistributionData = useMemo(() => {
-    if (!dashboard?.dailyScores?.length) return []
-    const latest = dashboard.dailyScores[dashboard.dailyScores.length - 1]
-    if (!latest) return []
+    if (dailyScores.length === 0) return []
+    const latest = dailyScores[dailyScores.length - 1]
     // حد أدنى 1 لكل مجال كي لا تختفي الشرائح الصفرية من دائرة الرسم
     return [
       { name: 'الصباح', value: Math.round(latest.morningScore) || 1 },
@@ -321,17 +258,17 @@ export default function Analytics() {
       { name: 'الصحة', value: Math.round(latest.healthScore) || 1 },
       { name: 'اليوميات', value: Math.round(latest.journalScore) || 1 },
     ]
-  }, [dashboard])
+  }, [dailyScores])
 
   // ── إحصاءات مشتقة: الأفضل/الأسوأ، الأرقام القياسية، مقارنة الأسبوع ──
 
   // Best/Worst Day
   const { bestDay, worstDay } = useMemo(() => {
-    if (!dashboard?.dailyScores || dashboard.dailyScores.length < 2) {
+    if (dailyScores.length < 2) {
       return { bestDay: null, worstDay: null }
     }
     const dayScores: Record<number, { total: number; count: number }> = {}
-    dashboard.dailyScores.forEach((s) => {
+    dailyScores.forEach((s) => {
       const day = new Date(s.date).getDay()
       if (!dayScores[day]) dayScores[day] = { total: 0, count: 0 }
       dayScores[day].total += s.score
@@ -347,64 +284,31 @@ export default function Analytics() {
       bestDay: { name: dayNamesAr[bestKey], avg: Math.round(bestAvg * 10) / 10 },
       worstDay: { name: dayNamesAr[worstKey], avg: Math.round(worstAvg * 10) / 10 },
     }
-  }, [dashboard])
+  }, [dailyScores])
 
-  // Personal Records
+  // Personal Records — الأرقام القياسية جاهزة من التجميع الخادمي
   const personalRecords = useMemo(() => {
-    if (!dashboard?.dailyScores || !focus) return null
-    const scores = dashboard.dailyScores
-    const highestScore = scores.length > 0 ? Math.round(Math.max(...scores.map((s) => s.score)) * 10) / 10 : 0
-    const longestFocus = focus.sessions.length > 0 ? Math.max(...focus.sessions.filter((s) => s.completed).map((s) => s.actualMin || 0)) : 0
-
-    // Most tasks in a day
-    const mostTasks = scores.length > 0 ? Math.round(Math.max(...scores.map((s) => s.taskScore)) * 10) / 10 : 0
-
-    // Longest habit streak
-    let longestStreak = 0
-    // أطول تتابع يومي لتواريخ الإتمام الفريدة (مرتّبة تصاعدياً)
-    if (habits?.logs?.length && habits?.habits?.length) {
-      const allDates = [...new Set(habits.logs.filter((l) => l.completed).map((l) => l.date))].sort()
-      let streak = 1
-      for (let i = 1; i < allDates.length; i++) {
-        const prev = new Date(allDates[i - 1])
-        const curr = new Date(allDates[i])
-        const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24)
-        if (Math.abs(diffDays - 1) < 0.5) {
-          streak++
-          longestStreak = Math.max(longestStreak, streak)
-        } else {
-          streak = 1
-        }
-      }
-      if (longestStreak === 0 && allDates.length > 0) longestStreak = 1
+    if (!payload) return null
+    return {
+      highestScore: payload.records.highestScore,
+      longestFocus: payload.records.longestFocusMin,
+      mostTasks: payload.records.mostTasksInDay,
+      longestStreak: payload.habitLongestStreak,
     }
+  }, [payload])
 
-    return { highestScore, longestFocus, mostTasks, longestStreak }
-  }, [dashboard, focus, habits])
-
-  // Weekly Comparison
+  // Weekly Comparison — دقائق الأسبوع/السابق مجهّزة من التجميع الخادمي
   const weeklyComparison = useMemo(() => {
-    if (!dashboard?.dailyScores || dashboard.dailyScores.length < 7) return null
-    const scores = dashboard.dailyScores
-    const thisWeek = scores.slice(-7)
-    const lastWeek = scores.slice(-14, -7)
+    if (dailyScores.length < 7) return null
+    const thisWeek = dailyScores.slice(-7)
+    const lastWeek = dailyScores.slice(-14, -7)
     if (lastWeek.length === 0) return null
 
     const avgThis = thisWeek.length > 0 ? Math.round((thisWeek.reduce((s, d) => s + d.score, 0) / thisWeek.length) * 10) / 10 : 0
     const avgLast = lastWeek.length > 0 ? Math.round((lastWeek.reduce((s, d) => s + d.score, 0) / lastWeek.length) * 10) / 10 : 0
 
-    const focusThis = focus?.sessions?.filter((s) => {
-      const d = new Date(s.startedAt)
-      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
-      return s.completed && d >= weekAgo
-    }).reduce((sum, s) => sum + (s.actualMin || 0), 0) || 0
-
-    const focusLast = focus?.sessions?.filter((s) => {
-      const d = new Date(s.startedAt)
-      const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
-      const oneWeekAgo = new Date(); oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-      return s.completed && d >= twoWeeksAgo && d < oneWeekAgo
-    }).reduce((sum, s) => sum + (s.actualMin || 0), 0) || 0
+    const focusThis = payload?.focusTotals.thisWeekMin ?? 0
+    const focusLast = payload?.focusTotals.lastWeekMin ?? 0
 
     return {
       scoreData: [
@@ -418,14 +322,14 @@ export default function Analytics() {
       // نسبة التغيّر مقارنةً بمتوسط الأسبوع الماضي (صفر عند غيابه)
       scoreChange: avgLast > 0 ? Math.round(((avgThis - avgLast) / avgLast) * 100) : 0,
     }
-  }, [dashboard, focus])
+  }, [dailyScores, payload])
 
   // ── الرؤى: بطاقات استنتاجية عربية من الإحصاءات الحالية ───────
 
   const insights = useMemo(() => {
     const items: { icon: React.ElementType; text: string; type: 'positive' | 'negative' | 'neutral'; label: string }[] = []
-    if (dashboard) {
-      const { streak, longestStreak, totalTasksDone, totalFocusMin } = dashboard.user
+    if (payload) {
+      const { streak, longestStreak, totalTasksDone, totalFocusMin } = payload.user
       items.push({
         icon: Flame,
         text: streak > 0 ? `سلسلتك الحالية: ${streak} يوم متتالي` : 'ابدأ سلسلتك اليوم!',
@@ -450,35 +354,31 @@ export default function Analytics() {
         type: totalFocusMin >= 600 ? 'positive' : totalFocusMin > 0 ? 'neutral' : 'negative',
         label: 'تركيز',
       })
-      if (dashboard.dailyScores?.length >= 2) {
-        const lastWeek = dashboard.dailyScores.slice(-7)
+      if (dailyScores.length >= 2) {
+        const lastWeek = dailyScores.slice(-7)
         const avg = lastWeek.reduce((s, d) => s + d.score, 0) / lastWeek.length
+        // الدرجة الموحّدة ٠-١٠٠: العتبة ٧٠ (كانت ٧ من عصر المقياس ٠-١٠)
         items.push({
-          icon: avg >= 7 ? TrendingUp : TrendingDown,
+          icon: avg >= 70 ? TrendingUp : TrendingDown,
           text: `متوسط الدرجات هذا الأسبوع: ${Math.round(avg * 10) / 10}`,
-          type: avg >= 7 ? 'positive' : 'negative',
+          type: avg >= 70 ? 'positive' : 'negative',
           label: 'اتجاه',
         })
       }
-    }
-    if (habits) {
-      const today = getToday()
-      const todayCompleted = habits.logs.filter((l) => l.date === today && l.completed).length
-      const rate = habits.habits.length > 0 ? Math.round((todayCompleted / habits.habits.length) * 100) : 0
       items.push({
         icon: Target,
-        text: `إكمال العادات اليوم: ${rate}%`,
-        type: rate >= 80 ? 'positive' : rate >= 50 ? 'neutral' : 'negative',
+        text: `إكمال العادات اليوم: ${payload.todayHabitRate}%`,
+        type: payload.todayHabitRate >= 80 ? 'positive' : payload.todayHabitRate >= 50 ? 'neutral' : 'negative',
         label: 'عادات',
       })
     }
     return items
-  }, [dashboard, habits])
+  }, [payload, dailyScores])
 
-  const totalXP = dashboard?.user.xp || 0
-  const totalTasks = dashboard?.user.totalTasksDone || 0
-  const totalFocusHours = Math.round((dashboard?.user.totalFocusMin || 0) / 60)
-  const currentStreak = dashboard?.user.streak || 0
+  const totalXP = payload?.user.xp || 0
+  const totalTasks = payload?.user.totalTasksDone || 0
+  const totalFocusHours = Math.round((payload?.user.totalFocusMin || 0) / 60)
+  const currentStreak = payload?.user.streak || 0
 
   // ── العرض: skeleton أثناء التحميل ثم الواجهة الكاملة ─────────
 
@@ -503,6 +403,22 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
+      {/* لافتة فشل الجلب — النتائج المعروضة قد لا تكون محدّثة */}
+      {fetchFailed && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="w-4 h-4 text-gold shrink-0" />
+            <p className="text-xs text-foreground">تعذر تحميل التحليلات — النتائج المعروضة قد لا تكون محدّثة.</p>
+          </div>
+          <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs border-gold/50 hover:bg-gold/10" onClick={retry}>
+            إعادة المحاولة
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
