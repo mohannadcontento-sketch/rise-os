@@ -74,6 +74,9 @@ export type RiseGlyph =
   | "settings"
   | "bolt"
   | "flame"
+  | "explore"
+  | "sprout"
+  | "steering"
   | "shield"
   | "trophy"
   | "bell"
@@ -294,6 +297,30 @@ const glyphs: Record<RiseGlyph, React.ReactNode> = {
       <path d="M3.5 19.5c.4-3 2.6-4.8 5.5-4.8s5.1 1.8 5.5 4.8" />
       <path d="M15.5 5.8a3.2 3.2 0 0 1 0 5.4" />
       <path d="M17 14.9c2.1.5 3.3 2.1 3.5 4.1" />
+    </g>
+  ),
+  /* compass with slanted needle — استكشف (Phase 18) */
+  explore: (
+    <g {...P}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" />
+      <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none" />
+    </g>
+  ),
+  /* seedling with two leaves — عالم تطوّر */
+  sprout: (
+    <g {...P}>
+      <path d="M12 21v-7" />
+      <path d="M12 14c0-3.9-3.1-7-7-7 0 3.9 3.1 7 7 7Z" />
+      <path d="M12 12c0-3.3 2.7-6 6-6 0 3.3-2.7 6-6 6Z" />
+    </g>
+  ),
+  /* ship helm with eight spokes — عالم إدارة حياتي */
+  steering: (
+    <g {...P}>
+      <circle cx="12" cy="12" r="6.5" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4M5.3 5.3l2.8 2.8M15.9 15.9l2.8 2.8M18.7 5.3l-2.8 2.8M8.1 15.9l-2.8 2.8" />
     </g>
   ),
 };
@@ -727,6 +754,7 @@ export function HabitIcon({
    ============================================================ */
 
 export const MODULE_ICONS: Record<string, { glyph: RiseGlyph; hue: RiseHue }> = {
+  explore: { glyph: "explore", hue: "cyan" },
   dashboard: { glyph: "dashboard", hue: "lime" },
   morning: { glyph: "sunrise", hue: "amber" },
   planner: { glyph: "planner", hue: "cyan" },

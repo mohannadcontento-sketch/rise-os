@@ -25,6 +25,8 @@ import type { ModuleId } from '@/store/app-store'
  * mobile "الرئيسية" and desktop "لوحة التحكم" for the same module).
  */
 export const MODULE_LABELS: Record<ModuleId, string> = {
+  // المرحلة 18: استكشف — Hub العوالم (شاشة تنقّل، فوق وحدات المحتوى)
+  'explore': 'استكشف',
   'dashboard': 'الرئيسية',
   'morning': 'الروتين الصباحي',
   'planner': 'المخطط اليومي',

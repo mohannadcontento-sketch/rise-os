@@ -34,10 +34,9 @@ import { useToday } from '@/hooks/use-today'
 import { useDataRefresh } from '@/hooks/use-data-refresh'
 import { apiGet, apiPut } from '@/lib/api-fetch'
 import { toArabicNum } from '@/lib/rise-utils'
-import { MODULE_LABELS } from '@/lib/module-labels'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { QuickAdd, type QuickAddType } from '@/components/rise/quick-add'
+import type { QuickAddType } from '@/components/rise/quick-add'
 import { getUserStorage } from '@/lib/user-storage'
 import { toast } from 'sonner'
 
@@ -516,78 +515,29 @@ function NewUserWelcome({ onAdd }: { onAdd: (t: QuickAddType) => void }) {
   )
 }
 
-// ── القسم: استكشف العوالم (خلف الطية) ─────────────────────────
+// ── القسم: استكشف — تشويق لمركز الاستكشف (خلف الطية) ──────────
+// المرحلة 18: شبكة العوالم الكاملة انتقلت لمركز الاستكشف (explore-hub) —
+// هنا بطاقة واحدة هادئة تفتحه (بلا تكرار قوائم العوالم في سطحين)
 
-const WORLDS: { label: string; desc: string; modules: { id: keyof typeof MODULE_LABELS; label: string }[]; hue: string }[] = [
-  {
-    label: 'أنجز', desc: 'مهامك ومشاريعك وأهدافك وتركيزك',
-    modules: [
-      { id: 'tasks', label: MODULE_LABELS.tasks },
-      { id: 'projects', label: MODULE_LABELS.projects },
-      { id: 'deepwork', label: MODULE_LABELS.deepwork },
-      { id: 'calendar', label: MODULE_LABELS.calendar },
-    ],
-    hue: 'from-lime-400/20',
-  },
-  {
-    label: 'تطوّر', desc: 'تعلّمك وقراءتك ودماغك الثاني',
-    modules: [
-      { id: 'learning', label: MODULE_LABELS.learning },
-      { id: 'reading', label: MODULE_LABELS.reading },
-      { id: 'brain', label: MODULE_LABELS.brain },
-    ],
-    hue: 'from-blue-400/20',
-  },
-  {
-    label: 'توازن', desc: 'روتينك وعاداتك ويومياتك وصحتك',
-    modules: [
-      { id: 'morning', label: MODULE_LABELS.morning },
-      { id: 'habits', label: MODULE_LABELS.habits },
-      { id: 'journal', label: MODULE_LABELS.journal },
-      { id: 'health', label: MODULE_LABELS.health },
-    ],
-    hue: 'from-emerald-400/20',
-  },
-  {
-    label: 'إدارة حياتي', desc: 'مخططك وماليتك وتحليلاتك ومراجعاتك',
-    modules: [
-      { id: 'planner', label: MODULE_LABELS.planner },
-      { id: 'finance', label: MODULE_LABELS.finance },
-      { id: 'analytics', label: MODULE_LABELS.analytics },
-      { id: 'weekly-review', label: MODULE_LABELS['weekly-review'] },
-    ],
-    hue: 'from-violet-400/20',
-  },
-]
-
-function DiscoverWorlds({ onOpen }: { onOpen: (m: keyof typeof MODULE_LABELS) => void }) {
+function ExploreTeaser({ onOpen }: { onOpen: () => void }) {
   return (
-    <section className="mb-4" aria-label="استكشف">
-      <h3 className="font-bold mb-3 flex items-center gap-2 px-1">
-        <Compass className="w-5 h-5 text-cyan-400" aria-hidden="true" />
-        استكشف عوالمك الأربعة
-      </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {WORLDS.map((w) => (
-          <div key={w.label} className={cn('glass rounded-2xl p-4 bg-gradient-to-bl to-transparent', w.hue)}>
-            <p className="font-semibold">{w.label}</p>
-            <p className="text-xs text-muted-foreground mb-2.5">{w.desc}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {w.modules.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => onOpen(m.id)}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-primary/15 hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-                  aria-label={`افتح ${m.label}`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+    <section className="mb-4 glass rounded-2xl p-4 sm:p-5 flex items-center gap-3" aria-label="استكشف العوالم">
+      <span
+        className="icon-well size-10 rounded-[0.85rem] shrink-0"
+        style={{ background: 'linear-gradient(135deg, #06B6D4, #67E8F9)', color: '#fff' }}
+        aria-hidden="true"
+      >
+        <Compass className="w-5 h-5" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-bold text-sm">استكشف عوالمك الأربعة</h3>
+        <p className="text-xs text-muted-foreground truncate">
+          أنجز · تطوّر · توازن · إدارة حياتي — {toArabicNum(18)} وحدة بانتظارك
+        </p>
       </div>
+      <Button size="sm" variant="outline" onClick={onOpen} aria-label="افتح مركز الاستكشف">
+        افتح الاستكشاف
+      </Button>
     </section>
   )
 }
@@ -653,7 +603,6 @@ export default function Home() {
   const [focusSessions, setFocusSessions] = useState<any[]>([])
 
   const [expanded, setExpanded] = useState(false)
-  const [quickAdd, setQuickAdd] = useState<{ open: boolean; type: QuickAddType | null }>({ open: false, type: null })
   const [busyId, setBusyId] = useState<string | null>(null)
   const hour = new Date().getHours()
   const isEvening = hour >= 17
@@ -792,7 +741,9 @@ export default function Home() {
   }, [])
 
   const openQuickAdd = useCallback((type: QuickAddType | null) => {
-    setQuickAdd({ open: true, type })
+    // المرحلة 18: الـsheet يعيش في الصدفة (نسخة واحدة) — الرئيسية
+    // تطلب فتحه بالنوع عبر حدث rise:quick-add العام
+    window.dispatchEvent(new CustomEvent('rise:quick-add', { detail: type ?? undefined }))
   }, [])
 
   const { text: greetingText, Icon: GreetingIcon } = greetingFor(hour)
@@ -917,16 +868,9 @@ export default function Home() {
         </section>
       )}
 
-      {/* ٨) استكشف — خلف الطية */}
-      <DiscoverWorlds onOpen={setActiveModule} />
+      {/* ٨) استكشف — تشويق لمركز الاستكشف (خلف الطية) */}
+      <ExploreTeaser onOpen={() => setActiveModule('explore')} />
 
-      {/* Quick Add — sheet جوال / popover سطح مكتب (key = إعادة تركيب بنوع مسبق) */}
-      <QuickAdd
-        key={quickAdd.type ?? 'default'}
-        open={quickAdd.open}
-        initialType={quickAdd.type}
-        onClose={() => setQuickAdd({ open: false, type: null })}
-      />
     </div>
   )
 }

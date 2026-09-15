@@ -72,14 +72,16 @@ export function QuickAdd({
   const inputRef = useRef<HTMLInputElement>(null)
 
   // التركيز على أول حقل عند الفتح + Escape للإغلاق
+  // (المرحلة 18: مستمع document بطور الالتقاط — يسبق أي stopPropagation
+  // في مسار الفقاعة ويضمن إغلاق الـsheet من أي عنصر مركّز)
   useEffect(() => {
     if (!open) return
     const t = setTimeout(() => {
       inputRef.current?.focus()
     }, 120)
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => { clearTimeout(t); window.removeEventListener('keydown', onKey) }
+    document.addEventListener('keydown', onKey, true)
+    return () => { clearTimeout(t); document.removeEventListener('keydown', onKey, true) }
   }, [open, onClose])
 
   const reset = useCallback(() => {

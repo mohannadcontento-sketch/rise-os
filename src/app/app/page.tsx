@@ -31,11 +31,11 @@ if (typeof window !== 'undefined' && typeof SVGElement !== 'undefined') {
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRiseStore } from '@/store/app-store'
 import {
-  Menu, Search, Sparkles, Plus,
+  Menu, Search,
   Flame, Target, BookOpen, Network,
-  LogOut, Zap, Circle, CheckCircle2,
+  LogOut, Circle, CheckCircle2,
 } from 'lucide-react'
-import { RiseIcon, RiseGlyphIcon, MODULE_ICONS, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
+import { RiseIcon, MODULE_ICONS, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
 import { MODULE_LABELS } from '@/lib/module-labels'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -49,6 +49,12 @@ import { apiPost, apiGet, clearAllCache } from '@/lib/api-fetch'
 import { ModuleErrorBoundary } from '@/components/module-error-boundary'
 import { ThemeToggle } from '@/components/rise/neo'
 import { GlassNav } from '@/components/rise/glass-nav'
+// المرحلة 18: بطاقة الحساب (حسابي — حسم §9/6) كسولة مثل الوحدات
+const AccountCard = lazy(() => import('@/components/rise/account-card').then(m => ({ default: m.AccountCard })))
+// المرحلة 17→18: الإضافة السريعة تنتقل لمستوى الصدفة — نسخة واحدة
+// تخدم شريط الجوال (+) وكل أسطح الرئيسية (بلا ازدواج instances)
+const QuickAdd = lazy(() => import('@/components/rise/quick-add').then(m => ({ default: m.QuickAdd })))
+import type { QuickAddType } from '@/components/rise/quick-add'
 // المرحلة 09: الـAdSlot الموحّد — كسول مثل باقي الوحدات (حزمة منفصلة)
 const AdSlot = lazy(() => import('@/components/rise/ad-slot').then(m => ({ default: m.AdSlot })))
 
@@ -85,6 +91,8 @@ const ReminderEngine = lazy(() => import('@/components/rise/reminder-engine').th
 // المرحلة 17: Home — مركز القيادة الجديد (يحل محل لوحة الإحصائيات القديمة:
 // الإحصاءات موجودة في وحدة التحليلات — حسم UX_FOUNDATION §9)
 const Home = lazy(() => import('@/components/rise/home').then(m => ({ default: m.default })))
+// المرحلة 18: استكشف — Hub العوالم الأربعة (شاشة تنقّل — ليست وحدة محتوى)
+const ExploreHub = lazy(() => import('@/components/rise/explore-hub').then(m => ({ default: m.default })))
 const MorningRoutine = lazy(() => import('@/components/rise/morning-routine').then(m => ({ default: m.default })))
 const DailyPlanner = lazy(() => import('@/components/rise/daily-planner').then(m => ({ default: m.default })))
 const Tasks = lazy(() => import('@/components/rise/tasks').then(m => ({ default: m.default })))
@@ -121,6 +129,7 @@ const AD_MODULE_MAP: Partial<Record<ModuleId, 'home' | 'community' | 'tasks'>> =
   tasks: 'tasks',
 }
 const moduleComponents: Record<ModuleId, React.LazyExoticComponent<React.ComponentType>> = {
+  'explore': ExploreHub,
   'dashboard': Home,
   'morning': MorningRoutine,
   'planner': DailyPlanner,
@@ -186,7 +195,11 @@ export default function AwjApp() {
     tasks: SearchTask[]; habits: SearchHabit[]; goals: SearchGoal[]
     journals: SearchJournal[]; books: SearchBook[]; knowledge: SearchKnowledge[]
   }>({ tasks: [], habits: [], goals: [], journals: [], books: [], knowledge: [] })
-  const [fabOpen, setFabOpen] = useState(false)
+  // ── المرحلة 17→18: الإضافة السريعة على مستوى الصدفة (تفتح من شريط
+  // الجوال + أو من أسطح الرئيسية عبر حدث rise:quick-add العام)
+  const [quickAdd, setQuickAdd] = useState<{ open: boolean; type: QuickAddType | null }>({ open: false, type: null })
+  // المرحلة 18: بطاقة الحساب السريعة (حسابي — حسم §9/6)
+  const [accountOpen, setAccountOpen] = useState(false)
   const mountedRef = useRef(false)
 
   // ─── Day-rollover detection ───────────────────────────────────────────
@@ -380,8 +393,58 @@ export default function AwjApp() {
         window.dispatchEvent(new CustomEvent('rise:navigate', { detail: stored }))
       }
     } catch { /* sessionStorage محجوب — تجاهل */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── المرحلة 18: طلبات فتح الإضافة السريعة من أي سطح ──────────────
+  // الرئيسية (إجراءاتها السريعة/قوالبها/بطاقاتها) تبث rise:quick-add
+  // بالنوع المطلوب — الـsheet يعيش هنا في الصدفة (نسخة واحدة).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const type = (e as CustomEvent).detail as QuickAddType | undefined
+      setQuickAdd({ open: true, type: type ?? null })
+    }
+    window.addEventListener('rise:quick-add', handler)
+    return () => window.removeEventListener('rise:quick-add', handler)
+  }, [])
+
+  // ── المرحلة 18: عنوان URL يتبع الوحدة (back/forward/refresh) ──────
+  // كل انتقال يدفع ?module=<id> في سجل المتصفح: زر/إيماءة الرجوع في
+  // الجوال تعود للوحدة السابقة (بدل الخروج من التطبيق)، والأمام/التحديث
+  // يستعيدان الوحدة النشطة — عقد اختبارات الخطة (route/refresh/back).
+  useEffect(() => {
+    const onPop = () => {
+      const params = new URLSearchParams(window.location.search)
+      const target = params.get('module') || 'dashboard'
+      if ((moduleNames as Record<string, string>)[target]) {
+        setActiveModule(target as ModuleId)
+      } else {
+        setActiveModule('dashboard')
+      }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [setActiveModule])
+
+  // محاذاة الرابط عند تغيّر الوحدة — بعد رجوع المتصفح يكون الرابط محاذيًا
+  // أصلًا (لا يُدفع شيء)؛ الرئيسية تُخفي المعامل لتبقى /app نظيفة.
+  // أول تشغيلة تُتخطى عمدًا: عند التحميل يحكم الرابطَ معامل deep-link
+  // (?module=) — ودفعه هنا كان يخلق مدخل dashboard وهميًا في السجل
+  // فيضطر المستخدم لضغط «رجوع» مرتين بعد إعادة التحميل.
+  const urlSyncedOnce = useRef(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!urlSyncedOnce.current) {
+      urlSyncedOnce.current = true
+      return
+    }
+    const params = new URLSearchParams(window.location.search)
+    const current = params.get('module') || 'dashboard'
+    if (current === activeModule) return
+    const url = new URL(window.location.href)
+    if (activeModule === 'dashboard') url.searchParams.delete('module')
+    else url.searchParams.set('module', activeModule)
+    history.pushState({}, '', url)
+  }, [activeModule])
 
   /* ── Global search ── */
   const handleSearchQuery = useCallback((query: string) => {
@@ -574,8 +637,13 @@ export default function AwjApp() {
         </div>
       </main>
 
-      {/* Mobile glass bottom navigation (Neo) */}
-      <GlassNav />
+      {/* Mobile glass bottom navigation (Neo) — المرحلة 18: ٥ أدوار
+          هيكلية (الرئيسية · استكشف · + · المجتمع · حسابي) */}
+      <GlassNav
+        onQuickAdd={() => setQuickAdd({ open: true, type: null })}
+        onAccount={() => setAccountOpen(true)}
+        accountOpen={accountOpen}
+      />
 
       {/* Command palette — lazy loaded */}
       <Suspense fallback={null}>
@@ -726,56 +794,22 @@ export default function AwjApp() {
       <KeyboardShortcutsDialog />
       </Suspense>
 
-      {/* ══════════ FAB - Quick Add ══════════ */}
-        {activeModule !== 'dashboard' && activeModule !== 'settings' && (
-          <div className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-4 z-50 flex flex-col-reverse items-center gap-3 lg:bottom-5 lg:right-5">
-            {/* Action items */}
-              {fabOpen && (
-                <div
-                  className="flex flex-col gap-2 mb-2 animate-[fadeSlideUp_0.15s_ease-out]"
-                >
-                  {([
-                    { label: 'مهمة جديدة', glyph: 'tasks', module: 'tasks' as ModuleId },
-                    { label: 'عادة جديدة', glyph: 'habits', module: 'habits' as ModuleId },
-                    { label: 'يومية جديدة', glyph: 'journal', module: 'journal' as ModuleId },
-                    { label: 'تسجيل صحي', glyph: 'health', module: 'health' as ModuleId },
-                  ] as const).map((action) => {
-                    const meta = MODULE_ICONS[action.glyph]
-                    return (
-                      <button
-                        key={action.label}
-                        onClick={() => {
-                          setFabOpen(false)
-                          setActiveModule(action.module)
-                        }}
-                        className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl glass border border-white/10 dark:border-white/5 shadow-lg hover:shadow-xl transition-shadow group"
-                      >
-                        <RiseIcon glyph={meta.glyph} hue={meta.hue} size="sm" className="!rounded-lg" />
-                        <span className="text-sm font-medium text-foreground whitespace-nowrap">{action.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-            {/* Main FAB button */}
-            <button
-              onClick={() => setFabOpen(!fabOpen)}
-              aria-label={fabOpen ? 'إغلاق القائمة السريعة' : 'فتح القائمة السريعة'}
-              className={cn(
-                'w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-xl transition-all active:scale-93',
-                'bg-gradient-to-br from-emerald-accent to-forest',
-                'hover:shadow-emerald-accent/30 hover:shadow-2xl'
-              )}
-            >
-              <span
-                className={cn('transition-transform duration-200', fabOpen && 'rotate-45')}
-              >
-                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </span>
-            </button>
-          </div>
-        )}
+      {/* ══════════ المرحلة 18: الإضافة السريعة + بطاقة الحساب ══════════ */}
+      {/* حلّت محل FAB القديم: + في شريط الجوال (دائمًا متاح) وإجراءات
+          الرئيسية على سطح المكتب — بلا زرّين عائمين متنافسين */}
+      <Suspense fallback={null}>
+        <QuickAdd
+          key={quickAdd.type ?? 'default'}
+          open={quickAdd.open}
+          initialType={quickAdd.type}
+          onClose={() => setQuickAdd({ open: false, type: null })}
+        />
+        <AccountCard
+          open={accountOpen}
+          onClose={() => setAccountOpen(false)}
+          onLogout={() => setLogoutConfirmOpen(true)}
+        />
+      </Suspense>
 
       {/* PWA: install prompt */}
       <Suspense fallback={null}><PWAInstallPrompt /></Suspense>

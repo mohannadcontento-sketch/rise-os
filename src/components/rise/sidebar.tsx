@@ -3,8 +3,9 @@
 // ============================================================
 // sidebar.tsx — الشريط الجانبي (التنقل الرئيسي)
 //
-// قلب التنقل في أوج: 23 وحدة داخل 5 مجموعات أكورديون (يومك/التنفيذ/
-// النمو/المجتمع/المال والمراجعة) + لوحة تحكم مثبّتة + إعدادات، وبطاقة
+// قلب التنقل في أوج (المرحلة 18): 18 وحدة داخل بطاقات العوالم الأربعة
+// (أنجز/تطوّر/توازن/إدارة حياتي) + الرئيسية مثبّتة + المجتمع المستقل
+// + الإعدادات، وبطاقة
 // مستخدم (أفاتار + مستوى + XP) في الأسفل تفتح الإعدادات.
 //
 // البنية الداخلية:
@@ -33,6 +34,7 @@ import { todayStr } from '@/hooks/use-today'
 import { X, ChevronDown, Pencil, Flame, Zap, Settings2, ChevronsDownUp, ChevronsUpDown, Sparkles } from 'lucide-react'
 import { MODULE_ICONS, RiseGlyphIcon, RiseIcon, type RiseGlyph, type RiseHue } from './icons'
 import { MODULE_LABELS } from '@/lib/module-labels'
+import { WORLDS } from '@/lib/worlds'
 import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react'
 import { AVATARS } from '@/lib/avatars'
 
@@ -61,72 +63,19 @@ function mi(id: string): { glyph: RiseGlyph; hue: RiseHue; label: string } {
 
 // ── خريطة التنقل: 5 مجموعات + مجموعة الأدمن الشرطية ──────────────────────────────────
 /**
- * SIDEBAR v3 — regrouped, collapsible, and visually calm.
- * 23 modules live in 5 tidy accordion cards + pinned dashboard + settings.
- * Each group has a color identity dot, item count, and a smooth
- * grid-rows accordion animation. The user card opens Settings.
+ * SIDEBAR v4 (المرحلة 18) — بطاقات العوالم الأربعة وفق UX_FOUNDATION §3:
+ * أنجز (٦) · تطوّر (٣) · توازن (٤) · إدارة حياتي (٥) = ١٨ وحدة داخل
+ * بطاقات أكورديون بألوان هويتها + الرئيسية مثبّتة أعلى + المجتمع نقطة
+ * مستقلة (حسم §9/4) + الإعدادات أسفل + مجموعة الأدمن للأدمن فقط.
+ * العضوية من lib/worlds (مصدر واحد يشترك معه مركز الاستكشف).
  */
-const navGroups: NavGroup[] = [
-  {
-    id: 'today',
-    title: 'يومك',
-    hint: 'روتين · مخطط · عادات · يوميات',
-    dot: 'bg-gold',
-    items: [
-      { id: 'morning', ...mi('morning') },
-      { id: 'planner', ...mi('planner') },
-      { id: 'habits', ...mi('habits') },
-      { id: 'journal', ...mi('journal') },
-    ],
-  },
-  {
-    id: 'execute',
-    title: 'التنفيذ',
-    hint: 'مهام · مشاريع · أهداف · تركيز',
-    dot: 'bg-emerald-accent',
-    items: [
-      { id: 'tasks', ...mi('tasks') },
-      { id: 'projects', ...mi('projects') },
-      { id: 'goals', ...mi('goals') },
-      { id: 'deepwork', ...mi('deepwork') },
-      { id: 'work', ...mi('work') },
-      { id: 'calendar', ...mi('calendar') },
-    ],
-  },
-  {
-    id: 'growth',
-    title: 'النمو والمعرفة',
-    hint: 'صحة · قراءة · تعلم · معرفة',
-    dot: 'bg-violet-accent',
-    items: [
-      { id: 'health', ...mi('health') },
-      { id: 'reading', ...mi('reading') },
-      { id: 'learning', ...mi('learning') },
-      { id: 'brain', ...mi('brain') },
-    ],
-  },
-  {
-    // FIX (owner: «مش شايف تاب المجتمع»): وحدة المجتمع كانت مسجّلة في
-    // الـstore والصفحة لكن بلا أي مدخل تنقّل — هذه المجموعة هي التاب.
-    id: 'community',
-    title: 'المجتمع',
-    hint: 'منشورات · تعليقات · تفاعل',
-    dot: 'bg-lime',
-    items: [{ id: 'community', ...mi('community') }],
-  },
-  {
-    id: 'life',
-    title: 'المال والمراجعة',
-    hint: 'مالية · مراجعات · تحليلات',
-    dot: 'bg-glass',
-    items: [
-      { id: 'finance', ...mi('finance') },
-      { id: 'weekly-review', ...mi('weekly-review') },
-      { id: 'monthly-review', ...mi('monthly-review') },
-      { id: 'analytics', ...mi('analytics') },
-    ],
-  },
-]
+const navGroups: NavGroup[] = WORLDS.map((w) => ({
+  id: w.id,
+  title: w.title,
+  hint: w.hint,
+  dot: w.dot,
+  items: w.items.map((id) => ({ id, ...mi(id) })),
+}))
 
 const ADMIN_GROUP: NavGroup = {
   id: 'admin',
@@ -150,7 +99,7 @@ const navOpenListeners = new Set<() => void>()
 function navOpenRead(): string[] {
   // قراءة كسولة: أول استدعاء يحمّل من التخزين المعزول ويملأ الكاش، والبقية من الذاكرة
   if (navOpenCache === null) {
-    let next: string[] = ['today']
+    let next: string[] = ['achieve']
     try {
       // تفضيل UI معزول للمستخدم (getUserStorage) — جهاز مشترك لا يشارك
       // حالة توسيع الأقسام بين الحسابات؛ بلا جلسة يُرفض ويعود الافتراضي.
@@ -174,7 +123,7 @@ function navOpenSubscribe(l: () => void) {
   return () => { navOpenListeners.delete(l) }
 }
 
-const DEFAULT_OPEN_GROUPS = ['today']
+const DEFAULT_OPEN_GROUPS = ['achieve']
 
 // ── أداة عرض: تحويل الأرقام إلى العربية الشرقية (٠-٩) ──────────────────────────────────
 function toArabicNum(n: number | null | undefined | string | object): string {
@@ -463,6 +412,20 @@ export function Sidebar() {
               </div>
             )
           })}
+
+          {/* المجتمع — نقطة تنقّل مستقلة خارج العوالم (حسم §9/4):
+              هوية اجتماعية لا فئة إنتاجية — صف مثبّت بلون lime */}
+          <div className="pt-2">
+            <div className="flex items-center gap-1.5 pb-1 px-2.5">
+              <span className="w-2 h-2 rounded-full bg-lime" aria-hidden="true" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/35">مستقلة</span>
+            </div>
+            <NavButton
+              item={{ id: 'community', ...mi('community') }}
+              active={activeModule === 'community'}
+              onSelect={() => go('community')}
+            />
+          </div>
 
           {/* Settings — always visible, calm row at the bottom */}
           <div className="pt-2">
