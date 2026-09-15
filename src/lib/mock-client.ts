@@ -70,6 +70,7 @@ const TABLE_TO_MODEL: Record<string, string> = {
   user_ai_usage: 'userAIUsage',
   user_storage: 'userStorage',
   user_api_keys: 'userApiKey',
+  user_consents: 'userConsent',
 }
 
 function getModel(table: string): any {

@@ -1,51 +1,66 @@
 'use client'
 
 // ============================================================
-// login-page.tsx — بوابة الدخول (مصادقة)
+// login-page.tsx — بوابة الدخول (مصادقة) — المرحلة 20
 //
-// شاشة ملء الشاشة تُعرض من مُوجِّه الوحدات (app/page.tsx) قبل
-// قيام الجلسة: تبويبا «تسجيل الدخول / حساب جديد» + وضع «نسيت
-// كلمة المرور»، يستدعي مسارات /api/auth/* مباشرة بـ fetch ثم
-// يسليم بيانات المستخدم للأم عبر onLogin (يخزنها في store).
+// شاشة ملء الشاشة تُعرض إما من مُوجِّه الوحدات (app/page.tsx قبل
+// قيام الجلسة — وضع الاستعلام) أو من مساري /login و /signup
+// المستقلين (defaultMode يحدد التبويب الابتدائي)؛ تبويبا
+// «تسجيل الدخول / حساب جديد» + وضع «نسيت كلمة المرور»، يستدعي
+// مسارات /api/auth/* مباشرة بـ fetch ثم يسلم بيانات المستخدم
+// للأم عبر onLogin (يخزنها في store) — أو يحوّل إلى /app إن
+// غاب onLogin (وضع المسارات المستقلة).
 // يقرأ الروابط العميقة ?forgot=1 (من صفحة رابط الاستعادة
 // المنتهي) و ?authError= (من /auth/callback) لتهيئة الوضع
 // والرسالة الأولى.
 //
 // البنية الداخلية:
-//   1) الحالة: mode (login/signup/forgot) + خطأ/إشعار +
-//      إظهار كلمة المرور + إعادة إرسال تأكيد البريد
-//   2) handleSubmit — تحقق بريد/كلمة مرور (8+) ثم POST
-//      للمسار المناسب؛ معالجة needsConfirmation و
-//      email_not_confirmed و reset-password
+//   1) الحالة: mode (login/signup/forgot) + خطأ/إشعار/بطاقة
+//      تأكيد بريد + إظهار كلمة المرور + إعادة إرسال بعدّاد
+//      تهدئة + قبول السياسات + نسخ السياسات الحالية
+//   2) handleSubmit — تحقق بريد/كلمة مرور (٨+ حرف+رقم) ثم POST
+//      للمسار المناسب مع { acceptedTerms, policyVersions } في
+//      وضع الحساب الجديد؛ معالجة needsConfirmation و
+//      email_not_confirmed و CONSENT_REQUIRED و
+//      POLICY_VERSION_MISMATCH (تحديث النسخ ثم إعادة قبول)
 //   3) الواجهة: هالة ambient ثلاثية + بطاقة neo + تبويبات
 //      role=tablist + حقول بأيقونات start + زر إرسال بأيقونة
-//      مختلفة لكل وضع
+//      مختلفة لكل وضع + checkbox موافقة بروابط واضحة +
+//      مؤشر متطلبات كلمة المرور الحي
 //
-// مبادئ UX/تقنية: زر «إعادة إرسال رابط التأكيد» يظهر فقط عند
-// خطأ عدم التأكيد (عبر apiPost)؛ رسالة الاستعادة لا تكشف هل
+// مبادئ UX/تقنية: زر «إعادة إرسال رابط التأكيد» يظهر في بطاقة
+// التأكيد الزرقاء (وبطاقة الخطأ عند email_not_confirmed) مع
+// عدّاد تهدئة ٣٠ث لمنع الإزعاج؛ رسالة الاستعادة لا تكشف هل
 // البريد مسجل؛ إظهار/إخفاء كلمة المرور بـ aria-label عربي؛
 // الزر معطل أثناء الإرسال ولا تحقق HTML مخصص (noValidate).
 // ============================================================
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, Mail, Lock, User, Eye, EyeOff, Sparkles, Shield, RefreshCw } from 'lucide-react'
+import { Zap, Mail, Lock, User, Eye, EyeOff, Sparkles, Shield, RefreshCw, Check, X, MailCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { apiPost } from '@/lib/api-fetch'
+import { REQUIRED_POLICY_VERSIONS } from '@/lib/policy-versions'
 
 interface LoginPageProps {
-  onLogin: (data: { user: { id: string; email: string; isAdmin: boolean; name?: string; avatar?: string | null } }) => void
+  onLogin?: (data: { user: { id: string; email: string; isAdmin: boolean; name?: string; avatar?: string | null } }) => void
+  /** التبويب الابتدائي — تستخدمه مسارات /login و /signup المستقلة */
+  defaultMode?: 'login' | 'signup'
 }
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
+/** أرقام شرقية لعرض نسخة السياسة (قاعدة §7/4) */
+function easternDigits(s: string): string {
+  return s.replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)])
+}
+
+export default function LoginPage({ onLogin, defaultMode = 'login' }: LoginPageProps) {
   // روابط عميقة: ?forgot=1 (من صفحة رابط الاستعادة المنتهي) و ?authError= (من /auth/callback)
   const searchParams = useSearchParams()
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(
-    () => (searchParams.get('forgot') === '1' ? 'forgot' : 'login')
+    () => (searchParams.get('forgot') === '1' ? 'forgot' : defaultMode)
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(() => {
@@ -59,16 +74,60 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [notice, setNotice] = useState(
     () => (searchParams.get('forgot') === '1' ? 'أدخل بريدك وسنرسل لك رابط إعادة تعيين كلمة المرور' : '')
   )
+  // بطاقة تأكيد البريد (حالة معلومات — ليست خطأ)
+  const [confirmation, setConfirmation] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
 
+  // ── موافقة السياسات (signup فقط) ──
+  const [accepted, setAccepted] = useState(false)
+  const [policyVersions, setPolicyVersions] = useState(REQUIRED_POLICY_VERSIONS)
+
+  // عدّاد تهدئة إعادة الإرسال (٣٠ ثانية)
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const t = setInterval(() => setResendCooldown((c) => c - 1), 1000)
+    return () => clearInterval(t)
+  }, [resendCooldown])
+
+  const switchMode = (next: 'login' | 'signup' | 'forgot') => {
+    setMode(next)
+    setError('')
+    setNotice('')
+    setConfirmation('')
+  }
+
+  // متطلبات كلمة المرور — تُعرض حية في وضع الحساب الجديد
+  const pwChecks = {
+    length: password.length >= 8,
+    letter: /[A-Za-z]/.test(password),
+    digit: /[0-9]/.test(password),
+  }
+  const pwValid = pwChecks.length && pwChecks.letter && pwChecks.digit
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resendLoading) return
+    setResendLoading(true)
+    try {
+      await apiPost('/api/auth/resend', { email })
+      setResendCooldown(30)
+      setConfirmation('تم إرسال رابط تأكيد جديد إلى بريدك الإلكتروني.')
+    } catch {
+      setError('تعذر إعادة الإرسال — حاول بعد قليل')
+    } finally {
+      setResendLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setNotice('')
+    setConfirmation('')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('بريد إلكتروني غير صالح')
       return
@@ -97,14 +156,28 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       return
     }
 
-    if (password.length < 8) {
+    if (mode === 'signup') {
+      // بوابة الموافقة العميلية — الخادم يرفض أيضًا (دفاع عميق)
+      if (!accepted) {
+        setError('يجب قبول الشروط وسياسة الخصوصية لإنشاء الحساب')
+        return
+      }
+      if (!pwValid) {
+        setError('كلمة المرور يجب أن تكون 8 أحرف على الأقل وتحتوي حرفًا ورقمًا')
+        return
+      }
+    } else if (password.length < 8) {
       setError('كلمة المرور يجب أن تكون 8 أحرف على الأقل')
       return
     }
+
     setLoading(true)
     try {
       const url = mode === 'login' ? '/api/auth/login' : '/api/auth/signup'
-      const body = mode === 'login' ? { email, password } : { email, password, name }
+      const body =
+        mode === 'login'
+          ? { email, password }
+          : { email, password, name, acceptedTerms: accepted, policyVersions }
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,13 +189,26 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       if (!res.ok) {
         if (data.errorType === 'email_not_confirmed') {
           setError(data.error || 'البريد الإلكتروني لم يتم تأكيده بعد. تحقق من صندوق البريد.')
-        } else {
-          setError(data.error || 'حدث خطأ')
+          return
         }
+        if (data.errorType === 'POLICY_VERSION_MISMATCH') {
+          // حدّث النسخ المعروضة واطلب قبولًا جديدًا للنسخة السارية
+          if (data.requiredPolicyVersions) setPolicyVersions(data.requiredPolicyVersions)
+          setAccepted(false)
+          setError(data.error || 'تحديثت الشروط أو سياسة الخصوصية — راجعها ثم اقبل النسخة الجديدة')
+          return
+        }
+        if (data.errorType === 'CONSENT_REQUIRED') {
+          setError(data.error || 'يجب قبول الشروط وسياسة الخصوصية لإنشاء الحساب')
+          return
+        }
+        setError(data.error || 'حدث خطأ')
         return
       }
       if (data.needsConfirmation) {
-        setError('تم إرسال رابط تأكيد إلى بريدك الإلكتروني')
+        // بطاقة معلومات هادئة (ليست خطأ) — مع إعادة إرسال وتهدئة
+        setConfirmation(data.message || 'تم إرسال رابط تأكيد إلى بريدك الإلكتروني')
+        setPassword('')
         return
       }
       if (data.user) {
@@ -134,7 +220,15 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           avatar: data.user.avatar ?? null,
         }
         localStorage.setItem('rise-user-info', JSON.stringify(userInfo))
-        onLogin({ user: userInfo })
+        if (onLogin) {
+          onLogin({ user: userInfo })
+        } else {
+          // وضع المسارات المستقلة (/login، /signup): حملة كاملة
+          // تلتقط الكوكيز httpOnly من جهة الخادم — عمدًا وليس
+          // router.push: الصدفة تُقلَع من الصفر بجلسة مُثبتة
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          window.location.assign('/app')
+        }
       } else {
         setError('تعذر إنشاء جلسة صالحة')
       }
@@ -178,7 +272,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 key={tab.id}
                 role="tab"
                 aria-selected={mode === tab.id}
-                onClick={() => { setMode(tab.id); setError(''); setNotice('') }}
+                onClick={() => switchMode(tab.id)}
                 className={cn(
                   'flex-1 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all press',
                   mode === tab.id
@@ -198,7 +292,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               <p className="text-xs text-muted-foreground mt-1">أدخل بريدك وسنرسل لك رابط إعادة التعيين</p>
               <button
                 type="button"
-                onClick={() => { setMode('login'); setError(''); setNotice('') }}
+                onClick={() => switchMode('login')}
                 className="mt-3 text-xs text-violet-accent hover:underline"
               >
                 ← العودة لتسجيل الدخول
@@ -260,6 +354,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   dir="ltr"
                   required
                   minLength={8}
+                  aria-describedby={mode === 'signup' ? 'pw-requirements' : undefined}
                 />
                 <button
                   type="button"
@@ -270,11 +365,37 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* مؤشر متطلبات كلمة المرور — حي في وضع الحساب الجديد */}
+              {mode === 'signup' && password.length > 0 && (
+                <div
+                  id="pw-requirements"
+                  role="status"
+                  aria-label="متطلبات كلمة المرور"
+                  className="mt-2.5 rounded-xl bg-muted/50 border border-border/60 px-3 py-2.5 space-y-1.5"
+                >
+                  {[
+                    { ok: pwChecks.length, label: '٨ محارف على الأقل' },
+                    { ok: pwChecks.letter, label: 'حرف واحد على الأقل' },
+                    { ok: pwChecks.digit, label: 'رقم واحد على الأقل' },
+                  ].map((c) => (
+                    <div key={c.label} className="flex items-center gap-2 text-xs">
+                      {c.ok ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-accent shrink-0" aria-hidden="true" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className={c.ok ? 'text-emerald-accent' : 'text-muted-foreground'}>{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {mode === 'login' && (
                 <div className="flex justify-end mt-1.5">
                   <button
                     type="button"
-                    onClick={() => { setMode('forgot'); setError(''); setNotice('') }}
+                    onClick={() => switchMode('forgot')}
                     className="text-xs text-violet-accent hover:underline"
                   >
                     نسيت كلمة المرور؟
@@ -284,10 +405,96 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </div>
             )}
 
+            {/* موافقة الشروط والخصوصية — إلزامية في وضع الحساب الجديد */}
+            {mode === 'signup' && (
+              <div className="rounded-xl bg-muted/40 border border-border/60 px-3.5 py-3">
+                <div className="flex items-start gap-2.5">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={accepted}
+                    aria-label="الموافقة على الشروط وسياسة الخصوصية"
+                    onClick={() => setAccepted(!accepted)}
+                    className={cn(
+                      'mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all press',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-accent/40',
+                      accepted
+                        ? 'bg-violet-accent border-violet-accent text-ink'
+                        : 'border-border bg-background hover:border-violet-accent/60'
+                    )}
+                  >
+                    {accepted && <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+                  </button>
+                  <p className="text-xs leading-relaxed text-foreground">
+                    أوافق على{' '}
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-accent font-semibold hover:underline"
+                    >
+                      الشروط
+                    </a>{' '}
+                    و{' '}
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-accent font-semibold hover:underline"
+                    >
+                      سياسة الخصوصية
+                    </a>{' '}
+                    — بما فيها كيفية معالجة بياناتك وحفظ خصوصيتك.
+                  </p>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2 ps-8">
+                  النسخة السارية: {easternDigits(policyVersions.terms)}
+                </p>
+              </div>
+            )}
+
             {/* Notice (نجاح استعادة) */}
             {notice && mode === 'forgot' && (
               <div className="text-sm text-success bg-success/10 border border-success/20 rounded-xl px-4 py-3 text-center" role="status">
                 <p>{notice}</p>
+              </div>
+            )}
+
+            {/* بطاقة تأكيد البريد — معلومات هادئة وليست خطأ */}
+            {confirmation && (
+              <div
+                className="text-sm rounded-xl px-4 py-3.5 bg-violet-accent/10 border border-violet-accent/25"
+                role="status"
+              >
+                <div className="flex items-center gap-2.5">
+                  <MailCheck className="w-5 h-5 text-violet-accent shrink-0" aria-hidden="true" />
+                  <div className="flex-1">
+                    <p className="font-bold text-foreground">تحقق من بريدك الإلكتروني</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{confirmation}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 mt-3">
+                  <button
+                    type="button"
+                    disabled={resendCooldown > 0 || resendLoading}
+                    onClick={handleResend}
+                    className="text-xs text-violet-accent hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1.5"
+                  >
+                    {resendLoading ? (
+                      <span className="w-3 h-3 border border-violet-accent/30 border-t-violet-accent rounded-full inline-block animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                    )}
+                    {resendCooldown > 0 ? `إعادة الإرسال بعد ${easternDigits(String(resendCooldown))} ثانية` : 'إعادة إرسال رابط التأكيد'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMode('login')}
+                    className="text-xs text-foreground/80 hover:text-foreground"
+                  >
+                    وصلتك الرسالة؟ سجّل دخولك
+                  </button>
+                </div>
               </div>
             )}
 
@@ -298,25 +505,16 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 {(error.includes('تأكيد') || error.includes('لم يتم تأكيده')) && (
                   <button
                     type="button"
-                    disabled={resendLoading}
-                    onClick={async () => {
-                      setResendLoading(true)
-                      try {
-                        await apiPost('/api/auth/resend', { email })
-                        setError('تم إعادة إرسال رابط التأكيد!')
-                      } catch {
-                        setError('فشل إعادة الإرسال')
-                      }
-                      setResendLoading(false)
-                    }}
-                    className="mt-2 text-xs text-violet-accent hover:underline flex items-center gap-1 mx-auto"
+                    disabled={resendLoading || resendCooldown > 0}
+                    onClick={handleResend}
+                    className="mt-2 text-xs text-violet-accent hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1 mx-auto"
                   >
                     {resendLoading ? (
                       <span className="w-3 h-3 border border-violet-accent/30 border-t-violet-accent rounded-full inline-block animate-spin" />
                     ) : (
-                      <RefreshCw className="w-3 h-3" />
+                      <RefreshCw className="w-3 h-3" aria-hidden="true" />
                     )}
-                    إعادة إرسال رابط التأكيد
+                    {resendCooldown > 0 ? `إعادة الإرسال بعد ${easternDigits(String(resendCooldown))} ثانية` : 'إعادة إرسال رابط التأكيد'}
                   </button>
                 )}
               </div>
@@ -325,7 +523,12 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             {/* Submit — violet, ink text (AA verified) */}
             <Button
               type="submit"
-              disabled={loading || !email || (mode !== 'forgot' && !password) || (mode === 'signup' && !name)}
+              disabled={
+                loading ||
+                !email ||
+                (mode !== 'forgot' && !password) ||
+                (mode === 'signup' && (!name || !accepted || !pwValid))
+              }
               className={cn(
                 'w-full h-11 rounded-xl bg-violet-accent text-ink font-bold transition-all press',
                 'hover:shadow-lg hover:shadow-violet-accent/25 hover:bg-[#B8A2FB] dark:hover:bg-[#C4B5FD]',
@@ -336,17 +539,17 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 <span className="w-5 h-5 border-2 border-ink/30 border-t-ink rounded-full inline-block animate-spin" />
               ) : mode === 'login' ? (
                 <span className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4" aria-hidden="true" />
                   دخول
                 </span>
               ) : mode === 'forgot' ? (
                 <span className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
+                  <Mail className="w-4 h-4" aria-hidden="true" />
                   إرسال رابط الاستعادة
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
+                  <Shield className="w-4 h-4" aria-hidden="true" />
                   إنشاء حساب
                 </span>
               )}

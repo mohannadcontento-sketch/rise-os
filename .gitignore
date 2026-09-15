@@ -94,3 +94,5 @@ deno.lock
 playwright-report/
 bun.lock
 prisma/test.db
+# Playwright auth state (Phase 20 — خارج git عمدًا)
+tests/e2e/.auth/

@@ -46,6 +46,7 @@ model User {
   notifications  Notification[]
   aiUsage        UserAIUsage?
   storage        UserStorage?
+  consents       UserConsent[]
   apiKeys        UserApiKey[]
   idempotencyRequests RequestIdempotency[]
   xpAwards        XpAward[]
@@ -476,6 +477,23 @@ model XpAward {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
+}
+
+// ==================== USER CONSENTS (المرحلة 20) ====================
+// سجل موافقات المستخدم على الشروط/الخصوصية — يُدرَج خادميًا فقط
+// (بوابة signup) ويُقرأ من مسار /api/auth/consents؛ العميل لا
+// يعدّل ولا يحذف. metadata: بصمات دنيا مجزّأة SHA-256 (ua/ip).
+model UserConsent {
+  id            String   @id @default(cuid())
+  userId        String
+  consentType   String   // 'terms' | 'privacy'
+  policyVersion String
+  consentedAt   DateTime @default(now())
+  metadata      String   @default("{}") // JSON string {uaHash?, ipHash?}
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, consentType, policyVersion])
+  @@index([userId])
 }
 
 // ==================== USER API KEY ====================

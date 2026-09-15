@@ -23,6 +23,7 @@ import { habitLogs } from './habitLogs'
 import { dailyScores } from './dailyScores'
 import { userAchievements } from './userAchievements'
 import { feedback } from './feedback'
+import { consents } from './consents'
 
 // ============================================================
 // data/index.ts — الواجهة الجماعية لطبقة البيانات (facade)
@@ -66,4 +67,5 @@ export const data = {
   dailyScores,
   userAchievements,
   feedback,
+  consents,
 }

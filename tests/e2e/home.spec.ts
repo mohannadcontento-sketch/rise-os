@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { consentedSignupPayload } from './helpers'
 
 // ============================================================
 // home.spec.ts — المرحلة ١٧ (تحديث المالك): الرئيسية = لوحة القيادة
@@ -19,7 +20,7 @@ import { test, expect } from '@playwright/test'
 
 let userSeq = 0
 const uniqueEmail = () => `e2e17-${Date.now()}-${++userSeq}@awj.test`
-const TEST_PASSWORD = 'phase17-strong-pass'
+const TEST_PASSWORD = 'phase17-strong-pass-1'
 
 const GREETING = /صباح الخير|نهارك سعيد|مساء الخير/
 
@@ -52,7 +53,7 @@ async function login(page: import('@playwright/test').Page) {
   let res: import('@playwright/test').APIResponse | null = null
   for (let attempt = 0; attempt < 2; attempt++) {
     res = await page.request.post('/api/auth/signup', {
-      data: { email, password: TEST_PASSWORD, name: 'مختبر المرحلة ١٧' },
+      data: consentedSignupPayload(email, TEST_PASSWORD, 'مختبر المرحلة ١٧'),
     })
     if (res.ok() || res.status() !== 429) break
     // نافذة الحد دقيقة كاملة — انتظارها يفك الاختناق حتمًا

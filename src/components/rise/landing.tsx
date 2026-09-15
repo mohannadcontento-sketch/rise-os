@@ -164,7 +164,7 @@ function LandingNav() {
 
         <div className="flex items-center gap-2.5">
           <ThemeToggle className="scale-90" />
-          <ComicButton tone="lime" onClick={() => router.push("/app")} className="!px-4 !py-2 !text-sm">
+          <ComicButton tone="lime" onClick={() => router.push("/signup")} className="!px-4 !py-2 !text-sm">
             ابدأ الآن
           </ComicButton>
         </div>
@@ -275,7 +275,7 @@ function Hero() {
 
           <Reveal delay={240}>
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start sm:justify-center">
-              <ComicButton tone="lime" onClick={() => router.push("/app")} className="!px-7 !py-3 !text-lg">
+              <ComicButton tone="lime" onClick={() => router.push("/signup")} className="!px-7 !py-3 !text-lg">
                 ابدأ رحلتك مجانًا
               </ComicButton>
               <a
@@ -730,7 +730,7 @@ function Pricing() {
               </ul>
               <ComicButton
                 tone={plan.highlighted ? "lime" : "ink"}
-                onClick={() => router.push("/app")}
+                onClick={() => router.push("/signup")}
                 className="mt-7 w-full"
               >
                 {plan.cta}
@@ -804,7 +804,7 @@ function FinalCta() {
               انضم لرحلة أوج ودوّر حياتك صفحة جديدة — تبدأ في أقل من دقيقة.
             </p>
             <div className="mt-8 flex justify-center">
-              <ComicButton tone="lime" onClick={() => router.push("/app")} className="!px-8 !py-3.5 !text-lg">
+              <ComicButton tone="lime" onClick={() => router.push("/signup")} className="!px-8 !py-3.5 !text-lg">
                 ابدأ رحلتك الآن ⚡
               </ComicButton>
             </div>

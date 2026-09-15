@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { consentedSignupPayload } from './helpers'
 
 // حجب Service Worker داخل هذه المجموعة فقط: الشبكة المراقبة
 // (route.fulfill لاختبار حالة الخطأ) يجب أن ترى طلبات الصفحة نفسها
@@ -24,7 +25,7 @@ test.use({ serviceWorkers: 'block' })
 
 let userSeq = 0
 const uniqueEmail = () => `e2e19-${Date.now()}-${++userSeq}@awj.test`
-const TEST_PASSWORD = 'phase19-strong-pass'
+const TEST_PASSWORD = 'phase19-strong-pass-1'
 
 const GREETING = /صباح الخير|نهارك سعيد|مساء الخير/
 
@@ -34,7 +35,7 @@ async function login(page: import('@playwright/test').Page) {
   let res: import('@playwright/test').APIResponse | null = null
   for (let attempt = 0; attempt < 2; attempt++) {
     res = await page.request.post('/api/auth/signup', {
-      data: { email, password: TEST_PASSWORD, name: 'مختبر المرحلة ١٩' },
+      data: consentedSignupPayload(email, TEST_PASSWORD, 'مختبر المرحلة ١٩'),
     })
     if (res.ok() || res.status() !== 429) break
     await page.waitForTimeout(65000)

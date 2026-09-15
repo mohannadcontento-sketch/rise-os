@@ -46,7 +46,9 @@ import { cn } from '@/lib/utils'
 import { useRiseStore } from '@/store/app-store'
 import { getUserStorage, setUserStorage } from '@/lib/user-storage'
 import { toast } from 'sonner'
-import { RiseIcon, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
+import { RiseIcon, RiseGlyphIcon, type RiseGlyph, type RiseHue } from '@/components/rise/icons'
+import { WORLDS } from '@/lib/worlds'
+import { MODULE_LABELS } from '@/lib/module-labels'
 import {
   Flame,
   BookOpen,
@@ -111,7 +113,7 @@ const stepThemes: { band: string; onBand: 'text-white' | 'text-ink'; icon: Compo
 const stepTitles = [
   'أهلاً بك',
   'يومك مع أوج',
-  'استكشف الوحدات',
+  'استكشف عوالمك الأربعة',
   'نصائح سريعة',
 ]
 
@@ -294,19 +296,18 @@ function DayJourneyStep() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Step 3 — Modules (duotone icon wells)
+   Step 3 — العوالم الأربعة (حسم §9/9 — المرحلة 20)
+   يستبدل شبكة الوحدات القديمة: نفس المصدر الواحد
+   lib/worlds.ts الذي يشترك فيه الشريط الجانبي ومركز
+   الاستكشاف — بلا انجراف عضوية، والتسميات من MODULE_LABELS.
    ═══════════════════════════════════════════════════════ */
 
-const moduleShowcase: { glyph: RiseGlyph; hue: RiseHue; name: string; desc: string }[] = [
-  { glyph: 'tasks', hue: 'blue', name: 'المهام', desc: 'مهام يومية + مهام مشاريع منفصلة' },
-  { glyph: 'habits', hue: 'lime', name: 'العادات', desc: 'سلاسل وتذكيرات تثبت عاداتك' },
-  { glyph: 'focus', hue: 'violet', name: 'العمل العميق', desc: 'جلسات تركيز وبومودورو' },
-  { glyph: 'goals', hue: 'rose', name: 'الأهداف', desc: 'أهداف قابلة للقياس مع تقدم' },
-  { glyph: 'journal', hue: 'cyan', name: 'اليوميات', desc: 'اكتب أفكارك وتابع مزاجك' },
-  { glyph: 'health', hue: 'rose', name: 'الصحة', desc: 'نوم وماء وتمارين' },
-  { glyph: 'finance', hue: 'lime', name: 'المالية', desc: 'ميزانية وادخار بذكاء' },
-  { glyph: 'brain', hue: 'violet', name: 'الدماغ الثاني', desc: 'ملاحظات وربط أفكار' },
-]
+const worldGlyphMap: Record<string, RiseGlyph> = {
+  achieve: 'flame',
+  grow: 'sprout',
+  balance: 'sunrise',
+  'manage-life': 'steering',
+}
 
 function ModulesStep() {
   return (
@@ -314,24 +315,48 @@ function ModulesStep() {
       <div className="text-center space-y-2">
         <span className="pill bg-emerald-accent/10 text-emerald-accent mb-1">
           <LayersIcon className="size-3 me-1" />
-          كل الوحدات
+          عوالم أوج
         </span>
-        <h2 className="text-xl sm:text-2xl font-bold">استكشف الوحدات</h2>
-        <p className="text-sm text-muted-foreground">أكثر من 20 وحدة — دي أشهرها، والباقي اكتشفه بنفسك من القائمة الجانبية</p>
+        <h2 className="text-xl sm:text-2xl font-bold">استكشف عوالمك الأربعة</h2>
+        <p className="text-sm text-muted-foreground">
+          حياتك مش قائمة واحدة — أوج منظمة في أربعة عوالم بمعنى مختلف، وكل الوحدات موجودة جوّاها
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {moduleShowcase.map((mod, i) => (
+      <div className="grid sm:grid-cols-2 gap-3">
+        {WORLDS.map((world, i) => (
           <div
-            key={mod.name}
+            key={world.id}
             className="animate-[fadeSlideIn_0.3s_ease-out]"
-            style={{ animationDelay: `${i * 55}ms`, animationFillMode: 'both' }}
+            style={{ animationDelay: `${i * 70}ms`, animationFillMode: 'both' }}
           >
-            <div className="neo-card card-lift group p-3.5 text-center h-full">
-              <div className="flex flex-col items-center gap-2">
-                <RiseIcon glyph={mod.glyph} hue={mod.hue} size="md" lift />
-                <h4 className="text-xs font-bold leading-tight">{mod.name}</h4>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">{mod.desc}</p>
+            <div className="neo-card card-lift p-4 h-full">
+              <div className="flex items-start gap-3">
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                  style={{ background: world.gradient }}
+                >
+                  <RiseGlyphIcon glyph={worldGlyphMap[world.id] ?? 'flame'} size={20} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="text-sm font-bold leading-tight">{world.title}</h4>
+                    <span className="text-[10px] font-bold text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 num" dir="ltr">
+                      {world.items.length}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{world.hint}</p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {world.items.map((id) => (
+                      <span
+                        key={id}
+                        className="text-[10px] text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5"
+                      >
+                        {MODULE_LABELS[id]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -340,7 +365,7 @@ function ModulesStep() {
 
       <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
         <Sparkles className="size-3.5 text-gold" />
-        كمان في: القراءة، التعلم، التقويم، الشغل، المشاريع، المراجعات، والتحليلات
+        وخارج العوالم: الرئيسية والمجتمع وحسابك — نقاط مستقلة دائمًا
       </div>
     </div>
   )
